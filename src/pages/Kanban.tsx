@@ -41,7 +41,7 @@ function TerminalDropBar({ columns, activeId }: { columns: PipelineStage[], acti
   );
 }
 
-function TerminalDropZone({ column }: { column: PipelineStage }) {
+function TerminalDropZone({ column }: { column: PipelineStage; key?: string | number }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   let Icon = null;

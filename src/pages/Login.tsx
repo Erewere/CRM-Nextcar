@@ -5,7 +5,7 @@ import { updateProfile } from 'firebase/auth';
 import { Navigate } from 'react-router';
 
 export function Login() {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, connectGoogleServices } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -106,7 +106,16 @@ export function Login() {
 
         <div className="w-full border-t border-slate-100 pt-6">
           <button
-            onClick={signInWithGoogle}
+            onClick={async () => {
+              try {
+                const token = await connectGoogleServices();
+                if (!token) {
+                  // User closed popup or failed. connectGoogleServices handles logs
+                }
+              } catch (err: any) {
+                setError('Error al iniciar sesión con Google. Verifica tu conexión o intenta con correo.');
+              }
+            }}
             type="button"
             className="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 transition-colors text-slate-700 font-bold rounded-lg flex items-center justify-center gap-3 shadow-sm text-sm"
           >

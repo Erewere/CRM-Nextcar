@@ -296,7 +296,7 @@ export function Dashboard() {
           <div className="flex-1 min-h-[300px]">
             {pipelineData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData} onClick={(data) => {
+                <BarChart data={pipelineData} onClick={(data: any) => {
                   if (data && data.activePayload && data.activePayload.length > 0) {
                     setSelectedStage(data.activePayload[0].payload.name);
                   }

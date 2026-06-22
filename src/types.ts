@@ -72,7 +72,7 @@ export interface Client {
   vehicle: string;
   vehicleId?: string;
   status: string;
-  origin: 'manual' | 'whatsapp' | 'web';
+  origin: 'manual' | 'whatsapp' | 'web' | 'google_contacts';
   createdAt: any;
   updatedAt: any;
 }
