@@ -112,10 +112,10 @@ export function Dashboard() {
 
   if (userData?.role === 'unassigned') {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-100 text-center h-[60vh]">
+      <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 text-center h-[60vh]">
         <Users className="w-16 h-16 text-slate-300 mb-4" />
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Cuenta en Revisión</h2>
-        <p className="text-slate-500 max-w-sm">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Cuenta en Revisión</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-sm">
           Tu cuenta ha sido creada exitosamente y se encuentra a la espera de que el administrador principal o la cuenta maestra asigne tu rol y agencia.
         </p>
       </div>
@@ -166,20 +166,20 @@ export function Dashboard() {
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Resumen Ejecutivo</h1>
-          <p className="text-sm text-slate-500">Métricas clave y estado de tus ventas</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-200 tracking-tight">Resumen Ejecutivo</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Métricas clave y estado de tus ventas</p>
         </div>
 
         {/* Dynamic Filters */}
-        <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 pl-2 border-r border-slate-200 pr-3">
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="flex items-center gap-2 pl-2 border-r border-slate-200 dark:border-slate-700 pr-3">
             <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-600">Filtros</span>
+            <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">Filtros</span>
           </div>
 
           {userData?.role === 'admin' && (
             <select 
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700"
+              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300"
               value={filterSeller}
               onChange={e => setFilterSeller(e.target.value)}
             >
@@ -189,7 +189,7 @@ export function Dashboard() {
           )}
 
           <select 
-            className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 max-w-[180px] truncate"
+            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[180px] truncate"
             value={filterCategory}
             onChange={e => setFilterCategory(e.target.value)}
           >
@@ -199,21 +199,21 @@ export function Dashboard() {
             ))}
           </select>
 
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
             <span className="text-xs text-slate-400 font-medium">Desde</span>
             <input 
               type="date"
-              className="bg-transparent text-sm focus:outline-none text-slate-700"
+              className="bg-transparent text-sm focus:outline-none text-slate-700 dark:text-slate-300"
               value={filterStartDate}
               onChange={e => setFilterStartDate(e.target.value)}
             />
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
             <span className="text-xs text-slate-400 font-medium">Hasta</span>
             <input 
               type="date"
-              className="bg-transparent text-sm focus:outline-none text-slate-700"
+              className="bg-transparent text-sm focus:outline-none text-slate-700 dark:text-slate-300"
               value={filterEndDate}
               onChange={e => setFilterEndDate(e.target.value)}
             />
@@ -227,7 +227,7 @@ export function Dashboard() {
                 setFilterStartDate('');
                 setFilterEndDate('');
               }}
-              className="text-xs underline text-slate-400 hover:text-slate-600 px-2"
+              className="text-xs underline text-slate-400 hover:text-slate-600 dark:text-slate-400 px-2"
             >
               Limpiar
             </button>
@@ -237,40 +237,40 @@ export function Dashboard() {
 
       {/* Primary KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-blue-300 transition-colors">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-blue-300 transition-colors">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Contactos Abiertos</p>
-            <p className="text-3xl font-bold text-slate-800">{activeContacts.length}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Contactos Abiertos</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{activeContacts.length}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
             <Users className="w-5 h-5 text-blue-600" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-emerald-300 transition-colors">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-emerald-300 transition-colors">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Inventario Disponible</p>
-            <p className="text-3xl font-bold text-slate-800">{availableVehicles.length}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Inventario Disponible</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{availableVehicles.length}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
             <Car className="w-5 h-5 text-emerald-600" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-amber-300 transition-colors">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-amber-300 transition-colors">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Oportunidades ('Hot')</p>
-            <p className="text-3xl font-bold text-slate-800">{hotLeads.length}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Oportunidades ('Hot')</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{hotLeads.length}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
             <Target className="w-5 h-5 text-amber-600" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-green-300 transition-colors">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-green-300 transition-colors">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Ventas Cerradas</p>
-            <p className="text-3xl font-bold text-slate-800">{wonContacts.length}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Ventas Cerradas</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{wonContacts.length}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
             <TrendingUp className="w-5 h-5 text-green-600" />
@@ -281,9 +281,9 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Embudo de Ventas Interactivo */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Contactos por Etapa Activa</h3>
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Contactos por Etapa Activa</h3>
             {selectedStage && (
               <button 
                 onClick={() => setSelectedStage(null)}
@@ -328,9 +328,9 @@ export function Dashboard() {
         </div>
 
         {/* Action Center (Tasks) */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-          <div className="p-5 border-b border-slate-100 bg-slate-50">
-            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+          <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               Centro de Atención
             </h3>
@@ -340,8 +340,8 @@ export function Dashboard() {
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-rose-500" />
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Tareas Atrasadas</p>
-                  <p className="text-xs text-slate-500">Requieren atención urgente</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Tareas Atrasadas</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Requieren atención urgente</p>
                 </div>
               </div>
               <span className="text-rose-600 font-black text-xl">{overdueTasks.length}</span>
@@ -351,22 +351,22 @@ export function Dashboard() {
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-blue-500" />
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Para Hoy</p>
-                  <p className="text-xs text-slate-500">Actividades programadas</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Para Hoy</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Actividades programadas</p>
                 </div>
               </div>
               <span className="text-blue-600 font-black text-xl">{todayTasks.length}</span>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-slate-500" />
+                <Calendar className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Esta Semana</p>
-                  <p className="text-xs text-slate-500">Tareas futuras próximas</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Esta Semana</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Tareas futuras próximas</p>
                 </div>
               </div>
-              <span className="text-slate-600 font-black text-xl">{thisWeekTasks.length}</span>
+              <span className="text-slate-600 dark:text-slate-400 font-black text-xl">{thisWeekTasks.length}</span>
             </div>
           </div>
         </div>
@@ -374,15 +374,15 @@ export function Dashboard() {
 
       {/* Drill-down view if a stage is selected */}
       {selectedStage && (
-        <div className="bg-white p-6 rounded-xl border border-blue-200 shadow-md">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-blue-200 shadow-md">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
              Prospectos en la etapa: <span className="text-blue-600">"{selectedStage}"</span>
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeContacts.filter(c => c.status === selectedStage).map(client => (
-              <div key={client.id} className="p-4 border border-slate-200 rounded-lg hover:shadow-sm transition-shadow">
-                <p className="font-bold text-slate-800">{client.name}</p>
-                <p className="text-sm text-slate-500 truncate">{client.vehicle || 'Sin vehículo de interés'}</p>
+              <div key={client.id} className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:shadow-sm transition-shadow">
+                <p className="font-bold text-slate-800 dark:text-slate-200">{client.name}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{client.vehicle || 'Sin vehículo de interés'}</p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-slate-400">{client.origin}</span>
                   <button className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-medium">Cerrar trato</button>

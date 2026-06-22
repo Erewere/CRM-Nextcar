@@ -211,27 +211,27 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-slate-50 shrink-0">
+        <div className="flex items-center justify-between p-4 border-b bg-slate-50 dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-4 text-sm">
             <button 
                onClick={() => setActiveTab('info')}
-               className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+               className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
             >
               Info del Vehículo
             </button>
             {!isNew && (
               <button 
                  onClick={() => setActiveTab('expenses')}
-                 className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                 className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
               >
                 Gastos
               </button>
             )}
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -247,8 +247,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               {/* Left Column - Photo & Status */}
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Foto del Vehículo</label>
-                  <div className="aspect-video bg-slate-100 rounded-xl relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-slate-300">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Foto del Vehículo</label>
+                  <div className="aspect-video bg-slate-100 dark:bg-slate-700 rounded-xl relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600">
                     {formData.photoUrl ? (
                       <>
                         <img src={formData.photoUrl} alt="Vehicle" className="absolute inset-0 w-full h-full object-cover" />
@@ -259,7 +259,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                         </label>
                       </>
                     ) : (
-                      <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition-colors">
+                      <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-slate-500 dark:text-slate-400 hover:text-blue-600 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
                         {uploading ? <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-2"></div> : <Upload className="w-8 h-8 mb-2" />}
                         <span className="font-medium">{uploading ? 'Subiendo...' : 'Subir Imagen'}</span>
                         <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
@@ -270,11 +270,11 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
                 {userData?.role === 'master' && (
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Agencia (Master)</label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Agencia (Master)</label>
                     <select
                       value={formData.agencyId || ''}
                       onChange={e => setFormData({...formData, agencyId: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800"
                       required
                     >
                       <option value="" disabled>Selecciona una agencia...</option>
@@ -287,11 +287,11 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Estado</label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Estado</label>
                     <select
                       value={formData.status}
                       onChange={e => setFormData({...formData, status: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700"
+                      className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 dark:text-slate-300"
                     >
                       <option value="available">Disponible</option>
                       <option value="reserved">Reservado</option>
@@ -299,7 +299,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Precio de Venta</label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Precio de Venta</label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
@@ -307,17 +307,17 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                         value={formData.price || ''}
                         onChange={e => setFormData({...formData, price: Number(e.target.value)})}
                         readOnly={userData?.role === 'seller' && !isNew}
-                        className={`w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-slate-700 ${userData?.role === 'seller' && !isNew ? 'bg-slate-100 cursor-not-allowed' : 'bg-white'}`} 
+                        className={`w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300 ${userData?.role === 'seller' && !isNew ? 'bg-slate-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`} 
                       />
                     </div>
                   </div>
                   {(formData.status === 'reserved' || formData.status === 'sold') && userData?.role === 'seller' && (
                     <div className="col-span-2">
-                      <label className="block text-sm font-semibold text-slate-700 mb-1">Cliente Solicitante</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Cliente Solicitante</label>
                       <select
                         value={selectedClientId}
                         onChange={e => setSelectedClientId(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800"
                         required
                       >
                         <option value="" disabled>Selecciona un cliente...</option>
@@ -330,10 +330,10 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 </div>
 
                 {isAdmin && (
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-sm font-semibold text-slate-800 mb-1 flex items-center justify-between">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
                       <span>Precio de Compra</span>
-                      <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Solo Admin</span>
+                      <span className="text-[10px] bg-slate-200 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Solo Admin</span>
                     </label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -341,7 +341,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                         type="number"
                         value={formData.purchasePrice || ''}
                         onChange={e => setFormData({...formData, purchasePrice: Number(e.target.value)})}
-                        className="w-full pl-9 pr-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 text-slate-700" 
+                        className="w-full pl-9 pr-3 py-2 border rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300" 
                       />
                     </div>
                   </div>
@@ -352,37 +352,37 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Marca</label>
-                    <input type="text" required value={formData.make} onChange={e=>setFormData({...formData, make: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Marca</label>
+                    <input type="text" required value={formData.make} onChange={e=>setFormData({...formData, make: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Modelo</label>
-                    <input type="text" required value={formData.model} onChange={e=>setFormData({...formData, model: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Año</label>
-                    <input type="number" required value={formData.year} onChange={e=>setFormData({...formData, year: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Color</label>
-                    <input type="text" required value={formData.color} onChange={e=>setFormData({...formData, color: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Modelo</label>
+                    <input type="text" required value={formData.model} onChange={e=>setFormData({...formData, model: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Transmisión</label>
-                    <select value={formData.transmission} onChange={e=>setFormData({...formData, transmission: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año</label>
+                    <input type="number" required value={formData.year} onChange={e=>setFormData({...formData, year: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Color</label>
+                    <input type="text" required value={formData.color} onChange={e=>setFormData({...formData, color: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Transmisión</label>
+                    <select value={formData.transmission} onChange={e=>setFormData({...formData, transmission: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                       <option>Automática</option>
                       <option>Manual</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Carrocería</label>
-                    <select value={formData.bodyType} onChange={e=>setFormData({...formData, bodyType: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Carrocería</label>
+                    <select value={formData.bodyType} onChange={e=>setFormData({...formData, bodyType: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                       <option>Sedán</option>
                       <option>SUV</option>
                       <option>Hatchback</option>
@@ -398,8 +398,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">VIN Number</label>
-                  <input type="text" value={formData.vin} onChange={e=>setFormData({...formData, vin: e.target.value})} className="w-full px-3 py-2 border rounded-lg font-mono text-sm uppercase" maxLength={17} />
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">VIN Number</label>
+                  <input type="text" value={formData.vin} onChange={e=>setFormData({...formData, vin: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono text-sm uppercase" maxLength={17} />
                 </div>
 
                 {!isNew && isAdmin && (
@@ -431,7 +431,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
           {activeTab === 'expenses' && !isNew && (
             <div className="h-full flex flex-col">
-              <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 rounded-xl border items-center">
+              <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border items-center">
                 <input 
                   type="date" 
                   value={expDate} 
@@ -466,7 +466,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   {editingExpenseId && (
                     <button 
                       onClick={cancelEdit}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
+                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
                     >
                       Cancelar
                     </button>
@@ -476,7 +476,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
               <div className="flex-1 overflow-auto border rounded-xl">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-500 bg-slate-50 border-b uppercase">
+                  <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border-b uppercase">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Fecha</th>
                       <th className="px-4 py-3 font-semibold">Descripción</th>
@@ -486,9 +486,9 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   </thead>
                   <tbody>
                     {expenses.map(exp => (
-                      <tr key={exp.id} className={`border-b last:border-0 hover:bg-slate-50/50 ${editingExpenseId === exp.id ? 'bg-blue-50/50' : ''}`}>
+                      <tr key={exp.id} className={`border-b last:border-0 hover:bg-slate-50 dark:bg-slate-900/50 ${editingExpenseId === exp.id ? 'bg-blue-50/50' : ''}`}>
                         <td className="px-4 py-3 whitespace-nowrap">{new Date(exp.date).toLocaleDateString()}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700">{exp.description}</td>
+                        <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{exp.description}</td>
                         <td className="px-4 py-3 text-red-600 font-medium">${exp.amount.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right">
                           <button type="button" onClick={() => handleEditClick(exp)} className="text-slate-400 hover:text-blue-600 p-1 mr-2">
@@ -502,14 +502,14 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     ))}
                     {expenses.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                           No hay gastos registrados para este vehículo.
                         </td>
                       </tr>
                     )}
                   </tbody>
                   {expenses.length > 0 && (
-                    <tfoot className="bg-slate-50 font-bold border-t">
+                    <tfoot className="bg-slate-50 dark:bg-slate-900 font-bold border-t">
                       <tr>
                         <td colSpan={2} className="px-4 py-3 text-right">Total Gastos:</td>
                         <td className="px-4 py-3 text-red-600">${totalExpenses.toLocaleString()}</td>
@@ -525,8 +525,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
         {/* Footer */}
         {activeTab === 'info' && (
-          <div className="p-4 border-t bg-slate-50 flex justify-end gap-3 shrink-0">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg">Cancelar</button>
+          <div className="p-4 border-t bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">Cancelar</button>
             <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-bold">
               {loading ? 'Guardando...' : 'Guardar Vehículo'}
             </button>

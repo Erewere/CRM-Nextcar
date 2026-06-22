@@ -277,20 +277,20 @@ export function Persons() {
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5]">
       {/* Header */}
-      <div className="px-4 md:px-6 py-4 bg-white border-b border-gray-200">
+      <div className="px-4 md:px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-gray-800">Personas</h1>
+            <h1 className="text-xl font-bold text-gray-800 dark:text-slate-200">Personas</h1>
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button 
                 onClick={() => setViewMode('list')} 
-                className={clsx("p-1.5 rounded transition-colors", viewMode === 'list' ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700")}
+                className={clsx("p-1.5 rounded transition-colors", viewMode === 'list' ? "bg-white dark:bg-slate-800 shadow-sm text-blue-600" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300")}
               >
                 <List className="w-4 h-4" />
               </button>
               <button 
                 onClick={() => setViewMode('grid')} 
-                className={clsx("p-1.5 rounded transition-colors", viewMode === 'grid' ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700")}
+                className={clsx("p-1.5 rounded transition-colors", viewMode === 'grid' ? "bg-white dark:bg-slate-800 shadow-sm text-blue-600" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300")}
               >
                 <Grid className="w-4 h-4" />
               </button>
@@ -300,7 +300,7 @@ export function Persons() {
             <button 
               onClick={handleImportGoogleContacts}
               disabled={importingContacts}
-              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold hover:bg-gray-50 shadow-sm text-xs md:text-sm"
+              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm"
             >
               <Download className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">{importingContacts ? 'Importando...' : 'Importar de Google'}</span><span className="sm:hidden">Importar</span>
             </button>
@@ -319,7 +319,7 @@ export function Persons() {
             placeholder="Buscar en Pipedrive..." 
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full border border-gray-300 rounded-full py-1.5 pl-10 pr-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 hover:bg-gray-100"
+            className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200-full py-1.5 pl-10 pr-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700"
           />
         </div>
       </div>
@@ -330,7 +330,7 @@ export function Persons() {
             {filteredPersons.map(person => (
               <div 
                 key={person.id} 
-                className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+                className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => setSelectedPerson(person)}
               >
                 <div className="flex items-start gap-4">
@@ -338,21 +338,21 @@ export function Persons() {
                     {person.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="overflow-hidden">
-                    <h3 className="font-bold text-gray-900 truncate" title={person.name}>{person.name}</h3>
+                    <h3 className="font-bold text-gray-900 dark:text-slate-100 truncate" title={person.name}>{person.name}</h3>
                     {person.organization && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
                         <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">{person.organization}</span>
                       </div>
                     )}
                     {person.email && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
                         <Mail className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">{person.email}</span>
                       </div>
                     )}
                     {person.phone && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
                         <Phone className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">{person.phone}</span>
                       </div>
@@ -364,13 +364,13 @@ export function Persons() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto bg-white border-t border-gray-200">
+        <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
           <table className="w-full text-left text-sm border-collapse table-fixed select-none">
-            <thead className="bg-[#fcfdfd] border-b border-gray-200 text-gray-600 font-medium sticky top-0 z-10 shadow-sm">
+            <thead className="bg-[#fcfdfd] dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 font-medium sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="w-10 border-r border-gray-200" style={{ width: 40 }}><div className="px-4 py-3"><input type="checkbox" className="rounded border-gray-300 cursor-pointer" /></div></th>
+                <th className="w-10 border-r border-gray-200 dark:border-slate-700" style={{ width: 40 }}><div className="px-4 py-3"><input type="checkbox" className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer" /></div></th>
                 {columns.filter(c => c.visible).map(col => (
-                  <th key={col.id} className="relative border-r border-gray-200 truncate group" style={{ width: col.width }}>
+                  <th key={col.id} className="relative border-r border-gray-200 dark:border-slate-700 truncate group" style={{ width: col.width }}>
                     <div className="px-4 py-3 truncate">{col.label}</div>
                     <div 
                       className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
@@ -379,15 +379,15 @@ export function Persons() {
                   </th>
                 ))}
                 <th className="w-10 relative" style={{ width: 40 }}>
-                  <button type="button" onClick={() => setShowColSettings(!showColSettings)} className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 outline-none">
-                    <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors" />
+                  <button type="button" onClick={() => setShowColSettings(!showColSettings)} className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 dark:hover:bg-slate-700 outline-none">
+                    <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-slate-400 transition-colors" />
                   </button>
                   {showColSettings && (
-                    <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded shadow-lg p-2 z-50">
-                      <div className="text-xs font-bold text-gray-500 mb-2 uppercase px-2">Columnas visibles</div>
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg p-2 z-50">
+                      <div className="text-xs font-bold text-gray-500 dark:text-slate-400 mb-2 uppercase px-2">Columnas visibles</div>
                       {columns.map(col => (
-                        <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-gray-700">
-                          <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300" />
+                        <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:bg-slate-900 rounded cursor-pointer text-gray-700 dark:text-slate-300">
+                          <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500" />
                           <span className="truncate">{col.label}</span>
                         </label>
                       ))}
@@ -396,12 +396,12 @@ export function Persons() {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white">
+            <tbody className="bg-white dark:bg-slate-800">
               {filteredPersons.map(person => {
                 const stats = getPersonStats(person.id);
                 return (
-                  <tr key={person.id} className="border-b border-gray-100 hover:bg-gray-50 group/row cursor-pointer" onClick={() => setSelectedPerson(person)}>
-                    <td className="px-4 py-2 border-r border-gray-100" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-gray-300 cursor-pointer" /></td>
+                  <tr key={person.id} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => setSelectedPerson(person)}>
+                    <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer" /></td>
                     {columns.filter(c => c.visible).map(col => {
                       let val: React.ReactNode = '';
                       if (col.id === 'name') val = <span className="text-blue-600 font-medium truncate w-full block">{person.name}</span>;
@@ -415,18 +415,18 @@ export function Persons() {
                       if (col.id === 'nextTaskDate') val = stats.nextTaskDate;
                       if (col.id === 'owner') val = agencyUsers[person.sellerId] || agencyUsers[person.agencyId] || 'Sin asignar';
                       return (
-                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 text-gray-600 truncate" style={{ width: col.width, maxWidth: col.width }}>
+                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate" style={{ width: col.width, maxWidth: col.width }}>
                           {val}
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600">...</td>
+                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600 dark:text-slate-400">...</td>
                   </tr>
                 );
               })}
               {filteredPersons.length === 0 && (
                 <tr>
-                  <td colSpan={columns.filter(c => c.visible).length + 2} className="px-4 py-8 text-center text-gray-500 font-medium border-b border-gray-100">
+                  <td colSpan={columns.filter(c => c.visible).length + 2} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400 font-medium border-b border-gray-100 dark:border-slate-700">
                     No se encontraron personas
                   </td>
                 </tr>
@@ -439,28 +439,28 @@ export function Persons() {
       {/* Add Modal */}
       {showAddPerson && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleAddPerson} className="bg-white rounded shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+          <form onSubmit={handleAddPerson} className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800">Añadir persona</h2>
-              <button type="button" onClick={() => setShowAddPerson(false)} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">Añadir persona</h2>
+              <button type="button" onClick={() => setShowAddPerson(false)} className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-2 flex flex-col gap-4 text-sm">
               <div>
-                <label className="block text-gray-700 mb-1">Nombre</label>
-                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Nombre</label>
+                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
               <div>
-                <label className="block text-gray-700 mb-1">Organización</label>
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Organización</label>
                 <div className="relative">
-                  <Building2 className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                  <input type="text" value={organization} onChange={e => setOrganization(e.target.value)} className="w-full border border-gray-300 rounded p-2 pl-9 focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <Building2 className="w-4 h-4 text-gray-500 dark:text-slate-400 absolute left-3 top-2.5" />
+                  <input type="text" value={organization} onChange={e => setOrganization(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 pl-9 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
               
               <div>
-                <label className="block text-gray-700 mb-1">Teléfono</label>
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Teléfono</label>
                 {phones.map((p, idx) => {
                   const existingMatch = persons.find(client => client.phone && p.value.length > 5 && client.phone.includes(p.value));
                   return (
@@ -484,7 +484,7 @@ export function Persons() {
                           newP[idx].type = e.target.value;
                           setPhones(newP);
                         }} 
-                        className="w-28 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                        className="w-28 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800"
                       >
                         <option>Trabajo</option>
                         <option>Móvil</option>
@@ -509,7 +509,7 @@ export function Persons() {
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-1">Correo electrónico</label>
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Correo electrónico</label>
                 {emails.map((m, idx) => {
                   const existingMatch = persons.find(client => client.email && m.value.length > 5 && client.email.includes(m.value));
                   return (
@@ -533,7 +533,7 @@ export function Persons() {
                           newE[idx].type = e.target.value;
                           setEmails(newE);
                         }} 
-                        className="w-28 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                        className="w-28 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800"
                       >
                         <option>Trabajo</option>
                         <option>Personal</option>
@@ -557,41 +557,41 @@ export function Persons() {
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-1">Etiquetas</label>
-                <select className="w-full border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white text-gray-500 font-medium">
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Etiquetas</label>
+                <select className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-medium">
                   <option>Añadir etiquetas</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-1">Propietario</label>
-                <select className="w-full border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white">
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Propietario</label>
+                <select className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800">
                   <option>{userData?.name || 'Luis'} (Tú)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-1">Visible para</label>
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">Visible para</label>
                 <div className="relative">
                    <div className="absolute left-3 top-2.5 flex flex-wrap w-4 h-4 gap-[2px] items-center justify-center p-[2px]">
-                     <div className="w-[5px] h-[5px] bg-gray-500 rounded-sm"></div>
-                     <div className="w-[5px] h-[5px] bg-gray-500 rounded-sm"></div>
-                     <div className="w-[5px] h-[5px] bg-gray-500 rounded-sm"></div>
-                     <div className="w-[5px] h-[5px] bg-gray-500 rounded-sm"></div>
+                     <div className="w-[5px] h-[5px] bg-gray-50 dark:bg-slate-9000 rounded-sm"></div>
+                     <div className="w-[5px] h-[5px] bg-gray-50 dark:bg-slate-9000 rounded-sm"></div>
+                     <div className="w-[5px] h-[5px] bg-gray-50 dark:bg-slate-9000 rounded-sm"></div>
+                     <div className="w-[5px] h-[5px] bg-gray-50 dark:bg-slate-9000 rounded-sm"></div>
                    </div>
-                   <select className="w-full border border-gray-300 rounded p-2 pl-9 focus:ring-1 focus:ring-blue-500 outline-none bg-white">
+                   <select className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 pl-9 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800">
                      <option>Grupo de visibilidad del propiet...</option>
                    </select>
                 </div>
               </div>
             </div>
             
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center bg-gray-50 mt-2">
-              <button type="button" className="flex items-center gap-2 font-bold text-gray-600 hover:text-gray-800">
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900 mt-2">
+              <button type="button" className="flex items-center gap-2 font-bold text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:text-slate-200">
                 <Download className="w-4 h-4" /> Importar
               </button>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setShowAddPerson(false)} className="px-5 py-1.5 font-bold text-gray-700 border border-gray-300 bg-white hover:bg-gray-50 rounded">Cancelar</button>
+                <button type="button" onClick={() => setShowAddPerson(false)} className="px-5 py-1.5 font-bold text-gray-700 dark:text-slate-300 border border-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:bg-slate-900 rounded">Cancelar</button>
                 <button type="submit" className="px-5 py-1.5 font-bold text-white bg-[#2E914F] hover:bg-[#257A41] rounded shadow-sm">Guardar</button>
               </div>
             </div>

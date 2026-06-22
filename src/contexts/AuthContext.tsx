@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User } from '../types';
@@ -86,7 +86,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const connectGoogleServices = async () => {
     try {
-      const result = await signInWithPopup(auth, provider);
+      let result;
+      if (auth.currentUser) {
+        try {
+          result = await linkWithPopup(auth.currentUser, provider);
+        } catch (linkErr: any) {
+          if (linkErr.code === 'auth/credential-already-in-use') {
+            throw new Error('Esta cuenta de Google ya está vinculada a otro usuario. Por favor, utiliza otra cuenta de Google o contacta a soporte.');
+          } else {
+            throw linkErr;
+          }
+        }
+      } else {
+        result = await signInWithPopup(auth, provider);
+      }
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         cachedAccessToken = credential.accessToken;
@@ -98,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Google services sync cancelled by user.');
       } else {
         console.error('Google connect error:', e);
+        throw e; // re-throw to allow component to display error
       }
     }
     return null;

@@ -122,8 +122,8 @@ export function Inventory() {
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Inventario</h1>
-          <p className="text-sm text-slate-500">Gestiona los vehículos de la agencia</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Inventario</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Gestiona los vehículos de la agencia</p>
         </div>
         <button 
           onClick={() => setSelectedVehicle({} as Vehicle)}
@@ -144,15 +144,15 @@ export function Inventory() {
             {pendingVehicles.map(v => (
               <div 
                 key={`pending-${v.id}`} 
-                className="flex items-center justify-between bg-white px-4 py-3 rounded-lg border border-amber-100 shadow-sm cursor-pointer hover:bg-amber-50/50 transition-colors"
+                className="flex items-center justify-between bg-white dark:bg-slate-800 px-4 py-3 rounded-lg border border-amber-100 shadow-sm cursor-pointer hover:bg-amber-50/50 transition-colors"
                 onClick={() => setSelectedVehicle(v)}
               >
                 <div>
-                  <div className="font-bold text-slate-800">{v.year} {v.make} {v.model}</div>
-                  <div className="text-sm text-slate-600 mt-1">
+                  <div className="font-bold text-slate-800 dark:text-slate-200">{v.year} {v.make} {v.model}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     Cambiar a: <strong className="uppercase text-amber-700">{(v as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</strong>
                   </div>
-                  <div className="text-xs text-slate-500 mt-1 space-y-0.5">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 space-y-0.5">
                     <p><span className="font-medium">Vendedor:</span> {(v as any).pendingValidation.requestedByName || 'Desconocido'}</p>
                     <p><span className="font-medium">Cliente:</span> {(v as any).pendingValidation.clientName || 'Desconocido'}</p>
                   </div>
@@ -160,7 +160,7 @@ export function Inventory() {
                 <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                   <button 
                     onClick={() => handleValidateStatus(v.id, false)}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors"
                   >
                     Rechazar
                   </button>
@@ -177,7 +177,7 @@ export function Inventory() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -186,15 +186,15 @@ export function Inventory() {
               placeholder="Buscar por marca, modelo, año, VIN, carrocería..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex items-center p-1 bg-slate-100 rounded-lg shrink-0">
+          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-700 rounded-lg shrink-0">
             <button
               onClick={() => setViewMode('grid')}
               className={clsx(
                 "p-1.5 rounded-md transition-colors",
-                viewMode === 'grid' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                viewMode === 'grid' ? "bg-white dark:bg-slate-800 text-blue-600 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
               )}
             >
               <LayoutGrid className="w-4 h-4" />
@@ -203,7 +203,7 @@ export function Inventory() {
               onClick={() => setViewMode('list')}
               className={clsx(
                 "p-1.5 rounded-md transition-colors",
-                viewMode === 'list' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                viewMode === 'list' ? "bg-white dark:bg-slate-800 text-blue-600 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
               )}
             >
               <List className="w-4 h-4" />
@@ -217,10 +217,10 @@ export function Inventory() {
               {filteredVehicles.map(vehicle => (
               <div 
                 key={vehicle.id} 
-                className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white group"
+                className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-slate-800 group"
                 onClick={() => setSelectedVehicle(vehicle)}
               >
-                <div className="h-48 bg-slate-100 relative">
+                <div className="h-48 bg-slate-100 dark:bg-slate-700 relative">
                   {vehicle.photoUrl ? (
                     <img src={vehicle.photoUrl} alt={`${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
                   ) : (
@@ -232,7 +232,7 @@ export function Inventory() {
                     {(userData?.role === 'admin' || userData?.role === 'master') && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
-                        className="p-1.5 bg-white/90 rounded-lg text-slate-400 hover:text-red-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 bg-white dark:bg-slate-800/90 rounded-lg text-slate-400 hover:text-red-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -249,12 +249,12 @@ export function Inventory() {
                   </div>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-bold text-slate-800 line-clamp-1">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
-                  <div className="text-xs text-slate-500 mb-2 mt-1 flex justify-between">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 mt-1 flex justify-between">
                     <span>{vehicle.color}</span>
                     <span>{vehicle.transmission}</span>
                   </div>
-                  <div className="text-xs text-slate-500 mb-3 truncate" title={vehicle.vin}>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate" title={vehicle.vin}>
                     VIN: <span className="font-mono">{vehicle.vin}</span>
                   </div>
                   
@@ -262,7 +262,7 @@ export function Inventory() {
                     <span className="text-lg font-bold text-blue-600">${Number(vehicle.price || 0).toLocaleString()}</span>
                   </div>
                   {(userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice && (
-                    <div className="mt-2 text-xs text-slate-500 flex justify-between items-center border-t pt-2">
+                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex justify-between items-center border-t pt-2">
                        <span>Costo: ${Number(vehicle.purchasePrice).toLocaleString()}</span>
                        <span className="font-semibold text-green-600">
                          Ut: ${Number((vehicle.price || 0) - (vehicle.purchasePrice || 0)).toLocaleString()}
@@ -273,7 +273,7 @@ export function Inventory() {
               </div>
             ))}
             {filteredVehicles.length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-500 flex flex-col items-center">
+              <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center">
                 <CarIcon className="w-12 h-12 mb-3 text-slate-300" />
                 <p>No se encontraron vehículos.</p>
               </div>
@@ -281,12 +281,12 @@ export function Inventory() {
           </div>
         </div>
         ) : (
-          <div className="flex-1 overflow-auto bg-white border-t border-gray-200">
+          <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
             <table className="w-full text-left text-sm border-collapse table-fixed select-none">
-              <thead className="bg-[#fcfdfd] border-b border-gray-200 text-gray-600 font-medium sticky top-0 z-10 shadow-sm">
+              <thead className="bg-[#fcfdfd] dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 font-medium sticky top-0 z-10 shadow-sm">
                 <tr>
                   {columns.filter(c => c.visible).map(col => (
-                    <th key={col.id} className="relative border-r border-gray-200 truncate group" style={{ width: col.width }}>
+                    <th key={col.id} className="relative border-r border-gray-200 dark:border-slate-700 truncate group" style={{ width: col.width }}>
                       <div className="px-4 py-3 truncate">{col.label}</div>
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
@@ -295,15 +295,15 @@ export function Inventory() {
                     </th>
                   ))}
                   <th className="w-10 relative" style={{ width: 40 }}>
-                    <button type="button" onClick={() => setShowColSettings(!showColSettings)} className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 outline-none">
-                      <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors" />
+                    <button type="button" onClick={() => setShowColSettings(!showColSettings)} className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 dark:hover:bg-slate-700 outline-none">
+                      <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-slate-400 transition-colors" />
                     </button>
                     {showColSettings && (
-                      <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded shadow-lg p-2 z-50">
-                        <div className="text-xs font-bold text-gray-500 mb-2 uppercase px-2">Columnas visibles</div>
+                      <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg p-2 z-50">
+                        <div className="text-xs font-bold text-gray-500 dark:text-slate-400 mb-2 uppercase px-2">Columnas visibles</div>
                         {columns.map(col => (
-                          <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-gray-700">
-                            <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300" />
+                          <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:bg-slate-900 rounded cursor-pointer text-gray-700 dark:text-slate-300">
+                            <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500" />
                             <span className="truncate">{col.label}</span>
                           </label>
                         ))}
@@ -312,9 +312,9 @@ export function Inventory() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white">
+              <tbody className="bg-white dark:bg-slate-800">
                 {filteredVehicles.map(vehicle => (
-                  <tr key={vehicle.id} className="border-b border-gray-100 hover:bg-gray-50 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
+                  <tr key={vehicle.id} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
                     {columns.filter(c => c.visible).map(col => {
                       let val: React.ReactNode = '';
                       if (col.id === 'year') val = vehicle.year;
@@ -329,12 +329,12 @@ export function Inventory() {
                       if (col.id === 'status') val = (vehicle as any).pendingValidation ? <span className="text-amber-600">Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</span> : vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado';
                       
                       return (
-                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 text-gray-600 truncate" style={{ width: col.width, maxWidth: col.width }}>
+                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate" style={{ width: col.width, maxWidth: col.width }}>
                           {val}
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600">
+                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600 dark:text-slate-400">
                       {(userData?.role === 'admin' || userData?.role === 'master') ? (
                         <button 
                           onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
@@ -348,7 +348,7 @@ export function Inventory() {
                 ))}
                 {filteredVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={columns.filter(c => c.visible).length + 1} className="px-4 py-8 text-center text-gray-500 font-medium border-b border-gray-100">
+                    <td colSpan={columns.filter(c => c.visible).length + 1} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400 font-medium border-b border-gray-100 dark:border-slate-700">
                       No se encontraron vehículos.
                     </td>
                   </tr>
@@ -368,13 +368,13 @@ export function Inventory() {
 
       {vehicleToDelete && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm overflow-hidden p-6 text-center">
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Eliminar Vehículo</h2>
-            <p className="text-slate-600 mb-6">¿Estás seguro de que deseas eliminar este vehículo? Esta acción no se puede deshacer.</p>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm overflow-hidden p-6 text-center">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Eliminar Vehículo</h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">¿Estás seguro de que deseas eliminar este vehículo? Esta acción no se puede deshacer.</p>
             <div className="flex gap-4">
               <button 
                 onClick={() => setVehicleToDelete(null)}
-                className="flex-1 py-2 px-4 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors"
+                className="flex-1 py-2 px-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 transition-colors"
               >
                 Cancelar
               </button>

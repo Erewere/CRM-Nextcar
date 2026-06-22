@@ -76,13 +76,13 @@ function ArchivedClientsModal({
 }) {
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-end">
-      <div className="w-[800px] max-w-full h-full bg-slate-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Archive className="w-5 h-5 text-slate-500" />
+      <div className="w-[800px] max-w-full h-full bg-slate-50 dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white dark:bg-slate-800">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+            <Archive className="w-5 h-5 text-slate-500 dark:text-slate-400" />
             Contactos Archivados
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 dark:text-slate-400 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -92,9 +92,9 @@ function ArchivedClientsModal({
              const columnClients = filteredClients.filter(c => c.status === col.id);
              return (
                <div key={col.id} className="flex-1 flex flex-col min-w-[320px] max-w-[400px]">
-                 <h3 className="font-bold text-slate-700 flex justify-between items-center bg-white p-3 rounded-lg shadow-sm mb-4 border border-slate-200">
+                 <h3 className="font-bold text-slate-700 dark:text-slate-300 flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm mb-4 border border-slate-200 dark:border-slate-700">
                    {col.title}
-                   <span className="bg-slate-100 px-2.5 py-0.5 rounded-full text-xs text-slate-600 font-semibold">{columnClients.length}</span>
+                   <span className="bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 rounded-full text-xs text-slate-600 dark:text-slate-400 font-semibold">{columnClients.length}</span>
                  </h3>
                  <div className="flex-1 overflow-y-auto pr-2 space-y-3 pb-20">
                    {columnClients.map(client => (
@@ -103,7 +103,7 @@ function ArchivedClientsModal({
                      </div>
                    ))}
                    {columnClients.length === 0 && (
-                     <div className="bg-white/50 border border-dashed border-slate-300 rounded-lg p-8 text-center text-slate-400 text-sm">
+                     <div className="bg-white dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center text-slate-400 text-sm">
                        No hay contactos en esta etapa
                      </div>
                    )}
@@ -260,13 +260,13 @@ export function Kanban() {
       <div className="mb-6 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-lg font-bold text-slate-800">Pipeline de Ventas</h1>
-            <p className="text-sm text-slate-500">Arrastra los prospectos para avanzar su proceso</p>
+            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-200">Pipeline de Ventas</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Arrastra los prospectos para avanzar su proceso</p>
           </div>
           {userData?.role === 'admin' && (
             <button 
               onClick={() => setShowSettings(true)}
-              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors ml-2"
+              className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded-lg transition-colors ml-2"
               title="Configurar Etapas del Pipeline"
             >
               <Settings className="w-5 h-5" />
@@ -274,7 +274,7 @@ export function Kanban() {
           )}
           <button 
             onClick={() => setShowArchived(true)}
-            className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors ml-2"
+            className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded-lg transition-colors ml-2"
             title="Ver Ganados y Perdidos"
           >
             <Archive className="w-5 h-5" />
@@ -284,7 +284,7 @@ export function Kanban() {
               <select
                 value={selectedSellerId}
                 onChange={(e) => setSelectedSellerId(e.target.value)}
-                className="text-sm border-slate-200 rounded-md py-1.5 pl-3 pr-8 text-slate-700 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className="text-sm border-slate-200 dark:border-slate-700 rounded-md py-1.5 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800"
               >
                 <option value="all">Todos los vendedores</option>
                 {users.map(u => (
@@ -309,7 +309,7 @@ export function Kanban() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex-1 flex overflow-x-auto items-start bg-white border border-slate-200 rounded-lg">
+          <div className="flex-1 flex overflow-x-auto items-start bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
             {activeColumns.map(col => {
               const columnClients = filteredClients.filter(c => c.status === col.id);
               return (

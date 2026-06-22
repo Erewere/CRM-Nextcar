@@ -81,26 +81,26 @@ export function AgencyUsers() {
     <div className="max-w-6xl mx-auto py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200 tracking-tight flex items-center gap-2">
             <Users className="w-6 h-6 text-indigo-600" />
             Gestión de Usuarios
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {isMaster ? 'Administra todos los usuarios y sus agencias' : 'Administra los roles de los usuarios en tu agencia'}
           </p>
         </div>
       </div>
 
       {isMaster && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row items-end gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col md:flex-row items-end gap-4">
           <div className="flex-1 w-full">
-            <label className="block text-sm font-semibold text-slate-700 mb-1">Nueva Agencia</label>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nueva Agencia</label>
             <input
               type="text"
               value={newAgencyName}
               onChange={(e) => setNewAgencyName(e.target.value)}
               placeholder="Nombre de la nueva agencia..."
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-300"
             />
           </div>
           <button
@@ -114,18 +114,18 @@ export function AgencyUsers() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <ul className="divide-y divide-slate-100">
           {users.map(u => (
-            <li key={u.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+            <li key={u.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <div className="font-bold text-slate-800">{u.name || 'Sin Nombre'}</div>
+                  <div className="font-bold text-slate-800 dark:text-slate-200">{u.name || 'Sin Nombre'}</div>
                   {u.role === 'master' && <span className="inline-flex items-center rounded-md bg-stone-100 px-2 py-1 text-[10px] font-medium text-stone-600 ring-1 ring-inset ring-stone-500/10"><Shield className="w-3 h-3 mr-1"/> Master</span>}
                   {u.role === 'admin' && <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Admin</span>}
                   {u.role === 'unassigned' && <span className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-[10px] font-medium text-orange-700 ring-1 ring-inset ring-orange-600/10">Pendiente</span>}
                 </div>
-                <div className="text-sm text-slate-500 mt-1 flex items-center gap-1">
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
                   <Mail className="w-3 h-3" />
                   {u.email}
                 </div>
@@ -134,11 +134,11 @@ export function AgencyUsers() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 {isMaster && (
                   <div className="w-full sm:w-auto">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Agencia</label>
+                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Agencia</label>
                     <select
                       value={u.agencyId || 'unassigned'}
                       onChange={(e) => handleUpdateAgency(u.id, e.target.value)}
-                      className="text-sm border border-slate-300 rounded-md py-1.5 px-3 bg-white w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="unassigned">-- Sin Asignar --</option>
                       {agencies.map(a => (
@@ -149,11 +149,11 @@ export function AgencyUsers() {
                 )}
                 
                 <div className="w-full sm:w-auto">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rol</label>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Rol</label>
                   <select
                     value={u.role || 'unassigned'}
                     onChange={(e) => handleUpdateRole(u.id, e.target.value)}
-                    className="text-sm border border-slate-300 rounded-md py-1.5 px-3 bg-white w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     disabled={(!isMaster && u.role === 'master')}
                   >
                     {isMaster && <option value="master">Master</option>}
@@ -166,7 +166,7 @@ export function AgencyUsers() {
             </li>
           ))}
           {users.length === 0 && (
-            <li className="p-8 text-center text-slate-500">
+            <li className="p-8 text-center text-slate-500 dark:text-slate-400">
               No se encontraron usuarios
             </li>
           )}

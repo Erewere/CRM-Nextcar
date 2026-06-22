@@ -239,10 +239,10 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-2 sm:p-4">
-      <div className="bg-white w-full max-w-6xl h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 w-full max-w-6xl h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
         
         {/* TOP HEADER */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-100 flexitems-center justify-center text-blue-700 font-bold text-lg flex items-center">
               {(formData.name || 'U').charAt(0).toUpperCase()}
@@ -250,8 +250,8 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
             <div className="flex-1 min-w-[200px]">
               {(!formData.status && !isNew) ? (
                 <>
-                  <h2 className="text-xl font-bold text-gray-900 leading-tight">{formData.name}</h2>
-                  <p className="text-sm font-medium text-gray-500 mt-1">Contacto sin trato activo.</p>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{formData.name}</h2>
+                  <p className="text-sm font-medium text-gray-500 dark:text-slate-400 mt-1">Contacto sin trato activo.</p>
                 </>
               ) : (
                 <>
@@ -260,7 +260,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                     value={formData.dealTitle !== undefined ? formData.dealTitle : (formData.name ? `${formData.name} deal` : '')}
                     onChange={handleChange}
                     placeholder={isNew ? 'Nuevo Trato' : 'Nombre del trato'}
-                    className="text-xl font-bold text-gray-900 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                    className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
                   />
                   {formData.status === 'won' && (
                     <p className="text-sm border border-green-200 bg-green-50 text-green-700 inline-block px-2 py-0.5 rounded mt-0.5 font-medium">Ganado</p>
@@ -307,13 +307,13 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
               <button 
                 type="button"
                 onClick={() => handleStatusChange('open')}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-slate-200 text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
               >
                 Reabrir trato
               </button>
             )}
             <div className="w-px h-6 bg-gray-300 mx-1"></div>
-            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors">
+            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 dark:text-slate-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -322,16 +322,16 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
         <div className="flex flex-1 overflow-hidden">
           
           {/* LEFT SIDEBAR (DETAILS) */}
-          <div className="w-[320px] shrink-0 border-r border-gray-200 bg-white overflow-y-auto hidden md:block">
+          <div className="w-[320px] shrink-0 border-r border-gray-200 bg-white dark:bg-slate-800 overflow-y-auto hidden md:block">
             <div className="p-5">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center justify-between">
                 Resumen
                 <MoreHorizontal className="w-4 h-4 text-gray-400" />
               </h3>
 
               <form id="client-form" onSubmit={handleSave} className="space-y-4">
                 <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor / Vehículo</label>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Valor / Vehículo</label>
                   <select required name="vehicle" value={formData.vehicleId || formData.vehicle || ''} onChange={e => {
                     const val = e.target.value;
                     if (val === 'Otro pendiente') {
@@ -358,8 +358,8 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                   </select>
                 </div>
                 
-                <div className="pt-2 border-t border-gray-100 space-y-1">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Persona</label>
+                <div className="pt-2 border-t border-gray-100 dark:border-slate-700 space-y-1">
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Persona</label>
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-400" />
                     <input 
@@ -377,7 +377,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     <Building2 className="w-4 h-4 text-gray-400" />
-                    <input name="organization" placeholder="Organización / Empresa" value={formData.organization || ''} onChange={handleChange} className="w-full text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                    <input name="organization" placeholder="Organización / Empresa" value={formData.organization || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     <Phone className="w-4 h-4 text-gray-400" />
@@ -388,7 +388,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                       placeholder="Teléfono" 
                       value={formData.phone || ''} 
                       onChange={handleChange} 
-                      className="w-full text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" 
+                      className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" 
                     />
                     <datalist id="existing-phones-list">
                       {existingPersons.filter(p => p.phone).map(p => <option key={p.id} value={p.phone}>{p.name}</option>)}
@@ -409,7 +409,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                       placeholder="Correo" 
                       value={formData.email || ''} 
                       onChange={handleChange} 
-                      className="w-full text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" 
+                      className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" 
                     />
                     <datalist id="existing-emails-list">
                       {existingPersons.filter(p => p.email).map(p => <option key={p.id} value={p.email}>{p.name}</option>)}
@@ -422,12 +422,12 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                   )}
                 </div>
 
-                <div className="pt-4 border-t border-gray-100 space-y-1">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Dirección Fí­sica</label>
-                  <input required name="address" placeholder="Ej. Calle 123..." value={formData.address || ''} onChange={handleChange} className="w-full text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                <div className="pt-4 border-t border-gray-100 dark:border-slate-700 space-y-1">
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Dirección Fí­sica</label>
+                  <input required name="address" placeholder="Ej. Calle 123..." value={formData.address || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
                 </div>
                 
-                <div className="pt-4 border-t border-gray-100">
+                <div className="pt-4 border-t border-gray-100 dark:border-slate-700">
                   <span className="text-xs text-gray-400 font-medium">Fuente: {formData.origin}</span>
                 </div>
               </form>
@@ -441,29 +441,29 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
               <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
                 
                 {/* INTERACTION WIDGET */}
-                <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-                  <div className="flex border-b border-gray-200">
+                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
+                  <div className="flex border-b border-gray-200 dark:border-slate-700">
                     <button 
                       onClick={() => setActiveTab('activity')}
-                      className={clsx("flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'activity' ? "border-blue-600 text-blue-700 bg-blue-50/50" : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50")}
+                      className={clsx("flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'activity' ? "border-blue-600 text-blue-700 bg-blue-50/50" : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900")}
                     >
                       <Calendar className="w-4 h-4" /> Actividad
                     </button>
                     <button 
                       onClick={() => setActiveTab('notes')}
-                      className={clsx("flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'notes' ? "border-blue-600 text-blue-700 bg-blue-50/50" : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50")}
+                      className={clsx("flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'notes' ? "border-blue-600 text-blue-700 bg-blue-50/50" : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900")}
                     >
                       <FileText className="w-4 h-4" /> Notas
                     </button>
                     <button 
                       onClick={() => setActiveTab('files')}
-                      className={clsx("flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'files' ? "border-blue-600 text-blue-700 bg-blue-50/50" : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50")}
+                      className={clsx("flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'files' ? "border-blue-600 text-blue-700 bg-blue-50/50" : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900")}
                     >
                       <Upload className="w-4 h-4" /> Archivos
                     </button>
                   </div>
                   
-                  <div className="p-4 bg-white">
+                  <div className="p-4 bg-white dark:bg-slate-800">
                     {activeTab === 'activity' && (
                       <div>
                         <input 
@@ -498,7 +498,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                       </div>
                     )}
                     {activeTab === 'files' && (
-                      <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
                         <label className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                           Haz clic para subir un archivo
@@ -513,19 +513,19 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                 {/* FOCUS SECTION (Pending tasks) */}
                 {pendingTasks.length > 0 && (
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2"> Enfoque </h3>
-                    <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 flex items-center gap-2"> Enfoque </h3>
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
                       {pendingTasks.map((t, idx) => (
-                        <div key={t.id} className={clsx("flex items-center justify-between p-3", idx !== pendingTasks.length - 1 && "border-b border-gray-100")}>
+                        <div key={t.id} className={clsx("flex items-center justify-between p-3", idx !== pendingTasks.length - 1 && "border-b border-gray-100 dark:border-slate-700")}>
                           <div className="flex items-center gap-3">
                             <button 
                               onClick={() => toggleTaskCompletion(t)}
                               className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-green-500 transition-colors"
                             >
                             </button>
-                            <span className="text-sm font-medium text-gray-800">{t.title}</span>
+                            <span className="text-sm font-medium text-gray-800 dark:text-slate-200">{t.title}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400 font-medium">
                             <Clock className="w-3.5 h-3.5" />
                             {t.dueDate}
                           </div>
@@ -537,7 +537,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
 
                 {/* TIMELINE / HISTORY SECTION */}
                 <div className="space-y-4">
-                   <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2"> Historial </h3>
+                   <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 flex items-center gap-2"> Historial </h3>
                    
                    <div className="relative pl-6 space-y-6 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-gray-200">
                      
@@ -549,10 +549,10 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                          </div>
                          <div className="bg-amber-50 border border-amber-100/60 p-3 rounded-lg mr-2">
                            <div className="flex justify-between items-start mb-1">
-                             <span className="text-xs font-semibold text-gray-600">Tarea completada</span>
+                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">Tarea completada</span>
                              <span className="text-[10px] text-gray-400">{t.dueDate}</span>
                            </div>
-                           <p className="text-sm text-gray-800 line-through opacity-70">{t.title}</p>
+                           <p className="text-sm text-gray-800 dark:text-slate-200 line-through opacity-70">{t.title}</p>
                          </div>
                        </div>
                      ))}
@@ -562,12 +562,12 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                          <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-yellow-500 border-2 border-white shadow-sm flex items-center justify-center">
                            <FileText className="w-2.5 h-2.5 text-white" />
                          </div>
-                         <div className="bg-white border border-yellow-200 p-3 rounded-lg mr-2 shadow-sm">
+                         <div className="bg-white dark:bg-slate-800 border border-yellow-200 p-3 rounded-lg mr-2 shadow-sm">
                            <div className="flex justify-between items-start mb-2">
-                             <span className="text-xs font-bold text-gray-800">{n.sellerId === userData?.id ? userData?.email : 'Nota'}</span>
+                             <span className="text-xs font-bold text-gray-800 dark:text-slate-200">{n.sellerId === userData?.id ? userData?.email : 'Nota'}</span>
                              <span className="text-[10px] text-gray-400">{(n.createdAt as string)?.split('T')[0]}</span>
                            </div>
-                           <p className="text-sm text-gray-700 whitespace-pre-wrap">{n.content}</p>
+                           <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{n.content}</p>
                          </div>
                        </div>
                      ))}
@@ -577,9 +577,9 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                          <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-sm flex items-center justify-center">
                            <Upload className="w-2 h-2 text-white" />
                          </div>
-                         <div className="bg-white border border-gray-200 p-3 rounded-lg mr-2 hover:border-blue-300 transition-colors">
+                         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-3 rounded-lg mr-2 hover:border-blue-300 transition-colors">
                            <div className="flex justify-between items-start mb-1">
-                             <span className="text-xs font-semibold text-gray-600">Archivo subido</span>
+                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">Archivo subido</span>
                              <span className="text-[10px] text-gray-400">{(f.uploadedAt as string)?.split('T')[0]}</span>
                            </div>
                            <a href={f.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-1.5 mt-1">
@@ -592,7 +592,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
 
                      <div className="relative">
                        <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-gray-300 border-2 border-white shadow-sm"></div>
-                       <div className="text-sm text-gray-500 ml-1">
+                       <div className="text-sm text-gray-500 dark:text-slate-400 ml-1">
                          Trato creado. Origen: <span className="font-semibold">{formData.origin}</span>
                        </div>
                      </div>
@@ -602,20 +602,20 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                 
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center bg-gray-50">
+              <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
                 <div className="text-center max-w-sm">
                   <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                     <User className="w-8 h-8" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Completa el formulario</h3>
-                  <p className="text-gray-500 text-sm">Rellena los datos básicos en el panel izquierdo y guarda para comenzar a registrar notas, documentos y actividades.</p>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">Completa el formulario</h3>
+                  <p className="text-gray-500 dark:text-slate-400 text-sm">Rellena los datos básicos en el panel izquierdo y guarda para comenzar a registrar notas, documentos y actividades.</p>
                 </div>
               </div>
             )}
 
             {/* BOTTOM ACTIONS (mobile: form save, desktop: right aligned save) */}
-            <div className="p-4 bg-white border-t border-gray-200 flex justify-end gap-3 shrink-0">
-              <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded transition-colors">
+            <div className="p-4 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3 shrink-0">
+              <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors">
                 Cancelar
               </button>
               <button form="client-form" type="submit" className="px-6 py-2 bg-[#2E353B] hover:bg-black transition-colors text-white text-sm font-bold rounded shadow-sm">

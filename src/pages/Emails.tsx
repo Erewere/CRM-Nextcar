@@ -125,14 +125,14 @@ export function Emails() {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-stretch overflow-hidden bg-white">
-      <div className="px-8 py-6 border-b border-gray-200 shrink-0 bg-white shadow-sm flex items-center justify-between z-10 relative">
+    <div className="flex-1 flex flex-col items-stretch overflow-hidden bg-white dark:bg-slate-800">
+      <div className="px-8 py-6 border-b border-gray-200 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 shadow-sm flex items-center justify-between z-10 relative">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-3">
             <Mail className="w-8 h-8 text-blue-600" />
             Correos Electrónicos
           </h1>
-          <p className="text-gray-500 mt-1 flex items-center gap-2">
+          <p className="text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-2">
             Gestiona tu bandeja de entrada sincronizada.
           </p>
         </div>
@@ -141,7 +141,7 @@ export function Emails() {
              <button
                onClick={fetchEmails}
                disabled={loading}
-               className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 font-medium rounded-lg hover:bg-gray-50 shadow-sm transition-all focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+               className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:bg-slate-900 shadow-sm transition-all focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
              >
                <RefreshCw className={clsx("w-4 h-4", loading && "animate-spin")} />
                Actualizar
@@ -151,28 +151,28 @@ export function Emails() {
       </div>
 
       <div className="flex-1 overflow-hidden relative">
-        <div className="absolute inset-0 bg-gray-50 flex items-stretch">
+        <div className="absolute inset-0 bg-gray-50 dark:bg-slate-900 flex items-stretch">
           {!googleToken ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
               <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-blue-100">
                 <Mail className="w-10 h-10" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-3">Conecta tu cuenta de Gmail</h2>
-              <p className="text-gray-500 max-w-md mx-auto mb-8 leading-relaxed">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-slate-200 mb-3">Conecta tu cuenta de Gmail</h2>
+              <p className="text-gray-500 dark:text-slate-400 max-w-md mx-auto mb-8 leading-relaxed">
                 Para poder leer y enviar correos, debes sincronizar tu cuenta de Google Workspace para conceder permisos de acceso a Gmail.
               </p>
               <button 
                 onClick={handleConnect}
                 className="bg-[#4285F4] hover:bg-[#3367d6] text-white px-6 py-3 rounded-lg font-medium shadow-md transition-all flex items-center gap-3"
               >
-                <svg className="w-5 h-5 bg-white rounded-full p-0.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
+                <svg className="w-5 h-5 bg-white dark:bg-slate-800 rounded-full p-0.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
                 Conectar Workspace
               </button>
             </div>
           ) : (
             <div className="flex-1 flex overflow-hidden">
                {/* Sidebar (List of correos) */}
-               <div className="w-[450px] shrink-0 border-r border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+               <div className="w-[450px] shrink-0 border-r border-gray-200 bg-white dark:bg-slate-800 flex flex-col h-full overflow-hidden">
                   {error && (
                     <div className="m-4 bg-red-50 border border-red-200 text-red-600 rounded-lg p-3 text-sm flex items-start gap-2 shrink-0">
                       <AlertCircle className="w-5 h-5 shrink-0" />
@@ -192,7 +192,7 @@ export function Emails() {
                         <p>Cargando bandeja de entrada...</p>
                       </div>
                     ) : messages.length === 0 && !error ? (
-                      <div className="p-8 text-center text-gray-500 flex flex-col items-center">
+                      <div className="p-8 text-center text-gray-500 dark:text-slate-400 flex flex-col items-center">
                         <Inbox className="w-12 h-12 text-gray-300 mb-3" />
                         <p>Tu bandeja está vacía</p>
                       </div>
@@ -212,17 +212,17 @@ export function Emails() {
                               key={msg.id} 
                               onClick={() => setSelectedEmail(msg)}
                               className={clsx(
-                                "p-4 cursor-pointer hover:bg-gray-50 transition-colors relative border-l-4",
+                                "p-4 cursor-pointer hover:bg-gray-50 dark:bg-slate-900 transition-colors relative border-l-4",
                                 isSelected ? "bg-blue-50/50 border-blue-500" : "border-transparent",
-                                msg.unread ? "font-bold text-gray-900" : "text-gray-600"
+                                msg.unread ? "font-bold text-gray-900 dark:text-slate-100" : "text-gray-600 dark:text-slate-400"
                               )}
                             >
                               <div className="flex justify-between items-baseline mb-1">
                                 <span className={clsx("truncate pr-4 text-sm", msg.unread && "text-blue-700")}>{msg.from.split('<')[0].replace(/"/g, '').trim()}</span>
                                 <span className={clsx("text-xs shrink-0", msg.unread ? "text-blue-600" : "text-gray-400")}>{dateFormatted}</span>
                               </div>
-                              <h4 className={clsx("text-sm mb-1 truncate", msg.unread && "text-gray-900")}>{msg.subject}</h4>
-                              <p className="text-xs text-gray-500 truncate">{decodeHTMLEntities(msg.snippet)}</p>
+                              <h4 className={clsx("text-sm mb-1 truncate", msg.unread && "text-gray-900 dark:text-slate-100")}>{msg.subject}</h4>
+                              <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{decodeHTMLEntities(msg.snippet)}</p>
                             </div>
                           );
                         })}
@@ -232,19 +232,19 @@ export function Emails() {
                </div>
                
                {/* Main Pane (Reading View) */}
-               <div className="flex-1 bg-white flex flex-col overflow-hidden relative">
+               <div className="flex-1 bg-white dark:bg-slate-800 flex flex-col overflow-hidden relative">
                  {selectedEmail ? (
-                   <div className="flex-1 flex flex-col overflow-hidden bg-white">
-                     <div className="shrink-0 p-6 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">{selectedEmail.subject}</h2>
+                   <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-800">
+                     <div className="shrink-0 p-6 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800/95 backdrop-blur-sm z-10">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{selectedEmail.subject}</h2>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase shrink-0">
                                {selectedEmail.from.charAt(0)}
                             </div>
                             <div>
-                               <div className="font-medium text-gray-900 text-sm">{selectedEmail.from}</div>
-                               <div className="text-xs text-gray-500">
+                               <div className="font-medium text-gray-900 dark:text-slate-100 text-sm">{selectedEmail.from}</div>
+                               <div className="text-xs text-gray-500 dark:text-slate-400">
                                  {selectedEmail.date}
                                </div>
                             </div>
@@ -254,11 +254,11 @@ export function Emails() {
                      <div className="flex-1 overflow-y-auto p-8 relative isolate">
                         {selectedEmail.bodyHtml ? (
                           <div 
-                            className="text-sm text-gray-800 leading-relaxed max-w-4xl prose prose-blue prose-sm marker:text-gray-400 prose-a:text-blue-600 hover:prose-a:text-blue-700" 
+                            className="text-sm text-gray-800 dark:text-slate-200 leading-relaxed max-w-4xl prose prose-blue prose-sm marker:text-gray-400 prose-a:text-blue-600 hover:prose-a:text-blue-700" 
                             dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }} 
                           />
                         ) : selectedEmail.bodyPlain ? (
-                          <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans max-w-4xl">
+                          <div className="text-sm text-gray-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap font-sans max-w-4xl">
                             {selectedEmail.bodyPlain}
                           </div>
                         ) : (
@@ -269,7 +269,7 @@ export function Emails() {
                      </div>
                    </div>
                  ) : (
-                   <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50">
+                   <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50 dark:bg-slate-900/50">
                      <FileText className="w-16 h-16 text-gray-200 mb-4" />
                      <p className="text-lg">Selecciona un correo para leerlo</p>
                    </div>

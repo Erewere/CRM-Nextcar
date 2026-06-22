@@ -41,16 +41,16 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 relative overflow-hidden font-sans">
-      <div className="z-10 w-full max-w-sm bg-white p-10 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center">
-        <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-6 w-full justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4 relative overflow-hidden font-sans">
+      <div className="z-10 w-full max-w-sm bg-white dark:bg-slate-800 p-10 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 flex flex-col items-center">
+        <div className="flex items-center gap-3 mb-8 border-b border-slate-100 dark:border-slate-700 pb-6 w-full justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
             NX
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">Nextcar <span className="text-blue-600">CRM</span></span>
+          <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Nextcar <span className="text-blue-600">CRM</span></span>
         </div>
         
-        <h2 className="text-base font-bold text-slate-800 text-center mb-6">
+        <h2 className="text-base font-bold text-slate-800 dark:text-slate-200 text-center mb-6">
           {isRegistering ? 'Crear nueva cuenta' : 'Acceso al Portal CRM'}
         </h2>
 
@@ -63,36 +63,36 @@ export function Login() {
         <form onSubmit={handleSubmit} className="w-full space-y-4 mb-6">
           {isRegistering && (
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Nombre Completo</label>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Nombre Completo</label>
               <input 
                 type="text" 
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 py-2.5 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                 placeholder="Tu nombre real"
               />
             </div>
           )}
           <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Email</label>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Email</label>
             <input 
               type="email" 
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 py-2.5 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
               placeholder="tu@email.com"
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Contraseña</label>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Contraseña</label>
             <input 
               type="password" 
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 py-2.5 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
               placeholder="••••••••"
             />
           </div>
@@ -104,7 +104,7 @@ export function Login() {
           </button>
         </form>
 
-        <div className="w-full border-t border-slate-100 pt-6">
+        <div className="w-full border-t border-slate-100 dark:border-slate-700 pt-6">
           <button
             onClick={async () => {
               try {
@@ -117,16 +117,16 @@ export function Login() {
               }
             }}
             type="button"
-            className="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 transition-colors text-slate-700 font-bold rounded-lg flex items-center justify-center gap-3 shadow-sm text-sm"
+            className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900 transition-colors text-slate-700 dark:text-slate-300 font-bold rounded-lg flex items-center justify-center gap-3 shadow-sm text-sm"
           >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4 bg-white rounded-full" />
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4 bg-white dark:bg-slate-800 rounded-full" />
             Continuar con Google
           </button>
         </div>
 
         <button 
           onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
-          className="mt-6 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
+          className="mt-6 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-blue-600 transition-colors"
         >
           {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
         </button>

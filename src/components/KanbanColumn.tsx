@@ -24,9 +24,9 @@ export function KanbanColumn({ column, clients, onClientClick, tasks = [] }: Pro
   const isNew = column.id === 'new' || lowerTitle.includes('nuev');
 
   return (
-    <div className="flex w-[270px] flex-col h-full shrink-0 border-r border-slate-200/70 bg-[#F3F4F6] relative">
+    <div className="flex w-[270px] flex-col h-full shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F3F4F6] relative">
       <div className={clsx(
-        "flex flex-col px-3 py-3 shrink-0 bg-white border-b border-slate-200 relative",
+        "flex flex-col px-3 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
       )}>
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-slate-200">
            {isWon && <div className="h-full bg-green-500 w-full" />}
@@ -34,13 +34,13 @@ export function KanbanColumn({ column, clients, onClientClick, tasks = [] }: Pro
            {isNew && <div className="h-full bg-blue-400 w-full" />}
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-bold text-slate-800">
+          <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">
             {column.title}
           </span>
           {/* Progress circle mock */}
-          <div className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-green-500 transform rotate-45"></div>
+          <div className="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-green-500 transform rotate-45"></div>
         </div>
-        <span className="text-[11px] font-medium text-slate-500 mt-1">
+        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">
           {clients.length} trato{clients.length !== 1 ? 's' : ''}
         </span>
       </div>

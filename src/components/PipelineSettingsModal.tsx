@@ -71,10 +71,10 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-          <h2 className="font-bold text-lg text-slate-800">Configurar Etapas</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+          <h2 className="font-bold text-lg text-slate-800 dark:text-slate-200">Configurar Etapas</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">✕</button>
         </div>
         
         <div className="p-4 overflow-y-auto flex-1">
@@ -94,8 +94,8 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
 
           <div className="space-y-2">
             {stages.map((stage, i) => (
-              <div key={stage.id} className="flex items-center justify-between border rounded-lg p-2 bg-white">
-                <span className="font-medium text-sm text-slate-700">{stage.title}</span>
+              <div key={stage.id} className="flex items-center justify-between border rounded-lg p-2 bg-white dark:bg-slate-800">
+                <span className="font-medium text-sm text-slate-700 dark:text-slate-300">{stage.title}</span>
                 <div className="flex gap-1">
                   <button onClick={() => moveUp(i)} disabled={i === 0} className="p-1 text-slate-400 hover:text-blue-600 disabled:opacity-30">
                     ↑
@@ -112,8 +112,8 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
           </div>
         </div>
 
-        <div className="p-4 border-t bg-slate-50 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg">Cancelar</button>
+        <div className="p-4 border-t bg-slate-50 dark:bg-slate-900 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">Cancelar</button>
           <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-bold">
             {loading ? 'Guardando...' : 'Guardar'}
           </button>
