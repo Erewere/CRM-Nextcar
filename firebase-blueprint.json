@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with RBAC roles",
+      "type": "object",
+      "required": ["email", "role", "createdAt"],
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["master", "admin", "seller"] },
+        "agencyId": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Agency": {
+      "title": "Agency",
+      "description": "Automotive agency",
+      "type": "object",
+      "required": ["name", "createdAt"],
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Sales lead / contact",
+      "type": "object",
+      "required": ["agencyId", "name", "address", "phone", "email", "vehicle", "status", "createdAt", "updatedAt"],
+      "properties": {
+        "agencyId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "vehicle": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "contacted", "negotiation", "won", "lost"] },
+        "origin": { "type": "string", "enum": ["manual", "whatsapp", "web"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Follow-up task for a client",
+      "type": "object",
+      "required": ["agencyId", "sellerId", "clientId", "title", "completed", "createdAt"],
+      "properties": {
+        "agencyId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "title": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "File": {
+      "title": "File",
+      "description": "Attached document for a client",
+      "type": "object",
+      "required": ["agencyId", "clientId", "filename", "url", "uploadedAt"],
+      "properties": {
+        "agencyId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "filename": { "type": "string" },
+        "url": { "type": "string" },
+        "uploadedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Global users collection with their RBAC roles."
+    },
+    "agencies/{agencyId}": {
+      "schema": { "$ref": "#/entities/Agency" },
+      "description": "Agencies."
+    },
+    "clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "All clients. Grouped by agencyId and sellerId logically via fields."
+    },
+    "tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "All tasks."
+    },
+    "files/{fileId}": {
+      "schema": { "$ref": "#/entities/File" },
+      "description": "All client document metadata."
+    }
+  }
+}

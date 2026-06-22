@@ -1,0 +1,6 @@
+{
+  "name": "Nextcar CRM",
+  "description": "Plataforma CRM avanzada para agencias automotrices con tablero Kanban, sistema de gestión de vendedores, y captación automática de leads de WhatsApp, diseñada al estilo Pipedrive.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
