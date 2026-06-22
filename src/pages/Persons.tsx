@@ -20,6 +20,51 @@ export function Persons() {
   const [selectedPerson, setSelectedPerson] = useState<Client | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [importingContacts, setImportingContacts] = useState(false);
+  
+  const [columns, setColumns] = useState([
+    { id: 'name', label: 'Nombre', visible: true, width: 200 },
+    { id: 'organization', label: 'Organización', visible: true, width: 150 },
+    { id: 'email', label: 'Correo electrónico', visible: true, width: 200 },
+    { id: 'phone', label: 'Teléfono', visible: true, width: 150 },
+    { id: 'vehicle', label: 'Vehículo', visible: true, width: 150 },
+    { id: 'status', label: 'Etapa', visible: true, width: 150 },
+    { id: 'closedDeals', label: 'Tratos cerrados', visible: true, width: 120 },
+    { id: 'openDeals', label: 'Tratos abiertos', visible: true, width: 120 },
+    { id: 'nextTaskDate', label: 'Fecha de la próxima actividad', visible: true, width: 220 },
+    { id: 'owner', label: 'Propietario', visible: true, width: 150 }
+  ]);
+  const [showColSettings, setShowColSettings] = useState(false);
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartWidth, setDragStartWidth] = useState(0);
+
+  useEffect(() => {
+    if (!resizingCol) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - dragStartX;
+      setColumns(cols => cols.map(c => c.id === resizingCol ? { ...c, width: Math.max(50, dragStartWidth + delta) } : c));
+    };
+    const handleMouseUp = () => setResizingCol(null);
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingCol, dragStartX, dragStartWidth]);
+
+  const handleMouseDown = (e: React.MouseEvent, colId: string, currentWidth: number) => {
+    setResizingCol(colId);
+    setDragStartX(e.clientX);
+    setDragStartWidth(currentWidth);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const toggleColumn = (id: string) => {
+    setColumns(cols => cols.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+  };
 
   // New person form state
   const [name, setName] = useState('');
@@ -213,13 +258,17 @@ export function Persons() {
     }
 
     const personTasks = tasks.filter(t => t.clientId === personId && !t.completed);
-    personTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-    const nextTaskDate = personTasks.length > 0 ? personTasks[0].dueDate : null;
+    personTasks.sort((a, b) => {
+      const da = new Date(a.dueDate ? a.dueDate + 'T00:00:00' : '9999-12-31T00:00:00');
+      const db = new Date(b.dueDate ? b.dueDate + 'T00:00:00' : '9999-12-31T00:00:00');
+      return da.getTime() - db.getTime();
+    });
+    const nextTaskDate = personTasks.length > 0 && personTasks[0].dueDate ? personTasks[0].dueDate : null;
 
     return {
       openDeals,
       closedDeals,
-      nextTaskDate: nextTaskDate ? format(new Date(nextTaskDate), "d 'de' MMMM 'de' yyyy", { locale: es }) : ''
+      nextTaskDate: nextTaskDate ? format(new Date(nextTaskDate + 'T00:00:00'), "d 'de' MMMM 'de' yyyy", { locale: es }) : ''
     };
   };
 
@@ -316,42 +365,68 @@ export function Persons() {
         </div>
       ) : (
         <div className="flex-1 overflow-auto bg-white border-t border-gray-200">
-          <table className="w-full text-left text-sm border-collapse">
+          <table className="w-full text-left text-sm border-collapse table-fixed select-none">
             <thead className="bg-[#fcfdfd] border-b border-gray-200 text-gray-600 font-medium sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="px-4 py-3 w-10 border-r border-gray-200"><input type="checkbox" className="rounded border-gray-300" /></th>
-                <th className="px-4 py-3 border-r border-gray-200">Nombre</th>
-                <th className="px-4 py-3 border-r border-gray-200">Organización</th>
-                <th className="px-4 py-3 border-r border-gray-200">Correo electrónico</th>
-                <th className="px-4 py-3 border-r border-gray-200">Teléfono</th>
-                <th className="px-4 py-3 border-r border-gray-200 text-right">Tratos cerrados</th>
-                <th className="px-4 py-3 border-r border-gray-200 text-right">Tratos abiertos</th>
-                <th className="px-4 py-3 border-r border-gray-200">Fecha de la próxima actividad</th>
-                <th className="px-4 py-3 border-r border-gray-200">Propietario</th>
-                <th className="px-4 py-3 w-10"><Settings className="w-4 h-4 text-gray-400" /></th>
+                <th className="w-10 border-r border-gray-200" style={{ width: 40 }}><div className="px-4 py-3"><input type="checkbox" className="rounded border-gray-300 cursor-pointer" /></div></th>
+                {columns.filter(c => c.visible).map(col => (
+                  <th key={col.id} className="relative border-r border-gray-200 truncate group" style={{ width: col.width }}>
+                    <div className="px-4 py-3 truncate">{col.label}</div>
+                    <div 
+                      className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
+                      onMouseDown={(e) => handleMouseDown(e, col.id, col.width)}
+                    />
+                  </th>
+                ))}
+                <th className="w-10 relative" style={{ width: 40 }}>
+                  <button type="button" onClick={() => setShowColSettings(!showColSettings)} className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 outline-none">
+                    <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors" />
+                  </button>
+                  {showColSettings && (
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded shadow-lg p-2 z-50">
+                      <div className="text-xs font-bold text-gray-500 mb-2 uppercase px-2">Columnas visibles</div>
+                      {columns.map(col => (
+                        <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-gray-700">
+                          <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300" />
+                          <span className="truncate">{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white">
               {filteredPersons.map(person => {
                 const stats = getPersonStats(person.id);
                 return (
-                  <tr key={person.id} className="border-b border-gray-100 hover:bg-gray-50 group cursor-pointer" onClick={() => setSelectedPerson(person)}>
-                    <td className="px-4 py-2 border-r border-gray-100" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-gray-300" /></td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-blue-600 font-medium">{person.name}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{person.organization}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{person.email}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{person.phone}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600 text-right">{stats.closedDeals}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600 text-right">{stats.openDeals}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{stats.nextTaskDate}</td>
-                    <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{agencyUsers[person.sellerId] || agencyUsers[person.agencyId] || 'Sin asignar'}</td>
-                    <td className="px-4 py-2 text-center text-gray-400 group-hover:text-gray-600">...</td>
+                  <tr key={person.id} className="border-b border-gray-100 hover:bg-gray-50 group/row cursor-pointer" onClick={() => setSelectedPerson(person)}>
+                    <td className="px-4 py-2 border-r border-gray-100" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-gray-300 cursor-pointer" /></td>
+                    {columns.filter(c => c.visible).map(col => {
+                      let val: React.ReactNode = '';
+                      if (col.id === 'name') val = <span className="text-blue-600 font-medium truncate w-full block">{person.name}</span>;
+                      if (col.id === 'organization') val = person.organization;
+                      if (col.id === 'email') val = person.email;
+                      if (col.id === 'phone') val = person.phone;
+                      if (col.id === 'vehicle') val = person.vehicle || person.dealTitle || '';
+                      if (col.id === 'status') val = <span className="capitalize">{person.status === 'open' ? 'Abierto' : person.status === 'won' ? 'Ganado' : person.status === 'lost' ? 'Perdido' : person.status || 'Nuevo'}</span>;
+                      if (col.id === 'closedDeals') val = <div className="text-right">{stats.closedDeals}</div>;
+                      if (col.id === 'openDeals') val = <div className="text-right">{stats.openDeals}</div>;
+                      if (col.id === 'nextTaskDate') val = stats.nextTaskDate;
+                      if (col.id === 'owner') val = agencyUsers[person.sellerId] || agencyUsers[person.agencyId] || 'Sin asignar';
+                      return (
+                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 text-gray-600 truncate" style={{ width: col.width, maxWidth: col.width }}>
+                          {val}
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600">...</td>
                   </tr>
                 );
               })}
               {filteredPersons.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 font-medium border-b border-gray-100">
+                  <td colSpan={columns.filter(c => c.visible).length + 2} className="px-4 py-8 text-center text-gray-500 font-medium border-b border-gray-100">
                     No se encontraron personas
                   </td>
                 </tr>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { logout, db } from '../lib/firebase';
-import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Menu, X, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Menu, X, Moon, Sun, ChevronLeft, ChevronRight } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import clsx from 'clsx';
 
@@ -13,6 +13,7 @@ export function Layout() {
   const [agencyName, setAgencyName] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -21,6 +22,9 @@ export function Layout() {
     if (savedMode) {
       document.documentElement.classList.add('dark');
     }
+    
+    const savedCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    setIsSidebarCollapsed(savedCollapsed);
   }, []);
 
   const toggleDarkMode = () => {
@@ -32,6 +36,12 @@ export function Layout() {
     } else {
       document.documentElement.classList.remove('dark');
     }
+  };
+
+  const toggleSidebar = () => {
+    const newCollapsed = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newCollapsed);
+    localStorage.setItem('sidebarCollapsed', newCollapsed.toString());
   };
 
   useEffect(() => {
@@ -95,14 +105,24 @@ export function Layout() {
 
       {/* Sidebar */}
       <aside className={clsx(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col items-stretch shrink-0 transition-transform duration-300 md:relative md:translate-x-0",
-        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        "fixed inset-y-0 left-0 z-50 bg-slate-900 text-slate-300 flex flex-col items-stretch shrink-0 transition-[width,transform] duration-300 md:relative md:translate-x-0",
+        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
+        isSidebarCollapsed ? "w-20" : "w-64"
       )}>
-        <div className="hidden md:flex items-center gap-3 p-6 border-b border-slate-800">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
+        <button 
+          onClick={toggleSidebar}
+          className="hidden md:flex absolute -right-3 top-6 bg-slate-800 text-slate-400 border border-slate-700 hover:text-white rounded-full p-1 z-50 hover:bg-slate-700 transition-colors"
+        >
+          {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
+
+        <div className={clsx("hidden md:flex items-center gap-3 p-6 border-b border-slate-800", isSidebarCollapsed && "justify-center px-2")}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
             NX
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">Nextcar <span className="text-blue-500">CRM</span></span>
+          {!isSidebarCollapsed && (
+            <span className="text-xl font-bold tracking-tight text-white truncate">Nextcar <span className="text-blue-500">CRM</span></span>
+          )}
         </div>
         
         <nav className="mt-4 flex-1 space-y-1 px-4 overflow-y-auto">
@@ -111,33 +131,41 @@ export function Layout() {
                key={item.path}
                to={item.path}
                end={item.path === '/'}
+               title={isSidebarCollapsed ? item.name : undefined}
                className={({ isActive }) => clsx(
-                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                 "flex items-center gap-3 py-2 rounded-lg text-sm transition-colors",
+                 isSidebarCollapsed ? "justify-center px-0" : "px-3",
                  isActive ? "bg-blue-600/10 text-blue-400 font-medium" : "text-slate-300 hover:bg-slate-800"
                )}
              >
-               <item.icon className="w-5 h-5" />
-               {item.name}
+               <item.icon className={clsx("shrink-0", isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5")} />
+               {!isSidebarCollapsed && <span className="truncate">{item.name}</span>}
              </NavLink>
           ))}
         </nav>
 
         <div className="mt-auto border-t border-slate-800 p-4">
-          <div className="flex items-center gap-3 rounded-xl bg-slate-800/50 p-3 mb-2">
-            <div className="h-10 w-10 shrink-0 rounded-lg bg-slate-600 flex items-center justify-center text-white font-bold uppercase">
+          <div className={clsx("flex items-center rounded-xl bg-slate-800/50 mb-2", isSidebarCollapsed ? "justify-center p-2" : "gap-3 p-3")}>
+            <div className="h-10 w-10 shrink-0 rounded-lg bg-slate-600 flex items-center justify-center text-white font-bold uppercase" title={isSidebarCollapsed ? userData?.name : undefined}>
               {userData?.name?.substring(0,2) || 'US'}
             </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-sm font-semibold text-white truncate">{userData?.name}</span>
-              <span className="text-[10px] text-slate-400 capitalize">{userData?.role}</span>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="flex flex-col overflow-hidden">
+                <span className="text-sm font-semibold text-white truncate">{userData?.name}</span>
+                <span className="text-[10px] text-slate-400 capitalize">{userData?.role}</span>
+              </div>
+            )}
           </div>
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            title={isSidebarCollapsed ? "Cerrar Sesión" : undefined}
+            className={clsx(
+              "w-full flex items-center rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors",
+              isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2"
+            )}
           >
-            <LogOut className="w-5 h-5" />
-            Cerrar Sesión
+            <LogOut className={clsx("shrink-0", isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5")} />
+            {!isSidebarCollapsed && <span className="truncate">Cerrar Sesión</span>}
           </button>
         </div>
       </aside>
