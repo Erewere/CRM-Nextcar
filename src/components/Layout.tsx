@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { logout, db } from '../lib/firebase';
-import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Menu, X, Moon, Sun } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import clsx from 'clsx';
 
@@ -12,6 +12,27 @@ export function Layout() {
   const location = useLocation();
   const [agencyName, setAgencyName] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    // Check local storage for dark mode preference
+    const savedMode = localStorage.getItem('darkMode') === 'true';
+    setIsDarkMode(savedMode);
+    if (savedMode) {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('darkMode', newMode.toString());
+    if (newMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -122,31 +143,40 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-[calc(100vh-56px)] md:h-screen overflow-hidden bg-slate-50 font-sans w-full relative">
-        <header className="flex h-16 items-center justify-between border-b bg-white px-4 md:px-8 shrink-0">
+      <main className="flex-1 flex flex-col h-[calc(100vh-56px)] md:h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
+        <header className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
           <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-            <h1 className="text-lg font-bold text-slate-800 hidden sm:block shrink-0">Panel de Control</h1>
+            <h1 className="text-lg font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors">Panel de Control</h1>
             {agencyName && (
-              <div className="flex items-center gap-1 md:gap-2 rounded-full bg-blue-50 border border-blue-100 px-2 md:px-3 py-1 truncate shrink-0">
-                <Building className="w-3 h-3 text-blue-600 shrink-0" />
-                <span className="text-[10px] md:text-xs font-medium text-blue-700 truncate">{agencyName}</span>
+              <div className="flex items-center gap-1 md:gap-2 rounded-full bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800/50 px-2 md:px-3 py-1 truncate shrink-0 transition-colors">
+                <Building className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="text-[10px] md:text-xs font-medium text-blue-700 dark:text-blue-300 truncate">{agencyName}</span>
               </div>
             )}
-            <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 shrink-0">
+            <div className="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 shrink-0 transition-colors">
               <span className="h-2 w-2 rounded-full bg-green-500"></span>
-              <span className="text-[10px] md:text-xs font-medium text-slate-600 hidden sm:inline">En línea</span>
+              <span className="text-[10px] md:text-xs font-medium text-slate-600 dark:text-slate-400 hidden sm:inline">En línea</span>
             </div>
           </div>
           <div className="flex items-center gap-4 shrink-0">
+             {/* Dark Mode Toggle */}
+             <button
+               onClick={toggleDarkMode}
+               className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+               aria-label="Toggle dark mode"
+             >
+               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+             </button>
+
              {/* Simulating "Integration with website" CTA just conceptually or link out */}
-             <a href="#" className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors">
+             <a href="https://www.nextcar.erewere.com" target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">
                <Car className="w-4 h-4" />
-               Ir a Nextcar.mx
+               Ir a Nextcar
              </a>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8 relative">
+        <div className="flex-1 overflow-auto p-4 md:p-8 relative transition-colors">
           <Outlet />
         </div>
       </main>
