@@ -9,6 +9,7 @@ let cachedAccessToken: string | null = null;
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/calendar.events');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;

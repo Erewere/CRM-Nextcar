@@ -9,6 +9,7 @@ import { Tasks } from './pages/Tasks';
 import { Persons } from './pages/Persons';
 import { AgencyUsers } from './pages/AgencyUsers';
 import { Inventory } from './pages/Inventory';
+import { Emails } from './pages/Emails';
 
 const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller')[] }) => {
   const { currentUser, userData, loading } = useAuth();
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />
+            <Route path="emails" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Emails /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
           </Route>
         </Routes>

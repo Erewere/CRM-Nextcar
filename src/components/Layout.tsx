@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { logout, db } from '../lib/firebase';
-import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Menu, X, Moon, Sun, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Menu, X, Moon, Sun, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import clsx from 'clsx';
 
@@ -71,6 +71,7 @@ export function Layout() {
     { name: 'Kanban', path: '/kanban', icon: Trello, roles: ['admin', 'seller'] },
     { name: 'Tareas Pendientes', path: '/tasks', icon: CheckSquare, roles: ['admin', 'seller'] },
     { name: 'Personas', path: '/persons', icon: Users, roles: ['admin', 'seller', 'master'] },
+    { name: 'Correos', path: '/emails', icon: Mail, roles: ['admin', 'seller', 'master'] },
     { name: 'Agencias & Usuarios', path: '/users', icon: Building, roles: ['master', 'admin'] }
   ].filter(item => {
     if (userData?.id === 'vxFIfZ5bdQSzaekW5d5c1TbNVCO2' && item.roles.includes('master')) return true;
