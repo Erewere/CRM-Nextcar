@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Phone, Users, Clock, Flag, Mail, Coffee, 
   Calendar as CalendarIcon, FileText, User, Link as LinkIcon, Settings, 
-  Building2, Briefcase, ChevronRight, ChevronLeft, CalendarX, Check
+  Building2, Briefcase, ChevronRight, ChevronLeft, CalendarX, Check, Car, PenTool
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Client } from '../types';
@@ -145,11 +145,10 @@ export function NewActivityModal({ onClose, onSave, clients, deals = [], current
 
   const types = [
     { id: 'call', icon: Phone, label: 'Llamada' },
-    { id: 'meeting', icon: Users, label: 'Reunión' },
-    { id: 'task', icon: Clock, label: 'Tarea' },
-    { id: 'deadline', icon: Flag, label: 'Plazo' },
-    { id: 'email', icon: Mail, label: 'Correo' },
-    { id: 'lunch', icon: Coffee, label: 'Comida' },
+    { id: 'appointment', icon: User, label: 'Cita' },
+    { id: 'test_drive', icon: Car, label: 'Prueba de manejo' },
+    { id: 'signature', icon: PenTool, label: 'Firma' },
+    { id: 'task', icon: Clock, label: 'Tarea' }
   ];
 
   const handleTypeSelect = (t: any) => {

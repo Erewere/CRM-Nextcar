@@ -8,7 +8,7 @@ import { NewActivityModal } from '../components/NewActivityModal';
 import { 
   CheckCircle, Circle, User, Calendar as CalendarIcon, 
   List as ListIcon, Phone, Video, CalendarDays, Flag,
-  Mail, Coffee, ChevronLeft, ChevronRight, X, AlertCircle, ChevronDown, Filter
+  Mail, Coffee, ChevronLeft, ChevronRight, X, AlertCircle, ChevronDown, Filter, Car, PenTool
 } from 'lucide-react';
 import clsx from 'clsx';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addDays, getDay, isSameDay, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
@@ -24,6 +24,9 @@ export function Tasks() {
   const [calendarMode, setCalendarMode] = useState<'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [filterType, setFilterType] = useState('all');
+  const [filterStatus, setFilterStatus] = useState<'all'|'pending'|'completed'>('all');
+  const [filterDate, setFilterDate] = useState<'all'|'overdue'|'today'|'tomorrow'|'week'>('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
@@ -122,9 +125,9 @@ export function Tasks() {
   const getTaskIcon = (title: string) => {
     const t = title.toLowerCase();
     if (t.includes('llama')) return <Phone className="w-3.5 h-3.5" />;
-    if (t.includes('reunió')) return <Video className="w-3.5 h-3.5" />;
-    if (t.includes('correo')) return <Mail className="w-3.5 h-3.5" />;
-    if (t.includes('comida')) return <Coffee className="w-3.5 h-3.5" />;
+    if (t.includes('cita') || t.includes('reunió') || t.includes('junta') || t.includes('meet')) return <User className="w-3.5 h-3.5" />;
+    if (t.includes('prueba') || t.includes('manejo') || t.includes('test')) return <Car className="w-3.5 h-3.5" />;
+    if (t.includes('firma') || t.includes('contrato')) return <PenTool className="w-3.5 h-3.5" />;
     return <CalendarDays className="w-3.5 h-3.5" />;
   };
 
@@ -159,17 +162,45 @@ export function Tasks() {
   };
 
   const filteredTasks = tasks.filter(({ task }) => {
+    // 1. Status Filter
+    if (filterStatus === 'pending' && task.completed) return false;
+    if (filterStatus === 'completed' && !task.completed) return false;
+
+    // 2. Date Filter
+    if (filterDate !== 'all' && task.dueDate) {
+      const taskDate = new Date(task.dueDate + 'T00:00:00'); // Assuming YYYY-MM-DD
+      taskDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const tomorrow = addDays(today, 1);
+      
+      if (filterDate === 'overdue') {
+        if (taskDate >= today || task.completed) return false;
+      } else if (filterDate === 'today') {
+        if (taskDate.getTime() !== today.getTime()) return false;
+      } else if (filterDate === 'tomorrow') {
+        if (taskDate.getTime() !== tomorrow.getTime()) return false;
+      } else if (filterDate === 'week') {
+        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+        if (taskDate < weekStart || taskDate > weekEnd) return false;
+      }
+    } else if (filterDate !== 'all' && !task.dueDate) {
+      return false; // exclude tasks without a due date if we filter by date
+    }
+
+    // 3. Type Filter
     if (filterType === 'all') return true;
     
     // Very basic filter logic based on title string matching (since Tasks don't have an explicit 'type' field yet)
     const t = task.title.toLowerCase();
     switch (filterType) {
       case 'call': return t.includes('llama');
-      case 'meeting': return t.includes('reunió') || t.includes('junta') || t.includes('meet');
-      case 'email': return t.includes('correo') || t.includes('email');
-      case 'lunch': return t.includes('comida') || t.includes('almuerzo');
-      case 'deadline': return t.includes('plazo') || t.includes('deadline');
-      case 'task': return !t.includes('llama') && !t.includes('reunió') && !t.includes('correo') && !t.includes('comida') && !t.includes('plazo'); // Default task
+      case 'appointment': return t.includes('cita') || t.includes('reunió') || t.includes('junta') || t.includes('meet');
+      case 'test_drive': return t.includes('prueba') || t.includes('manejo') || t.includes('test');
+      case 'signature': return t.includes('firma') || t.includes('contrato');
+      case 'task': return !t.includes('llama') && !t.includes('cita') && !t.includes('prueba') && !t.includes('firma') && !t.includes('reunió'); // Default task
       default: return true;
     }
   });
@@ -221,9 +252,31 @@ export function Tasks() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
              <span className="text-xs font-semibold text-gray-500">{tasks.length} actividades</span>
              <span className="text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded-full uppercase">Sincronización Inactiva</span>
-             <button className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded hover:bg-gray-50 shadow-sm text-gray-700 ml-auto sm:ml-0">
-               <Filter className="w-3.5 h-3.5" /> Filtro
-             </button>
+             <div className="relative">
+               <button 
+                 onClick={() => setShowFilterMenu(!showFilterMenu)}
+                 className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded hover:bg-gray-50 shadow-sm text-gray-700 ml-auto sm:ml-0"
+               >
+                 <Filter className="w-3.5 h-3.5" /> Filtro
+               </button>
+               {showFilterMenu && (
+                 <div className="absolute right-0 mt-2 w-48 bg-white rounded shadow-lg border border-gray-200 z-50 p-2 text-sm text-gray-700">
+                   <div className="font-bold text-xs uppercase text-gray-500 mb-2 px-2">Estado</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterStatus === 'all' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterStatus('all')}>Todos los estados</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterStatus === 'pending' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterStatus('pending')}>Pendientes</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterStatus === 'completed' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterStatus('completed')}>Completadas</div>
+                   
+                   <div className="border-t border-gray-100 my-2"></div>
+                   
+                   <div className="font-bold text-xs uppercase text-gray-500 mb-2 px-2">Fecha</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterDate === 'all' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterDate('all')}>Todas las fechas</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterDate === 'overdue' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterDate('overdue')}>Vencidas</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterDate === 'today' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterDate('today')}>Hoy</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterDate === 'tomorrow' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterDate('tomorrow')}>Mañana</div>
+                   <div className={clsx("px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50", filterDate === 'week' && "bg-blue-50 text-blue-600 font-medium")} onClick={() => setFilterDate('week')}>Esta semana</div>
+                 </div>
+               )}
+             </div>
           </div>
         </div>
 
@@ -231,16 +284,15 @@ export function Tasks() {
         <div className="flex items-center gap-3 mt-4 overflow-x-auto pb-1 text-xs font-bold scrollbar-hide">
            <span className={clsx("shrink-0 cursor-pointer px-2 py-1 rounded", filterType === 'all' ? "text-blue-600 bg-blue-50" : "text-gray-700")} onClick={() => setFilterType('all')}>Todos</span>
            <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'call' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('call')}><Phone className="w-3 h-3" /> Llamada</span>
-           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'meeting' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('meeting')}><Video className="w-3 h-3" /> Reunión</span>
+           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'appointment' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('appointment')}><User className="w-3 h-3" /> Cita</span>
+           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'test_drive' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('test_drive')}><Car className="w-3 h-3" /> Prueba de manejo</span>
+           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'signature' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('signature')}><PenTool className="w-3 h-3" /> Firma</span>
            <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'task' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('task')}><CalendarDays className="w-3 h-3" /> Tarea</span>
-           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'deadline' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('deadline')}><Flag className="w-3 h-3" /> Plazo</span>
-           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'email' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('email')}><Mail className="w-3 h-3" /> Correo</span>
-           <span className={clsx("shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded", filterType === 'lunch' ? "text-blue-600 bg-blue-100" : "text-gray-600 hover:bg-gray-50")} onClick={() => setFilterType('lunch')}><Coffee className="w-3 h-3" /> Comida</span>
            
            <div className="md:ml-auto flex shrink-0 gap-3 text-xs text-gray-500 border-l border-gray-200 pl-3">
-             <span className="text-blue-600 border-b-2 border-blue-600 pb-0.5 cursor-pointer">Pendientes</span>
-             <span className="hover:text-gray-800 cursor-pointer hidden sm:inline">Vencidas</span>
-             <span className="hover:text-gray-800 cursor-pointer hidden sm:inline">Hoy</span>
+             <span className={clsx("cursor-pointer", filterStatus === 'pending' ? "text-blue-600 border-b-2 border-blue-600 pb-0.5" : "hover:text-gray-800")} onClick={() => setFilterStatus(filterStatus === 'pending' ? 'all' : 'pending')}>Pendientes</span>
+             <span className={clsx("cursor-pointer hidden sm:inline", filterDate === 'overdue' ? "text-blue-600 border-b-2 border-blue-600 pb-0.5" : "hover:text-gray-800")} onClick={() => setFilterDate(filterDate === 'overdue' ? 'all' : 'overdue')}>Vencidas</span>
+             <span className={clsx("cursor-pointer hidden sm:inline", filterDate === 'today' ? "text-blue-600 border-b-2 border-blue-600 pb-0.5" : "hover:text-gray-800")} onClick={() => setFilterDate(filterDate === 'today' ? 'all' : 'today')}>Hoy</span>
            </div>
         </div>
       </div>
