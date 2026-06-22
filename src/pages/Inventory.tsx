@@ -3,16 +3,63 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Vehicle } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
+import clsx from 'clsx';
 
 export function Inventory() {
   const { userData } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
+
+  const [columns, setColumns] = useState([
+    { id: 'year', label: 'Año', visible: true, width: 100 },
+    { id: 'make', label: 'Marca', visible: true, width: 150 },
+    { id: 'model', label: 'Modelo', visible: true, width: 150 },
+    { id: 'color', label: 'Color', visible: true, width: 120 },
+    { id: 'transmission', label: 'Transmisión', visible: true, width: 150 },
+    { id: 'bodyType', label: 'Carrocería', visible: true, width: 150 },
+    { id: 'price', label: 'Precio', visible: true, width: 150 },
+    { id: 'purchasePrice', label: 'Costo', visible: true, width: 150 },
+    { id: 'vin', label: 'VIN', visible: true, width: 220 },
+    { id: 'status', label: 'Estado', visible: true, width: 120 }
+  ]);
+  const [showColSettings, setShowColSettings] = useState(false);
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartWidth, setDragStartWidth] = useState(0);
+
+  useEffect(() => {
+    if (!resizingCol) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - dragStartX;
+      setColumns(cols => cols.map(c => c.id === resizingCol ? { ...c, width: Math.max(50, dragStartWidth + delta) } : c));
+    };
+    const handleMouseUp = () => setResizingCol(null);
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingCol, dragStartX, dragStartWidth]);
+
+  const handleMouseDown = (e: React.MouseEvent, colId: string, currentWidth: number) => {
+    setResizingCol(colId);
+    setDragStartX(e.clientX);
+    setDragStartWidth(currentWidth);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const toggleColumn = (id: string) => {
+    setColumns(cols => cols.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+  };
 
   useEffect(() => {
     if (!userData?.agencyId && userData?.role !== 'master') return;
@@ -66,7 +113,7 @@ export function Inventory() {
   };
 
   const filteredVehicles = vehicles.filter(v => 
-    `${v.make} ${v.model} ${v.year} ${v.vin}`.toLowerCase().includes(searchTerm.toLowerCase())
+    `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
@@ -136,17 +183,38 @@ export function Inventory() {
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Buscar por marca, modelo, año, VIN..." 
+              placeholder="Buscar por marca, modelo, año, VIN, carrocería..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <div className="flex items-center p-1 bg-slate-100 rounded-lg shrink-0">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={clsx(
+                "p-1.5 rounded-md transition-colors",
+                viewMode === 'grid' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={clsx(
+                "p-1.5 rounded-md transition-colors",
+                viewMode === 'list' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         
-        <div className="flex-1 overflow-auto p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredVehicles.map(vehicle => (
+        {viewMode === 'grid' ? (
+          <div className="flex-1 overflow-auto p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredVehicles.map(vehicle => (
               <div 
                 key={vehicle.id} 
                 className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white group"
@@ -212,6 +280,83 @@ export function Inventory() {
             )}
           </div>
         </div>
+        ) : (
+          <div className="flex-1 overflow-auto bg-white border-t border-gray-200">
+            <table className="w-full text-left text-sm border-collapse table-fixed select-none">
+              <thead className="bg-[#fcfdfd] border-b border-gray-200 text-gray-600 font-medium sticky top-0 z-10 shadow-sm">
+                <tr>
+                  {columns.filter(c => c.visible).map(col => (
+                    <th key={col.id} className="relative border-r border-gray-200 truncate group" style={{ width: col.width }}>
+                      <div className="px-4 py-3 truncate">{col.label}</div>
+                      <div 
+                        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => handleMouseDown(e, col.id, col.width)}
+                      />
+                    </th>
+                  ))}
+                  <th className="w-10 relative" style={{ width: 40 }}>
+                    <button type="button" onClick={() => setShowColSettings(!showColSettings)} className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 outline-none">
+                      <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors" />
+                    </button>
+                    {showColSettings && (
+                      <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded shadow-lg p-2 z-50">
+                        <div className="text-xs font-bold text-gray-500 mb-2 uppercase px-2">Columnas visibles</div>
+                        {columns.map(col => (
+                          <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-gray-700">
+                            <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300" />
+                            <span className="truncate">{col.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {filteredVehicles.map(vehicle => (
+                  <tr key={vehicle.id} className="border-b border-gray-100 hover:bg-gray-50 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
+                    {columns.filter(c => c.visible).map(col => {
+                      let val: React.ReactNode = '';
+                      if (col.id === 'year') val = vehicle.year;
+                      if (col.id === 'make') val = <span className="font-medium text-blue-600">{vehicle.make}</span>;
+                      if (col.id === 'model') val = vehicle.model;
+                      if (col.id === 'color') val = vehicle.color;
+                      if (col.id === 'transmission') val = vehicle.transmission;
+                      if (col.id === 'bodyType') val = vehicle.bodyType;
+                      if (col.id === 'price') val = `$${Number(vehicle.price || 0).toLocaleString()}`;
+                      if (col.id === 'purchasePrice') val = (userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '-';
+                      if (col.id === 'vin') val = <span className="font-mono text-xs">{vehicle.vin}</span>;
+                      if (col.id === 'status') val = (vehicle as any).pendingValidation ? <span className="text-amber-600">Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</span> : vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado';
+                      
+                      return (
+                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 text-gray-600 truncate" style={{ width: col.width, maxWidth: col.width }}>
+                          {val}
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600">
+                      {(userData?.role === 'admin' || userData?.role === 'master') ? (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
+                          className="p-1 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      ) : '...'}
+                    </td>
+                  </tr>
+                ))}
+                {filteredVehicles.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.filter(c => c.visible).length + 1} className="px-4 py-8 text-center text-gray-500 font-medium border-b border-gray-100">
+                      No se encontraron vehículos.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {selectedVehicle !== undefined && (

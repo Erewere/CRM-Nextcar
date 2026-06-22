@@ -389,7 +389,10 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                       <option>Pickup</option>
                       <option>Coupé</option>
                       <option>Van</option>
+                      <option>Minivan</option>
                       <option>Convertible</option>
+                      <option>Premium</option>
+                      <option>4X4</option>
                     </select>
                   </div>
                 </div>
