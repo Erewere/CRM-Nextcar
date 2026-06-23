@@ -18,14 +18,46 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
   const { userData } = useAuth();
   const isNew = !client.id;
   const [formData, setFormData] = useState<Partial<Client>>(
-    isNew ? { status: initialStatus, origin: 'manual', agencyId: userData?.agencyId, sellerId: userData?.id } : client
+    isNew ? { status: initialStatus, origin: 'manual', agencyId: userData?.agencyId, sellerId: userData?.id, tags: [] } : { tags: [], ...client }
   );
   const [tasks, setTasks] = useState<Task[]>([]);
   const [files, setFiles] = useState<ClientFile[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [inventoryVehicles, setInventoryVehicles] = useState<Vehicle[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!userData) return;
+    const fetchAvailableTags = async () => {
+      const agencyId = userData?.agencyId || 'master_agency';
+      try {
+        const q = query(collection(db, 'agency_tags'), where('agencyId', '==', agencyId));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          setAvailableTags(['Venta', 'Compra', 'Busca de auto', 'Crédito']);
+        } else {
+          setAvailableTags(Array.from(new Set(snap.docs.map(doc => doc.data().name).filter(Boolean))));
+        }
+      } catch (err) {
+        console.error("Error loading tags:", err);
+        setAvailableTags(['Venta', 'Compra', 'Busca de auto', 'Crédito']);
+      }
+    };
+    fetchAvailableTags();
+  }, [userData]);
+
+  const handleTagToggle = (tag: string) => {
+    setFormData(prev => {
+      const currentTags = prev.tags || [];
+      const updatedTags = currentTags.includes(tag)
+        ? currentTags.filter(t => t !== tag)
+        : [...currentTags, tag];
+      return { ...prev, tags: updatedTags };
+    });
+  };
   
   const [activeTab, setActiveTab] = useState<'activity' | 'notes' | 'files'>('activity');
+  const [showFullAddress, setShowFullAddress] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -105,7 +137,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    const person = existingPersons.find(p => p.name.toLowerCase() === val.toLowerCase());
+    const person = existingPersons.find(p => (p.name || '').toLowerCase() === val.toLowerCase());
     if (person) {
       setFormData(prev => ({
         ...prev,
@@ -248,7 +280,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
               {(formData.name || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-[200px]">
-              {(!formData.status && !isNew) ? (
+              {(!formData.dealTitle && !isNew) ? (
                 <>
                   <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{formData.name}</h2>
                   <p className="text-sm font-medium text-gray-500 dark:text-slate-400 mt-1">Contacto sin trato activo.</p>
@@ -257,7 +289,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                 <>
                   <input
                     name="dealTitle"
-                    value={formData.dealTitle !== undefined ? formData.dealTitle : (formData.name ? `${formData.name} deal` : '')}
+                    value={formData.dealTitle || ''}
                     onChange={handleChange}
                     placeholder={isNew ? 'Nuevo Trato' : 'Nombre del trato'}
                     className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
@@ -276,16 +308,18 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!isNew && !formData.status && (
+            {!isNew && !formData.dealTitle && (
               <button 
                 type="button"
-                onClick={() => handleStatusChange('new')}
+                onClick={() => {
+                  setFormData(prev => ({ ...prev, dealTitle: `${formData.name} deal`, status: prev.status || 'new' }));
+                }}
                 className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
               >
                 + Crear Trato
               </button>
             )}
-            {!isNew && formData.status && formData.status !== 'won' && formData.status !== 'lost' && (
+            {!isNew && formData.dealTitle && formData.status !== 'won' && formData.status !== 'lost' && (
               <>
                 <button 
                   type="button"
@@ -332,7 +366,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
               <form id="client-form" onSubmit={handleSave} className="space-y-4">
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Valor / Vehículo</label>
-                  <select required name="vehicle" value={formData.vehicleId || formData.vehicle || ''} onChange={e => {
+                  <select name="vehicle" value={formData.vehicleId || formData.vehicle || ''} onChange={e => {
                     const val = e.target.value;
                     if (val === 'Otro pendiente') {
                        setFormData({ ...formData, vehicle: val, vehicleId: undefined });
@@ -363,7 +397,6 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-400" />
                     <input 
-                      required 
                       name="name" 
                       list="existing-persons-list"
                       placeholder="Nombre" 
@@ -382,7 +415,6 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                   <div className="flex items-center gap-2 mt-2">
                     <Phone className="w-4 h-4 text-gray-400" />
                     <input 
-                      required 
                       name="phone" 
                       list="existing-phones-list"
                       placeholder="Teléfono" 
@@ -402,7 +434,6 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                   <div className="flex items-center gap-2 mt-2">
                     <MessageCircle className="w-4 h-4 text-gray-400" />
                     <input 
-                      required 
                       type="email" 
                       name="email" 
                       list="existing-emails-list"
@@ -423,10 +454,78 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                 </div>
 
                 <div className="pt-4 border-t border-gray-100 dark:border-slate-700 space-y-1">
-                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Dirección Fí­sica</label>
-                  <input required name="address" placeholder="Ej. Calle 123..." value={formData.address || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Dirección</label>
+                    <button type="button" onClick={() => setShowFullAddress(!showFullAddress)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold uppercase tracking-wider">
+                      {showFullAddress ? 'Ocultar detalles' : 'Desglosar dirección'}
+                    </button>
+                  </div>
+                  {showFullAddress ? (
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                       <div className="col-span-2">
+                         <input name="street" placeholder="Calle" value={formData.street || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                       </div>
+                       <div>
+                         <input name="exteriorNumber" placeholder="Número Ext/Int" value={formData.exteriorNumber || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                       </div>
+                       <div>
+                         <input name="neighborhood" placeholder="Colonia" value={formData.neighborhood || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                       </div>
+                       <div>
+                         <input name="city" placeholder="Ciudad" value={formData.city || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                       </div>
+                       <div>
+                         <input name="zipCode" placeholder="Código Postal" value={formData.zipCode || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                       </div>
+                    </div>
+                  ) : (
+                    <input name="address" placeholder="Ej. Calle 123..." value={formData.address || ''} onChange={handleChange} className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none" />
+                  )}
                 </div>
                 
+                <div className="pt-4 border-t border-gray-100 dark:border-slate-700 space-y-2">
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5 text-indigo-505" />
+                    Etiquetas
+                  </label>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) handleTagToggle(val);
+                      e.target.value = '';
+                    }}
+                    className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded p-1.5 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none"
+                  >
+                    <option value="" disabled>Seleccionar etiqueta...</option>
+                    {availableTags.map((tag, i) => (
+                      <option key={`opt-${tag}-${i}`} value={tag}>
+                        {tag} {(formData.tags || []).includes(tag) ? '✓' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {formData.tags && formData.tags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {formData.tags.map((tag, idx) => (
+                        <span key={`${tag}-${idx}`} className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/10 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => handleTagToggle(tag)}
+                            className="text-indigo-400 hover:text-red-500 font-bold ml-1 text-[11px] leading-none"
+                            title="Eliminar etiqueta"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 italic mt-1">Sin etiquetas personalizadas.</p>
+                  )}
+                </div>
+
                 <div className="pt-4 border-t border-gray-100 dark:border-slate-700">
                   <span className="text-xs text-gray-400 font-medium">Fuente: {formData.origin}</span>
                 </div>

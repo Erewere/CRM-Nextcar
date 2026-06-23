@@ -73,6 +73,29 @@ export function Persons() {
   const [emails, setEmails] = useState([{ value: '', type: 'Trabajo' }]);
   const [labels, setLabels] = useState('');
   const [agencyUsers, setAgencyUsers] = useState<Record<string, string>>({});
+  
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!userData) return;
+    const fetchAvailableTags = async () => {
+      const agencyId = userData?.agencyId || 'master_agency';
+      try {
+        const q = query(collection(db, 'agency_tags'), where('agencyId', '==', agencyId));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          setAvailableTags(['Venta', 'Compra', 'Busca de auto', 'Crédito']);
+        } else {
+          setAvailableTags(Array.from(new Set(snap.docs.map(doc => doc.data().name).filter(Boolean))));
+        }
+      } catch (err) {
+        console.error("Error loading tags:", err);
+        setAvailableTags(['Venta', 'Compra', 'Busca de auto', 'Crédito']);
+      }
+    };
+    fetchAvailableTags();
+  }, [userData]);
 
   useEffect(() => {
     if (!userData || userData.role === 'master') return;
@@ -129,7 +152,7 @@ export function Persons() {
 
   const handleAddPerson = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userData || !name) return;
+    if (!userData) return;
     
     try {
       const primaryPhone = phones.map(p => p.value).filter(Boolean).join(', ');
@@ -148,6 +171,7 @@ export function Persons() {
         vehicle: '',
         status: '',
         origin: 'manual',
+        tags: selectedTags,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -159,6 +183,7 @@ export function Persons() {
       setEmails([{ value: '', type: 'Trabajo' }]);
       setOrganization('');
       setLabels('');
+      setSelectedTags([]);
     } catch (e) {
       console.error(e);
     }
@@ -194,7 +219,7 @@ export function Persons() {
             const exists = [...persons, ...newPersons].find(p => 
               (personEmail && p.email?.includes(personEmail)) || 
               (personPhone && p.phone?.includes(personPhone)) ||
-              (p.name.toLowerCase() === personName.toLowerCase())
+              (p.name && p.name.toLowerCase() === personName.toLowerCase())
             );
             
             if (!exists) {
@@ -238,7 +263,7 @@ export function Persons() {
   };
 
   const filteredPersons = persons.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.organization && p.organization.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -250,7 +275,7 @@ export function Persons() {
     if (personDeals.length === 0) {
       const person = persons.find(p => p.id === personId);
       if (person && person.status) {
-        const pStatus = person.status.toLowerCase();
+        const pStatus = (person.status || '').toLowerCase();
         const isClosed = pStatus === 'won' || pStatus.includes('ganado') || pStatus === 'lost' || pStatus.includes('perdido');
         if (isClosed) closedDeals = 1;
         else openDeals = 1;
@@ -339,6 +364,15 @@ export function Persons() {
                   </div>
                   <div className="overflow-hidden">
                     <h3 className="font-bold text-gray-900 dark:text-slate-100 truncate" title={person.name}>{person.name}</h3>
+                    {person.tags && person.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1 mb-1.5">
+                        {person.tags.map((t, idx) => (
+                          <span key={`${t}-${idx}`} className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold border border-indigo-100 dark:border-indigo-800/10 uppercase tracking-wider">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {person.organization && (
                       <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
                         <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -404,7 +438,22 @@ export function Persons() {
                     <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer" /></td>
                     {columns.filter(c => c.visible).map(col => {
                       let val: React.ReactNode = '';
-                      if (col.id === 'name') val = <span className="text-blue-600 font-medium truncate w-full block">{person.name}</span>;
+                      if (col.id === 'name') {
+                        val = (
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-blue-600 font-medium truncate w-full block">{person.name}</span>
+                            {person.tags && person.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {person.tags.map((t, idx) => (
+                                  <span key={`${t}-${idx}`} className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold border border-indigo-100 dark:border-indigo-800/10 uppercase">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
                       if (col.id === 'organization') val = person.organization;
                       if (col.id === 'email') val = person.email;
                       if (col.id === 'phone') val = person.phone;
@@ -449,7 +498,7 @@ export function Persons() {
             <div className="flex-1 overflow-y-auto px-6 py-2 flex flex-col gap-4 text-sm">
               <div>
                 <label className="block text-gray-700 dark:text-slate-300 mb-1">Nombre</label>
-                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
               <div>
                 <label className="block text-gray-700 dark:text-slate-300 mb-1">Organización</label>
@@ -558,9 +607,39 @@ export function Persons() {
 
               <div>
                 <label className="block text-gray-700 dark:text-slate-300 mb-1">Etiquetas</label>
-                <select className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-medium">
-                  <option>Añadir etiquetas</option>
+                <select 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val !== 'add' && !selectedTags.includes(val)) {
+                      setSelectedTags(prev => [...prev, val]);
+                    }
+                    e.target.value = 'add';
+                  }}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-medium"
+                >
+                  <option value="add">Añadir etiquetas</option>
+                  {availableTags.map((tag, i) => (
+                    <option key={`opt-${tag}-${i}`} value={tag}>
+                      {tag} {selectedTags.includes(tag) ? '✓' : ''}
+                    </option>
+                  ))}
                 </select>
+                {selectedTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {selectedTags.map((st, idx) => (
+                      <span key={`${st}-${idx}`} className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/10 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        {st}
+                        <button 
+                          type="button" 
+                          onClick={() => setSelectedTags(prev => prev.filter(t => t !== st))} 
+                          className="text-indigo-400 hover:text-red-500 font-bold ml-1 text-[11px]"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

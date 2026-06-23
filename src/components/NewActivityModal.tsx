@@ -123,7 +123,7 @@ export function NewActivityModal({ onClose, onSave, clients, deals = [], current
   // Handle deal selection logic
   const handleDealChange = (val: string) => {
     setDealTitle(val);
-    const existingDeal = deals.find(d => d.title.toLowerCase() === val.toLowerCase());
+    const existingDeal = deals.find(d => (d.title || '').toLowerCase() === val.toLowerCase());
     if (existingDeal) {
       if (existingDeal.clientId) {
         setClientId(existingDeal.clientId);
@@ -379,7 +379,7 @@ export function NewActivityModal({ onClose, onSave, clients, deals = [], current
             </button>
             <button 
               onClick={() => {
-                const existingDeal = deals.find(d => d.title.toLowerCase() === dealTitle.toLowerCase());
+                const existingDeal = deals.find(d => (d.title || '').toLowerCase() === dealTitle.toLowerCase());
                 onSave({
                   title,
                   type,

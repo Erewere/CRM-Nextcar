@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import admin from 'firebase-admin';
+import { Resend } from 'resend';
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
 let adminApp: admin.app.App | null = null;
@@ -20,12 +21,44 @@ function getAdminApp() {
   return adminApp;
 }
 
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   // Use JSON middleware for webhook bodies
   app.use(express.json());
+
+  // === Resend Email Endpoint ===
+  app.post("/api/send-invite", async (req, res) => {
+    if (!resend) {
+      return res.status(500).json({ error: "Servicio de correo no configurado (Falta RESEND_API_KEY)" });
+    }
+    const { to, subject, html } = req.body;
+    if (!to || !subject || !html) {
+      return res.status(400).json({ error: "Faltan parámetros requeridos (to, subject, html)" });
+    }
+    try {
+      let fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+      if (!fromEmail.includes('@')) {
+        fromEmail = 'Nextcar CRM <onboarding@resend.dev>';
+      }
+
+      const { data, error } = await resend.emails.send({
+        from: fromEmail,
+        to,
+        subject,
+        html
+      });
+      if (error) {
+        return res.status(400).json({ error });
+      }
+      res.status(200).json({ data });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // === Meta (WhatsApp/Messenger) Webhook Integration ===
   

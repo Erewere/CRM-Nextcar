@@ -126,8 +126,8 @@ export function Dashboard() {
   const wonKeywords = ['ganado', 'won', 'vendid', 'cerrad'];
   const lostKeywords = ['perdid', 'lost'];
   
-  const isWon = (status: string) => wonKeywords.some(k => status.toLowerCase().includes(k));
-  const isLost = (status: string) => lostKeywords.some(k => status.toLowerCase().includes(k));
+  const isWon = (status: string = '') => wonKeywords.some(k => (status || '').toLowerCase().includes(k));
+  const isLost = (status: string = '') => lostKeywords.some(k => (status || '').toLowerCase().includes(k));
   const isActive = (status: string) => !isWon(status) && !isLost(status);
 
   const activeContacts = filteredClients.filter(c => isActive(c.status));
@@ -156,7 +156,7 @@ export function Dashboard() {
   // Let's assume contacts in advanced stages (e.g. 'propuesta', 'demostracion') or with tasks this week are higher probability.
   const hotLeads = activeContacts.filter(c => {
     const hasActiveTask = thisWeekTasks.some(t => t.clientId === c.id);
-    const inAdvancedStage = c.status.toLowerCase().includes('propuest') || c.status.toLowerCase().includes('demostra') || c.status.toLowerCase().includes('negocia');
+    const inAdvancedStage = c.status ? (c.status.toLowerCase().includes('propuest') || c.status.toLowerCase().includes('demostra') || c.status.toLowerCase().includes('negocia')) : false;
     return hasActiveTask || inAdvancedStage;
   });
 

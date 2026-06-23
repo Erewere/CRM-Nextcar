@@ -122,8 +122,8 @@ export function Tasks() {
     calendarDays = [...prefixDays, ...calendarDays];
   }
 
-  const getTaskIcon = (title: string) => {
-    const t = title.toLowerCase();
+  const getTaskIcon = (title: string = '') => {
+    const t = (title || '').toLowerCase();
     if (t.includes('llama')) return <Phone className="w-3.5 h-3.5" />;
     if (t.includes('cita') || t.includes('reunió') || t.includes('junta') || t.includes('meet')) return <User className="w-3.5 h-3.5" />;
     if (t.includes('prueba') || t.includes('manejo') || t.includes('test')) return <Car className="w-3.5 h-3.5" />;
@@ -194,7 +194,7 @@ export function Tasks() {
     if (filterType === 'all') return true;
     
     // Very basic filter logic based on title string matching (since Tasks don't have an explicit 'type' field yet)
-    const t = task.title.toLowerCase();
+    const t = (task.title || '').toLowerCase();
     switch (filterType) {
       case 'call': return t.includes('llama');
       case 'appointment': return t.includes('cita') || t.includes('reunió') || t.includes('junta') || t.includes('meet');

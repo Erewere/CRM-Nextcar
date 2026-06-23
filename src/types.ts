@@ -68,11 +68,17 @@ export interface Client {
   organization?: string;
   address: string;
   phone: string;
+  street?: string;
+  exteriorNumber?: string;
+  neighborhood?: string;
+  city?: string;
+  zipCode?: string;
   email: string;
   vehicle: string;
   vehicleId?: string;
   status: string;
   origin: 'manual' | 'whatsapp' | 'web' | 'google_contacts';
+  tags?: string[];
   createdAt: any;
   updatedAt: any;
 }
