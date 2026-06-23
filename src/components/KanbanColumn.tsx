@@ -18,7 +18,7 @@ export function KanbanColumn({ column, clients, onClientClick, tasks = [] }: Pro
     id: column.id,
   });
 
-  const lowerTitle = column.title.toLowerCase();
+  const lowerTitle = String(column.title || '').toLowerCase();
   const isWon = column.id === 'won' || lowerTitle.includes('ganad') || lowerTitle.includes('vendid');
   const isLost = column.id === 'lost' || lowerTitle.includes('perdid');
   const isNew = column.id === 'new' || lowerTitle.includes('nuev');

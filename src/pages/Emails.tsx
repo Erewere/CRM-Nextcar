@@ -57,19 +57,19 @@ export function Emails() {
         });
         if (msgRes.ok) {
           const msgData = await msgRes.json();
-          const headers = msgData.payload.headers;
-          const subjectHeader = headers.find((h: any) => h.name.toLowerCase() === 'subject');
-          const fromHeader = headers.find((h: any) => h.name.toLowerCase() === 'from');
-          const dateHeader = headers.find((h: any) => h.name.toLowerCase() === 'date');
+          const headers = msgData.payload?.headers || [];
+          const subjectHeader = headers.find((h: any) => (h.name || '').toLowerCase() === 'subject');
+          const fromHeader = headers.find((h: any) => (h.name || '').toLowerCase() === 'from');
+          const dateHeader = headers.find((h: any) => (h.name || '').toLowerCase() === 'date');
           
           const getBody = (payload: any): { html?: string, plain?: string } => {
             let html = '';
             let plain = '';
-            if (payload.mimeType === 'text/plain' && payload.body.data) {
-              plain = atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-            } else if (payload.mimeType === 'text/html' && payload.body.data) {
-              html = atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-            } else if (payload.parts) {
+            if (payload?.mimeType === 'text/plain' && payload?.body?.data) {
+              plain = atob(String(payload.body.data).replace(/-/g, '+').replace(/_/g, '/'));
+            } else if (payload?.mimeType === 'text/html' && payload?.body?.data) {
+              html = atob(String(payload.body.data).replace(/-/g, '+').replace(/_/g, '/'));
+            } else if (payload?.parts) {
               for (const part of payload.parts) {
                 const subBody = getBody(part);
                 if (subBody.html) html = subBody.html;
@@ -203,7 +203,11 @@ export function Emails() {
                           let dateFormatted = '';
                           try {
                             const dateObj = new Date(msg.date);
-                            dateFormatted = format(dateObj, "dd MMM", { locale: es });
+                            if (!isNaN(dateObj.getTime())) {
+                              dateFormatted = format(dateObj, "dd MMM", { locale: es });
+                            } else {
+                              dateFormatted = msg.date || '';
+                            }
                           } catch (e) {
                             dateFormatted = msg.date.slice(0, 10);
                           }
@@ -218,7 +222,7 @@ export function Emails() {
                               )}
                             >
                               <div className="flex justify-between items-baseline mb-1">
-                                <span className={clsx("truncate pr-4 text-sm", msg.unread && "text-blue-700")}>{msg.from.split('<')[0].replace(/"/g, '').trim()}</span>
+                                <span className={clsx("truncate pr-4 text-sm", msg.unread && "text-blue-700")}>{(msg.from || '').split('<')[0].replace(/"/g, '').trim()}</span>
                                 <span className={clsx("text-xs shrink-0", msg.unread ? "text-blue-600" : "text-gray-400")}>{dateFormatted}</span>
                               </div>
                               <h4 className={clsx("text-sm mb-1 truncate", msg.unread && "text-gray-900 dark:text-slate-100")}>{msg.subject}</h4>
@@ -240,7 +244,7 @@ export function Emails() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase shrink-0">
-                               {selectedEmail.from.charAt(0)}
+                               {String(selectedEmail.from || '?').charAt(0).toUpperCase()}
                             </div>
                             <div>
                                <div className="font-medium text-gray-900 dark:text-slate-100 text-sm">{selectedEmail.from}</div>

@@ -71,7 +71,11 @@ export function Tasks() {
         }
 
         const combined = taskList.map(t => ({ task: t, client: t.clientId ? cMap.get(t.clientId) : null }));
-        combined.sort((a,b) => new Date(a.task.dueDate).getTime() - new Date(b.task.dueDate).getTime());
+        combined.sort((a,b) => {
+          const aTime = a.task.dueDate ? new Date(a.task.dueDate).getTime() : 0;
+          const bTime = b.task.dueDate ? new Date(b.task.dueDate).getTime() : 0;
+          return aTime - bTime;
+        });
         setTasks(combined);
       } catch (e) {
         console.error(e);
@@ -123,7 +127,7 @@ export function Tasks() {
   }
 
   const getTaskIcon = (title: string = '') => {
-    const t = (title || '').toLowerCase();
+    const t = String(title || '').toLowerCase();
     if (t.includes('llama')) return <Phone className="w-3.5 h-3.5" />;
     if (t.includes('cita') || t.includes('reunió') || t.includes('junta') || t.includes('meet')) return <User className="w-3.5 h-3.5" />;
     if (t.includes('prueba') || t.includes('manejo') || t.includes('test')) return <Car className="w-3.5 h-3.5" />;
@@ -169,6 +173,7 @@ export function Tasks() {
     // 2. Date Filter
     if (filterDate !== 'all' && task.dueDate) {
       const taskDate = new Date(task.dueDate + 'T00:00:00'); // Assuming YYYY-MM-DD
+      if (isNaN(taskDate.getTime())) return false; // Invalid date
       taskDate.setHours(0, 0, 0, 0);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -194,7 +199,7 @@ export function Tasks() {
     if (filterType === 'all') return true;
     
     // Very basic filter logic based on title string matching (since Tasks don't have an explicit 'type' field yet)
-    const t = (task.title || '').toLowerCase();
+    const t = String(task.title || '').toLowerCase();
     switch (filterType) {
       case 'call': return t.includes('llama');
       case 'appointment': return t.includes('cita') || t.includes('reunió') || t.includes('junta') || t.includes('meet');

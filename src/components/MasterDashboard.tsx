@@ -9,7 +9,8 @@ const safeDate = (val: any) => {
   if (!val) return new Date();
   if (typeof val.toDate === 'function') return val.toDate();
   if (val.seconds) return new Date(val.seconds * 1000);
-  return new Date(val);
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? new Date() : d;
 };
 
 export function MasterDashboard() {

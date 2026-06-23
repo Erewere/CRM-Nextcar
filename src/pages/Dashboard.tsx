@@ -5,9 +5,11 @@ import { db } from '../lib/firebase';
 import { Client, Vehicle, Task, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Users, Car, Target, CheckCircle, TrendingUp, Calendar, Clock, AlertCircle, Filter } from 'lucide-react';
-import { isToday, isThisWeek, parseISO, isAfter, startOfDay } from 'date-fns';
+import { isToday, isThisWeek, parseISO, isAfter, startOfDay, isValid } from 'date-fns';
 
 import { MasterDashboard } from '../components/MasterDashboard';
+
+import { Link } from 'react-router';
 
 export function Dashboard() {
   const { userData } = useAuth();
@@ -26,6 +28,9 @@ export function Dashboard() {
   // For interactive stage selection
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
+  const [filterTag, setFilterTag] = useState<string>('all');
+  const [agencyTags, setAgencyTags] = useState<{id: string, name: string}[]>([]);
+
   useEffect(() => {
     if (!userData || userData.role === 'master' || userData.id === 'vxFIfZ5bdQSzaekW5d5c1TbNVCO2' || userData.role === 'unassigned') {
       setLoading(false);
@@ -40,23 +45,26 @@ export function Dashboard() {
         let tasksQ = query(collection(db, 'tasks'), agencyQuery);
         let vehiclesQ = query(collection(db, 'vehicles'), agencyQuery);
         let usersQ = query(collection(db, 'users'), agencyQuery);
+        let tagsQ = query(collection(db, 'agency_tags'), agencyQuery);
 
         if (userData.role === 'seller') {
           clientsQ = query(collection(db, 'clients'), agencyQuery, where('sellerId', '==', userData.id));
           tasksQ = query(collection(db, 'tasks'), agencyQuery, where('sellerId', '==', userData.id));
         }
 
-        const [clientsSnap, vehiclesSnap, tasksSnap, usersSnap] = await Promise.all([
+        const [clientsSnap, vehiclesSnap, tasksSnap, usersSnap, tagsSnap] = await Promise.all([
           getDocs(clientsQ),
           getDocs(vehiclesQ),
           getDocs(tasksQ),
-          getDocs(usersQ)
+          getDocs(usersQ),
+          getDocs(tagsQ)
         ]);
 
         setClients(clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
         setVehicles(vehiclesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle)));
         setTasks(tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
         setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+        setAgencyTags(tagsSnap.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
       } catch (e) {
         console.error("Error fetching dashboard data", e);
       } finally {
@@ -74,11 +82,13 @@ export function Dashboard() {
       
       if (filterStartDate) {
         const clientDate = c.createdAt?.toDate ? c.createdAt.toDate() : new Date(c.createdAt || Date.now());
-        if (isAfter(startOfDay(new Date(filterStartDate)), clientDate)) return false;
+        const startDate = new Date(filterStartDate);
+        if (isValid(startDate) && isValid(clientDate) && isAfter(startOfDay(startDate), clientDate)) return false;
       }
       if (filterEndDate) {
         const clientDate = c.createdAt?.toDate ? c.createdAt.toDate() : new Date(c.createdAt || Date.now());
-        if (isAfter(clientDate, startOfDay(new Date(filterEndDate)))) return false;
+        const endDate = new Date(filterEndDate);
+        if (isValid(endDate) && isValid(clientDate) && isAfter(clientDate, startOfDay(endDate))) return false;
       }
       
       if (filterCategory !== 'all') {
@@ -86,9 +96,13 @@ export function Dashboard() {
         if (clientVehicle?.bodyType !== filterCategory) return false;
       }
       
+      if (filterTag !== 'all') {
+        if (!c.tags || !c.tags.includes(filterTag)) return false;
+      }
+      
       return true;
     });
-  }, [clients, filterSeller, filterStartDate, filterEndDate, filterCategory, vehicles]);
+  }, [clients, filterSeller, filterStartDate, filterEndDate, filterCategory, vehicles, filterTag]);
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter(v => {
@@ -126,8 +140,8 @@ export function Dashboard() {
   const wonKeywords = ['ganado', 'won', 'vendid', 'cerrad'];
   const lostKeywords = ['perdid', 'lost'];
   
-  const isWon = (status: string = '') => wonKeywords.some(k => (status || '').toLowerCase().includes(k));
-  const isLost = (status: string = '') => lostKeywords.some(k => (status || '').toLowerCase().includes(k));
+  const isWon = (status: string = '') => wonKeywords.some(k => String(status || '').toLowerCase().includes(k));
+  const isLost = (status: string = '') => lostKeywords.some(k => String(status || '').toLowerCase().includes(k));
   const isActive = (status: string) => !isWon(status) && !isLost(status);
 
   const activeContacts = filteredClients.filter(c => isActive(c.status));
@@ -148,15 +162,28 @@ export function Dashboard() {
   })).sort((a, b) => b.total - a.total); // Sort highest first
 
   // Tasks Insights
-  const todayTasks = filteredTasks.filter(t => !t.completed && t.dueDate && isToday(parseISO(t.dueDate)));
-  const thisWeekTasks = filteredTasks.filter(t => !t.completed && t.dueDate && isThisWeek(parseISO(t.dueDate)));
-  const overdueTasks = filteredTasks.filter(t => !t.completed && t.dueDate && isAfter(startOfDay(new Date()), parseISO(t.dueDate)) && !isToday(parseISO(t.dueDate)));
+  const todayTasks = filteredTasks.filter(t => {
+    if (t.completed || !t.dueDate) return false;
+    const d = parseISO(t.dueDate);
+    return isValid(d) && isToday(d);
+  });
+  const thisWeekTasks = filteredTasks.filter(t => {
+    if (t.completed || !t.dueDate) return false;
+    const d = parseISO(t.dueDate);
+    return isValid(d) && isThisWeek(d);
+  });
+  const overdueTasks = filteredTasks.filter(t => {
+    if (t.completed || !t.dueDate) return false;
+    const d = parseISO(t.dueDate);
+    return isValid(d) && isAfter(startOfDay(new Date()), d) && !isToday(d);
+  });
 
   // "Hot" leads (Probability of sale in week/month) 
   // Let's assume contacts in advanced stages (e.g. 'propuesta', 'demostracion') or with tasks this week are higher probability.
   const hotLeads = activeContacts.filter(c => {
     const hasActiveTask = thisWeekTasks.some(t => t.clientId === c.id);
-    const inAdvancedStage = c.status ? (c.status.toLowerCase().includes('propuest') || c.status.toLowerCase().includes('demostra') || c.status.toLowerCase().includes('negocia')) : false;
+    const st = String(c.status || '').toLowerCase();
+    const inAdvancedStage = c.status ? (st.includes('propuest') || st.includes('demostra') || st.includes('negocia')) : false;
     return hasActiveTask || inAdvancedStage;
   });
 
@@ -171,11 +198,51 @@ export function Dashboard() {
         </div>
 
         {/* Dynamic Filters */}
-        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="flex items-center gap-2 pl-2 border-r border-slate-200 dark:border-slate-700 pr-3">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">Filtros</span>
+        <div className="flex flex-col items-end gap-3">
+          {/* Quick Date Filters */}
+          <div className="flex gap-2">
+            <button 
+              onClick={() => {
+                const today = new Date().toISOString().split('T')[0];
+                setFilterStartDate(today);
+                setFilterEndDate(today);
+              }}
+              className="text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+            >
+              Hoy
+            </button>
+            <button 
+              onClick={() => {
+                const date = new Date();
+                date.setDate(date.getDate() - date.getDay() + 1); // Monday
+                const start = date.toISOString().split('T')[0];
+                const end = new Date().toISOString().split('T')[0];
+                setFilterStartDate(start);
+                setFilterEndDate(end);
+              }}
+              className="text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+            >
+              Esta Semana
+            </button>
+            <button 
+              onClick={() => {
+                const date = new Date();
+                const start = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
+                const end = new Date().toISOString().split('T')[0];
+                setFilterStartDate(start);
+                setFilterEndDate(end);
+              }}
+              className="text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+            >
+              Este Mes
+            </button>
           </div>
+
+          <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div className="flex items-center gap-2 pl-2 border-r border-slate-200 dark:border-slate-700 pr-3">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">Filtros</span>
+            </div>
 
           {userData?.role === 'admin' && (
             <select 
@@ -199,6 +266,17 @@ export function Dashboard() {
             ))}
           </select>
 
+          <select 
+            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[180px] truncate"
+            value={filterTag}
+            onChange={e => setFilterTag(e.target.value)}
+          >
+            <option value="all">Todas las etiquetas</option>
+            {agencyTags.map(tag => (
+              <option key={tag.id} value={tag.name}>{tag.name}</option>
+            ))}
+          </select>
+
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
             <span className="text-xs text-slate-400 font-medium">Desde</span>
             <input 
@@ -219,11 +297,12 @@ export function Dashboard() {
             />
           </div>
           
-          {(filterSeller !== 'all' || filterCategory !== 'all' || filterStartDate || filterEndDate) && (
+          {(filterSeller !== 'all' || filterCategory !== 'all' || filterTag !== 'all' || filterStartDate || filterEndDate) && (
             <button 
               onClick={() => {
                 setFilterSeller('all');
                 setFilterCategory('all');
+                setFilterTag('all');
                 setFilterStartDate('');
                 setFilterEndDate('');
               }}
@@ -232,12 +311,13 @@ export function Dashboard() {
               Limpiar
             </button>
           )}
+          </div>
         </div>
       </div>
 
       {/* Primary KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-blue-300 transition-colors">
+        <Link to="/persons" className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-blue-300 hover:shadow-md transition-all">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Contactos Abiertos</p>
             <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{activeContacts.length}</p>
@@ -245,9 +325,9 @@ export function Dashboard() {
           <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
             <Users className="w-5 h-5 text-blue-600" />
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-emerald-300 transition-colors">
+        <Link to="/inventory" className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-emerald-300 hover:shadow-md transition-all">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Inventario Disponible</p>
             <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{availableVehicles.length}</p>
@@ -255,9 +335,9 @@ export function Dashboard() {
           <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
             <Car className="w-5 h-5 text-emerald-600" />
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-amber-300 transition-colors">
+        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-amber-300 hover:shadow-md transition-all">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Oportunidades ('Hot')</p>
             <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{hotLeads.length}</p>
@@ -265,9 +345,9 @@ export function Dashboard() {
           <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
             <Target className="w-5 h-5 text-amber-600" />
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-green-300 transition-colors">
+        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-green-300 hover:shadow-md transition-all">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Ventas Cerradas</p>
             <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{wonContacts.length}</p>
@@ -275,7 +355,7 @@ export function Dashboard() {
           <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
             <TrendingUp className="w-5 h-5 text-green-600" />
           </div>
-        </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -336,7 +416,7 @@ export function Dashboard() {
             </h3>
           </div>
           <div className="p-5 flex-1 space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-rose-50 border border-rose-100">
+            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-rose-500" />
                 <div>
@@ -345,9 +425,9 @@ export function Dashboard() {
                 </div>
               </div>
               <span className="text-rose-600 font-black text-xl">{overdueTasks.length}</span>
-            </div>
+            </Link>
 
-            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100">
+            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-blue-500" />
                 <div>
@@ -356,9 +436,9 @@ export function Dashboard() {
                 </div>
               </div>
               <span className="text-blue-600 font-black text-xl">{todayTasks.length}</span>
-            </div>
+            </Link>
 
-            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
               <div className="flex items-center gap-3">
                 <Calendar className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                 <div>
@@ -367,7 +447,7 @@ export function Dashboard() {
                 </div>
               </div>
               <span className="text-slate-600 dark:text-slate-400 font-black text-xl">{thisWeekTasks.length}</span>
-            </div>
+            </Link>
           </div>
         </div>
       </div>
@@ -380,14 +460,14 @@ export function Dashboard() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeContacts.filter(c => c.status === selectedStage).map(client => (
-              <div key={client.id} className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:shadow-sm transition-shadow">
-                <p className="font-bold text-slate-800 dark:text-slate-200">{client.name}</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{client.vehicle || 'Sin vehículo de interés'}</p>
+              <Link to="/kanban" key={client.id} className="block p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group">
+                <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">{client.name}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1">{client.vehicle || 'Sin vehículo de interés'}</p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-slate-400">{client.origin}</span>
-                  <button className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-medium">Cerrar trato</button>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">Ver en Kanban</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

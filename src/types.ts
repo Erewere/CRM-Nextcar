@@ -37,6 +37,12 @@ export interface Vehicle {
   status: string;
   createdAt: string;
   updatedAt: string;
+  // New fields
+  km?: number;
+  receivedAt?: string;
+  cylinders?: number;
+  liters?: number;
+  equipment?: string;
 }
 
 export interface Agency {

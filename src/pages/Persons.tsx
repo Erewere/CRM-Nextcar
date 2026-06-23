@@ -129,7 +129,7 @@ export function Persons() {
         const uniqueClients: Client[] = [];
         const seenNames = new Set<string>();
         for (const c of allClients) {
-          const nm = c.name?.trim().toLowerCase();
+          const nm = String(c.name || '').trim().toLowerCase();
           if (nm && !seenNames.has(nm)) {
             seenNames.add(nm);
             uniqueClients.push(c);
@@ -219,7 +219,7 @@ export function Persons() {
             const exists = [...persons, ...newPersons].find(p => 
               (personEmail && p.email?.includes(personEmail)) || 
               (personPhone && p.phone?.includes(personPhone)) ||
-              (p.name && p.name.toLowerCase() === personName.toLowerCase())
+              (p.name && String(p.name).toLowerCase() === String(personName).toLowerCase())
             );
             
             if (!exists) {
@@ -263,8 +263,8 @@ export function Persons() {
   };
 
   const filteredPersons = persons.filter(p => 
-    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (p.organization && p.organization.toLowerCase().includes(searchTerm.toLowerCase()))
+    String(p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (p.organization && String(p.organization).toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const getPersonStats = (personId: string) => {
@@ -275,7 +275,7 @@ export function Persons() {
     if (personDeals.length === 0) {
       const person = persons.find(p => p.id === personId);
       if (person && person.status) {
-        const pStatus = (person.status || '').toLowerCase();
+        const pStatus = String(person.status || '').toLowerCase();
         const isClosed = pStatus === 'won' || pStatus.includes('ganado') || pStatus === 'lost' || pStatus.includes('perdido');
         if (isClosed) closedDeals = 1;
         else openDeals = 1;
@@ -290,10 +290,18 @@ export function Persons() {
     });
     const nextTaskDate = personTasks.length > 0 && personTasks[0].dueDate ? personTasks[0].dueDate : null;
 
+    let formattedNextTaskDate = '';
+    if (nextTaskDate) {
+      const d = new Date(nextTaskDate + 'T00:00:00');
+      if (!isNaN(d.getTime())) {
+        formattedNextTaskDate = format(d, "d 'de' MMMM 'de' yyyy", { locale: es });
+      }
+    }
+
     return {
       openDeals,
       closedDeals,
-      nextTaskDate: nextTaskDate ? format(new Date(nextTaskDate + 'T00:00:00'), "d 'de' MMMM 'de' yyyy", { locale: es }) : ''
+      nextTaskDate: formattedNextTaskDate
     };
   };
 
@@ -360,10 +368,10 @@ export function Persons() {
               >
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0">
-                    {person.name.charAt(0).toUpperCase()}
+                    {String(person.name || '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="overflow-hidden">
-                    <h3 className="font-bold text-gray-900 dark:text-slate-100 truncate" title={person.name}>{person.name}</h3>
+                    <h3 className="font-bold text-gray-900 dark:text-slate-100 truncate" title={person.name}>{person.name || 'Sin Nombre'}</h3>
                     {person.tags && person.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1 mb-1.5">
                         {person.tags.map((t, idx) => (
@@ -441,7 +449,7 @@ export function Persons() {
                       if (col.id === 'name') {
                         val = (
                           <div className="flex flex-col gap-0.5 min-w-0">
-                            <span className="text-blue-600 font-medium truncate w-full block">{person.name}</span>
+                            <span className="text-blue-600 font-medium truncate w-full block">{person.name || 'Sin Nombre'}</span>
                             {person.tags && person.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {person.tags.map((t, idx) => (

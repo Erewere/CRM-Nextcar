@@ -137,7 +137,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    const person = existingPersons.find(p => (p.name || '').toLowerCase() === val.toLowerCase());
+    const person = existingPersons.find(p => String(p.name || '').toLowerCase() === val.toLowerCase());
     if (person) {
       setFormData(prev => ({
         ...prev,
@@ -277,7 +277,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-100 flexitems-center justify-center text-blue-700 font-bold text-lg flex items-center">
-              {(formData.name || 'U').charAt(0).toUpperCase()}
+              {String(formData.name || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-[200px]">
               {(!formData.dealTitle && !isNew) ? (
@@ -664,7 +664,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                          <div className="bg-white dark:bg-slate-800 border border-yellow-200 p-3 rounded-lg mr-2 shadow-sm">
                            <div className="flex justify-between items-start mb-2">
                              <span className="text-xs font-bold text-gray-800 dark:text-slate-200">{n.sellerId === userData?.id ? userData?.email : 'Nota'}</span>
-                             <span className="text-[10px] text-gray-400">{(n.createdAt as string)?.split('T')[0]}</span>
+                             <span className="text-[10px] text-gray-400">{typeof n.createdAt === 'string' ? n.createdAt.split('T')[0] : ''}</span>
                            </div>
                            <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{n.content}</p>
                          </div>
@@ -679,7 +679,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-3 rounded-lg mr-2 hover:border-blue-300 transition-colors">
                            <div className="flex justify-between items-start mb-1">
                              <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">Archivo subido</span>
-                             <span className="text-[10px] text-gray-400">{(f.uploadedAt as string)?.split('T')[0]}</span>
+                             <span className="text-[10px] text-gray-400">{typeof f.uploadedAt === 'string' ? f.uploadedAt.split('T')[0] : ''}</span>
                            </div>
                            <a href={f.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-1.5 mt-1">
                              <FileText className="w-3.5 h-3.5" />

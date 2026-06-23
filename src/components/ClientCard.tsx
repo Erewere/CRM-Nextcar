@@ -52,7 +52,7 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700">
-              {(client.name || 'U').charAt(0).toUpperCase()}
+              {String(client.name || 'U').charAt(0).toUpperCase()}
             </div>
             
             {client.origin === 'whatsapp' ? (

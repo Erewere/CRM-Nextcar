@@ -26,7 +26,12 @@ export function Inventory() {
     { id: 'price', label: 'Precio', visible: true, width: 150 },
     { id: 'purchasePrice', label: 'Costo', visible: true, width: 150 },
     { id: 'vin', label: 'VIN', visible: true, width: 220 },
-    { id: 'status', label: 'Estado', visible: true, width: 120 }
+    { id: 'status', label: 'Estado', visible: true, width: 120 },
+    { id: 'km', label: 'Km', visible: false, width: 120 },
+    { id: 'cylinders', label: 'Cilindros', visible: false, width: 120 },
+    { id: 'liters', label: 'Motor (L)', visible: false, width: 120 },
+    { id: 'receivedAt', label: 'F. Recepción', visible: false, width: 150 },
+    { id: 'equipment', label: 'Equipamiento', visible: false, width: 200 }
   ]);
   const [showColSettings, setShowColSettings] = useState(false);
   const [resizingCol, setResizingCol] = useState<string | null>(null);
@@ -113,7 +118,7 @@ export function Inventory() {
   };
 
   const filteredVehicles = vehicles.filter(v => 
-    `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color}`.toLowerCase().includes(searchTerm.toLowerCase())
+    `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color} ${v.equipment || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
@@ -251,9 +256,22 @@ export function Inventory() {
                 <div className="p-4">
                   <h3 className="font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 mt-1 flex justify-between">
-                    <span>{vehicle.color}</span>
+                    <span>{vehicle.color} • {vehicle.km?.toLocaleString() || 0} km</span>
                     <span>{vehicle.transmission}</span>
                   </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 mt-1 flex justify-between">
+                    <span>Motor: {vehicle.cylinders || 4} cil, {vehicle.liters || 0}L</span>
+                    <span>Días Inv: {
+                      vehicle.receivedAt && !isNaN(new Date(vehicle.receivedAt).getTime())
+                        ? Math.floor((new Date().getTime() - new Date(vehicle.receivedAt).getTime()) / (1000 * 3600 * 24)) 
+                        : 'N/A'
+                    }</span>
+                  </div>
+                  {vehicle.equipment && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 truncate" title={vehicle.equipment}>
+                      Eq: {vehicle.equipment}
+                    </div>
+                  )}
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate" title={vehicle.vin}>
                     VIN: <span className="font-mono">{vehicle.vin}</span>
                   </div>
@@ -327,6 +345,11 @@ export function Inventory() {
                       if (col.id === 'purchasePrice') val = (userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '-';
                       if (col.id === 'vin') val = <span className="font-mono text-xs">{vehicle.vin}</span>;
                       if (col.id === 'status') val = (vehicle as any).pendingValidation ? <span className="text-amber-600">Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</span> : vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado';
+                      if (col.id === 'km') val = vehicle.km?.toLocaleString() || '0';
+                      if (col.id === 'cylinders') val = vehicle.cylinders || '4';
+                      if (col.id === 'liters') val = vehicle.liters || '0';
+                      if (col.id === 'receivedAt') val = vehicle.receivedAt && typeof vehicle.receivedAt === 'string' ? vehicle.receivedAt.split('T')[0] : '-';
+                      if (col.id === 'equipment') val = vehicle.equipment || '-';
                       
                       return (
                         <td key={col.id} className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate" style={{ width: col.width, maxWidth: col.width }}>

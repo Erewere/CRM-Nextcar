@@ -22,8 +22,8 @@ const DEFAULT_COLUMNS: PipelineStage[] = [
 ];
 
 function isTerminalColumn(col: PipelineStage) {
-  const t = col.title.toLowerCase();
-  const id = col.id.toLowerCase();
+  const t = String(col.title || '').toLowerCase();
+  const id = String(col.id || '').toLowerCase();
   return id === 'won' || id === 'lost' || t.includes('ganad') || t.includes('vendid') || t.includes('perdid') || t.includes('closed') || t.includes('cerrad');
 }
 
@@ -45,7 +45,7 @@ function TerminalDropZone({ column }: { column: PipelineStage; key?: string | nu
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   let Icon = null;
-  const t = column.title.toLowerCase();
+  const t = String(column.title || '').toLowerCase();
   if (t.includes('ganad') || t.includes('won')) Icon = '🎉';
   else if (t.includes('perdid') || t.includes('lost')) Icon = '🗑️';
 
@@ -217,7 +217,8 @@ export function Kanban() {
         });
 
         // Trigger vehicle status pending validation if moved to "won"
-        const isWon = overColumnId === 'won' || overColumnId.toLowerCase().includes('ganado') || overColumnId.toLowerCase().includes('vendido');
+        const overStr = String(overColumnId || '').toLowerCase();
+        const isWon = overColumnId === 'won' || overStr.includes('ganado') || overStr.includes('vendido');
         if (isWon && client.vehicleId) {
           await updateDoc(doc(db, 'vehicles', client.vehicleId), {
             pendingValidation: {
@@ -235,7 +236,8 @@ export function Kanban() {
         setClients(prev => [...prev]);
       }
       
-      if (overColumnId === 'won' || overColumnId.toLowerCase().includes('ganado') || overColumnId.toLowerCase().includes('vendido')) {
+      const overStrEnd = String(overColumnId || '').toLowerCase();
+      if (overColumnId === 'won' || overStrEnd.includes('ganado') || overStrEnd.includes('vendido')) {
         confetti({
           particleCount: 150,
           spread: 70,
