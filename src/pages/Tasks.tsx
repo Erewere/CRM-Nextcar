@@ -236,16 +236,20 @@ export function Tasks() {
     }
   };
 
-  const [taskToDelete, setTaskToDelete] = useState<string | 'multiple' | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<string | "multiple" | null>(
+    null,
+  );
 
   const confirmDelete = async () => {
     if (!taskToDelete) return;
     try {
-      if (taskToDelete === 'multiple') {
+      if (taskToDelete === "multiple") {
         for (const id of selectedTaskIds) {
           await deleteDoc(doc(db, "tasks", id));
         }
-        setTasks((prev) => prev.filter((t) => !selectedTaskIds.includes(t.task.id)));
+        setTasks((prev) =>
+          prev.filter((t) => !selectedTaskIds.includes(t.task.id)),
+        );
         setSelectedTaskIds([]);
       } else {
         await deleteDoc(doc(db, "tasks", taskToDelete));
@@ -260,13 +264,10 @@ export function Tasks() {
   };
 
   const handleDeleteSelectedTasks = () => {
-    setTaskToDelete('multiple');
+    setTaskToDelete("multiple");
   };
 
-  const handleDeleteSingleTask = (
-    taskId: string,
-    e: React.MouseEvent,
-  ) => {
+  const handleDeleteSingleTask = (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setTaskToDelete(taskId);
   };
@@ -1153,11 +1154,13 @@ export function Tasks() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
             <div className="p-5">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Confirmar eliminación</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                Confirmar eliminación
+              </h3>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                {taskToDelete === 'multiple' 
-                  ? `¿Estás seguro que deseas eliminar las ${selectedTaskIds.length} tareas seleccionadas?` 
-                  : '¿Estás seguro que deseas eliminar esta tarea?'}
+                {taskToDelete === "multiple"
+                  ? `¿Estás seguro que deseas eliminar las ${selectedTaskIds.length} tareas seleccionadas?`
+                  : "¿Estás seguro que deseas eliminar esta tarea?"}
                 Esta acción no se puede deshacer.
               </p>
             </div>
@@ -1213,6 +1216,24 @@ export function Tasks() {
                   return;
                 }
                 if (!token) return; // User cancelled popup
+              }
+
+              // Create person if name is provided but it doesn't match an existing one
+              if (taskData.clientName && !finalClientId) {
+                const clientRef = doc(collection(db, "clients"));
+                const newClient = {
+                  id: clientRef.id,
+                  agencyId: userData.agencyId || "",
+                  sellerId: userData.id || "",
+                  name: taskData.clientName,
+                  organization: taskData.organization || "",
+                  status: taskData.clientStatus || "new",
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+                await setDoc(clientRef, newClient);
+                finalClientId = clientRef.id;
+                setClients((prev) => [...prev, newClient as Client]);
               }
 
               // Create deal if title is provided but it doesn't match an existing one
