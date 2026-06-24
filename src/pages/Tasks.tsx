@@ -9,6 +9,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Client, Deal } from "../types";
@@ -36,6 +37,7 @@ import {
   PenTool,
   Settings,
   Trash2,
+  Clock,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -50,6 +52,15 @@ import {
   endOfMonth,
   addMonths,
   subMonths,
+  startOfDay,
+  endOfDay,
+  startOfYear,
+  endOfYear,
+  addYears,
+  subYears,
+  eachMonthOfInterval,
+  isAfter,
+  parseISO,
 } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -63,7 +74,9 @@ export function Tasks() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"list" | "calendar">("list");
-  const [calendarMode, setCalendarMode] = useState<"week" | "month">("week");
+  const [calendarMode, setCalendarMode] = useState<
+    "day" | "week" | "month" | "year"
+  >("week");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState<
@@ -84,6 +97,8 @@ export function Tasks() {
     phone: true,
   });
   const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [showPostponeMenu, setShowPostponeMenu] = useState(false);
+  const [showRightSidebar, setShowRightSidebar] = useState(true);
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
     checkbox: 40,
@@ -267,24 +282,56 @@ export function Tasks() {
     setTaskToDelete("multiple");
   };
 
+  const handlePostponeSelectedTasks = async (daysToPostpone: number) => {
+    if (!selectedTaskIds.length) return;
+
+    try {
+      const batch = writeBatch(db);
+      for (const taskId of selectedTaskIds) {
+        const taskObj = tasks.find((t) => t.id === taskId);
+        if (taskObj && taskObj.dueDate) {
+          const currentDate = new Date(taskObj.dueDate + "T00:00:00");
+          const newDate = addDays(currentDate, daysToPostpone);
+          batch.update(doc(db, "tasks", taskId), {
+            dueDate: format(newDate, "yyyy-MM-dd"),
+            updatedAt: new Date(),
+          });
+        }
+      }
+      await batch.commit();
+      setSelectedTaskIds([]);
+    } catch (error) {
+      console.error("Error postponing tasks:", error);
+      alert("Error al posponer las tareas");
+    }
+  };
+
   const handleDeleteSingleTask = (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setTaskToDelete(taskId);
   };
 
   const nextPeriod = () => {
-    if (calendarMode === "week") {
+    if (calendarMode === "day") {
+      setCurrentDate(addDays(currentDate, 1));
+    } else if (calendarMode === "week") {
       setCurrentDate(addDays(currentDate, 7));
-    } else {
+    } else if (calendarMode === "month") {
       setCurrentDate(addMonths(currentDate, 1));
+    } else {
+      setCurrentDate(addYears(currentDate, 1));
     }
   };
 
   const prevPeriod = () => {
-    if (calendarMode === "week") {
+    if (calendarMode === "day") {
+      setCurrentDate(addDays(currentDate, -1));
+    } else if (calendarMode === "week") {
       setCurrentDate(addDays(currentDate, -7));
-    } else {
+    } else if (calendarMode === "month") {
       setCurrentDate(subMonths(currentDate, 1));
+    } else {
+      setCurrentDate(subYears(currentDate, 1));
     }
   };
 
@@ -292,14 +339,26 @@ export function Tasks() {
 
   // Calendar data calculation
   const start =
-    calendarMode === "week"
-      ? startOfWeek(currentDate, { weekStartsOn: 1 })
-      : startOfMonth(currentDate);
+    calendarMode === "day"
+      ? startOfDay(currentDate)
+      : calendarMode === "week"
+        ? startOfWeek(currentDate, { weekStartsOn: 1 })
+        : calendarMode === "month"
+          ? startOfMonth(currentDate)
+          : startOfYear(currentDate);
   const end =
-    calendarMode === "week"
-      ? endOfWeek(currentDate, { weekStartsOn: 1 })
-      : endOfMonth(currentDate);
-  const days = eachDayOfInterval({ start, end });
+    calendarMode === "day"
+      ? endOfDay(currentDate)
+      : calendarMode === "week"
+        ? endOfWeek(currentDate, { weekStartsOn: 1 })
+        : calendarMode === "month"
+          ? endOfMonth(currentDate)
+          : endOfYear(currentDate);
+
+  let days: Date[] = [];
+  if (calendarMode !== "year") {
+    days = eachDayOfInterval({ start, end });
+  }
 
   // Add padding for month view
   let calendarDays = [...days];
@@ -310,6 +369,185 @@ export function Tasks() {
     ).fill(null);
     calendarDays = [...prefixDays, ...calendarDays];
   }
+
+  // --- Drag & Drop for Calendar ---
+  const [dragState, setDragState] = useState<{
+    taskId: string;
+    type: "move" | "resize";
+    startY: number;
+    startX: number;
+    originalTop: number;
+    originalHeight: number;
+    originalDate: string;
+    currentTop: number;
+    currentHeight: number;
+    currentDate: string;
+    originalStartStr: string;
+    originalEndStr: string | undefined;
+    hasMoved: boolean;
+  } | null>(null);
+  const calendarGridRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      e.preventDefault();
+      setDragState((prev) => {
+        if (!prev) return prev;
+        const deltaY = e.clientY - prev.startY;
+        const deltaX = e.clientX - prev.startX;
+
+        if (!prev.hasMoved && Math.abs(deltaY) < 5 && Math.abs(deltaX) < 5) {
+          return prev;
+        }
+
+        let newTop = prev.originalTop;
+        let newHeight = prev.originalHeight;
+        let newDate = prev.originalDate;
+
+        if (prev.type === "move") {
+          newTop = Math.max(0, prev.originalTop + deltaY);
+          // Find which column we are in
+          if (calendarGridRef.current) {
+            const rect = calendarGridRef.current.getBoundingClientRect();
+            // Using time column width 64px (w-16)
+            const timeColumnWidth = 64;
+            const gridX = e.clientX - rect.left - timeColumnWidth;
+            const gridWidth = rect.width - timeColumnWidth;
+            if (gridX >= 0 && gridWidth > 0) {
+              const colWidth = gridWidth / calendarDays.length;
+              const colIndex = Math.floor(gridX / colWidth);
+              if (colIndex >= 0 && colIndex < calendarDays.length) {
+                newDate = format(calendarDays[colIndex], "yyyy-MM-dd");
+              }
+            }
+          }
+        } else if (prev.type === "resize") {
+          newHeight = Math.max(20, prev.originalHeight + deltaY);
+        }
+
+        return {
+          ...prev,
+          currentTop: newTop,
+          currentHeight: newHeight,
+          currentDate: newDate,
+          hasMoved: true,
+        };
+      });
+    };
+
+    const handlePointerUp = async (e: PointerEvent) => {
+      if (dragState) {
+        if (!dragState.hasMoved) {
+          setDragState(null);
+          return;
+        }
+
+        // Calculate final times
+        let newStartTime = dragState.originalStartStr;
+        let newEndTime = dragState.originalEndStr;
+        let newDate = dragState.currentDate;
+
+        if (dragState.type === "move") {
+          const top = dragState.currentTop;
+          const startHour = Math.floor(top / 96);
+          const startMin = Math.floor(((top % 96) / 96) * 60);
+          // Snap to 15 mins
+          const snappedStartMin = Math.round(startMin / 15) * 15;
+          let finalStartHour = startHour;
+          let finalStartMin = snappedStartMin;
+          if (finalStartMin >= 60) {
+            finalStartHour += 1;
+            finalStartMin -= 60;
+          }
+          finalStartHour = Math.max(0, Math.min(23, finalStartHour));
+          newStartTime = `${finalStartHour.toString().padStart(2, "0")}:${finalStartMin.toString().padStart(2, "0")}`;
+
+          if (dragState.originalEndStr) {
+            // shift end time by the same duration
+            const oldStartHour = parseInt(
+              dragState.originalStartStr.split(":")[0] || "0",
+            );
+            const oldStartMin = parseInt(
+              dragState.originalStartStr.split(":")[1] || "0",
+            );
+            const oldEndHour = parseInt(
+              dragState.originalEndStr.split(":")[0] || "0",
+            );
+            const oldEndMin = parseInt(
+              dragState.originalEndStr.split(":")[1] || "0",
+            );
+
+            let oldTotalStart = oldStartHour * 60 + oldStartMin;
+            let oldTotalEnd = oldEndHour * 60 + oldEndMin;
+            if (oldTotalEnd < oldTotalStart) oldTotalEnd += 24 * 60;
+            const duration = oldTotalEnd - oldTotalStart;
+
+            let newTotalEnd = finalStartHour * 60 + finalStartMin + duration;
+            let finalEndHour = Math.floor(newTotalEnd / 60) % 24;
+            let finalEndMin = newTotalEnd % 60;
+            newEndTime = `${finalEndHour.toString().padStart(2, "0")}:${finalEndMin.toString().padStart(2, "0")}`;
+          }
+        } else if (dragState.type === "resize") {
+          // keep original start time, update end time based on height
+          const startHour = parseInt(
+            dragState.originalStartStr.split(":")[0] || "0",
+          );
+          const startMin = parseInt(
+            dragState.originalStartStr.split(":")[1] || "0",
+          );
+
+          const height = dragState.currentHeight;
+          const durationMins = (height / 96) * 60;
+          const totalMins = startHour * 60 + startMin + durationMins;
+
+          // Snap end time to 15 mins
+          const snappedTotalMins = Math.round(totalMins / 15) * 15;
+          let finalEndHour = Math.floor(snappedTotalMins / 60) % 24;
+          let finalEndMin = snappedTotalMins % 60;
+
+          newEndTime = `${finalEndHour.toString().padStart(2, "0")}:${finalEndMin.toString().padStart(2, "0")}`;
+        }
+
+        // Apply changes
+        setDragState(null);
+        try {
+          await updateDoc(doc(db, "tasks", dragState.taskId), {
+            dueDate: newDate,
+            startTime: newStartTime,
+            endTime: newEndTime || "",
+            updatedAt: new Date().toISOString(),
+          });
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.task.id === dragState.taskId
+                ? {
+                    ...t,
+                    task: {
+                      ...t.task,
+                      dueDate: newDate,
+                      startTime: newStartTime,
+                      endTime: newEndTime,
+                    },
+                  }
+                : t,
+            ),
+          );
+        } catch (error) {
+          console.error("Error updating task drag:", error);
+        }
+      }
+    };
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [dragState, calendarDays]);
 
   const getTaskIcon = (title: string = "") => {
     const t = String(title || "").toLowerCase();
@@ -516,13 +754,55 @@ export function Tasks() {
             {view === "list" && (
               <div className="relative flex items-center gap-2 ml-auto sm:ml-0">
                 {selectedTaskIds.length > 0 && (
-                  <button
-                    onClick={handleDeleteSelectedTasks}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded shadow-sm transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Borrar ({selectedTaskIds.length})
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowPostponeMenu(!showPostponeMenu)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded shadow-sm transition-colors"
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        Posponer ({selectedTaskIds.length})
+                      </button>
+                      {showPostponeMenu && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50 p-1">
+                          <button
+                            onClick={() => {
+                              handlePostponeSelectedTasks(1);
+                              setShowPostponeMenu(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
+                          >
+                            1 día (Mañana)
+                          </button>
+                          <button
+                            onClick={() => {
+                              handlePostponeSelectedTasks(2);
+                              setShowPostponeMenu(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
+                          >
+                            2 días
+                          </button>
+                          <button
+                            onClick={() => {
+                              handlePostponeSelectedTasks(7);
+                              setShowPostponeMenu(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
+                          >
+                            1 semana
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleDeleteSelectedTasks}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded shadow-sm transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Borrar ({selectedTaskIds.length})
+                    </button>
+                  </div>
                 )}
                 <button
                   onClick={() => setShowColumnSettings(!showColumnSettings)}
@@ -791,359 +1071,747 @@ export function Tasks() {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-auto bg-white dark:bg-slate-800">
-        {view === "list" && (
-          <table className="w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-[800px]">
-            <thead className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-700 dark:text-slate-300 font-bold">
-              <tr>
-                <th
-                  className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 text-center relative"
-                  style={{ width: columnWidths.checkbox }}
-                >
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
-                    checked={
-                      selectedTaskIds.length === filteredTasks.length &&
-                      filteredTasks.length > 0
-                    }
-                    onChange={() =>
-                      toggleSelectAllTasks(filteredTasks.map((t) => t.task.id))
-                    }
-                  />
-                  <div
-                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                    onMouseDown={(e) => handleMouseDown(e, "checkbox")}
-                  />
-                </th>
-                {visibleColumns.status && (
+      <div className="flex-1 flex overflow-hidden bg-white dark:bg-slate-800">
+        <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 flex flex-col">
+          {view === "list" && (
+            <table className="w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-[800px]">
+              <thead className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-700 dark:text-slate-300 font-bold">
+                <tr>
                   <th
-                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
-                    style={{ width: columnWidths.status }}
+                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 text-center relative"
+                    style={{ width: columnWidths.checkbox }}
                   >
-                    Finalizada
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
+                      checked={
+                        selectedTaskIds.length === filteredTasks.length &&
+                        filteredTasks.length > 0
+                      }
+                      onChange={() =>
+                        toggleSelectAllTasks(
+                          filteredTasks.map((t) => t.task.id),
+                        )
+                      }
+                    />
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "status")}
+                      onMouseDown={(e) => handleMouseDown(e, "checkbox")}
                     />
                   </th>
-                )}
-                {visibleColumns.title && (
-                  <th
-                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
-                    style={{ width: columnWidths.title }}
-                  >
-                    Asunto
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "title")}
-                    />
-                  </th>
-                )}
-                {visibleColumns.deal && (
-                  <th
-                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
-                    style={{ width: columnWidths.deal }}
-                  >
-                    Trato
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "deal")}
-                    />
-                  </th>
-                )}
-                {visibleColumns.dueDate && (
-                  <th
-                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
-                    style={{ width: columnWidths.dueDate }}
-                  >
-                    Vencimiento
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "dueDate")}
-                    />
-                  </th>
-                )}
-                {visibleColumns.contact && (
-                  <th
-                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
-                    style={{ width: columnWidths.contact }}
-                  >
-                    Persona de contacto
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "contact")}
-                    />
-                  </th>
-                )}
-                {visibleColumns.email && (
-                  <th
-                    className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
-                    style={{ width: columnWidths.email }}
-                  >
-                    Correo electrónico
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "email")}
-                    />
-                  </th>
-                )}
-                {visibleColumns.phone && (
-                  <th
-                    className="px-4 py-2 relative border-r border-gray-200 dark:border-slate-700"
-                    style={{ width: columnWidths.phone }}
-                  >
-                    Teléfono
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                      onMouseDown={(e) => handleMouseDown(e, "phone")}
-                    />
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-slate-800">
-              {filteredTasks.map(({ task, client }) => (
-                <tr
-                  key={task.id}
-                  className={clsx(
-                    "border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 flex-col md:table-row group",
-                    selectedTaskIds.includes(task.id) &&
-                      "bg-blue-50 dark:bg-slate-700",
-                  )}
-                >
-                  <td className="px-4 py-2 text-center border-r border-gray-100 dark:border-slate-700 text-gray-300 relative">
-                    <div className="flex items-center justify-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
-                        checked={selectedTaskIds.includes(task.id)}
-                        onChange={() => toggleTaskSelection(task.id)}
-                      />
-                      <button
-                        onClick={(e) => handleDeleteSingleTask(task.id, e)}
-                        className="p-1 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Eliminar tarea"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
                   {visibleColumns.status && (
-                    <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleTask(task.id, task.completed);
-                        }}
-                        className={clsx(
-                          "transition-colors",
-                          task.completed
-                            ? "text-green-500"
-                            : "text-gray-300 hover:text-green-500",
-                        )}
-                      >
-                        {task.completed ? (
-                          <CheckCircle className="w-5 h-5 mx-auto" />
-                        ) : (
-                          <Circle className="w-5 h-5 mx-auto" />
-                        )}
-                      </button>
-                    </td>
+                    <th
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      style={{ width: columnWidths.status }}
+                    >
+                      Finalizada
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "status")}
+                      />
+                    </th>
                   )}
                   {visibleColumns.title && (
-                    <td
-                      className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-bold truncate cursor-pointer hover:text-blue-600"
-                      onClick={() => setEditingTask(task)}
+                    <th
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      style={{ width: columnWidths.title }}
                     >
-                      <span
+                      Asunto
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "title")}
+                      />
+                    </th>
+                  )}
+                  {visibleColumns.deal && (
+                    <th
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      style={{ width: columnWidths.deal }}
+                    >
+                      Trato
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "deal")}
+                      />
+                    </th>
+                  )}
+                  {visibleColumns.dueDate && (
+                    <th
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      style={{ width: columnWidths.dueDate }}
+                    >
+                      Vencimiento
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "dueDate")}
+                      />
+                    </th>
+                  )}
+                  {visibleColumns.contact && (
+                    <th
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      style={{ width: columnWidths.contact }}
+                    >
+                      Persona de contacto
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "contact")}
+                      />
+                    </th>
+                  )}
+                  {visibleColumns.email && (
+                    <th
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      style={{ width: columnWidths.email }}
+                    >
+                      Correo electrónico
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "email")}
+                      />
+                    </th>
+                  )}
+                  {visibleColumns.phone && (
+                    <th
+                      className="px-4 py-2 relative border-r border-gray-200 dark:border-slate-700"
+                      style={{ width: columnWidths.phone }}
+                    >
+                      Teléfono
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
+                        onMouseDown={(e) => handleMouseDown(e, "phone")}
+                      />
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-slate-800">
+                {filteredTasks.map(({ task, client }) => (
+                  <tr
+                    key={task.id}
+                    className={clsx(
+                      "border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 flex-col md:table-row group",
+                      selectedTaskIds.includes(task.id) &&
+                        "bg-blue-50 dark:bg-slate-700",
+                    )}
+                  >
+                    <td className="px-4 py-2 text-center border-r border-gray-100 dark:border-slate-700 text-gray-300 relative">
+                      <div className="flex items-center justify-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
+                          checked={selectedTaskIds.includes(task.id)}
+                          onChange={() => toggleTaskSelection(task.id)}
+                        />
+                        <button
+                          onClick={(e) => handleDeleteSingleTask(task.id, e)}
+                          className="p-1 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Eliminar tarea"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    {visibleColumns.status && (
+                      <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTask(task.id, task.completed);
+                          }}
+                          className={clsx(
+                            "transition-colors",
+                            task.completed
+                              ? "text-green-500"
+                              : "text-gray-300 hover:text-green-500",
+                          )}
+                        >
+                          {task.completed ? (
+                            <CheckCircle className="w-5 h-5 mx-auto" />
+                          ) : (
+                            <Circle className="w-5 h-5 mx-auto" />
+                          )}
+                        </button>
+                      </td>
+                    )}
+                    {visibleColumns.title && (
+                      <td
+                        className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-bold truncate cursor-pointer hover:text-blue-600"
+                        onClick={() => setEditingTask(task)}
+                      >
+                        <span
+                          className={clsx(
+                            "flex items-center gap-2",
+                            task.completed && "line-through",
+                            getTaskColorClass(task),
+                          )}
+                        >
+                          {getTaskIcon(task.title)} {task.title}
+                        </span>
+                      </td>
+                    )}
+                    {visibleColumns.deal && (
+                      <td
+                        className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-blue-600 truncate hover:underline cursor-pointer"
+                        onClick={() =>
+                          client
+                            ? setSelectedClient(client)
+                            : setEditingTask(task)
+                        }
+                      >
+                        {client?.name || "Desconocido"}
+                      </td>
+                    )}
+                    {visibleColumns.dueDate && (
+                      <td
                         className={clsx(
-                          "flex items-center gap-2",
-                          task.completed && "line-through",
+                          "px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-medium",
                           getTaskColorClass(task),
                         )}
                       >
-                        {getTaskIcon(task.title)} {task.title}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.deal && (
+                        {task.dueDate
+                          ? format(
+                              new Date(task.dueDate + "T00:00:00"),
+                              "dd MMM yyyy",
+                              { locale: es },
+                            )
+                          : ""}
+                      </td>
+                    )}
+                    {visibleColumns.contact && (
+                      <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 truncate hover:underline cursor-pointer text-gray-600 dark:text-slate-400">
+                        <span className="border border-gray-200 dark:border-slate-700 rounded px-2 inline-block">
+                          {client?.name || "Desconocido"}
+                        </span>
+                      </td>
+                    )}
+                    {visibleColumns.email && (
+                      <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 truncate text-blue-600 hover:underline cursor-pointer">
+                        {client?.email || ""}
+                      </td>
+                    )}
+                    {visibleColumns.phone && (
+                      <td className="px-4 py-2 truncate text-gray-600 dark:text-slate-400 hover:text-blue-600 cursor-pointer">
+                        {client?.phone || ""}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {filteredTasks.length === 0 && (
+                  <tr>
                     <td
-                      className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-blue-600 truncate hover:underline cursor-pointer"
-                      onClick={() =>
-                        client
-                          ? setSelectedClient(client)
-                          : setEditingTask(task)
-                      }
+                      colSpan={8}
+                      className="p-8 text-center text-sm font-medium text-gray-500 dark:text-slate-400"
                     >
-                      {client?.name || "Desconocido"}
+                      No hay actividades para mostrar.
                     </td>
-                  )}
-                  {visibleColumns.dueDate && (
-                    <td
-                      className={clsx(
-                        "px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-medium",
-                        getTaskColorClass(task),
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {view === "calendar" && (
+            <div className="flex flex-col h-full border-t border-gray-200 dark:border-slate-700">
+              {/* Calendar Controls */}
+              <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
+                <div className="flex items-center gap-3">
+                  <select
+                    value={calendarMode}
+                    onChange={(e) => setCalendarMode(e.target.value as any)}
+                    className="px-3 py-1.5 text-xs font-bold border border-gray-300 rounded bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 shadow-sm outline-none"
+                  >
+                    <option value="day">Día</option>
+                    <option value="week">Semana</option>
+                    <option value="month">Mes</option>
+                    <option value="year">Año</option>
+                  </select>
+                  <div className="flex items-center">
+                    <button
+                      onClick={prevPeriod}
+                      className="p-1 border border-r-0 border-gray-300 bg-white dark:bg-slate-800 rounded-l hover:bg-gray-50 dark:bg-slate-900"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentDate(new Date())}
+                      className="px-3 py-[3px] text-xs font-bold border border-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:bg-slate-900"
+                    >
+                      Hoy
+                    </button>
+                    <button
+                      onClick={nextPeriod}
+                      className="p-1 border border-l-0 border-gray-300 bg-white dark:bg-slate-800 rounded-r hover:bg-gray-50 dark:bg-slate-900"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="font-bold text-gray-800 dark:text-slate-200 text-sm capitalize">
+                  {calendarMode === "day"
+                    ? format(start, "EEEE d 'de' MMMM, yyyy", { locale: es })
+                    : calendarMode === "week"
+                      ? `${format(start, "MMM d", { locale: es })} - ${format(end, "MMM d, yyyy", { locale: es })}`
+                      : calendarMode === "month"
+                        ? format(start, "MMMM yyyy", { locale: es })
+                        : format(start, "yyyy", { locale: es })}
+                </div>
+              </div>
+
+              {calendarMode === "month" && (
+                <div className="overflow-x-auto flex-1">
+                  <div className="min-w-[500px] h-full flex flex-col">
+                    {/* Calendar Grid Header */}
+                    <div className="grid grid-cols-7 border-b border-gray-200 bg-white dark:bg-slate-800 shadow-sm z-10 sticky top-0 shrink-0">
+                      {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map(
+                        (d) => (
+                          <div
+                            key={d}
+                            className="px-1 md:px-2 py-2 text-[10px] md:text-[11px] font-bold text-gray-500 dark:text-slate-400 border-r border-gray-200 dark:border-slate-700 text-center"
+                          >
+                            {d}
+                          </div>
+                        ),
                       )}
-                    >
-                      {task.dueDate
-                        ? format(
-                            new Date(task.dueDate + "T00:00:00"),
-                            "dd MMM yyyy",
-                            { locale: es },
-                          )
-                        : ""}
-                    </td>
-                  )}
-                  {visibleColumns.contact && (
-                    <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 truncate hover:underline cursor-pointer text-gray-600 dark:text-slate-400">
-                      <span className="border border-gray-200 dark:border-slate-700 rounded px-2 inline-block">
-                        {client?.name || "Desconocido"}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.email && (
-                    <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 truncate text-blue-600 hover:underline cursor-pointer">
-                      {client?.email || ""}
-                    </td>
-                  )}
-                  {visibleColumns.phone && (
-                    <td className="px-4 py-2 truncate text-gray-600 dark:text-slate-400 hover:text-blue-600 cursor-pointer">
-                      {client?.phone || ""}
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {filteredTasks.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="p-8 text-center text-sm font-medium text-gray-500 dark:text-slate-400"
-                  >
-                    No hay actividades para mostrar.
-                  </td>
-                </tr>
+                    </div>
+
+                    {/* Calendar Grid Body */}
+                    <div className="grid grid-cols-7 flex-1 border-r border-gray-200 bg-white dark:bg-slate-800 grid-rows-5">
+                      {calendarDays.map((day, i) => {
+                        const isValidDay = day instanceof Date;
+                        const dateStr = isValidDay
+                          ? format(day, "yyyy-MM-dd")
+                          : "";
+                        const dayTasks = filteredTasks.filter(
+                          (t) => t.task.dueDate === dateStr,
+                        );
+                        const isToday = isValidDay && isSameDay(day, today);
+
+                        return (
+                          <div
+                            key={i}
+                            className={clsx(
+                              "border-b border-l border-gray-200 dark:border-slate-700 p-1 min-h-[100px] md:min-h-[120px] transition-colors relative",
+                              !isValidDay && "bg-gray-50 dark:bg-slate-900",
+                              isValidDay && "hover:bg-blue-50/20",
+                            )}
+                          >
+                            {isValidDay && (
+                              <div className="flex flex-col h-full relative">
+                                <div
+                                  className={clsx(
+                                    "text-right text-xs font-bold mb-1 p-1",
+                                    isToday
+                                      ? "text-blue-600 bg-blue-100 w-6 h-6 rounded-full flex items-center justify-center ml-auto"
+                                      : "text-gray-500 dark:text-slate-400",
+                                  )}
+                                >
+                                  {format(day, "d")}
+                                </div>
+                                <div className="flex flex-col gap-1 overflow-y-auto max-h-[150px] scrollbar-hide">
+                                  {dayTasks.map(({ task, client }) => (
+                                    <div
+                                      key={task.id}
+                                      onClick={() => setEditingTask(task)}
+                                      className={clsx(
+                                        "text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border",
+                                        task.completed
+                                          ? "bg-gray-100 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 line-through hover:border-gray-300"
+                                          : "bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100 hover:border-blue-300",
+                                      )}
+                                    >
+                                      {task.title}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               )}
-            </tbody>
-          </table>
-        )}
 
-        {view === "calendar" && (
-          <div className="flex flex-col h-full border-t border-gray-200 dark:border-slate-700">
-            {/* Calendar Controls */}
-            <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() =>
-                    setCalendarMode(calendarMode === "week" ? "month" : "week")
-                  }
-                  className="px-3 py-1.5 text-xs font-bold border border-gray-300 rounded bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 shadow-sm"
-                >
-                  Ver {calendarMode === "week" ? "Mes" : "Semana"}
-                </button>
-                <div className="flex items-center">
-                  <button
-                    onClick={prevPeriod}
-                    className="p-1 border border-r-0 border-gray-300 bg-white dark:bg-slate-800 rounded-l hover:bg-gray-50 dark:bg-slate-900"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setCurrentDate(new Date())}
-                    className="px-3 py-[3px] text-xs font-bold border border-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:bg-slate-900"
-                  >
-                    Hoy
-                  </button>
-                  <button
-                    onClick={nextPeriod}
-                    className="p-1 border border-l-0 border-gray-300 bg-white dark:bg-slate-800 rounded-r hover:bg-gray-50 dark:bg-slate-900"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="font-bold text-gray-800 dark:text-slate-200 text-sm">
-                {calendarMode === "week"
-                  ? `${format(start, "MMM d", { locale: es })} - ${format(end, "MMM d, yyyy", { locale: es })}`
-                  : format(start, "MMMM yyyy", { locale: es })}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <div className="min-w-[500px]">
-                {/* Calendar Grid Header */}
-                <div className="grid grid-cols-7 border-b border-gray-200 bg-white dark:bg-slate-800 shadow-sm z-10 sticky top-0">
-                  {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map(
-                    (d, i) => (
-                      <div
-                        key={d}
-                        className="px-1 md:px-2 py-2 text-[10px] md:text-[11px] font-bold text-gray-500 dark:text-slate-400 border-r border-gray-200 dark:border-slate-700 text-center"
-                      >
-                        {d}
-                      </div>
-                    ),
-                  )}
-                </div>
-
-                {/* Calendar Grid Body */}
+              {(calendarMode === "week" || calendarMode === "day") && (
                 <div
-                  className={clsx(
-                    "grid grid-cols-7 flex-1 border-r border-gray-200 bg-white dark:bg-slate-800",
-                    calendarMode === "month" && "grid-rows-5",
-                  )}
+                  className="flex flex-1 overflow-auto bg-white dark:bg-slate-800 relative"
+                  ref={calendarGridRef}
                 >
-                  {calendarDays.map((day, i) => {
-                    const isValidDay = day instanceof Date;
-                    const dateStr = isValidDay ? format(day, "yyyy-MM-dd") : "";
-                    const dayTasks = filteredTasks.filter(
-                      (t) => t.task.dueDate === dateStr,
-                    );
-                    const isToday = isValidDay && isSameDay(day, today);
-
-                    return (
+                  {/* Time Column */}
+                  <div className="w-16 shrink-0 border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 sticky left-0 z-20">
+                    <div className="h-16 border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-gray-50 dark:bg-slate-900 z-30" />
+                    {Array.from({ length: 24 }, (_, i) => (
                       <div
                         key={i}
-                        className={clsx(
-                          "border-b border-l border-gray-200 dark:border-slate-700 p-1 min-h-[100px] md:min-h-[120px] transition-colors relative",
-                          !isValidDay && "bg-gray-50 dark:bg-slate-900",
-                          isValidDay && "hover:bg-blue-50/20",
-                        )}
+                        className="h-24 border-b border-gray-200 dark:border-slate-700 text-[10px] text-gray-500 dark:text-slate-400 text-right pr-2 pt-1 font-medium"
                       >
-                        {isValidDay && (
-                          <div className="flex flex-col h-full relative">
-                            <div
+                        {i.toString().padStart(2, "0")}:00
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Days Columns */}
+                  <div
+                    className={clsx(
+                      "flex-1 flex",
+                      calendarMode === "week" && "min-w-[700px]",
+                    )}
+                  >
+                    {calendarDays.map((day, i) => {
+                      const dateStr = format(day, "yyyy-MM-dd");
+                      const dayTasks = filteredTasks.filter((t) => {
+                        if (dragState && dragState.taskId === t.task.id) {
+                          return dragState.currentDate === dateStr;
+                        }
+                        return t.task.dueDate === dateStr;
+                      });
+
+                      return (
+                        <div
+                          key={i}
+                          className="flex-1 flex flex-col border-r border-gray-200 dark:border-slate-700 min-w-[100px]"
+                        >
+                          {/* Day Header */}
+                          <div className="h-16 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky top-0 z-10 flex flex-col items-center justify-center shrink-0">
+                            <span className="text-[10px] uppercase text-gray-500 dark:text-slate-400 font-bold mb-1">
+                              {format(day, "eee", { locale: es })}
+                            </span>
+                            <span
                               className={clsx(
-                                "text-right text-xs font-bold mb-1 p-1",
-                                isToday
-                                  ? "text-blue-600 bg-blue-100 w-6 h-6 rounded-full flex items-center justify-center ml-auto"
-                                  : "text-gray-500 dark:text-slate-400",
+                                "text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full",
+                                isSameDay(day, today)
+                                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                                  : "text-gray-900 dark:text-slate-100",
                               )}
                             >
                               {format(day, "d")}
-                            </div>
-                            <div className="flex flex-col gap-1 overflow-y-auto max-h-[150px] scrollbar-hide">
-                              {dayTasks.map(({ task, client }) => (
+                            </span>
+                          </div>
+
+                          {/* Hour Cells */}
+                          <div className="relative flex-1">
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <div
+                                key={h}
+                                className="h-24 border-b border-gray-100 dark:border-slate-800/50"
+                              />
+                            ))}
+
+                            {/* Render Tasks Absolute */}
+                            {dayTasks.map(({ task, client }) => {
+                              const startHour = task.startTime
+                                ? parseInt(task.startTime.split(":")[0])
+                                : 12;
+                              const startMin = task.startTime
+                                ? parseInt(task.startTime.split(":")[1])
+                                : 0;
+                              // Cell height is 96px (h-24 = 6rem = 96px)
+                              const top = startHour * 96 + (startMin / 60) * 96;
+
+                              let height = 44;
+                              if (task.endTime) {
+                                const endHour = parseInt(
+                                  task.endTime.split(":")[0],
+                                );
+                                const endMin = parseInt(
+                                  task.endTime.split(":")[1],
+                                );
+                                let endTotalMinutes = endHour * 60 + endMin;
+                                let startTotalMinutes =
+                                  startHour * 60 + startMin;
+                                if (endTotalMinutes < startTotalMinutes) {
+                                  endTotalMinutes += 24 * 60; // Next day fallback
+                                }
+                                const durationMinutes =
+                                  endTotalMinutes - startTotalMinutes;
+                                height = Math.max(
+                                  44,
+                                  (durationMinutes / 60) * 96 - 4,
+                                ); // -4 for padding/border adjustments
+                              }
+
+                              const isDragging = dragState?.taskId === task.id;
+                              const displayTop = isDragging
+                                ? dragState.currentTop
+                                : top;
+                              const displayHeight = isDragging
+                                ? dragState.currentHeight
+                                : height;
+
+                              return (
                                 <div
                                   key={task.id}
-                                  onClick={() => setEditingTask(task)}
+                                  onPointerUp={(e) => {
+                                    if (!dragState || !dragState.hasMoved) {
+                                      setEditingTask(task);
+                                    }
+                                  }}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    setDragState({
+                                      taskId: task.id,
+                                      type: "move",
+                                      startY: e.clientY,
+                                      startX: e.clientX,
+                                      originalTop: top,
+                                      originalHeight: height,
+                                      originalDate: task.dueDate,
+                                      currentTop: top,
+                                      currentHeight: height,
+                                      currentDate: task.dueDate,
+                                      originalStartStr:
+                                        task.startTime || "12:00",
+                                      originalEndStr: task.endTime,
+                                      hasMoved: false,
+                                    });
+                                  }}
                                   className={clsx(
-                                    "text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border",
+                                    "absolute left-1 right-1 rounded border p-1.5 shadow-sm overflow-hidden cursor-pointer flex flex-col z-10 transition-all group",
+                                    isDragging
+                                      ? "z-50 opacity-90 shadow-xl ring-2 ring-blue-500 scale-[1.02] select-none"
+                                      : "hover:z-20",
                                     task.completed
-                                      ? "bg-gray-100 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 line-through hover:border-gray-300"
-                                      : "bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100 hover:border-blue-300",
+                                      ? "bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 line-through opacity-80"
+                                      : "bg-blue-50/95 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700/50 hover:bg-blue-100 dark:hover:bg-blue-900/80 shadow-blue-900/5",
+                                  )}
+                                  style={{
+                                    top: `${displayTop + 2}px`,
+                                    minHeight: "44px",
+                                    height:
+                                      task.endTime || isDragging
+                                        ? `${displayHeight}px`
+                                        : undefined,
+                                    touchAction: "none",
+                                  }}
+                                >
+                                  <div className="font-bold text-[11px] leading-tight group-hover:text-blue-800 dark:group-hover:text-blue-200 line-clamp-2">
+                                    {task.title}
+                                  </div>
+                                  {task.startTime && (
+                                    <div className="text-[10px] mt-0.5 opacity-80 flex items-center gap-1">
+                                      <CalendarIcon className="w-2 h-2" />
+                                      {task.startTime}{" "}
+                                      {task.endTime && `- ${task.endTime}`}
+                                    </div>
+                                  )}
+                                  {/* Resize Handle */}
+                                  <div
+                                    className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-blue-500/20 active:bg-blue-500/40"
+                                    onPointerDown={(e) => {
+                                      e.stopPropagation();
+                                      setDragState({
+                                        taskId: task.id,
+                                        type: "resize",
+                                        startY: e.clientY,
+                                        startX: e.clientX,
+                                        originalTop: top,
+                                        originalHeight: height,
+                                        originalDate: task.dueDate,
+                                        currentTop: top,
+                                        currentHeight: height,
+                                        currentDate: task.dueDate,
+                                        originalStartStr:
+                                          task.startTime || "12:00",
+                                        originalEndStr: task.endTime,
+                                        hasMoved: false,
+                                      });
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {calendarMode === "year" && (
+                <div className="flex-1 overflow-auto p-4 md:p-6 bg-white dark:bg-slate-800">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {eachMonthOfInterval({ start, end }).map((monthDate) => {
+                      const monthStart = startOfMonth(monthDate);
+                      const monthEnd = endOfMonth(monthDate);
+                      const monthDays = eachDayOfInterval({
+                        start: monthStart,
+                        end: monthEnd,
+                      });
+                      const startDayOfWeek = getDay(monthStart);
+                      const prefix = Array(
+                        startDayOfWeek === 0 ? 6 : startDayOfWeek - 1,
+                      ).fill(null);
+                      const allDays = [...prefix, ...monthDays];
+
+                      return (
+                        <div
+                          key={monthDate.toISOString()}
+                          className="border border-gray-200 dark:border-slate-700 rounded-lg p-3"
+                        >
+                          <div className="font-bold text-sm text-gray-800 dark:text-slate-200 mb-3 capitalize text-center">
+                            {format(monthDate, "MMMM", { locale: es })}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                            {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+                              <div
+                                key={i}
+                                className="text-[10px] font-bold text-gray-400"
+                              >
+                                {d}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 text-center">
+                            {allDays.map((d, i) => {
+                              if (!d) return <div key={i} />;
+                              const hasTasks = filteredTasks.some(
+                                (t) =>
+                                  t.task.dueDate === format(d, "yyyy-MM-dd"),
+                              );
+                              return (
+                                <div
+                                  key={i}
+                                  className={clsx(
+                                    "w-6 h-6 mx-auto flex items-center justify-center text-[10px] rounded-full",
+                                    isSameDay(d, today) &&
+                                      "bg-blue-600 text-white font-bold",
+                                    !isSameDay(d, today) &&
+                                      hasTasks &&
+                                      "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 font-bold",
+                                    !isSameDay(d, today) &&
+                                      !hasTasks &&
+                                      "text-gray-700 dark:text-slate-300",
                                   )}
                                 >
-                                  {task.title}
+                                  {format(d, "d")}
                                 </div>
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right Sidebar: Mis tareas */}
+        {showRightSidebar ? (
+          <div className="w-80 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col overflow-hidden transition-all duration-300">
+            <div
+              className="p-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-800 z-10 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-900 transition-colors"
+              onClick={() => setShowRightSidebar(false)}
+              title="Ocultar panel"
+            >
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  TASKS
+                </div>
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-sm">
+                  <span>Mis tareas</span>
                 </div>
               </div>
+              <button className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-500 transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-2 border-b border-gray-100 dark:border-slate-700/50">
+              <button
+                onClick={() => setShowNewTaskModal(true)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+              >
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-100/50 text-blue-600 shrink-0">
+                  <span className="text-lg leading-none mt-[-2px]">+</span>
+                </div>
+                Agregar una tarea
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
+              {filteredTasks
+                .filter((t) => !t.task.completed)
+                .sort((a, b) => {
+                  const dateA = a.task.dueDate
+                    ? new Date(a.task.dueDate).getTime()
+                    : Infinity;
+                  const dateB = b.task.dueDate
+                    ? new Date(b.task.dueDate).getTime()
+                    : Infinity;
+                  return dateA - dateB;
+                })
+                .map(({ task, client }) => (
+                  <div
+                    key={task.id}
+                    className="group flex gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/50 transition-all"
+                    onClick={() => setEditingTask(task)}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTask(task.id, task.completed);
+                      }}
+                      className="mt-0.5 shrink-0 text-gray-300 hover:text-green-500 transition-colors"
+                    >
+                      <Circle className="w-4 h-4" />
+                    </button>
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight">
+                        {task.title}
+                      </span>
+                      {task.dueDate && (
+                        <span
+                          className={clsx(
+                            "text-[11px] mt-1 font-semibold flex items-center gap-1",
+                            isAfter(
+                              startOfDay(new Date()),
+                              parseISO(task.dueDate),
+                            )
+                              ? "text-rose-500"
+                              : "text-gray-500 dark:text-slate-400",
+                          )}
+                        >
+                          {format(parseISO(task.dueDate), "MMM d", {
+                            locale: es,
+                          })}
+                          {task.startTime && ` • ${task.startTime}`}
+                        </span>
+                      )}
+                      {client && (
+                        <span className="text-[11px] text-blue-600 truncate mt-0.5">
+                          {client.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+              {filteredTasks.filter((t) => !t.task.completed).length === 0 && (
+                <div className="text-center p-6 text-gray-400 dark:text-slate-500 text-sm">
+                  No tienes tareas pendientes. ¡Buen trabajo!
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="w-12 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex flex-col items-center py-4 transition-all duration-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 border-l-4 border-l-blue-500"
+            onClick={() => setShowRightSidebar(true)}
+            title="Mostrar panel de tareas"
+          >
+            <button className="p-1.5 rounded-md bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 shadow-sm transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="mt-8 relative h-32 w-full flex items-center justify-center">
+              <span className="absolute -rotate-90 whitespace-nowrap text-xs font-bold text-gray-500 tracking-widest uppercase">
+                Mis tareas
+              </span>
             </div>
           </div>
         )}
@@ -1221,7 +1889,11 @@ export function Tasks() {
               // Try to find existing client by name if ID is missing
               if (taskData.clientName && !finalClientId) {
                 const existingClient = clients.find(
-                  (c) => String(c.name || "").toLowerCase().trim() === String(taskData.clientName).toLowerCase().trim()
+                  (c) =>
+                    String(c.name || "")
+                      .toLowerCase()
+                      .trim() ===
+                    String(taskData.clientName).toLowerCase().trim(),
                 );
                 if (existingClient) {
                   finalClientId = existingClient.id;
@@ -1246,7 +1918,11 @@ export function Tasks() {
               // Try to find existing deal by title if ID is missing
               if (taskData.dealTitle && !finalDealId) {
                 const existingDeal = deals.find(
-                  (d) => String(d.title || "").toLowerCase().trim() === String(taskData.dealTitle).toLowerCase().trim()
+                  (d) =>
+                    String(d.title || "")
+                      .toLowerCase()
+                      .trim() ===
+                    String(taskData.dealTitle).toLowerCase().trim(),
                 );
                 if (existingDeal) {
                   finalDealId = existingDeal.id;
@@ -1280,12 +1956,14 @@ export function Tasks() {
                 const matchedDeal = deals.find((d) => d.id === finalDealId);
                 if (matchedDeal && !matchedDeal.clientId) {
                   await updateDoc(doc(db, "deals", finalDealId), {
-                    clientId: finalClientId
+                    clientId: finalClientId,
                   });
                   setDeals((prev) =>
                     prev.map((d) =>
-                      d.id === finalDealId ? { ...d, clientId: finalClientId } : d
-                    )
+                      d.id === finalDealId
+                        ? { ...d, clientId: finalClientId }
+                        : d,
+                    ),
                   );
                 }
               }

@@ -1,7 +1,7 @@
 export interface User {
   id: string; // The uid created in Firebase Auth
   email: string;
-  role: 'master' | 'admin' | 'seller' | 'unassigned';
+  role: "master" | "admin" | "seller" | "unassigned";
   agencyId: string;
   name: string;
   createdAt: string | Date;
@@ -59,7 +59,7 @@ export interface Deal {
   clientId: string;
   title: string;
   value?: number;
-  status: 'open' | 'won' | 'lost';
+  status: "open" | "won" | "lost";
   stageId?: string;
   createdAt: any;
   updatedAt: any;
@@ -69,6 +69,7 @@ export interface Client {
   id: string;
   agencyId: string;
   sellerId: string;
+  visibility?: "private" | "all";
   name: string;
   dealTitle?: string;
   organization?: string;
@@ -83,7 +84,7 @@ export interface Client {
   vehicle: string;
   vehicleId?: string;
   status: string;
-  origin: 'manual' | 'whatsapp' | 'web' | 'google_contacts';
+  origin: "manual" | "whatsapp" | "web" | "google_contacts";
   tags?: string[];
   createdAt: any;
   updatedAt: any;
@@ -101,6 +102,7 @@ export interface Task {
   endTime?: string;
   completed: boolean;
   createdAt: any;
+  updatedAt?: any;
 }
 
 export interface ClientFile {
