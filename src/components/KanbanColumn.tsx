@@ -24,7 +24,7 @@ export function KanbanColumn({ column, clients, onClientClick, tasks = [] }: Pro
   const isNew = column.id === 'new' || lowerTitle.includes('nuev');
 
   return (
-    <div className="flex w-[270px] flex-col h-full shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F3F4F6] relative">
+    <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col h-full shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F3F4F6] relative">
       <div className={clsx(
         "flex flex-col px-3 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
       )}>

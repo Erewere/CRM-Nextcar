@@ -86,25 +86,26 @@ function TerminalDropZone({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
-  let Icon = null;
+  let Icon: React.ReactNode = null;
   const t = String(column.title || "").toLowerCase();
   if (t.includes("ganad") || t.includes("won")) Icon = "🎉";
   else if (t.includes("perdid") || t.includes("lost")) Icon = "🗑️";
+  else Icon = "➡️";
 
   return (
     <div
       ref={setNodeRef}
       className={clsx(
-        "flex flex-col items-center justify-center flex-1 min-w-[100px] shrink-0 h-16 md:h-20 rounded-xl transition-all duration-300 border-2",
+        "flex flex-col items-center justify-center flex-1 min-w-[70px] md:min-w-[90px] shrink-0 h-16 md:h-20 rounded-xl transition-all duration-300 border-2",
         isOver
           ? "border-blue-400 bg-blue-500/20 scale-105"
           : "border-transparent bg-slate-700/50 text-slate-300 hover:bg-slate-700",
       )}
     >
-      <span className="text-lg md:text-xl md:mb-1">{Icon}</span>
+      <span className="text-sm md:text-xl md:mb-1">{Icon}</span>
       <span
         className={clsx(
-          "font-bold text-[10px] md:text-xs uppercase tracking-wider text-center px-1 truncate w-full",
+          "font-bold text-[9px] md:text-xs uppercase tracking-wider text-center px-1 truncate w-full",
           isOver ? "text-blue-400" : "text-slate-300",
         )}
       >
@@ -434,7 +435,7 @@ export function Kanban() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex-1 flex overflow-x-auto items-start bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="flex-1 flex overflow-x-auto snap-x snap-mandatory md:snap-none items-start bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
             {activeColumns.map((col) => {
               const columnClients = filteredClients.filter(
                 (c) => c.status === col.id,
@@ -451,7 +452,7 @@ export function Kanban() {
             })}
           </div>
 
-          <TerminalDropBar columns={terminalColumns} activeId={activeId} />
+          <TerminalDropBar columns={columns.filter((c) => c.id !== activeClient?.status)} activeId={activeId} />
 
           <DragOverlay zIndex={50} dropAnimation={null}>
             {activeClient ? (
