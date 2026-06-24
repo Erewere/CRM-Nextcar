@@ -1,8 +1,9 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import admin from 'firebase-admin';
-import { Resend } from 'resend';
+import admin from "firebase-admin";
+import { Resend } from "resend";
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
 let adminApp: admin.app.App | null = null;
@@ -10,7 +11,7 @@ function getAdminApp() {
   if (!adminApp) {
     if (process.env.FIREBASE_PROJECT_ID) {
       adminApp = admin.initializeApp({
-        projectId: process.env.FIREBASE_PROJECT_ID
+        projectId: process.env.FIREBASE_PROJECT_ID,
       });
     } else {
       // In AI Studio / local dev, default init often works if set up through gcloud
@@ -21,7 +22,9 @@ function getAdminApp() {
   return adminApp;
 }
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 async function startServer() {
   const app = express();
@@ -33,23 +36,29 @@ async function startServer() {
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {
     if (!resend) {
-      return res.status(500).json({ error: "Servicio de correo no configurado (Falta RESEND_API_KEY)" });
+      return res
+        .status(500)
+        .json({
+          error: "Servicio de correo no configurado (Falta RESEND_API_KEY)",
+        });
     }
     const { to, subject, html } = req.body;
     if (!to || !subject || !html) {
-      return res.status(400).json({ error: "Faltan parámetros requeridos (to, subject, html)" });
+      return res
+        .status(400)
+        .json({ error: "Faltan parámetros requeridos (to, subject, html)" });
     }
     try {
-      let fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-      if (!fromEmail.includes('@')) {
-        fromEmail = 'Nextcar CRM <onboarding@resend.dev>';
+      let fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+      if (!fromEmail.includes("@")) {
+        fromEmail = "Nextcar CRM <onboarding@resend.dev>";
       }
 
       const { data, error } = await resend.emails.send({
         from: fromEmail,
         to,
         subject,
-        html
+        html,
       });
       if (error) {
         return res.status(400).json({ error });
@@ -61,7 +70,7 @@ async function startServer() {
   });
 
   // === Meta (WhatsApp/Messenger) Webhook Integration ===
-  
+
   // 1. Webhook Verification (GET)
   app.get("/api/meta/webhook", (req, res) => {
     // Meta requires verifying the token.
@@ -85,7 +94,7 @@ async function startServer() {
   // 2. Webhook Payload parsing (POST)
   app.post("/api/meta/webhook", async (req, res) => {
     const body = req.body;
-    
+
     if (body.object === "whatsapp_business_account" || body.object === "page") {
       try {
         const adminDb = getAdminApp().firestore();
@@ -97,31 +106,42 @@ async function startServer() {
               const value = change.value;
               if (value && value.messages && value.messages[0]) {
                 const phone = value.contacts?.[0]?.wa_id || "";
-                const name = value.contacts?.[0]?.profile?.name || "Unknown WA Lead";
+                const name =
+                  value.contacts?.[0]?.profile?.name || "Unknown WA Lead";
                 const text = value.messages[0]?.text?.body || "";
-                
-                console.log(`New incoming WA message from ${name} (${phone}): ${text}`);
-                
+
+                console.log(
+                  `New incoming WA message from ${name} (${phone}): ${text}`,
+                );
+
                 await createMetaLead(adminDb, name, phone, "whatsapp", text);
               }
             }
           }
-          
+
           // For Messenger
           if (body.object === "page" && entry.messaging) {
             for (const event of entry.messaging) {
               const senderId = event.sender?.id || "";
               const text = event.message?.text || "";
-              
+
               if (senderId && text) {
-                console.log(`New incoming Messenger message from ${senderId}: ${text}`);
-                await createMetaLead(adminDb, `Messenger Lead (${senderId})`, "", "messenger", text);
+                console.log(
+                  `New incoming Messenger message from ${senderId}: ${text}`,
+                );
+                await createMetaLead(
+                  adminDb,
+                  `Messenger Lead (${senderId})`,
+                  "",
+                  "messenger",
+                  text,
+                );
               }
             }
           }
         }
         res.sendStatus(200);
-      } catch(e) {
+      } catch (e) {
         console.error("Error processing meta payload:", e);
         res.sendStatus(500);
       }
@@ -130,11 +150,17 @@ async function startServer() {
     }
   });
 
-  async function createMetaLead(adminDb: admin.firestore.Firestore, name: string, phone: string, origin: string, text: string) {
-    // In a real multi-tenant app, map the phone or page ID to the correct agencyId. 
+  async function createMetaLead(
+    adminDb: admin.firestore.Firestore,
+    name: string,
+    phone: string,
+    origin: string,
+    text: string,
+  ) {
+    // In a real multi-tenant app, map the phone or page ID to the correct agencyId.
     // For now we'll assign to a default or find the first admin agency.
     let agencyId = "DEFAULT_AGENCY";
-    
+
     const newClient = {
       agencyId,
       name,
@@ -144,13 +170,12 @@ async function startServer() {
       vehicle: text.substring(0, 100),
       status: "new",
       origin: origin,
-      sellerId: "", 
+      sellerId: "",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     await adminDb.collection("clients").add(newClient);
   }
-
 
   // === Vite Middleware for development ===
   if (process.env.NODE_ENV !== "production") {
@@ -159,25 +184,28 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-    
+
     // Explicit fallback for SPA in development
-    app.use('*', async (req, res, next) => {
+    app.get("*", async (req, res, next) => {
       try {
         const url = req.originalUrl;
-        let template = require('fs').readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        let template = fs.readFileSync(
+          path.resolve(process.cwd(), "index.html"),
+          "utf-8",
+        );
         template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
       } catch (e: any) {
         vite.ssrFixStacktrace(e);
         next(e);
       }
     });
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     // Provide a fallback for React Router
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
