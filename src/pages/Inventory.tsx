@@ -300,7 +300,7 @@ export function Inventory() {
         </div>
         ) : (
           <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
-            <table className="w-full text-left text-sm border-collapse table-fixed select-none">
+            <table className="w-full min-w-[1000px] text-left text-sm border-collapse table-fixed select-none">
               <thead className="bg-[#fcfdfd] dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 font-medium sticky top-0 z-10 shadow-sm">
                 <tr>
                   {columns.filter(c => c.visible).map(col => (

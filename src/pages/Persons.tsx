@@ -534,7 +534,7 @@ export function Persons() {
               onClick={() => setShowAddPerson(true)}
               className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
             >
-              <Plus className="w-4 h-4 shrink-0" /> Persona
+              <Plus className="w-4 h-4 shrink-0" /> Nuevo Trato
             </button>
           </div>
         </div>
@@ -610,7 +610,7 @@ export function Persons() {
         </div>
       ) : (
         <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
-          <table className="w-full text-left text-sm border-collapse table-fixed select-none">
+          <table className="w-full min-w-[800px] text-left text-sm border-collapse table-fixed select-none">
             <thead className="bg-[#fcfdfd] dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 font-medium sticky top-0 z-10 shadow-sm">
               <tr>
                 <th

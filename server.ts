@@ -186,7 +186,7 @@ async function startServer() {
     app.use(vite.middlewares);
 
     // Explicit fallback for SPA in development
-    app.get("*", async (req, res, next) => {
+    app.use("*", async (req, res, next) => {
       try {
         const url = req.originalUrl;
         let template = fs.readFileSync(

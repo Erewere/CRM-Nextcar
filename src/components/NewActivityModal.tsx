@@ -250,8 +250,11 @@ export function NewActivityModal({
       if (existingDeal.clientId) {
         setClientId(existingDeal.clientId);
         const person = clients.find((c) => c.id === existingDeal.clientId);
-        if (person && person.organization) {
-          setOrganization(person.organization);
+        if (person) {
+          setClientName(person.name);
+          if (person.organization) {
+            setOrganization(person.organization);
+          }
         }
       }
     }
@@ -306,9 +309,9 @@ export function NewActivityModal({
         </div>
 
         {/* Content */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
           {/* Left Column - Form */}
-          <div className="w-2/3 overflow-y-auto p-6 flex flex-col gap-6">
+          <div className="w-full md:w-2/3 md:overflow-y-auto p-4 md:p-6 flex flex-col gap-6">
             {/* Title & Type */}
             <div>
               <input
@@ -512,7 +515,7 @@ export function NewActivityModal({
           </div>
 
           {/* Right Column - Calendar Preview */}
-          <div className="w-1/3 bg-white dark:bg-slate-800 border-l border-gray-200 dark:border-slate-700 flex flex-col">
+          <div className="w-full md:w-1/3 bg-white dark:bg-slate-800 border-t md:border-t-0 md:border-l border-gray-200 dark:border-slate-700 flex flex-col min-h-[400px]">
             <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 shadow-sm z-10">
               <span className="font-bold text-gray-800 dark:text-slate-200 text-sm">
                 {format(previewDate, "EEEE, MMMM do", { locale: es })}

@@ -41,7 +41,7 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4 relative overflow-hidden font-sans">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4 relative overflow-hidden font-sans">
       <div className="z-10 w-full max-w-sm bg-white dark:bg-slate-800 p-10 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 flex flex-col items-center">
         <div className="flex items-center gap-3 mb-8 border-b border-slate-100 dark:border-slate-700 pb-6 w-full justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">

@@ -368,9 +368,9 @@ export function Dashboard() {
         </div>
 
         {/* Dynamic Filters */}
-        <div className="flex flex-col items-end gap-3">
+        <div className="flex flex-col items-start md:items-end gap-3 w-full md:w-auto">
           {/* Quick Date Filters */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
                 const today = new Date().toISOString().split("T")[0];

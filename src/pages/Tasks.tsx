@@ -793,7 +793,7 @@ export function Tasks() {
       {/* Content Area */}
       <div className="flex-1 overflow-auto bg-white dark:bg-slate-800">
         {view === "list" && (
-          <table className="w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-max">
+          <table className="w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-[800px]">
             <thead className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-700 dark:text-slate-300 font-bold">
               <tr>
                 <th
@@ -1218,39 +1218,76 @@ export function Tasks() {
                 if (!token) return; // User cancelled popup
               }
 
-              // Create person if name is provided but it doesn't match an existing one
+              // Try to find existing client by name if ID is missing
               if (taskData.clientName && !finalClientId) {
-                const clientRef = doc(collection(db, "clients"));
-                const newClient = {
-                  id: clientRef.id,
-                  agencyId: userData.agencyId || "",
-                  sellerId: userData.id || "",
-                  name: taskData.clientName,
-                  organization: taskData.organization || "",
-                  status: taskData.clientStatus || "new",
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
-                await setDoc(clientRef, newClient);
-                finalClientId = clientRef.id;
-                setClients((prev) => [...prev, newClient as Client]);
+                const existingClient = clients.find(
+                  (c) => String(c.name || "").toLowerCase().trim() === String(taskData.clientName).toLowerCase().trim()
+                );
+                if (existingClient) {
+                  finalClientId = existingClient.id;
+                } else {
+                  const clientRef = doc(collection(db, "clients"));
+                  const newClient = {
+                    id: clientRef.id,
+                    agencyId: userData.agencyId || "",
+                    sellerId: userData.id || "",
+                    name: taskData.clientName,
+                    organization: taskData.organization || "",
+                    status: taskData.clientStatus || "new",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  };
+                  await setDoc(clientRef, newClient);
+                  finalClientId = clientRef.id;
+                  setClients((prev) => [...prev, newClient as Client]);
+                }
               }
 
-              // Create deal if title is provided but it doesn't match an existing one
+              // Try to find existing deal by title if ID is missing
               if (taskData.dealTitle && !finalDealId) {
-                const dealRef = doc(collection(db, "deals"));
-                const newDeal = {
-                  id: dealRef.id,
-                  agencyId: userData.agencyId || "",
-                  clientId: finalClientId || "",
-                  title: taskData.dealTitle,
-                  status: "open",
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
-                await setDoc(dealRef, newDeal);
-                finalDealId = dealRef.id;
-                setDeals((prev) => [...prev, newDeal as Deal]);
+                const existingDeal = deals.find(
+                  (d) => String(d.title || "").toLowerCase().trim() === String(taskData.dealTitle).toLowerCase().trim()
+                );
+                if (existingDeal) {
+                  finalDealId = existingDeal.id;
+                } else {
+                  const dealRef = doc(collection(db, "deals"));
+                  const newDeal = {
+                    id: dealRef.id,
+                    agencyId: userData.agencyId || "",
+                    clientId: finalClientId || "",
+                    title: taskData.dealTitle,
+                    status: "open",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  };
+                  await setDoc(dealRef, newDeal);
+                  finalDealId = dealRef.id;
+                  setDeals((prev) => [...prev, newDeal as Deal]);
+                }
+              }
+
+              // Inherit clientId from the deal if missing
+              if (!finalClientId && finalDealId) {
+                const matchedDeal = deals.find((d) => d.id === finalDealId);
+                if (matchedDeal && matchedDeal.clientId) {
+                  finalClientId = matchedDeal.clientId;
+                }
+              }
+
+              // Update deal with clientId if the deal was missing it but the task has one
+              if (finalClientId && finalDealId) {
+                const matchedDeal = deals.find((d) => d.id === finalDealId);
+                if (matchedDeal && !matchedDeal.clientId) {
+                  await updateDoc(doc(db, "deals", finalDealId), {
+                    clientId: finalClientId
+                  });
+                  setDeals((prev) =>
+                    prev.map((d) =>
+                      d.id === finalDealId ? { ...d, clientId: finalClientId } : d
+                    )
+                  );
+                }
               }
 
               // Update client with new organization if needed

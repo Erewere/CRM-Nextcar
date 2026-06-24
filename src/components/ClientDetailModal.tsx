@@ -609,9 +609,9 @@ export function ClientDetailModal({
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
           {/* LEFT SIDEBAR (DETAILS) */}
-          <div className="w-[320px] shrink-0 border-r border-gray-200 bg-white dark:bg-slate-800 overflow-y-auto hidden md:block">
+          <div className="w-full md:w-[320px] shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 md:overflow-y-auto">
             <div className="p-5">
               <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center justify-between">
                 Resumen
@@ -1029,9 +1029,9 @@ export function ClientDetailModal({
           </div>
 
           {/* RIGHT SIDEBAR (INTERACTIONS & TIMELINE) */}
-          <div className="flex-1 flex flex-col bg-[#F9FAFB] overflow-hidden">
+          <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-slate-900 md:overflow-hidden">
             {!isNew ? (
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+              <div className="flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6">
                 {/* INTERACTION WIDGET */}
                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
                   <div className="flex border-b border-gray-200 dark:border-slate-700">

@@ -81,7 +81,7 @@ export function Layout() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col md:flex-row">
+    <div className="min-h-[100dvh] bg-gray-50 dark:bg-slate-900 flex flex-col md:flex-row">
       <TaskReminders />
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 px-4 py-3 shrink-0">
@@ -175,7 +175,7 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-[calc(100vh-56px)] md:h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
+      <main className="flex-1 flex flex-col h-[calc(100dvh-56px)] md:h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
         <header className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
           <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
             <h1 className="text-lg font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors">Panel de Control</h1>
