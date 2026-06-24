@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { doc, setDoc, updateDoc, collection, query, where, getDocs, deleteDoc, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { X, FileText, Upload, Calendar, CheckSquare, Phone, MessageCircle, MoreHorizontal, User, Tag, Clock, Building2 } from 'lucide-react';
+import { X, FileText, Upload, Calendar, CheckSquare, Phone, MessageCircle, MoreHorizontal, User, Tag, Clock, Building2, Eye, Users } from 'lucide-react';
 import clsx from 'clsx';
 
 interface Props {
@@ -24,6 +24,17 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
   const [files, setFiles] = useState<ClientFile[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [inventoryVehicles, setInventoryVehicles] = useState<Vehicle[]>([]);
+  const [agencyUsers, setAgencyUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!userData?.agencyId) return;
+    const loadUsers = async () => {
+      const q = query(collection(db, 'users'), where('agencyId', '==', userData.agencyId));
+      const s = await getDocs(q);
+      setAgencyUsers(s.docs.map(d => ({ id: d.id, ...d.data() })));
+    };
+    loadUsers();
+  }, [userData?.agencyId]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
   useEffect(() => {
@@ -85,7 +96,10 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
     if (isNew) return;
     // Load tasks
     const loadTasks = async () => {
-      const q = query(collection(db, 'tasks'), where('clientId', '==', client.id));
+      let q = query(collection(db, 'tasks'), where('clientId', '==', client.id));
+      if (userData?.role === 'seller') {
+        q = query(collection(db, 'tasks'), where('clientId', '==', client.id), where('sellerId', '==', userData.id));
+      }
       const s = await getDocs(q);
       const t = s.docs.map(d => ({ id: d.id, ...d.data() } as Task));
       t.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
@@ -441,6 +455,36 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                       {existingPersons.filter(p => p.phone).map(p => <option key={p.id} value={p.phone}>{p.name}</option>)}
                     </datalist>
                   </div>
+                  {userData?.role !== 'seller' && (
+                    <>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Users className="w-4 h-4 text-gray-400" />
+                        <select
+                          name="sellerId"
+                          value={formData.sellerId || ''}
+                          onChange={handleChange}
+                          className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                        >
+                          <option value="" disabled>Seleccionar Asignado...</option>
+                          {agencyUsers.filter(u => u.role !== 'unassigned').map(u => (
+                            <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Eye className="w-4 h-4 text-gray-400" />
+                        <select
+                          name="visibility"
+                          value={formData.visibility || 'all'}
+                          onChange={handleChange}
+                          className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                        >
+                          <option value="all">Visible para todos</option>
+                          <option value="private">Privado (Solo asignado y admin)</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
                   {existingPersons.find(p => p.phone && formData.phone && formData.phone.length > 5 && p.phone.includes(formData.phone) && p.id !== formData.id) && (
                     <p className="text-[11px] text-orange-600 font-medium ml-6">
                       Este teléfono podría estar ligado a: {existingPersons.find(p => p.phone && formData.phone && p.phone.includes(formData.phone) && p.id !== formData.id)?.name}

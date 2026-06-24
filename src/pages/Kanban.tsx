@@ -155,20 +155,23 @@ export function Kanban() {
 
     let q = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
     let tq = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId));
-    if (userData.role === 'seller') {
-      q = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
-      tq = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
-    }
 
     const unsubscribeClients = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      let data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      if (userData.role === 'seller') {
+         data = data.filter(c => c.sellerId === userData.id || c.visibility === 'all');
+      }
       setClients(data);
     }, (error) => {
       console.error("Error with snapshot", error);
     });
 
     const unsubscribeTasks = onSnapshot(tq, (snapshot) => {
-      const data = snapshot.docs.map(d => {
+      let dataDocs = snapshot.docs;
+      if (userData.role === 'seller') {
+         dataDocs = dataDocs.filter(d => d.data().sellerId === userData.id);
+      }
+      const data = dataDocs.map(d => {
          const t = d.data();
          return {
             clientId: t.clientId,

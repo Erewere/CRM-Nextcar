@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Client, Vehicle, Task, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Users, Car, Target, CheckCircle, TrendingUp, Calendar, Clock, AlertCircle, Filter } from 'lucide-react';
+import { Users, Car, Target, CheckCircle, TrendingUp, Calendar, Clock, AlertCircle, Filter, Briefcase } from 'lucide-react';
 import { isToday, isThisWeek, parseISO, isAfter, startOfDay, isValid } from 'date-fns';
 
 import { MasterDashboard } from '../components/MasterDashboard';
@@ -317,13 +317,13 @@ export function Dashboard() {
 
       {/* Primary KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link to="/persons" className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-blue-300 hover:shadow-md transition-all">
+        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-blue-300 hover:shadow-md transition-all">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Contactos Abiertos</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Oportunidades Activas</p>
             <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">{activeContacts.length}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-            <Users className="w-5 h-5 text-blue-600" />
+            <Briefcase className="w-5 h-5 text-blue-600" />
           </div>
         </Link>
 
@@ -363,7 +363,7 @@ export function Dashboard() {
         {/* Embudo de Ventas Interactivo */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Contactos por Etapa Activa</h3>
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Oportunidades por Etapa Activa</h3>
             {selectedStage && (
               <button 
                 onClick={() => setSelectedStage(null)}
@@ -401,7 +401,7 @@ export function Dashboard() {
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400">
-                No hay contactos activos.
+                No hay oportunidades activas.
               </div>
             )}
           </div>

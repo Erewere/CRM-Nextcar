@@ -104,19 +104,21 @@ interface NewActivityModalProps {
   clients: Client[];
   deals?: any[];
   currentUser: any;
+  initialData?: any;
 }
 
-export function NewActivityModal({ onClose, onSave, clients, deals = [], currentUser }: NewActivityModalProps) {
-  const [type, setType] = useState('call');
-  const [title, setTitle] = useState('Llamada');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [startTime, setStartTime] = useState('12:15');
-  const [endTime, setEndTime] = useState('');
-  const [notes, setNotes] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [dealTitle, setDealTitle] = useState('');
-  const [organization, setOrganization] = useState('');
-  const [completed, setCompleted] = useState(false);
+export function NewActivityModal({ onClose, onSave, clients, deals = [], currentUser, initialData }: NewActivityModalProps) {
+  const [type, setType] = useState(initialData?.type || 'call');
+  const [title, setTitle] = useState(initialData?.title || 'Llamada');
+  const [date, setDate] = useState(initialData?.dueDate || format(new Date(), 'yyyy-MM-dd'));
+  const [startTime, setStartTime] = useState(initialData?.startTime || '12:15');
+  const [endTime, setEndTime] = useState(initialData?.endTime || '');
+  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [clientId, setClientId] = useState(initialData?.clientId || '');
+  const initialDealTitle = initialData?.dealTitle || (initialData?.dealId ? deals.find(d => d.id === initialData.dealId)?.title : '') || '';
+  const [dealTitle, setDealTitle] = useState(initialDealTitle);
+  const [organization, setOrganization] = useState(initialData?.organization || '');
+  const [completed, setCompleted] = useState(initialData?.completed || false);
   const [syncToCalendar, setSyncToCalendar] = useState(false);
   const [previewDate, setPreviewDate] = useState(new Date());
 
@@ -165,7 +167,9 @@ export function NewActivityModal({ onClose, onSave, clients, deals = [], current
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">Schedule an activity</h2>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
+            {initialData ? 'Editar actividad' : 'Programar actividad'}
+          </h2>
           <button onClick={onClose} className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300">
             <X className="w-5 h-5" />
           </button>

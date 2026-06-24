@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
-import { Users, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, Trash2, X } from 'lucide-react';
+import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
+import { Users, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, Trash2, X, Clock } from 'lucide-react';
+import { Task, Client } from '../types';
 
 export function AgencyUsers() {
   const { userData } = useAuth();
@@ -16,6 +17,11 @@ export function AgencyUsers() {
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [loadingTags, setLoadingTags] = useState(false);
+  
+  const [inactivityAlertDays, setInactivityAlertDays] = useState(14);
+  const [savingInactivity, setSavingInactivity] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   
   useEffect(() => {
     if (!userData) return;
@@ -101,6 +107,23 @@ export function AgencyUsers() {
           const snap = await getDocs(query(collection(db, 'users'), where('agencyId', '==', userData.agencyId)));
           setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
+
+        // Load inactivity alerts data
+        if (userData.agencyId && userData.agencyId !== 'unassigned') {
+          const agencySnap = await getDoc(doc(db, 'agencies', userData.agencyId));
+          if (agencySnap.exists() && agencySnap.data().inactivityAlertDays) {
+            setInactivityAlertDays(agencySnap.data().inactivityAlertDays);
+          }
+          const clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
+          const tasksQ = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId));
+          
+          const [clientsSnap, tasksSnap] = await Promise.all([
+            getDocs(clientsQ),
+            getDocs(tasksQ)
+          ]);
+          setClients(clientsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+          setTasks(tasksSnap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+        }
       } catch (e) {
         console.error("Error fetching data:", e);
       } finally {
@@ -125,10 +148,19 @@ export function AgencyUsers() {
     }
   };
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
+  const handleUpdateRole = async (userId: string, newRole: string, currentName: string, email: string) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { role: newRole });
-      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      const updates: any = { role: newRole };
+      let newName = currentName;
+      
+      // If the user was assigned a role but their name still says pending, update it to their email prefix
+      if (newRole !== 'unassigned' && currentName === 'Usuario Pendiente') {
+        newName = email.split('@')[0];
+        updates.name = newName;
+      }
+
+      await updateDoc(doc(db, 'users', userId), updates);
+      setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
     } catch (e) {
       console.error(e);
       alert('Error updating role. Check permissions.');
@@ -189,6 +221,40 @@ export function AgencyUsers() {
         alert('Error al enviar invitación. ' + (e.message || ''));
     } finally {
         setInviting(false);
+    }
+  };
+
+  const inactivityThresholdMs = inactivityAlertDays * 24 * 60 * 60 * 1000;
+  const inactiveAlerts = useMemo(() => {
+    const alerts: { task: Task, client: Client | null }[] = [];
+    const nowMs = Date.now();
+    tasks.forEach(task => {
+      if (!task.completed && task.dueDate) {
+        const taskDate = new Date(task.dueDate).getTime();
+        if (nowMs - taskDate > inactivityThresholdMs) {
+          alerts.push({
+            task,
+            client: clients.find(c => c.id === task.clientId) || null
+          });
+        }
+      }
+    });
+    return alerts;
+  }, [tasks, clients, inactivityThresholdMs]);
+
+  const handleSaveInactivity = async () => {
+    if (!userData?.agencyId) return;
+    setSavingInactivity(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), {
+        inactivityAlertDays
+      });
+      alert('Configuración guardada.');
+    } catch (e) {
+      console.error(e);
+      alert('Error guardando configuración.');
+    } finally {
+      setSavingInactivity(false);
     }
   };
 
@@ -253,6 +319,65 @@ export function AgencyUsers() {
           {inviting ? 'Enviando...' : 'Enviar Invitación'}
         </button>
       </div>
+
+      {userData?.role === 'admin' && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm flex flex-col">
+          <div className="p-5 border-b border-orange-100 dark:border-orange-900 bg-orange-50 dark:bg-orange-900/20">
+            <h3 className="text-sm font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Alertas de Inactividad
+            </h3>
+            <p className="text-xs text-orange-600 dark:text-orange-500 mt-1">
+              Clientes con tareas vencidas hace más de {inactivityAlertDays} días.
+            </p>
+          </div>
+          <div className="p-5 flex-1 flex flex-col">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 dark:border-slate-700">
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Umbral de Inactividad (Días)</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={inactivityAlertDays}
+                  onChange={(e) => setInactivityAlertDays(Number(e.target.value))}
+                  className="border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 w-20 text-center"
+                />
+                <button 
+                  onClick={handleSaveInactivity} 
+                  disabled={savingInactivity}
+                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingInactivity ? '...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-3 overflow-y-auto max-h-[300px] scrollbar-hide flex-1">
+              {inactiveAlerts.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 flex-col">
+                  <CheckCircle className="w-8 h-8 mb-2 text-green-500 opacity-50" />
+                  <p>Todos los clientes están al día.</p>
+                </div>
+              ) : (
+                inactiveAlerts.map(({ task, client }) => (
+                  <div key={task.id} className="p-3 rounded-lg bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30">
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
+                      {client ? client.name : 'Sin cliente asignado'}
+                    </p>
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Tarea: <span className="text-slate-800 dark:text-slate-300">{task.title}</span>
+                    </p>
+                    <p className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold mt-1">
+                      Venció el: {new Date(task.dueDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sección de Gestión de Etiquetas */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
@@ -319,9 +444,12 @@ export function AgencyUsers() {
             <li key={u.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <div className="font-bold text-slate-800 dark:text-slate-200">{u.name || 'Sin Nombre'}</div>
+                  <div className="font-bold text-slate-800 dark:text-slate-200">
+                    {u.name === 'Usuario Pendiente' && u.role !== 'unassigned' ? (u.email?.split('@')[0] || 'Usuario') : (u.name || 'Sin Nombre')}
+                  </div>
                   {u.role === 'master' && <span className="inline-flex items-center rounded-md bg-stone-100 px-2 py-1 text-[10px] font-medium text-stone-600 ring-1 ring-inset ring-stone-500/10"><Shield className="w-3 h-3 mr-1"/> Master</span>}
                   {u.role === 'admin' && <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Admin</span>}
+                  {u.role === 'seller' && <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">Vendedor</span>}
                   {u.role === 'unassigned' && <span className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-[10px] font-medium text-orange-700 ring-1 ring-inset ring-orange-600/10">Pendiente</span>}
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
@@ -351,7 +479,7 @@ export function AgencyUsers() {
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Rol</label>
                   <select
                     value={u.role || 'unassigned'}
-                    onChange={(e) => handleUpdateRole(u.id, e.target.value)}
+                    onChange={(e) => handleUpdateRole(u.id, e.target.value, u.name, u.email)}
                     className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     disabled={(!isMaster && u.role === 'master')}
                   >

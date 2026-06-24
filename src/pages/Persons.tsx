@@ -101,31 +101,58 @@ export function Persons() {
     if (!userData || userData.role === 'master') return;
 
     const fetchData = async () => {
-      let q = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
-      let dq = query(collection(db, 'deals'), where('agencyId', '==', userData.agencyId));
-      let tq = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId));
+      let clientsDocs: any[] = [];
+      let dealsDocs: any[] = [];
+      let tasksDocs: any[] = [];
       const uq = query(collection(db, 'users'), where('agencyId', '==', userData.agencyId));
 
-      if (userData.role === 'seller') {
-        q = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
-        dq = query(collection(db, 'deals'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
-        tq = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
-      }
       try {
-        const [snap, dSnap, tSnap, uSnap] = await Promise.all([
-          getDocs(q),
-          getDocs(dq).catch(() => ({ docs: [] }) as any),
-          getDocs(tq).catch(() => ({ docs: [] }) as any),
-          getDocs(uq).catch(() => ({ docs: [] }) as any)
-        ]);
+        let uSnap = await getDocs(uq).catch(() => ({ docs: [] }) as any);
+
+        if (userData.role === 'seller') {
+          const cq1 = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
+          const cq2 = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId), where('visibility', '==', 'all'));
+          const dq1 = query(collection(db, 'deals'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
+          const tq1 = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id));
+          
+          const [csnap1, csnap2, dsnap, tsnap] = await Promise.all([
+            getDocs(cq1),
+            getDocs(cq2),
+            getDocs(dq1).catch(() => ({ docs: [] }) as any),
+            getDocs(tq1).catch(() => ({ docs: [] }) as any)
+          ]);
+
+          const cMap = new Map();
+          csnap1.docs.forEach(d => cMap.set(d.id, d));
+          csnap2.docs.forEach(d => cMap.set(d.id, d));
+          clientsDocs = Array.from(cMap.values());
+          dealsDocs = dsnap.docs;
+          tasksDocs = tsnap.docs;
+        } else {
+          const q = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
+          const dq = query(collection(db, 'deals'), where('agencyId', '==', userData.agencyId));
+          const tq = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId));
+          
+          const [snap, dSnap, tSnap] = await Promise.all([
+            getDocs(q),
+            getDocs(dq).catch(() => ({ docs: [] }) as any),
+            getDocs(tq).catch(() => ({ docs: [] }) as any)
+          ]);
+          
+          clientsDocs = snap.docs;
+          dealsDocs = dSnap.docs;
+          tasksDocs = tSnap.docs;
+        }
         
         const usersMap: Record<string, string> = {};
-        uSnap.docs.forEach((d: any) => {
-          usersMap[d.id] = d.data().name;
-        });
+        if (uSnap && uSnap.docs) {
+          uSnap.docs.forEach((d: any) => {
+            usersMap[d.id] = d.data().name;
+          });
+        }
         setAgencyUsers(usersMap);
 
-        const allClients = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+        const allClients = clientsDocs.map(d => ({ id: d.id, ...d.data() } as Client));
         const uniqueClients: Client[] = [];
         const seenNames = new Set<string>();
         for (const c of allClients) {
@@ -139,8 +166,8 @@ export function Persons() {
         }
         setPersons(uniqueClients);
         
-        setDeals(dSnap?.docs ? dSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Deal)) : []);
-        setTasks(tSnap?.docs ? tSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Task)) : []);
+        setDeals(dealsDocs ? dealsDocs.map((d: any) => ({ id: d.id, ...d.data() } as Deal)) : []);
+        setTasks(tasksDocs ? tasksDocs.map((d: any) => ({ id: d.id, ...d.data() } as Task)) : []);
       } catch (err) {
         console.error(err);
       } finally {

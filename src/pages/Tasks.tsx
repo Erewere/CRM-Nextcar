@@ -30,6 +30,7 @@ export function Tasks() {
   
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showSyncBanner, setShowSyncBanner] = useState(true);
 
   // New task form
@@ -331,12 +332,12 @@ export function Tasks() {
                       {task.completed ? <CheckCircle className="w-5 h-5 mx-auto" /> : <Circle className="w-5 h-5 mx-auto" />}
                     </button>
                   </td>
-                  <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-bold truncate cursor-pointer hover:text-blue-600" onClick={() => client && setSelectedClient(client)}>
+                  <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-bold truncate cursor-pointer hover:text-blue-600" onClick={() => setEditingTask(task)}>
                      <span className={clsx("flex items-center gap-2", task.completed && "line-through text-gray-500 dark:text-slate-400")}>
                        {getTaskIcon(task.title)} {task.title}
                      </span>
                   </td>
-                  <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-blue-600 truncate hover:underline cursor-pointer" onClick={() => client && setSelectedClient(client)}>
+                  <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-blue-600 truncate hover:underline cursor-pointer" onClick={() => client ? setSelectedClient(client) : setEditingTask(task)}>
                     {client?.name || 'Desconocido'}
                   </td>
                   <td className="px-4 py-2 border-r border-gray-100 dark:border-slate-700">
@@ -420,7 +421,7 @@ export function Tasks() {
                               {dayTasks.map(({task, client}) => (
                                 <div 
                                   key={task.id} 
-                                  onClick={() => client && setSelectedClient(client)}
+                                  onClick={() => setEditingTask(task)}
                                   className={clsx("text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border", task.completed ? "bg-gray-100 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 line-through hover:border-gray-300" : "bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100 hover:border-blue-300")}
                                 >
                                    {task.title}
@@ -439,13 +440,14 @@ export function Tasks() {
         )}
       </div>
 
-      {/* New Activity Modal */}
-      {showNewTaskModal && (
+      {/* New/Edit Activity Modal */}
+      {(showNewTaskModal || editingTask) && (
         <NewActivityModal 
-          onClose={() => setShowNewTaskModal(false)}
+          onClose={() => { setShowNewTaskModal(false); setEditingTask(null); }}
           clients={clients}
           deals={deals}
           currentUser={userData}
+          initialData={editingTask}
           onSave={async (taskData) => {
             if (!taskData.title || !taskData.dueDate || !userData) {
               if (!taskData.title) alert('El título es requerido');
@@ -494,9 +496,8 @@ export function Tasks() {
                 }
               }
 
-              const newRef = doc(collection(db, 'tasks'));
-              const tempTask: Task = {
-                id: newRef.id,
+              const newRef = editingTask ? doc(db, 'tasks', editingTask.id) : doc(collection(db, 'tasks'));
+              const tempTask: Partial<Task> = {
                 agencyId: userData.agencyId || '',
                 sellerId: userData.id || '',
                 clientId: finalClientId || '',
@@ -506,9 +507,15 @@ export function Tasks() {
                 startTime: taskData.startTime,
                 endTime: taskData.endTime,
                 completed: taskData.completed || false,
-                createdAt: new Date().toISOString()
+                updatedAt: new Date().toISOString()
               };
-              await setDoc(newRef, tempTask);
+              
+              if (!editingTask) {
+                tempTask.createdAt = new Date().toISOString();
+                await setDoc(newRef, tempTask);
+              } else {
+                await updateDoc(newRef, tempTask);
+              }
 
               if (taskData.syncToCalendar && token) {
                 const event = {
@@ -541,8 +548,13 @@ export function Tasks() {
                 }
 
               const cl = clients.find(c => c.id === finalClientId) || null;
-              setTasks(prev => [...prev, { task: tempTask, client: cl }]);
+              if (editingTask) {
+                setTasks(prev => prev.map(t => t.task.id === editingTask.id ? { task: { ...t.task, ...tempTask } as Task, client: cl } : t));
+              } else {
+                setTasks(prev => [{ task: { id: newRef.id, ...tempTask } as Task, client: cl }, ...prev]);
+              }
               setShowNewTaskModal(false);
+              setEditingTask(null);
             } catch (e) {
               console.error("Error creating task", e);
             }
