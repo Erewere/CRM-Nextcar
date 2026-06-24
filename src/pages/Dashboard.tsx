@@ -4,7 +4,7 @@ import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'fireb
 import { db } from '../lib/firebase';
 import { Client, Vehicle, Task, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Users, Car, Target, CheckCircle, TrendingUp, Calendar, Clock, AlertCircle, Filter, Briefcase } from 'lucide-react';
+import { Users, Car, Target, CheckCircle, TrendingUp, Calendar, Clock, AlertCircle, Filter, Briefcase, ChevronDown, Check } from 'lucide-react';
 import { isToday, isThisWeek, parseISO, isAfter, startOfDay, isValid } from 'date-fns';
 
 import { MasterDashboard } from '../components/MasterDashboard';
@@ -28,7 +28,8 @@ export function Dashboard() {
   // For interactive stage selection
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
-  const [filterTag, setFilterTag] = useState<string>('all');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [agencyTags, setAgencyTags] = useState<{id: string, name: string}[]>([]);
 
   useEffect(() => {
@@ -96,13 +97,13 @@ export function Dashboard() {
         if (clientVehicle?.bodyType !== filterCategory) return false;
       }
       
-      if (filterTag !== 'all') {
-        if (!c.tags || !c.tags.includes(filterTag)) return false;
+      if (filterTags.length > 0) {
+        if (!c.tags || !filterTags.every(tag => c.tags.includes(tag))) return false;
       }
       
       return true;
     });
-  }, [clients, filterSeller, filterStartDate, filterEndDate, filterCategory, vehicles, filterTag]);
+  }, [clients, filterSeller, filterStartDate, filterEndDate, filterCategory, vehicles, filterTags]);
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter(v => {
@@ -266,16 +267,48 @@ export function Dashboard() {
             ))}
           </select>
 
-          <select 
-            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[180px] truncate"
-            value={filterTag}
-            onChange={e => setFilterTag(e.target.value)}
-          >
-            <option value="all">Todas las etiquetas</option>
-            {agencyTags.map(tag => (
-              <option key={tag.id} value={tag.name}>{tag.name}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <button 
+              onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none text-slate-700 dark:text-slate-300 max-w-[180px]"
+            >
+              <span className="truncate">{filterTags.length > 0 ? `${filterTags.length} etiquetas` : 'Todas las etiquetas'}</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            {isTagDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-0" onClick={() => setIsTagDropdownOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-10 py-1 max-h-60 overflow-y-auto">
+                  <div 
+                    className="px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer flex items-center justify-between text-sm text-slate-700 dark:text-slate-300"
+                    onClick={() => {
+                      setFilterTags([]);
+                      setIsTagDropdownOpen(false);
+                    }}
+                  >
+                    <span>Todas las etiquetas</span>
+                    {filterTags.length === 0 && <Check className="w-4 h-4 text-blue-600" />}
+                  </div>
+                  {agencyTags.map(tag => (
+                    <div 
+                      key={tag.id}
+                      className="px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer flex items-center justify-between text-sm text-slate-700 dark:text-slate-300"
+                      onClick={() => {
+                        if (filterTags.includes(tag.name)) {
+                          setFilterTags(filterTags.filter(t => t !== tag.name));
+                        } else {
+                          setFilterTags([...filterTags, tag.name]);
+                        }
+                      }}
+                    >
+                      <span>{tag.name}</span>
+                      {filterTags.includes(tag.name) && <Check className="w-4 h-4 text-blue-600" />}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
             <span className="text-xs text-slate-400 font-medium">Desde</span>
@@ -297,12 +330,12 @@ export function Dashboard() {
             />
           </div>
           
-          {(filterSeller !== 'all' || filterCategory !== 'all' || filterTag !== 'all' || filterStartDate || filterEndDate) && (
+          {(filterSeller !== 'all' || filterCategory !== 'all' || filterTags.length > 0 || filterStartDate || filterEndDate) && (
             <button 
               onClick={() => {
                 setFilterSeller('all');
                 setFilterCategory('all');
-                setFilterTag('all');
+                setFilterTags([]);
                 setFilterStartDate('');
                 setFilterEndDate('');
               }}
