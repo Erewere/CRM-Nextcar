@@ -60,6 +60,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
   const [showFullAddress, setShowFullAddress] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
+  const [newTaskTime, setNewTaskTime] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
   
   useEffect(() => {
@@ -191,12 +192,25 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
   const handleAddTask = async () => {
     if (!newTaskTitle || !newTaskDate || isNew) return;
     const newRef = doc(collection(db, 'tasks'));
+    
+    // Format time if provided (convert from HH:mm to h:mm a.m./p.m.)
+    let formattedTime = '';
+    if (newTaskTime) {
+      const [hoursStr, minutesStr] = newTaskTime.split(':');
+      let hours = parseInt(hoursStr, 10);
+      const period = hours >= 12 ? 'p.m.' : 'a.m.';
+      if (hours === 0) hours = 12;
+      else if (hours > 12) hours -= 12;
+      formattedTime = `${hours}:${minutesStr} ${period}`;
+    }
+
     const t: Partial<Task> = {
       agencyId: userData?.agencyId,
       sellerId: userData?.id,
       clientId: client.id,
       title: newTaskTitle,
       dueDate: newTaskDate,
+      startTime: formattedTime || undefined,
       completed: false,
       createdAt: new Date().toISOString()
     };
@@ -204,6 +218,7 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
     setTasks(prev => [{ id: newRef.id, ...t } as Task, ...prev]);
     setNewTaskTitle('');
     setNewTaskDate('');
+    setNewTaskTime('');
   };
 
   const handleAddNote = async () => {
@@ -572,14 +587,22 @@ export function ClientDetailModal({ client, initialStatus = 'new', onClose }: Pr
                           onChange={e=>setNewTaskTitle(e.target.value)} 
                           className="w-full text-sm border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 mb-3" 
                         />
-                        <div className="flex justify-between items-center">
+                        <div className="flex gap-2 items-center mb-3">
                           <input 
                             type="date" 
                             value={newTaskDate} 
                             onChange={e=>setNewTaskDate(e.target.value)} 
-                            className="text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                            className="flex-1 text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
                           />
-                          <button onClick={handleAddTask} className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors">Programar Vencimiento</button>
+                          <input 
+                            type="time" 
+                            value={newTaskTime} 
+                            onChange={e=>setNewTaskTime(e.target.value)} 
+                            className="w-24 text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                          />
+                        </div>
+                        <div className="flex justify-end items-center">
+                          <button onClick={handleAddTask} className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors">Programar Tarea</button>
                         </div>
                       </div>
                     )}

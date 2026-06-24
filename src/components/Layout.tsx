@@ -6,6 +6,8 @@ import { LayoutDashboard, Trello, CheckSquare, Users, LogOut, Car, Building, Men
 import { doc, getDoc } from 'firebase/firestore';
 import clsx from 'clsx';
 
+import { TaskReminders } from './TaskReminders';
+
 export function Layout() {
   const { userData } = useAuth();
   const navigate = useNavigate();
@@ -80,6 +82,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col md:flex-row">
+      <TaskReminders />
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 px-4 py-3 shrink-0">
         <div className="flex items-center gap-3">

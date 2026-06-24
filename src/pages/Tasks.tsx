@@ -503,6 +503,8 @@ export function Tasks() {
                 dealId: finalDealId || '',
                 title: taskData.title,
                 dueDate: taskData.dueDate,
+                startTime: taskData.startTime,
+                endTime: taskData.endTime,
                 completed: taskData.completed || false,
                 createdAt: new Date().toISOString()
               };

@@ -97,6 +97,8 @@ export interface Task {
   dealId?: string;
   title: string;
   dueDate: string;
+  startTime?: string;
+  endTime?: string;
   completed: boolean;
   createdAt: any;
 }
