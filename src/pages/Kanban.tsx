@@ -452,7 +452,10 @@ export function Kanban() {
             })}
           </div>
 
-          <TerminalDropBar columns={columns.filter((c) => c.id !== activeClient?.status)} activeId={activeId} />
+          <TerminalDropBar
+            columns={columns.filter((c) => c.id !== activeClient?.status)}
+            activeId={activeId}
+          />
 
           <DragOverlay zIndex={50} dropAnimation={null}>
             {activeClient ? (
