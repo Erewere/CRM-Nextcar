@@ -140,7 +140,7 @@ export function Layout() {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 px-4 py-3 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-sm">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-white text-sm">
             NX
           </div>
           <span className="text-lg font-bold tracking-tight text-white">
@@ -192,12 +192,12 @@ export function Layout() {
             isSidebarCollapsed && "justify-center px-2",
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 font-bold text-white shadow-lg shadow-blue-900/20">
             NX
           </div>
           {!isSidebarCollapsed && (
             <span className="text-xl font-bold tracking-tight text-white truncate">
-              Nextcar <span className="text-blue-500">CRM</span>
+              Nextcar <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">CRM</span>
             </span>
           )}
         </div>
@@ -211,11 +211,11 @@ export function Layout() {
               title={isSidebarCollapsed ? item.name : undefined}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-3 py-2 rounded-lg text-sm transition-colors",
+                  "flex items-center gap-3 py-2 rounded-lg text-sm transition-all duration-200",
                   isSidebarCollapsed ? "justify-center px-0" : "px-3",
                   isActive
-                    ? "bg-blue-600/10 text-blue-400 font-medium"
-                    : "text-slate-300 hover:bg-slate-800",
+                    ? "bg-gradient-to-r from-blue-600/20 to-indigo-600/10 text-blue-400 font-semibold shadow-sm border border-blue-500/10"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-slate-100",
                 )
               }
             >

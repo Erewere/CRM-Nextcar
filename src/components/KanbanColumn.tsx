@@ -35,25 +35,26 @@ export function KanbanColumn({
   const isNew = column.id === "new" || lowerTitle.includes("nuev");
 
   return (
-    <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col h-full shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F3F4F6] relative">
+    <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col h-full shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors">
       <div
         className={clsx(
-          "flex flex-col px-3 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
+          "flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
         )}
       >
-        <div className="absolute bottom-0 left-0 h-[2px] w-full bg-slate-200">
-          {isWon && <div className="h-full bg-green-500 w-full" />}
-          {isLost && <div className="h-full bg-red-400 w-full" />}
-          {isNew && <div className="h-full bg-blue-400 w-full" />}
+        <div className="absolute top-0 left-0 h-[3px] w-full bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600">
+          {isWon && <div className="h-full bg-gradient-to-r from-emerald-400 to-green-500 w-full" />}
+          {isLost && <div className="h-full bg-gradient-to-r from-rose-400 to-red-500 w-full" />}
+          {isNew && <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 w-full" />}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-[14px] font-bold text-slate-800 dark:text-slate-100">
             {column.title}
           </span>
-          {/* Progress circle mock */}
-          <div className="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-green-500 transform rotate-45"></div>
+          <div className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 shadow-sm">
+            {clients.length}
+          </div>
         </div>
-        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1">
+        <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-1">
           {clients.length} trato{clients.length !== 1 ? "s" : ""}
         </span>
       </div>
@@ -61,9 +62,9 @@ export function KanbanColumn({
       <div
         ref={setNodeRef}
         className={clsx(
-          "flex-1 overflow-y-auto p-2 flex flex-col gap-2 min-h-[150px] transition-all duration-300 rounded-b-lg",
+          "flex-1 overflow-y-auto p-3 flex flex-col gap-3 min-h-[150px] transition-all duration-300",
           isOver
-            ? "bg-blue-50/80 ring-2 ring-inset ring-blue-400 shadow-inner scale-[1.01]"
+            ? "bg-blue-50/50 dark:bg-blue-900/20 ring-2 ring-inset ring-blue-400 dark:ring-blue-500/50 shadow-inner"
             : "",
         )}
       >

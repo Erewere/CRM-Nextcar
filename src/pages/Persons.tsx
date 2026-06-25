@@ -8,6 +8,7 @@ import {
   doc,
   setDoc,
   writeBatch,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task } from "../types";
@@ -149,11 +150,9 @@ export function Persons() {
       )
     ) {
       try {
-        const batch = writeBatch(db);
-        selectedClients.forEach((id) => {
-          batch.delete(doc(db, "clients", id));
-        });
-        await batch.commit();
+        await Promise.all(
+          selectedClients.map((id) => deleteDoc(doc(db, "clients", id)))
+        );
         setPersons((prev) =>
           prev.filter((p) => !selectedClients.includes(p.id)),
         );
@@ -547,7 +546,7 @@ export function Persons() {
             {selectedClients.length > 0 && (
               <button
                 onClick={handleDeleteSelected}
-                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 shadow-sm text-xs md:text-sm"
+                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-rose-500 to-red-600 text-white rounded font-semibold hover:bg-red-700 shadow-sm text-xs md:text-sm"
               >
                 <Trash2 className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">
@@ -571,7 +570,7 @@ export function Persons() {
             </button>
             <button
               onClick={() => setShowAddPerson(true)}
-              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
+              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
             >
               <Plus className="w-4 h-4 shrink-0" /> Nuevo Trato
             </button>

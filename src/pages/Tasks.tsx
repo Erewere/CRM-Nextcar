@@ -615,7 +615,7 @@ export function Tasks() {
                 className={clsx(
                   "h-8 flex flex-col items-center justify-center rounded-lg text-xs cursor-pointer transition-all relative",
                   isToday
-                    ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-md shadow-blue-500/20"
                     : isCurrentMonth
                       ? "text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 font-medium"
                       : "text-gray-300 dark:text-slate-600",
@@ -869,7 +869,7 @@ export function Tasks() {
 
             <div
               onClick={() => setShowNewTaskModal(true)}
-              className="flex items-center p-0.5 bg-green-600 text-white rounded text-sm font-semibold cursor-pointer hover:bg-green-700 shadow-sm shrink-0"
+              className="flex items-center p-0.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded text-sm font-semibold cursor-pointer hover:bg-green-700 shadow-sm shrink-0"
             >
               <div className="px-3 flex items-center gap-1 border-r border-green-500">
                 <span className="text-lg leading-none mb-0.5">+</span> Actividad
@@ -1619,7 +1619,7 @@ export function Tasks() {
                               className={clsx(
                                 "text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full",
                                 isSameDay(day, today)
-                                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
                                   : "text-gray-900 dark:text-slate-100",
                               )}
                             >
@@ -1814,7 +1814,7 @@ export function Tasks() {
                                   className={clsx(
                                     "w-6 h-6 mx-auto flex items-center justify-center text-[10px] rounded-full",
                                     isSameDay(d, today) &&
-                                      "bg-blue-600 text-white font-bold",
+                                      "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold",
                                     !isSameDay(d, today) &&
                                       hasTasks &&
                                       "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 font-bold",

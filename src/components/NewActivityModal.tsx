@@ -122,7 +122,7 @@ function TimeSelect({
                 className={clsx(
                   "px-3 py-2 text-sm cursor-pointer flex justify-between items-center transition-colors",
                   isActive
-                    ? "bg-blue-600 text-white active-time-option"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white active-time-option"
                     : "text-gray-700 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-600",
                 )}
                 onClick={() => {
@@ -717,7 +717,7 @@ export function NewActivityModal({
 
                 return (
                   <div
-                    className="absolute left-12 right-2 bg-blue-600 text-white text-xs px-2 py-1.5 rounded z-10 shadow-md border border-blue-500 overflow-hidden flex flex-col cursor-grab active:cursor-grabbing"
+                    className="absolute left-12 right-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs px-2 py-1.5 rounded z-10 shadow-md border border-blue-500 overflow-hidden flex flex-col cursor-grab active:cursor-grabbing"
                     style={{
                       top: `${topPx}px`,
                       minHeight: "30px",

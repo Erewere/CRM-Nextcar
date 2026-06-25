@@ -346,7 +346,7 @@ export function AgencyUsers() {
                 <button 
                   onClick={handleSaveInactivity} 
                   disabled={savingInactivity}
-                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+                  className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
                 >
                   {savingInactivity ? '...' : 'Guardar'}
                 </button>

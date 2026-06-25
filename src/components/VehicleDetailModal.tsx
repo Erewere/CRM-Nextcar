@@ -488,7 +488,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   <button 
                     onClick={handleAddOrEditExpense}
                     disabled={!expDesc || !expAmount}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
                   >
                     {editingExpenseId ? 'Guardar Cambios' : 'Agregar Gasto'}
                   </button>
@@ -556,7 +556,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         {activeTab === 'info' && (
           <div className="p-4 border-t bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">Cancelar</button>
-            <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-bold">
+            <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg font-bold">
               {loading ? 'Guardando...' : 'Guardar Vehículo'}
             </button>
           </div>

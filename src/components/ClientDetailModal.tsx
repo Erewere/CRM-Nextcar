@@ -563,7 +563,7 @@ export function ClientDetailModal({
                     status: prev.status || "new",
                   }));
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
               >
                 + Crear Trato
               </button>
@@ -576,14 +576,14 @@ export function ClientDetailModal({
                   <button
                     type="button"
                     onClick={() => handleStatusChange("won")}
-                    className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                    className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
                   >
                     Ganado
                   </button>
                   <button
                     type="button"
                     onClick={() => handleStatusChange("lost")}
-                    className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                    className="bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
                   >
                     Perdido
                   </button>
@@ -1097,7 +1097,7 @@ export function ClientDetailModal({
                         <div className="flex justify-end items-center">
                           <button
                             onClick={handleAddTask}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
                           >
                             Programar Tarea
                           </button>
@@ -1115,7 +1115,7 @@ export function ClientDetailModal({
                         <div className="flex justify-end">
                           <button
                             onClick={handleAddNote}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
                           >
                             Guardar Nota
                           </button>

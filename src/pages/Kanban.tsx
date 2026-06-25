@@ -422,7 +422,7 @@ export function Kanban() {
         </div>
         <button
           onClick={() => setSelectedClient({} as Client)}
-          className="bg-blue-600 hover:bg-blue-700 transition-colors text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-blue-200"
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-blue-200"
         >
           + NUEVO TRATO
         </button>

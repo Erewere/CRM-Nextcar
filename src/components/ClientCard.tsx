@@ -34,15 +34,15 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
     <div 
       onClick={onClick}
       className={clsx(
-        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm transition-all hover:shadow-md cursor-grab active:cursor-grabbing text-left relative",
+        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all hover:shadow-md cursor-grab active:cursor-grabbing text-left relative overflow-hidden",
         client.origin === 'whatsapp' && "border-l-4 border-l-green-400"
       )}
     >
       {/* Activity indicator border top (optional, could be dynamically colored based on tasks) */}
-      <div className="absolute top-0 left-0 w-full h-[3px] bg-transparent group-hover:bg-slate-200 transition-colors" />
+      <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
       <div className="p-3 pb-2.5">
-        <h4 className="text-[13px] font-bold text-blue-900 truncate mb-0.5">
+        <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           {client.dealTitle || (client.name ? `${client.name} deal` : 'Deal')}
         </h4>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-3 font-medium">
@@ -51,22 +51,22 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
         
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/40 dark:to-blue-800/40 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300 shadow-sm border border-blue-200/50 dark:border-blue-700/50">
               {String(client.name || 'U').charAt(0).toUpperCase()}
             </div>
             
             {client.origin === 'whatsapp' ? (
-              <span className="rounded bg-green-50 px-1.5 py-0.5 text-[9px] font-bold text-green-600 flex items-center gap-1">
+              <span className="rounded bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-1.5 py-0.5 text-[9px] font-bold text-green-700 dark:text-green-400 border border-green-100 dark:border-green-800/50 flex items-center gap-1 shadow-sm">
                 <MessageCircle className="w-2.5 h-2.5" /> WA WP
               </span>
             ) : (
-              <span className="rounded bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+              <span className="rounded bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
                 <Phone className="w-2.5 h-2.5" /> {client.phone || 'Tel'}
               </span>
             )}
           </div>
           
-          <div className={clsx("w-[22px] h-[22px] rounded-full border flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-sm", statusColorClass)}>
+          <div className={clsx("w-[24px] h-[24px] rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-md", statusColorClass)}>
             <ChevronRight className="w-4 h-4 ml-0.5" />
           </div>
         </div>

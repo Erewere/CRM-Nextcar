@@ -132,7 +132,7 @@ export function Inventory() {
         </div>
         <button 
           onClick={() => setSelectedVehicle({} as Vehicle)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Agregar Vehículo
@@ -403,7 +403,7 @@ export function Inventory() {
               </button>
               <button 
                 onClick={() => handleDelete(vehicleToDelete)}
-                className="flex-1 py-2 px-4 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+                className="flex-1 py-2 px-4 bg-gradient-to-r from-rose-500 to-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
               >
                 Eliminar
               </button>

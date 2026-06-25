@@ -51,6 +51,23 @@ import { MasterDashboard } from "../components/MasterDashboard";
 
 import { Link } from "react-router";
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-lg border border-slate-100 dark:border-slate-700">
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">{label}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: payload[0].payload.color || payload[0].color || "#3b82f6" }}></div>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            <span className="font-medium text-slate-900 dark:text-white">{payload[0].value}</span> Oportunidades
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export function Dashboard() {
   const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
@@ -68,6 +85,7 @@ export function Dashboard() {
   // For interactive stage selection
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
+  const [activeDateFilter, setActiveDateFilter] = useState<string>("");
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>(
@@ -376,8 +394,13 @@ export function Dashboard() {
                 const today = new Date().toISOString().split("T")[0];
                 setFilterStartDate(today);
                 setFilterEndDate(today);
+                setActiveDateFilter("today");
               }}
-              className="text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                activeDateFilter === "today"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
+              }`}
             >
               Hoy
             </button>
@@ -389,8 +412,13 @@ export function Dashboard() {
                 const end = new Date().toISOString().split("T")[0];
                 setFilterStartDate(start);
                 setFilterEndDate(end);
+                setActiveDateFilter("week");
               }}
-              className="text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                activeDateFilter === "week"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
+              }`}
             >
               Esta Semana
             </button>
@@ -403,8 +431,13 @@ export function Dashboard() {
                 const end = new Date().toISOString().split("T")[0];
                 setFilterStartDate(start);
                 setFilterEndDate(end);
+                setActiveDateFilter("month");
               }}
-              className="text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                activeDateFilter === "month"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
+              }`}
             >
               Este Mes
             </button>
@@ -510,7 +543,7 @@ export function Dashboard() {
                 type="date"
                 className="bg-transparent text-sm focus:outline-none text-slate-700 dark:text-slate-300"
                 value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
+                onChange={(e) => { setFilterStartDate(e.target.value); setActiveDateFilter(""); }}
               />
             </div>
 
@@ -520,7 +553,7 @@ export function Dashboard() {
                 type="date"
                 className="bg-transparent text-sm focus:outline-none text-slate-700 dark:text-slate-300"
                 value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
+                onChange={(e) => { setFilterEndDate(e.target.value); setActiveDateFilter(""); }}
               />
             </div>
 
@@ -536,6 +569,7 @@ export function Dashboard() {
                   setFilterTags([]);
                   setFilterStartDate("");
                   setFilterEndDate("");
+                  setActiveDateFilter("");
                 }}
                 className="text-xs underline text-slate-400 hover:text-slate-600 dark:text-slate-400 px-2"
               >
@@ -648,42 +682,76 @@ export function Dashboard() {
                     }
                   }}
                 >
+                  <defs>
+                    <linearGradient id="colorBlue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="colorGreen" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="colorOrange" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="colorPurple" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="colorPink" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="colorInactive" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#cbd5e1" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#cbd5e1" stopOpacity={0.3} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#f1f5f9"
+                    stroke="#f8fafc"
                   />
                   <XAxis
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    tick={{ fontSize: 12, fill: "#94a3b8" }}
+                    dy={10}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    tick={{ fontSize: 12, fill: "#94a3b8" }}
+                    dx={-10}
                   />
                   <Tooltip
-                    cursor={{ fill: "#f8fafc" }}
-                    contentStyle={{
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                    }}
+                    cursor={{ fill: "transparent" }}
+                    content={<CustomTooltip />}
                   />
-                  <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                    {pipelineData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          selectedStage === entry.id || !selectedStage
-                            ? COLORS[index % COLORS.length]
-                            : "#cbd5e1"
-                        }
-                        className="cursor-pointer transition-all duration-300"
-                      />
-                    ))}
+                  <Bar dataKey="total" radius={[6, 6, 0, 0]} barSize={36}>
+                    {pipelineData.map((entry, index) => {
+                      const gradients = [
+                        "url(#colorBlue)",
+                        "url(#colorGreen)",
+                        "url(#colorOrange)",
+                        "url(#colorPurple)",
+                        "url(#colorPink)",
+                      ];
+                      const isActive = selectedStage === entry.id || !selectedStage;
+                      const fillColor = isActive
+                        ? gradients[index % gradients.length]
+                        : "url(#colorInactive)";
+
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={fillColor}
+                          className="cursor-pointer transition-all duration-300 hover:opacity-80"
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

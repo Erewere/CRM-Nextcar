@@ -87,7 +87,7 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             />
-            <button onClick={handleAdd} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">
+            <button onClick={handleAdd} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">
               Agregar
             </button>
           </div>
@@ -114,7 +114,7 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
 
         <div className="p-4 border-t bg-slate-50 dark:bg-slate-900 flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">Cancelar</button>
-          <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-bold">
+          <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg font-bold">
             {loading ? 'Guardando...' : 'Guardar'}
           </button>
         </div>
