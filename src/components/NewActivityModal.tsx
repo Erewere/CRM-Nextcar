@@ -148,6 +148,7 @@ interface NewActivityModalProps {
   deals?: any[];
   currentUser: any;
   initialData?: any;
+  tasks?: any[];
 }
 
 export function NewActivityModal({
@@ -157,13 +158,30 @@ export function NewActivityModal({
   deals = [],
   currentUser,
   initialData,
+  tasks = [],
 }: NewActivityModalProps) {
   const [type, setType] = useState(initialData?.type || "call");
   const [title, setTitle] = useState(initialData?.title || "Llamada");
   const [date, setDate] = useState(
     initialData?.dueDate || format(new Date(), "yyyy-MM-dd"),
   );
-  const [startTime, setStartTime] = useState(initialData?.startTime || "12:15");
+
+  const getDefaultStartTime = () => {
+    const now = new Date();
+    let mins = now.getMinutes();
+    let hrs = now.getHours();
+    mins = Math.ceil(mins / 15) * 15;
+    if (mins >= 60) {
+      mins = 0;
+      hrs += 1;
+    }
+    hrs = hrs % 24;
+    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+  };
+
+  const [startTime, setStartTime] = useState(
+    initialData?.startTime || getDefaultStartTime(),
+  );
   const [endTime, setEndTime] = useState(initialData?.endTime || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [clientId, setClientId] = useState(initialData?.clientId || "");
@@ -177,6 +195,61 @@ export function NewActivityModal({
   });
   const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const nameInputRef = useRef<HTMLDivElement>(null);
+
+  const dragRef = useRef<{ startY: number, startTop: number, durationMins: number, isDragging: boolean }>({ startY: 0, startTop: 0, durationMins: 60, isDragging: false });
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const startH = parseInt(startTime.split(":")[0] || "0");
+    const startM = parseInt(startTime.split(":")[1] || "0");
+    let endH = parseInt(endTime.split(":")[0] || "-1");
+    let endM = parseInt(endTime.split(":")[1] || "0");
+    
+    let durationMins = 60;
+    if (endTime && (endH * 60 + endM) > (startH * 60 + startM)) {
+      durationMins = (endH * 60 + endM) - (startH * 60 + startM);
+    }
+
+    dragRef.current = {
+      startY: e.clientY,
+      startTop: (startH + startM / 60) * 60,
+      durationMins,
+      isDragging: true
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current.isDragging) return;
+    const deltaY = e.clientY - dragRef.current.startY;
+    let newTop = dragRef.current.startTop + deltaY;
+    
+    // snap to 15 mins (15px)
+    newTop = Math.round(newTop / 15) * 15;
+    
+    if (newTop < 0) newTop = 0; 
+    if (newTop > 24 * 60 - 15) newTop = 24 * 60 - 15; 
+
+    const newH = Math.floor(newTop / 60);
+    const newM = newTop % 60;
+    const newStartTimeStr = `${newH.toString().padStart(2, "0")}:${newM.toString().padStart(2, "0")}`;
+    
+    setStartTime(newStartTimeStr);
+    
+    if (endTime) {
+       let endTotal = newH * 60 + newM + dragRef.current.durationMins;
+       if (endTotal >= 24 * 60) endTotal = 24 * 60 - 1; // max 23:59
+       const newEndH = Math.floor(endTotal / 60);
+       const newEndM = endTotal % 60;
+       setEndTime(`${newEndH.toString().padStart(2, "0")}:${newEndM.toString().padStart(2, "0")}`);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current.isDragging) {
+      dragRef.current.isDragging = false;
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -238,7 +311,50 @@ export function NewActivityModal({
     }
   }, [currentUser?.agencyId]);
 
-  const [previewDate, setPreviewDate] = useState(new Date());
+  const [previewDate, setPreviewDate] = useState<Date>(
+    initialData?.dueDate
+      ? new Date(initialData.dueDate + "T00:00:00")
+      : new Date(),
+  );
+
+  useEffect(() => {
+    // Attempt to scroll the calendar view to the current task or current time
+    const container = document.getElementById("calendar-scroll-container");
+    if (container) {
+      const taskPreview = document.getElementById("current-task-preview");
+      if (taskPreview) {
+        const topPx = parseInt(taskPreview.style.top || "0");
+        container.scrollTop = Math.max(0, topPx - 100);
+      } else {
+        const now = new Date();
+        const topPx = (now.getHours() + now.getMinutes() / 60) * 60;
+        container.scrollTop = Math.max(0, topPx - 100);
+      }
+    }
+  }, [startTime, previewDate]);
+
+  useEffect(() => {
+    if (date) {
+      const [y, m, d] = date.split("-");
+      if (y && m && d) {
+        const newDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+        if (
+          !isNaN(newDate.getTime()) &&
+          format(previewDate, "yyyy-MM-dd") !== date
+        ) {
+          setPreviewDate(newDate);
+        }
+      }
+    }
+  }, [date]);
+
+  // Sync date back if previewDate is changed by the arrows
+  useEffect(() => {
+    const formatted = format(previewDate, "yyyy-MM-dd");
+    if (date !== formatted) {
+      setDate(formatted);
+    }
+  }, [previewDate]);
 
   // Handle deal selection logic
   const handleDealChange = (val: string) => {
@@ -535,11 +651,111 @@ export function NewActivityModal({
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto relative">
-              {/* Event preview block */}
-              <div className="absolute top-[30px] left-12 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1.5 rounded z-10 flex items-center gap-1 shadow-sm">
-                <Phone className="w-3 h-3" /> Llamada
-              </div>
+            <div
+              className="flex-1 overflow-y-auto relative"
+              id="calendar-scroll-container"
+            >
+              {/* Actual tasks from props */}
+              {tasks
+                .filter(
+                  (t) => t.task.dueDate === format(previewDate, "yyyy-MM-dd"),
+                )
+                .map((t) => {
+                  const tStartHour = parseInt(
+                    t.task.startTime?.split(":")[0] || "12",
+                  );
+                  const tStartMin = parseInt(
+                    t.task.startTime?.split(":")[1] || "0",
+                  );
+                  let durationMins = 60;
+                  if (t.task.endTime) {
+                    const tEndHour = parseInt(
+                      t.task.endTime.split(":")[0] || "13",
+                    );
+                    const tEndMin = parseInt(
+                      t.task.endTime.split(":")[1] || "0",
+                    );
+                    durationMins =
+                      tEndHour * 60 + tEndMin - (tStartHour * 60 + tStartMin);
+                  }
+                  if (durationMins <= 0) durationMins = 60;
+                  const tTop = (tStartHour + tStartMin / 60) * 60;
+                  const tHeight = (durationMins / 60) * 60;
+
+                  return (
+                    <div
+                      key={t.task.id}
+                      className="absolute left-12 right-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700/50 text-xs px-2 py-1 rounded z-0 flex flex-col gap-0.5 overflow-hidden opacity-60 pointer-events-none"
+                      style={{ top: `${tTop}px`, height: `${tHeight}px` }}
+                    >
+                      <span className="font-bold line-clamp-1">
+                        {t.task.title}
+                      </span>
+                      {tHeight > 30 && t.client && (
+                        <span className="text-[10px] truncate">
+                          {t.client.name}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {/* Event preview block for the current task being created/edited */}
+              {(() => {
+                const startH = parseInt(startTime.split(":")[0] || "0");
+                const startM = parseInt(startTime.split(":")[1] || "0");
+                let endH = parseInt(endTime.split(":")[0] || "-1");
+                let endM = parseInt(endTime.split(":")[1] || "0");
+
+                let durationMins = 60;
+                if (endTime && endH * 60 + endM > startH * 60 + startM) {
+                  durationMins = endH * 60 + endM - (startH * 60 + startM);
+                }
+
+                const topPx = (startH + startM / 60) * 60;
+                const heightPx = (durationMins / 60) * 60;
+
+                return (
+                  <div
+                    className="absolute left-12 right-2 bg-blue-600 text-white text-xs px-2 py-1.5 rounded z-10 shadow-md border border-blue-500 overflow-hidden flex flex-col cursor-grab active:cursor-grabbing"
+                    style={{
+                      top: `${topPx}px`,
+                      minHeight: "30px",
+                      height: `${heightPx}px`,
+                      touchAction: "none"
+                    }}
+                    id="current-task-preview"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      {type === "call" && (
+                        <Phone className="w-3 h-3 shrink-0" />
+                      )}
+                      {type === "meeting" && (
+                        <Users className="w-3 h-3 shrink-0" />
+                      )}
+                      {type === "task" && (
+                        <Check className="w-3 h-3 shrink-0" />
+                      )}
+                      {type === "deadline" && (
+                        <Flag className="w-3 h-3 shrink-0" />
+                      )}
+                      {type === "email" && (
+                        <Mail className="w-3 h-3 shrink-0" />
+                      )}
+                      {type === "lunch" && (
+                        <Coffee className="w-3 h-3 shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {title || "Nueva actividad"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {hours.map((hour, i) => (
                 <div
@@ -555,13 +771,31 @@ export function NewActivityModal({
                 </div>
               ))}
 
-              {/* Current time line mock */}
-              <div className="absolute top-[280px] left-0 right-0 border-t border-red-500 z-20 flex items-center">
-                <div className="text-[10px] text-red-500 w-12 text-right pr-1 bg-white dark:bg-slate-800 font-bold tracking-tighter -mt-2">
-                  23:05
-                </div>
-                <div className="w-2 h-2 bg-red-500 rounded-full -ml-1"></div>
-              </div>
+              {/* Current time line */}
+              {(() => {
+                const now = new Date();
+                // Only show if previewDate is today
+                if (
+                  format(now, "yyyy-MM-dd") !==
+                  format(previewDate, "yyyy-MM-dd")
+                )
+                  return null;
+                const nowH = now.getHours();
+                const nowM = now.getMinutes();
+                const nowTop = (nowH + nowM / 60) * 60;
+
+                return (
+                  <div
+                    className="absolute left-0 right-0 border-t border-red-500 z-20 flex items-center pointer-events-none"
+                    style={{ top: `${nowTop}px` }}
+                  >
+                    <div className="text-[10px] text-red-500 w-12 text-right pr-1 bg-white dark:bg-slate-800 font-bold tracking-tighter -mt-2.5">
+                      {`${nowH.toString().padStart(2, "0")}:${nowM.toString().padStart(2, "0")}`}
+                    </div>
+                    <div className="w-2 h-2 bg-red-500 rounded-full -ml-1"></div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

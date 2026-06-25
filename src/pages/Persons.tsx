@@ -7,6 +7,7 @@ import {
   getDocs,
   doc,
   setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task } from "../types";
@@ -45,6 +46,7 @@ export function Persons() {
     { id: string; title: string }[]
   >([]);
   const [importingContacts, setImportingContacts] = useState(false);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
 
   useEffect(() => {
     if (userData?.agencyId) {
@@ -139,6 +141,29 @@ export function Persons() {
 
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  const handleDeleteSelected = async () => {
+    if (
+      window.confirm(
+        `¿Estás seguro que deseas eliminar ${selectedClients.length} contactos?`,
+      )
+    ) {
+      try {
+        const batch = writeBatch(db);
+        selectedClients.forEach((id) => {
+          batch.delete(doc(db, "clients", id));
+        });
+        await batch.commit();
+        setPersons((prev) =>
+          prev.filter((p) => !selectedClients.includes(p.id)),
+        );
+        setSelectedClients([]);
+      } catch (err) {
+        console.error("Error deleting clients:", err);
+        alert("Error al eliminar contactos");
+      }
+    }
+  };
 
   useEffect(() => {
     if (!userData) return;
@@ -519,6 +544,20 @@ export function Persons() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {selectedClients.length > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 shadow-sm text-xs md:text-sm"
+              >
+                <Trash2 className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">
+                  Eliminar seleccionados ({selectedClients.length})
+                </span>
+                <span className="sm:hidden">
+                  Eliminar ({selectedClients.length})
+                </span>
+              </button>
+            )}
             <button
               onClick={handleImportGoogleContacts}
               disabled={importingContacts}
@@ -620,6 +659,24 @@ export function Persons() {
                   <div className="px-4 py-3">
                     <input
                       type="checkbox"
+                      checked={
+                        selectedClients.length > 0 &&
+                        selectedClients.length === filteredPersons.length
+                      }
+                      ref={(input) => {
+                        if (input) {
+                          input.indeterminate =
+                            selectedClients.length > 0 &&
+                            selectedClients.length < filteredPersons.length;
+                        }
+                      }}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedClients(filteredPersons.map((p) => p.id));
+                        } else {
+                          setSelectedClients([]);
+                        }
+                      }}
                       className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
                     />
                   </div>
@@ -688,6 +745,16 @@ export function Persons() {
                     >
                       <input
                         type="checkbox"
+                        checked={selectedClients.includes(person.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedClients([...selectedClients, person.id]);
+                          } else {
+                            setSelectedClients(
+                              selectedClients.filter((id) => id !== person.id),
+                            );
+                          }
+                        }}
                         className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
                       />
                     </td>

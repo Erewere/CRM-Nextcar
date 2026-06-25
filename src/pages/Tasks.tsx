@@ -61,6 +61,7 @@ import {
   eachMonthOfInterval,
   isAfter,
   parseISO,
+  isSameMonth,
 } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -78,13 +79,12 @@ export function Tasks() {
     "day" | "week" | "month" | "year"
   >("week");
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [miniCalendarDate, setMiniCalendarDate] = useState(new Date());
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState<
     "all" | "pending" | "completed"
   >("all");
-  const [filterDate, setFilterDate] = useState<
-    "all" | "overdue" | "today" | "tomorrow" | "week"
-  >("all");
+  const [filterDate, setFilterDate] = useState<string>("all");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const [visibleColumns, setVisibleColumns] = useState({
@@ -133,6 +133,17 @@ export function Tasks() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const handleTaskClick = (task: Task) => {
+    setEditingTask(task);
+    if (task.dueDate) {
+      const taskDate = new Date(task.dueDate + "T00:00:00");
+      setCurrentDate(taskDate);
+      setMiniCalendarDate(taskDate);
+      setFilterDate(task.dueDate);
+    }
+  };
+
   const [showSyncBanner, setShowSyncBanner] = useState(true);
 
   // New task form
@@ -549,6 +560,129 @@ export function Tasks() {
     };
   }, [dragState, calendarDays]);
 
+  const renderMiniCalendar = () => {
+    const start = startOfWeek(startOfMonth(miniCalendarDate), {
+      weekStartsOn: 1,
+    });
+    const end = endOfWeek(endOfMonth(miniCalendarDate), { weekStartsOn: 1 });
+    const days = eachDayOfInterval({ start, end });
+
+    return (
+      <div className="p-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setMiniCalendarDate((prev) => subMonths(prev, 1))}
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="text-sm font-bold text-slate-800 dark:text-slate-200 capitalize">
+            {format(miniCalendarDate, "MMMM yyyy", { locale: es })}
+          </div>
+          <button
+            onClick={() => setMiniCalendarDate((prev) => addMonths(prev, 1))}
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {["L", "M", "X", "J", "V", "S", "D"].map((day) => (
+            <div
+              key={day}
+              className="text-center text-[10px] font-bold text-gray-400 py-1"
+            >
+              {day}
+            </div>
+          ))}
+          {days.map((day, i) => {
+            const isCurrentMonth = isSameMonth(day, miniCalendarDate);
+            const isToday = isSameDay(day, new Date());
+            const hasTasks = filteredTasks.some(
+              (t) =>
+                t.task.dueDate === format(day, "yyyy-MM-dd") &&
+                !t.task.completed,
+            );
+
+            return (
+              <div
+                key={i}
+                onClick={() => {
+                  const newDateStr = format(day, "yyyy-MM-dd");
+                  setFilterDate(newDateStr);
+                  setCurrentDate(day);
+                }}
+                className={clsx(
+                  "h-8 flex flex-col items-center justify-center rounded-lg text-xs cursor-pointer transition-all relative",
+                  isToday
+                    ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20"
+                    : isCurrentMonth
+                      ? "text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 font-medium"
+                      : "text-gray-300 dark:text-slate-600",
+                  filterDate === format(day, "yyyy-MM-dd") &&
+                    !isToday &&
+                    "ring-2 ring-blue-500 ring-inset",
+                )}
+              >
+                <span>{format(day, "d")}</span>
+                {hasTasks && (
+                  <div
+                    className={clsx(
+                      "w-1 h-1 rounded-full absolute bottom-1",
+                      isToday ? "bg-white" : "bg-blue-500",
+                    )}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Day Tasks under Mini Calendar */}
+        {filterDate && filterDate !== "all" && filterDate !== "overdue" && filterDate !== "today" && filterDate !== "tomorrow" && filterDate !== "week" && (
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700/50 flex flex-col gap-2">
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+              Actividades {format(parseISO(filterDate), "MMM d", { locale: es })}
+            </div>
+            {filteredTasks
+              .filter(t => t.task.dueDate === filterDate)
+              .sort((a, b) => {
+                 const timeA = a.task.startTime ? a.task.startTime : "24:00";
+                 const timeB = b.task.startTime ? b.task.startTime : "24:00";
+                 return timeA.localeCompare(timeB);
+              })
+              .map(({task, client}) => (
+                <div
+                  key={task.id}
+                  onClick={() => handleTaskClick(task)}
+                  className="flex gap-2 items-start p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer"
+                >
+                  <div className="text-[10px] font-bold text-gray-400 shrink-0 mt-0.5 w-8">
+                    {task.startTime || "-"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={clsx("text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1", task.completed && "line-through text-gray-400")}>
+                      {task.title}
+                    </div>
+                    {client && (
+                      <div className="text-[10px] text-blue-500 truncate">
+                        {client.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {filteredTasks.filter(t => t.task.dueDate === filterDate).length === 0 && (
+                <div className="text-center text-xs text-gray-400 py-4">
+                  No hay actividades
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const getTaskIcon = (title: string = "") => {
     const t = String(title || "").toLowerCase();
     if (t.includes("llama")) return <Phone className="w-3.5 h-3.5" />;
@@ -640,6 +774,9 @@ export function Tasks() {
         const weekStart = startOfWeek(today, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
         if (taskDate < weekStart || taskDate > weekEnd) return false;
+      } else {
+        // Specific date format like "yyyy-MM-dd"
+        if (task.dueDate !== filterDate) return false;
       }
     } else if (filterDate !== "all" && !task.dueDate) {
       return false; // exclude tasks without a due date if we filter by date
@@ -1237,7 +1374,7 @@ export function Tasks() {
                     {visibleColumns.title && (
                       <td
                         className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 font-bold truncate cursor-pointer hover:text-blue-600"
-                        onClick={() => setEditingTask(task)}
+                        onClick={() => handleTaskClick(task)}
                       >
                         <span
                           className={clsx(
@@ -1256,7 +1393,7 @@ export function Tasks() {
                         onClick={() =>
                           client
                             ? setSelectedClient(client)
-                            : setEditingTask(task)
+                            : handleTaskClick(task)
                         }
                       >
                         {client?.name || "Desconocido"}
@@ -1412,7 +1549,7 @@ export function Tasks() {
                                   {dayTasks.map(({ task, client }) => (
                                     <div
                                       key={task.id}
-                                      onClick={() => setEditingTask(task)}
+                                      onClick={() => handleTaskClick(task)}
                                       className={clsx(
                                         "text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border",
                                         task.completed
@@ -1545,7 +1682,7 @@ export function Tasks() {
                                   key={task.id}
                                   onPointerUp={(e) => {
                                     if (!dragState || !dragState.hasMoved) {
-                                      setEditingTask(task);
+                                      handleTaskClick(task);
                                     }
                                   }}
                                   onPointerDown={(e) => {
@@ -1701,7 +1838,7 @@ export function Tasks() {
           )}
         </div>
 
-        {/* Right Sidebar: Mis tareas */}
+        {/* Right Sidebar */}
         {showRightSidebar ? (
           <div className="w-80 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col overflow-hidden transition-all duration-300">
             <div
@@ -1711,10 +1848,12 @@ export function Tasks() {
             >
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  TASKS
+                  {view === "calendar" ? "TASKS" : "CALENDAR"}
                 </div>
                 <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-sm">
-                  <span>Mis tareas</span>
+                  <span>
+                    {view === "calendar" ? "Mis tareas" : "Calendario"}
+                  </span>
                 </div>
               </div>
               <button className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-500 transition-colors">
@@ -1722,95 +1861,108 @@ export function Tasks() {
               </button>
             </div>
 
-            <div className="p-2 border-b border-gray-100 dark:border-slate-700/50">
-              <button
-                onClick={() => setShowNewTaskModal(true)}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
-              >
-                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-100/50 text-blue-600 shrink-0">
-                  <span className="text-lg leading-none mt-[-2px]">+</span>
-                </div>
-                Agregar una tarea
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-              {filteredTasks
-                .filter((t) => !t.task.completed)
-                .sort((a, b) => {
-                  const dateA = a.task.dueDate
-                    ? new Date(a.task.dueDate).getTime()
-                    : Infinity;
-                  const dateB = b.task.dueDate
-                    ? new Date(b.task.dueDate).getTime()
-                    : Infinity;
-                  return dateA - dateB;
-                })
-                .map(({ task, client }) => (
-                  <div
-                    key={task.id}
-                    className="group flex gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/50 transition-all"
-                    onClick={() => setEditingTask(task)}
+            {view === "calendar" ? (
+              <>
+                <div className="p-2 border-b border-gray-100 dark:border-slate-700/50">
+                  <button
+                    onClick={() => setShowNewTaskModal(true)}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
                   >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleTask(task.id, task.completed);
-                      }}
-                      className="mt-0.5 shrink-0 text-gray-300 hover:text-green-500 transition-colors"
-                    >
-                      <Circle className="w-4 h-4" />
-                    </button>
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight">
-                        {task.title}
-                      </span>
-                      {task.dueDate && (
-                        <span
-                          className={clsx(
-                            "text-[11px] mt-1 font-semibold flex items-center gap-1",
-                            isAfter(
-                              startOfDay(new Date()),
-                              parseISO(task.dueDate),
-                            )
-                              ? "text-rose-500"
-                              : "text-gray-500 dark:text-slate-400",
-                          )}
-                        >
-                          {format(parseISO(task.dueDate), "MMM d", {
-                            locale: es,
-                          })}
-                          {task.startTime && ` • ${task.startTime}`}
-                        </span>
-                      )}
-                      {client && (
-                        <span className="text-[11px] text-blue-600 truncate mt-0.5">
-                          {client.name}
-                        </span>
-                      )}
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-100/50 text-blue-600 shrink-0">
+                      <span className="text-lg leading-none mt-[-2px]">+</span>
                     </div>
-                  </div>
-                ))}
-
-              {filteredTasks.filter((t) => !t.task.completed).length === 0 && (
-                <div className="text-center p-6 text-gray-400 dark:text-slate-500 text-sm">
-                  No tienes tareas pendientes. ¡Buen trabajo!
+                    Agregar una tarea
+                  </button>
                 </div>
-              )}
-            </div>
+
+                <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
+                  {filteredTasks
+                    .filter((t) => !t.task.completed)
+                    .sort((a, b) => {
+                      const dateA = a.task.dueDate
+                        ? new Date(a.task.dueDate).getTime()
+                        : Infinity;
+                      const dateB = b.task.dueDate
+                        ? new Date(b.task.dueDate).getTime()
+                        : Infinity;
+                      return dateA - dateB;
+                    })
+                    .map(({ task, client }) => (
+                      <div
+                        key={task.id}
+                        className="group flex gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/50 transition-all"
+                        onClick={() => handleTaskClick(task)}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTask(task.id, task.completed);
+                          }}
+                          className="mt-0.5 shrink-0 text-gray-300 hover:text-green-500 transition-colors"
+                        >
+                          <Circle className="w-4 h-4" />
+                        </button>
+                        <div className="flex-1 min-w-0 flex flex-col">
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight">
+                            {task.title}
+                          </span>
+                          {task.dueDate && (
+                            <span
+                              className={clsx(
+                                "text-[11px] mt-1 font-semibold flex items-center gap-1",
+                                isAfter(
+                                  startOfDay(new Date()),
+                                  parseISO(task.dueDate),
+                                )
+                                  ? "text-rose-500"
+                                  : "text-gray-500 dark:text-slate-400",
+                              )}
+                            >
+                              {format(parseISO(task.dueDate), "MMM d", {
+                                locale: es,
+                              })}
+                              {task.startTime && ` • ${task.startTime}`}
+                            </span>
+                          )}
+                          {client && (
+                            <span className="text-[11px] text-blue-600 truncate mt-0.5">
+                              {client.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                  {filteredTasks.filter((t) => !t.task.completed).length ===
+                    0 && (
+                    <div className="text-center p-6 text-gray-400 dark:text-slate-500 text-sm">
+                      No tienes tareas pendientes. ¡Buen trabajo!
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 overflow-y-auto">
+                {renderMiniCalendar()}
+              </div>
+            )}
           </div>
         ) : (
           <div
             className="w-12 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex flex-col items-center py-4 transition-all duration-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 border-l-4 border-l-blue-500"
             onClick={() => setShowRightSidebar(true)}
-            title="Mostrar panel de tareas"
+            title={
+              view === "calendar"
+                ? "Mostrar panel de tareas"
+                : "Mostrar calendario"
+            }
           >
             <button className="p-1.5 rounded-md bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 shadow-sm transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="mt-8 relative h-32 w-full flex items-center justify-center">
               <span className="absolute -rotate-90 whitespace-nowrap text-xs font-bold text-gray-500 tracking-widest uppercase">
-                Mis tareas
+                {view === "calendar" ? "Mis tareas" : "Calendario"}
               </span>
             </div>
           </div>
@@ -1858,6 +2010,7 @@ export function Tasks() {
             setEditingTask(null);
           }}
           clients={clients}
+          tasks={tasks}
           deals={deals}
           currentUser={userData}
           initialData={editingTask}
@@ -1994,6 +2147,8 @@ export function Tasks() {
                 clientId: finalClientId || "",
                 dealId: finalDealId || "",
                 title: taskData.title,
+                type: taskData.type || "call",
+                notes: taskData.notes || "",
                 dueDate: taskData.dueDate,
                 startTime: taskData.startTime,
                 endTime: taskData.endTime,
