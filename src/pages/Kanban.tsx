@@ -148,6 +148,7 @@ function ArchivedClientsModal({
           {terminalColumns.map((col) => {
             const columnClients = filteredClients.filter(
               (c) => c.status === col.id,
+
             );
             return (
               <div
@@ -161,21 +162,24 @@ function ArchivedClientsModal({
                   </span>
                 </h3>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 pb-20">
-                  {columnClients.map((client) => (
-                    <div
-                      key={client.id}
-                      onClick={() => {
-                        onClientClick(client);
-                        onClose();
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <ClientCard
-                        client={client}
-                        tasks={tasks.filter((t) => t.clientId === client.id)}
-                      />
-                    </div>
-                  ))}
+                  {columnClients.map((client) => {
+                    const clientIdToUse = (client as any).originalClientId || client.id;
+                    return (
+                      <div
+                        key={client.id}
+                        onClick={() => {
+                          onClientClick(client);
+                          onClose();
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <ClientCard
+                          client={client}
+                          tasks={tasks.filter((t) => t.clientId === clientIdToUse || (t as any).dealId === client.id)}
+                        />
+                      </div>
+                    );
+                  })}
                   {columnClients.length === 0 && (
                     <div className="bg-white dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center text-slate-400 text-sm">
                       No hay contactos en esta etapa
@@ -297,9 +301,76 @@ export function Kanban() {
     }),
   );
 
+  const activeOriginalStatusRef = React.useRef<string | null>(null);
+
   const handleDragStart = (event: any) => {
     setActiveId(event.active.id);
+    const client = clients.find((c) => c.id === event.active.id);
+    if (client) {
+      activeOriginalStatusRef.current = client.status || null;
+    }
   };
+
+  const handleDragOver = (event: any) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    if (activeId === overId) return;
+
+    const isActiveAClient = clients.some((c) => c.id === activeId);
+    if (!isActiveAClient) return;
+
+    const overClient = clients.find((c) => c.id === overId);
+    const overColumnId = overClient ? overClient.status : overId;
+
+    if (!columns.find((c) => c.id === overColumnId)) return;
+
+    setClients((prev) => {
+      const activeIndex = prev.findIndex((c) => c.id === activeId);
+      const overIndex = overClient
+        ? prev.findIndex((c) => c.id === overId)
+        : prev.length;
+
+      if (activeIndex === -1) return prev;
+
+      const activeClient = prev[activeIndex];
+
+      if (activeClient.status !== overColumnId) {
+        // Moving to a new column
+        const next = [...prev];
+        const movedClient = { ...activeClient, status: overColumnId as any };
+        next.splice(activeIndex, 1);
+        if (overClient) {
+          next.splice(overIndex, 0, movedClient);
+        } else {
+          // Empty column drop, just place it at the end
+          next.push(movedClient);
+        }
+        return next;
+      } else if (overClient && activeIndex !== overIndex) {
+        // Reordering within the same column
+        const next = [...prev];
+        const [movedClient] = next.splice(activeIndex, 1);
+        next.splice(overIndex, 0, movedClient);
+        return next;
+      }
+
+      return prev;
+    });
+  };
+
+  const activeClient = activeId ? clients.find((c) => c.id === activeId) : null;
+
+  const filteredClients =
+    selectedSellerId === "all"
+      ? clients
+      : clients.filter((c) => c.sellerId === selectedSellerId);
+
+  const activeColumns = columns.filter((c) => !isTerminalColumn(c));
+  const terminalColumns = columns.filter((c) => isTerminalColumn(c));
 
   const handleDragEnd = async (event: any) => {
     const { active, over } = event;
@@ -307,18 +378,18 @@ export function Kanban() {
     if (!over) return;
 
     const clientId = active.id;
-    const overColumnId = over.data?.current?.sortable?.containerId || over.id;
+    const overClientId = over.id;
+    const overClient = clients.find((c) => c.id === overClientId);
+    const overColumnId = overClient ? overClient.status : over.id;
 
     if (!columns.find((c) => c.id === overColumnId)) return;
 
     const client = clients.find((c) => c.id === clientId);
-    if (client && client.status !== overColumnId) {
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === clientId ? { ...c, status: overColumnId as any } : c,
-        ),
-      );
-
+    const originalStatus = activeOriginalStatusRef.current;
+    
+    if (client && originalStatus !== overColumnId) {
+      // The array was already modified locally in handleDragOver, 
+      // we only need to persist to Firebase if the status is different from start
       try {
         await updateDoc(doc(db, "clients", clientId), {
           status: overColumnId,
@@ -345,7 +416,8 @@ export function Kanban() {
         }
       } catch (e) {
         console.error("Status update error", e);
-        setClients((prev) => [...prev]);
+        // If it failed, we'd theoretically want to revert the array change
+        // but for now we let snapshot catch up or ignore
       }
 
       const overStrEnd = String(overColumnId || "").toLowerCase();
@@ -362,20 +434,12 @@ export function Kanban() {
         });
       }
     }
+    
+    activeOriginalStatusRef.current = null;
   };
 
-  const activeClient = activeId ? clients.find((c) => c.id === activeId) : null;
-
-  const filteredClients =
-    selectedSellerId === "all"
-      ? clients
-      : clients.filter((c) => c.sellerId === selectedSellerId);
-
-  const activeColumns = columns.filter((c) => !isTerminalColumn(c));
-  const terminalColumns = columns.filter((c) => isTerminalColumn(c));
-
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col min-h-full">
       <div className="mb-6 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4 shrink-0">
         <div className="flex flex-wrap items-center gap-3">
           <div>
@@ -428,14 +492,15 @@ export function Kanban() {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex flex-col">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex-1 flex overflow-x-auto snap-x snap-mandatory md:snap-none items-start bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="flex overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
             {activeColumns.map((col) => {
               const columnClients = filteredClients.filter(
                 (c) => c.status === col.id,
@@ -453,7 +518,7 @@ export function Kanban() {
           </div>
 
           <TerminalDropBar
-            columns={columns.filter((c) => c.id !== activeClient?.status)}
+            columns={terminalColumns}
             activeId={activeId}
           />
 

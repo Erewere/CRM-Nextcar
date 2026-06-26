@@ -524,12 +524,15 @@ export function Tasks() {
         // Apply changes
         setDragState(null);
         try {
-          await updateDoc(doc(db, "tasks", dragState.taskId), {
+          const updateData: any = {
             dueDate: newDate,
-            startTime: newStartTime,
-            endTime: newEndTime || "",
             updatedAt: new Date().toISOString(),
-          });
+          };
+          if (newStartTime !== undefined) updateData.startTime = newStartTime;
+          if (newEndTime !== undefined) updateData.endTime = newEndTime;
+          else updateData.endTime = "";
+
+          await updateDoc(doc(db, "tasks", dragState.taskId), updateData);
           setTasks((prev) =>
             prev.map((t) =>
               t.task.id === dragState.taskId
@@ -1333,20 +1336,13 @@ export function Tasks() {
                     )}
                   >
                     <td className="px-4 py-2 text-center border-r border-gray-100 dark:border-slate-700 text-gray-300 relative">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center py-2">
                         <input
                           type="checkbox"
                           className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
                           checked={selectedTaskIds.includes(task.id)}
                           onChange={() => toggleTaskSelection(task.id)}
                         />
-                        <button
-                          onClick={(e) => handleDeleteSingleTask(task.id, e)}
-                          className="p-1 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Eliminar tarea"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     </td>
                     {visibleColumns.status && (
@@ -2155,6 +2151,13 @@ export function Tasks() {
                 completed: taskData.completed || false,
                 updatedAt: new Date().toISOString(),
               };
+
+              // Remove undefined fields to avoid Firebase errors
+              Object.keys(tempTask).forEach(
+                (k) =>
+                  tempTask[k as keyof typeof tempTask] === undefined &&
+                  delete tempTask[k as keyof typeof tempTask],
+              );
 
               if (!editingTask) {
                 tempTask.createdAt = new Date().toISOString();

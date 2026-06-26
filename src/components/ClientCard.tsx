@@ -89,10 +89,9 @@ export function SortableClientCard({ client, tasks, onClick }: Props) {
       <div 
         ref={setNodeRef} 
         style={style} 
-        className="rounded-xl border-2 border-dashed border-blue-400 bg-blue-50/20 overflow-hidden relative flex transition-all duration-300"
+        className="rounded-xl border-2 border-dashed border-blue-400 opacity-60 transition-all duration-300"
       >
-        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_8px,#bfdbfe_8px,#bfdbfe_16px)] opacity-20 animate-[pulse_2s_ease-in-out_infinite]" />
-        <div className="opacity-40 w-full pointer-events-none">
+        <div className="w-full pointer-events-none">
           <ClientCard client={client} tasks={tasks} />
         </div>
       </div>

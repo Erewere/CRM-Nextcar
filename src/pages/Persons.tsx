@@ -41,6 +41,7 @@ export function Persons() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddPerson, setShowAddPerson] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Client | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [pipelineStages, setPipelineStages] = useState<
@@ -143,24 +144,23 @@ export function Persons() {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const handleDeleteSelected = async () => {
-    if (
-      window.confirm(
-        `¿Estás seguro que deseas eliminar ${selectedClients.length} contactos?`,
-      )
-    ) {
-      try {
-        await Promise.all(
-          selectedClients.map((id) => deleteDoc(doc(db, "clients", id)))
-        );
-        setPersons((prev) =>
-          prev.filter((p) => !selectedClients.includes(p.id)),
-        );
-        setSelectedClients([]);
-      } catch (err) {
-        console.error("Error deleting clients:", err);
-        alert("Error al eliminar contactos");
-      }
+  const handleDeleteSelected = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await Promise.all(
+        selectedClients.map((id) => deleteDoc(doc(db, "clients", id)))
+      );
+      setPersons((prev) =>
+        prev.filter((p) => !selectedClients.includes(p.id)),
+      );
+      setSelectedClients([]);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error("Error deleting clients:", err);
+      alert("Error al eliminar contactos");
     }
   };
 
@@ -572,7 +572,7 @@ export function Persons() {
               onClick={() => setShowAddPerson(true)}
               className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
             >
-              <Plus className="w-4 h-4 shrink-0" /> Nuevo Trato
+              <Plus className="w-4 h-4 shrink-0" /> Nuevo Contacto
             </button>
           </div>
         </div>
@@ -655,7 +655,7 @@ export function Persons() {
                   className="w-10 border-r border-gray-200 dark:border-slate-700"
                   style={{ width: 40 }}
                 >
-                  <div className="px-4 py-3">
+                  <div className="flex items-center justify-center py-3">
                     <input
                       type="checkbox"
                       checked={
@@ -739,23 +739,25 @@ export function Persons() {
                     onClick={() => setSelectedPerson(person)}
                   >
                     <td
-                      className="px-4 py-2 border-r border-gray-100 dark:border-slate-700"
+                      className="border-r border-gray-100 dark:border-slate-700"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedClients.includes(person.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedClients([...selectedClients, person.id]);
-                          } else {
-                            setSelectedClients(
-                              selectedClients.filter((id) => id !== person.id),
-                            );
-                          }
-                        }}
-                        className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
-                      />
+                      <div className="flex items-center justify-center py-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedClients.includes(person.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedClients([...selectedClients, person.id]);
+                            } else {
+                              setSelectedClients(
+                                selectedClients.filter((id) => id !== person.id),
+                              );
+                            }
+                          }}
+                          className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
+                        />
+                      </div>
                     </td>
                     {columns
                       .filter((c) => c.visible)
@@ -904,25 +906,28 @@ export function Persons() {
                   Teléfono
                 </label>
                 {phones.map((p, idx) => {
+                  const matches = p.value.length >= 3 
+                    ? persons.filter(cl => cl.phone && cl.phone.toLowerCase().includes(p.value.toLowerCase()) && cl.phone !== p.value)
+                    : [];
                   const existingMatch = persons.find(
                     (client) =>
                       client.phone &&
-                      p.value.length > 5 &&
-                      client.phone.includes(p.value),
+                      p.value.length >= 3 &&
+                      client.phone === p.value,
                   );
+                  
                   return (
-                    <div key={`phone-${idx}`} className="mb-2">
+                    <div key={`phone-${idx}`} className="mb-2 relative">
                       <div className="flex items-center gap-2">
                         <input
                           type="tel"
                           value={p.value}
-                          list="modal-phones-list"
                           onChange={(e) => {
                             const newP = [...phones];
                             newP[idx].value = e.target.value;
                             setPhones(newP);
                           }}
-                          className="flex-1 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none"
+                          className="flex-1 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none"
                         />
                         <select
                           value={p.type}
@@ -948,24 +953,35 @@ export function Persons() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      {existingMatch && (
+                      
+                      {matches.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto left-0">
+                          {matches.map(match => (
+                            <div 
+                              key={match.id}
+                              className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center"
+                              onClick={() => {
+                                const newP = [...phones];
+                                newP[idx].value = match.phone || '';
+                                setPhones(newP);
+                              }}
+                            >
+                              <span className="font-medium text-slate-800 dark:text-slate-200">{match.phone}</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-xs truncate max-w-[150px]">{match.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {existingMatch && matches.length === 0 && (
                         <p className="text-[11px] text-orange-600 font-medium mt-1">
-                          Este teléfono podría estar ligado a:{" "}
+                          Este teléfono ya está ligado a:{" "}
                           {existingMatch.name}
                         </p>
                       )}
                     </div>
                   );
                 })}
-                <datalist id="modal-phones-list">
-                  {persons
-                    .filter((cl) => cl.phone)
-                    .map((cl) => (
-                      <option key={cl.id} value={cl.phone}>
-                        {cl.name}
-                      </option>
-                    ))}
-                </datalist>
                 <button
                   type="button"
                   onClick={() =>
@@ -982,25 +998,28 @@ export function Persons() {
                   Correo electrónico
                 </label>
                 {emails.map((m, idx) => {
+                  const matches = m.value.length >= 3 
+                    ? persons.filter(cl => cl.email && cl.email.toLowerCase().includes(m.value.toLowerCase()) && cl.email !== m.value)
+                    : [];
                   const existingMatch = persons.find(
                     (client) =>
                       client.email &&
-                      m.value.length > 5 &&
-                      client.email.includes(m.value),
+                      m.value.length >= 3 &&
+                      client.email === m.value,
                   );
+                  
                   return (
-                    <div key={`email-${idx}`} className="mb-2">
+                    <div key={`email-${idx}`} className="mb-2 relative">
                       <div className="flex items-center gap-2">
                         <input
                           type="email"
                           value={m.value}
-                          list="modal-emails-list"
                           onChange={(e) => {
                             const newE = [...emails];
                             newE[idx].value = e.target.value;
                             setEmails(newE);
                           }}
-                          className="flex-1 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none"
+                          className="flex-1 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none"
                         />
                         <select
                           value={m.type}
@@ -1025,24 +1044,35 @@ export function Persons() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      {existingMatch && (
+
+                      {matches.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto left-0">
+                          {matches.map(match => (
+                            <div 
+                              key={match.id}
+                              className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center"
+                              onClick={() => {
+                                const newE = [...emails];
+                                newE[idx].value = match.email || '';
+                                setEmails(newE);
+                              }}
+                            >
+                              <span className="font-medium text-slate-800 dark:text-slate-200">{match.email}</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-xs truncate max-w-[150px]">{match.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {existingMatch && matches.length === 0 && (
                         <p className="text-[11px] text-orange-600 font-medium mt-1">
-                          Este correo podría estar ligado a:{" "}
+                          Este correo ya está ligado a:{" "}
                           {existingMatch.name}
                         </p>
                       )}
                     </div>
                   );
                 })}
-                <datalist id="modal-emails-list">
-                  {persons
-                    .filter((cl) => cl.email)
-                    .map((cl) => (
-                      <option key={cl.id} value={cl.email}>
-                        {cl.name}
-                      </option>
-                    ))}
-                </datalist>
                 <button
                   type="button"
                   onClick={() =>
@@ -1151,6 +1181,36 @@ export function Persons() {
               </div>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="p-5">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                Confirmar eliminación
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                ¿Estás seguro que deseas eliminar {selectedClients.length} contactos? Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

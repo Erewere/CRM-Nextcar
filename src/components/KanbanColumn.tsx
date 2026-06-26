@@ -35,7 +35,7 @@ export function KanbanColumn({
   const isNew = column.id === "new" || lowerTitle.includes("nuev");
 
   return (
-    <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col h-full shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors">
+    <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors h-full">
       <div
         className={clsx(
           "flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
@@ -55,14 +55,14 @@ export function KanbanColumn({
           </div>
         </div>
         <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-1">
-          {clients.length} trato{clients.length !== 1 ? "s" : ""}
+          {clients.length} contacto{clients.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       <div
         ref={setNodeRef}
         className={clsx(
-          "flex-1 overflow-y-auto p-3 flex flex-col gap-3 min-h-[150px] transition-all duration-300",
+          "flex-1 p-3 flex flex-col gap-3 min-h-[150px] transition-all duration-300",
           isOver
             ? "bg-blue-50/50 dark:bg-blue-900/20 ring-2 ring-inset ring-blue-400 dark:ring-blue-500/50 shadow-inner"
             : "",
@@ -73,14 +73,16 @@ export function KanbanColumn({
           items={clients.map((c) => c.id)}
           strategy={verticalListSortingStrategy}
         >
-          {clients.map((client) => (
-            <SortableClientCard
-              key={client.id}
-              client={client}
-              onClick={() => onClientClick(client)}
-              tasks={tasks.filter((t) => t.clientId === client.id)}
-            />
-          ))}
+          {clients.map((client) => {
+            return (
+              <SortableClientCard
+                key={client.id}
+                client={client}
+                onClick={() => onClientClick(client)}
+                tasks={tasks.filter((t) => t.clientId === client.id)}
+              />
+            );
+          })}
         </SortableContext>
       </div>
     </div>

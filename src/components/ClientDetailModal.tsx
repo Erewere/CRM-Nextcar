@@ -403,10 +403,12 @@ export function ClientDetailModal({
       clientId: client.id,
       title: newTaskTitle,
       dueDate: newTaskDate,
-      startTime: formattedTime || undefined,
       completed: false,
       createdAt: new Date().toISOString(),
     };
+    if (formattedTime) {
+      t.startTime = formattedTime;
+    }
     await setDoc(newRef, t);
     setTasks((prev) => [{ id: newRef.id, ...t } as Task, ...prev]);
     setNewTaskTitle("");
