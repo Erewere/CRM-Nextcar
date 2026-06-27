@@ -186,14 +186,29 @@ export function AgencyUsers() {
     setInviting(true);
     try {
         const appUrl = window.location.origin + '/login';
-        const subject = 'Invitación para unirte al CRM Nextcar';
-        const messageHtml = `<p>Hola,</p>
-<p>Has sido invitado para unirte al equipo de ventas en nuestro CRM.</p>
-<p>Esta aplicación te ayudará a gestionar tus ventas, clientes, inventario y tareas de manera eficiente para cerrar más tratos.</p>
-<p>Por favor ingresa y regístrate utilizando el siguiente enlace:</p>
-<p><a href="${appUrl}">${appUrl}</a></p>
-<br/>
-<p>¡Bienvenido al equipo!</p>`;
+        const subject = 'Invitación oficial para unirte a Nextcar CRM';
+        const messageHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 40px 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+    <div style="background-color: #1e293b; padding: 40px 30px; text-align: center;">
+      <img src="https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80" alt="Nextcar" style="width: 100%; height: 160px; object-fit: cover; border-radius: 8px; margin-bottom: 20px; opacity: 0.9;" />
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Nextcar CRM</h1>
+    </div>
+    <div style="padding: 40px 30px;">
+      <p style="color: #334155; font-size: 16px; line-height: 24px; margin-top: 0;">Estimado(a) colaborador(a),</p>
+      <p style="color: #334155; font-size: 16px; line-height: 24px;">Has sido cordialmente invitado(a) a unirte al equipo de ventas en nuestro sistema <strong>Nextcar CRM</strong>.</p>
+      <p style="color: #334155; font-size: 16px; line-height: 24px;">Nuestra plataforma de alto rendimiento te proporcionará las herramientas necesarias para gestionar de manera integral el inventario de vehículos, dar un seguimiento preciso a tus clientes potenciales y organizar tus tareas estratégicas para maximizar los cierres de ventas.</p>
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${appUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">Acceder a la Plataforma</a>
+      </div>
+      <p style="color: #64748b; font-size: 14px; line-height: 24px;">Si tienes problemas con el botón, puedes copiar y pegar este enlace en tu navegador:</p>
+      <p style="color: #2563eb; font-size: 14px; word-break: break-all; margin-bottom: 0;">${appUrl}</p>
+    </div>
+    <div style="background-color: #f1f5f9; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
+      <p style="color: #64748b; font-size: 13px; margin: 0;">© ${new Date().getFullYear()} Nextcar CRM. Todos los derechos reservados.</p>
+    </div>
+  </div>
+</div>`;
 
         const res = await fetch('/api/send-invite', {
             method: 'POST',

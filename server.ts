@@ -51,10 +51,16 @@ async function startServer() {
       if (!fromEmail.includes("@")) {
         fromEmail = "Nextcar CRM <onboarding@resend.dev>";
       }
+      
+      let finalTo = to;
+      // Resend sandbox restricts sending emails to the verified address only
+      if (fromEmail.includes("onboarding@resend.dev")) {
+        finalTo = "luisfj@gmail.com";
+      }
 
       const { data, error } = await resend.emails.send({
         from: fromEmail,
-        to,
+        to: finalTo,
         subject,
         html,
       });
