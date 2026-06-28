@@ -385,18 +385,18 @@ export function ClientDetailModal({
   };
 
   const handleAddTask = async () => {
-    if (!newTaskTitle || !newTaskDate || isNew) return;
-    
-    // Format time if provided (convert from HH:mm to h:mm a.m./p.m.)
-    let formattedTime = "";
-    if (newTaskTime) {
-      const [hoursStr, minutesStr] = newTaskTime.split(":");
-      let hours = parseInt(hoursStr, 10);
-      const period = hours >= 12 ? "p.m." : "a.m.";
-      if (hours === 0) hours = 12;
-      else if (hours > 12) hours -= 12;
-      formattedTime = `${hours}:${minutesStr} ${period}`;
+    if (isNew) return;
+    if (!newTaskTitle) {
+      alert("El título de la tarea es requerido.");
+      return;
     }
+    if (!newTaskDate) {
+      alert("La fecha de la tarea es requerida.");
+      return;
+    }
+    
+    // Use the raw HH:mm time
+    let formattedTime = newTaskTime || "";
 
     if (editingTaskId) {
       const taskRef = doc(db, "tasks", editingTaskId);

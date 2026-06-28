@@ -601,7 +601,7 @@ export function Tasks() {
           {days.map((day, i) => {
             const isCurrentMonth = isSameMonth(day, miniCalendarDate);
             const isToday = isSameDay(day, new Date());
-            const hasTasks = filteredTasks.some(
+            const hasTasks = baseFilteredTasks.some(
               (t) =>
                 t.task.dueDate === format(day, "yyyy-MM-dd") &&
                 !t.task.completed,
@@ -722,7 +722,20 @@ export function Tasks() {
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle || !newTaskDate || !newTaskClientId || !userData) return;
+    if (!userData) return;
+    
+    if (!newTaskTitle) {
+      alert("El título de la tarea es requerido.");
+      return;
+    }
+    if (!newTaskDate) {
+      alert("La fecha de la tarea es requerida.");
+      return;
+    }
+    if (!newTaskClientId) {
+      alert("Debes seleccionar un cliente para la tarea.");
+      return;
+    }
 
     try {
       const newRef = doc(collection(db, "tasks"));
@@ -735,12 +748,21 @@ export function Tasks() {
         completed: false,
         createdAt: new Date().toISOString(),
       };
+      await setDoc(newRef, t);
+      
+      const newClient = clients.find(c => c.id === newTaskClientId) || null;
+      setTasks(prev => [{ task: { id: newRef.id, ...t } as Task, client: newClient }, ...prev]);
+      
+      setNewTaskTitle("");
+      setNewTaskDate("");
+      setNewTaskClientId("");
+
       await updateDoc(doc(db, "clients", newTaskClientId), {
         updatedAt: new Date().toISOString(),
-      }); // Just to trigger some update if needed, normally we do setDoc
-      // Actually we just set instead of update for a new document
+      }).catch(() => {}); // Just to trigger some update if needed
     } catch (e) {
-      // ignore
+      console.error("Error creating task:", e);
+      alert("Error al crear la tarea.");
     }
   };
 
@@ -752,40 +774,12 @@ export function Tasks() {
     }
   };
 
-  const filteredTasks = tasks.filter(({ task }) => {
+  const baseFilteredTasks = tasks.filter(({ task }) => {
     // 1. Status Filter
     if (filterStatus === "pending" && task.completed) return false;
     if (filterStatus === "completed" && !task.completed) return false;
 
-    // 2. Date Filter
-    if (filterDate !== "all" && task.dueDate) {
-      const taskDate = new Date(task.dueDate + "T00:00:00"); // Assuming YYYY-MM-DD
-      if (isNaN(taskDate.getTime())) return false; // Invalid date
-      taskDate.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const tomorrow = addDays(today, 1);
-
-      if (filterDate === "overdue") {
-        if (taskDate >= today || task.completed) return false;
-      } else if (filterDate === "today") {
-        if (taskDate.getTime() !== today.getTime()) return false;
-      } else if (filterDate === "tomorrow") {
-        if (taskDate.getTime() !== tomorrow.getTime()) return false;
-      } else if (filterDate === "week") {
-        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-        if (taskDate < weekStart || taskDate > weekEnd) return false;
-      } else {
-        // Specific date format like "yyyy-MM-dd"
-        if (task.dueDate !== filterDate) return false;
-      }
-    } else if (filterDate !== "all" && !task.dueDate) {
-      return false; // exclude tasks without a due date if we filter by date
-    }
-
-    // 3. Type Filter
+    // 2. Type Filter
     if (filterType === "all") return true;
 
     // Very basic filter logic based on title string matching (since Tasks don't have an explicit 'type' field yet)
@@ -817,6 +811,38 @@ export function Tasks() {
       default:
         return true;
     }
+  });
+
+  const filteredTasks = baseFilteredTasks.filter(({ task }) => {
+    // Date Filter
+    if (filterDate !== "all" && task.dueDate) {
+      const taskDate = new Date(task.dueDate + "T00:00:00"); // Assuming YYYY-MM-DD
+      if (isNaN(taskDate.getTime())) return false; // Invalid date
+      taskDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const tomorrow = addDays(today, 1);
+
+      if (filterDate === "overdue") {
+        if (taskDate >= today || task.completed) return false;
+      } else if (filterDate === "today") {
+        if (taskDate.getTime() !== today.getTime()) return false;
+      } else if (filterDate === "tomorrow") {
+        if (taskDate.getTime() !== tomorrow.getTime()) return false;
+      } else if (filterDate === "week") {
+        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+        if (taskDate < weekStart || taskDate > weekEnd) return false;
+      } else {
+        // Specific date format like "yyyy-MM-dd"
+        if (task.dueDate !== filterDate) return false;
+      }
+    } else if (filterDate !== "all" && !task.dueDate) {
+      return false; // exclude tasks without a due date if we filter by date
+    }
+
+    return true;
   });
 
   if (loading)
@@ -1515,7 +1541,7 @@ export function Tasks() {
                         const dateStr = isValidDay
                           ? format(day, "yyyy-MM-dd")
                           : "";
-                        const dayTasks = filteredTasks.filter(
+                        const dayTasks = baseFilteredTasks.filter(
                           (t) => t.task.dueDate === dateStr,
                         );
                         const isToday = isValidDay && isSameDay(day, today);
@@ -1594,7 +1620,7 @@ export function Tasks() {
                   >
                     {calendarDays.map((day, i) => {
                       const dateStr = format(day, "yyyy-MM-dd");
-                      const dayTasks = filteredTasks.filter((t) => {
+                      const dayTasks = baseFilteredTasks.filter((t) => {
                         if (dragState && dragState.taskId === t.task.id) {
                           return dragState.currentDate === dateStr;
                         }
@@ -1800,7 +1826,7 @@ export function Tasks() {
                           <div className="grid grid-cols-7 gap-1 text-center">
                             {allDays.map((d, i) => {
                               if (!d) return <div key={i} />;
-                              const hasTasks = filteredTasks.some(
+                              const hasTasks = baseFilteredTasks.some(
                                 (t) =>
                                   t.task.dueDate === format(d, "yyyy-MM-dd"),
                               );
