@@ -189,7 +189,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
     // Provide fallback for SPA router in development
-    app.use("*", async (req, res, next) => {
+    app.get("*", async (req, res, next) => {
       const url = req.originalUrl;
       try {
         let template = fs.readFileSync(
@@ -207,7 +207,7 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     // Provide a fallback for React Router
-    app.use((req, res) => {
+    app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
