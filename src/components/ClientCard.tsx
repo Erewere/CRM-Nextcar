@@ -78,7 +78,7 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
           ) : null}
         </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-3 font-medium">
-          {client.name} {client.vehicle && client.vehicle !== 'Otro pendiente' ? ` • ${client.vehicle}` : ''}
+          {client.vehicle && client.vehicle !== 'Otro pendiente' ? client.vehicle : 'Sin vehículo de interés'}
         </p>
         
         <div className="flex items-center justify-between">
