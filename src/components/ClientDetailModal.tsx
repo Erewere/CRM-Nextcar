@@ -33,6 +33,7 @@ import {
   Edit2,
 } from "lucide-react";
 import clsx from "clsx";
+import { TimeSelect } from "./TimeSelect";
 
 interface Props {
   client: Client | Partial<Client>;
@@ -121,7 +122,20 @@ export function ClientDetailModal({
   const [showFullAddress, setShowFullAddress] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
-  const [newTaskTime, setNewTaskTime] = useState("");
+  const getDefaultTime = () => {
+    const now = new Date();
+    let mins = now.getMinutes();
+    let hrs = now.getHours();
+    mins = Math.ceil(mins / 15) * 15;
+    if (mins === 60) {
+      mins = 0;
+      hrs += 1;
+    }
+    hrs = hrs % 24;
+    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+  };
+
+  const [newTaskTime, setNewTaskTime] = useState(getDefaultTime());
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [pipelineStages, setPipelineStages] = useState<
@@ -435,7 +449,7 @@ export function ClientDetailModal({
 
     setNewTaskTitle("");
     setNewTaskDate("");
-    setNewTaskTime("");
+    setNewTaskTime(getDefaultTime());
   };
 
   const handleEditTaskClick = (task: Task) => {
@@ -462,7 +476,7 @@ export function ClientDetailModal({
         setNewTaskTime(task.startTime);
       }
     } else {
-      setNewTaskTime("");
+      setNewTaskTime(getDefaultTime());
     }
   };
 
@@ -470,7 +484,7 @@ export function ClientDetailModal({
     setEditingTaskId(null);
     setNewTaskTitle("");
     setNewTaskDate("");
-    setNewTaskTime("");
+    setNewTaskTime(getDefaultTime());
   };
 
   const handleAddNote = async () => {
@@ -1086,7 +1100,7 @@ export function ClientDetailModal({
             {!isNew ? (
               <div className="flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6">
                 {/* INTERACTION WIDGET */}
-                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
                   <div className="flex border-b border-gray-200 dark:border-slate-700">
                     <button
                       onClick={() => setActiveTab("activity")}
@@ -1140,28 +1154,10 @@ export function ClientDetailModal({
                             onChange={(e) => setNewTaskDate(e.target.value)}
                             className="flex-1 text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                           />
-                          <input
-                            type="time"
-                            step="900"
+                          <TimeSelect
                             value={newTaskTime}
-                            onChange={(e) => setNewTaskTime(e.target.value)}
-                            onClick={(e) => {
-                              if (!newTaskTime) {
-                                // Round current time to nearest 15 mins
-                                const now = new Date();
-                                let m = now.getMinutes();
-                                const h = now.getHours();
-                                m = Math.ceil(m / 15) * 15;
-                                let addH = 0;
-                                if (m === 60) {
-                                  m = 0;
-                                  addH = 1;
-                                }
-                                const finalH = (h + addH) % 24;
-                                setNewTaskTime(`${finalH.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
-                              }
-                            }}
-                            className="w-24 text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            onChange={(val) => setNewTaskTime(val)}
+                            placeholder="h:mm"
                           />
                         </div>
                         <div className="flex justify-end items-center gap-2">
