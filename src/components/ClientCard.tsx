@@ -2,7 +2,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Client } from '../types';
-import { MessageCircle, Phone, ChevronRight } from 'lucide-react';
+import { MessageCircle, Phone, ChevronRight, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 
 interface Props {
@@ -13,22 +13,47 @@ interface Props {
 }
 
 export function ClientCard({ client, tasks = [], onClick }: Props) {
-  const getTaskStatusColor = () => {
+  const getTaskStatusInfo = () => {
     const pendingTasks = tasks.filter(t => !t.completed);
-    if (pendingTasks.length === 0) return 'text-slate-400 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 group-hover:bg-slate-100 dark:bg-slate-700 group-hover:text-slate-600 dark:text-slate-400';
+    if (pendingTasks.length === 0) {
+      return {
+        colorClass: 'text-amber-500 border-amber-200 bg-amber-50 hover:bg-amber-100 hover:text-amber-600 hover:border-amber-300',
+        title: 'Trato sin tareas asignadas',
+        hasNoTasks: true
+      };
+    }
     
-    // Check if any is overdue (before today)
     const todayStr = new Date().toISOString().split('T')[0];
     const hasOverdue = pendingTasks.some(t => {
       if (!t.dueDate) return true; // Tasks without due dates are considered overdue/pending action
       return t.dueDate < todayStr;
     });
     
-    if (hasOverdue) return 'text-red-500 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-600 hover:border-red-300';
-    return 'text-green-500 border-green-200 bg-green-50 hover:bg-green-100 hover:text-green-600 hover:border-green-300';
+    if (hasOverdue) {
+      return {
+        colorClass: 'text-red-500 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-600 hover:border-red-300',
+        title: 'Tarea vencida',
+        hasNoTasks: false
+      };
+    }
+    
+    const hasToday = pendingTasks.some(t => t.dueDate === todayStr);
+    if (hasToday) {
+      return {
+        colorClass: 'text-blue-500 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-600 hover:border-blue-300',
+        title: 'Tarea para hoy',
+        hasNoTasks: false
+      };
+    }
+
+    return {
+      colorClass: 'text-green-500 border-green-200 bg-green-50 hover:bg-green-100 hover:text-green-600 hover:border-green-300',
+      title: 'Tarea programada a futuro',
+      hasNoTasks: false
+    };
   };
 
-  const statusColorClass = getTaskStatusColor();
+  const { colorClass: statusColorClass, title: statusTitle, hasNoTasks } = getTaskStatusInfo();
 
   return (
     <div 
@@ -42,9 +67,16 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
       <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
       <div className="p-3 pb-2.5">
-        <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-          {client.dealTitle || (client.name ? `${client.name} deal` : 'Deal')}
-        </h4>
+        <div className="flex justify-between items-start gap-2 mb-0.5">
+          <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            {client.dealTitle || (client.name ? `${client.name} deal` : 'Deal')}
+          </h4>
+          {client.dealValue ? (
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-800/50">
+              ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(client.dealValue)}
+            </span>
+          ) : null}
+        </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-3 font-medium">
           {client.name} {client.vehicle && client.vehicle !== 'Otro pendiente' ? ` • ${client.vehicle}` : ''}
         </p>
@@ -66,8 +98,15 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
             )}
           </div>
           
-          <div className={clsx("w-[24px] h-[24px] rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-md", statusColorClass)}>
-            <ChevronRight className="w-4 h-4 ml-0.5" />
+          <div 
+            className={clsx("w-[24px] h-[24px] rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-md", statusColorClass)}
+            title={statusTitle}
+          >
+            {hasNoTasks ? (
+              <AlertTriangle className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronRight className="w-4 h-4 ml-0.5" />
+            )}
           </div>
         </div>
       </div>

@@ -34,6 +34,9 @@ export function KanbanColumn({
   const isLost = column.id === "lost" || lowerTitle.includes("perdid");
   const isNew = column.id === "new" || lowerTitle.includes("nuev");
 
+  const totalValue = clients.reduce((acc, client) => acc + (Number(client.dealValue) || 0), 0);
+  const formattedValue = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(totalValue);
+
   return (
     <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors h-full">
       <div
@@ -54,9 +57,16 @@ export function KanbanColumn({
             {clients.length}
           </div>
         </div>
-        <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-1">
-          {clients.length} contacto{clients.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
+            {clients.length} contacto{clients.length !== 1 ? "s" : ""}
+          </span>
+          {totalValue > 0 && (
+            <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
+              {formattedValue}
+            </span>
+          )}
+        </div>
       </div>
 
       <div

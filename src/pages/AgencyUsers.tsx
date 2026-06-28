@@ -13,6 +13,7 @@ export function AgencyUsers() {
   const [newAgencyName, setNewAgencyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState('');
   
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
@@ -229,8 +230,9 @@ export function AgencyUsers() {
             throw new Error(errorMsg);
         }
 
-        alert('¡Invitación enviada con éxito a ' + inviteEmail.trim() + '!');
+        setInviteSuccessMsg(`¡Invitación enviada con éxito a ${inviteEmail.trim()}!`);
         setInviteEmail('');
+        setTimeout(() => setInviteSuccessMsg(''), 5000);
     } catch (e: any) {
         console.error(e);
         alert('Error al enviar invitación. ' + (e.message || ''));
@@ -314,25 +316,33 @@ export function AgencyUsers() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col md:flex-row items-end gap-4">
-        <div className="flex-1 w-full">
-          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Invitar al Equipo (Enviar correo electrónico)</label>
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="correo@ejemplo.com"
-            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-          />
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row items-end gap-4 w-full">
+          <div className="flex-1 w-full">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Invitar al Equipo (Enviar correo electrónico)</label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            />
+          </div>
+          <button
+            onClick={handleSendInvitation}
+            disabled={!inviteEmail.trim() || inviting}
+            className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
+          >
+            <Send className="w-4 h-4" />
+            {inviting ? 'Enviando...' : 'Enviar Invitación'}
+          </button>
         </div>
-        <button
-          onClick={handleSendInvitation}
-          disabled={!inviteEmail.trim() || inviting}
-          className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
-        >
-          <Send className="w-4 h-4" />
-          {inviting ? 'Enviando...' : 'Enviar Invitación'}
-        </button>
+        {inviteSuccessMsg && (
+          <div className="text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" />
+            {inviteSuccessMsg}
+          </div>
+        )}
       </div>
 
       {userData?.role === 'admin' && (

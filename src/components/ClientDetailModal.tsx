@@ -30,6 +30,7 @@ import {
   Building2,
   Eye,
   Users,
+  Edit2,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -121,6 +122,7 @@ export function ClientDetailModal({
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
   const [newTaskTime, setNewTaskTime] = useState("");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [pipelineStages, setPipelineStages] = useState<
     { id: string; title: string }[]
@@ -384,8 +386,7 @@ export function ClientDetailModal({
 
   const handleAddTask = async () => {
     if (!newTaskTitle || !newTaskDate || isNew) return;
-    const newRef = doc(collection(db, "tasks"));
-
+    
     // Format time if provided (convert from HH:mm to h:mm a.m./p.m.)
     let formattedTime = "";
     if (newTaskTime) {
@@ -397,20 +398,76 @@ export function ClientDetailModal({
       formattedTime = `${hours}:${minutesStr} ${period}`;
     }
 
-    const t: Partial<Task> = {
-      agencyId: userData?.agencyId,
-      sellerId: userData?.id,
-      clientId: client.id,
-      title: newTaskTitle,
-      dueDate: newTaskDate,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
-    if (formattedTime) {
-      t.startTime = formattedTime;
+    if (editingTaskId) {
+      const taskRef = doc(db, "tasks", editingTaskId);
+      const updates: Partial<Task> = {
+        title: newTaskTitle,
+        dueDate: newTaskDate,
+        updatedAt: new Date().toISOString(),
+      };
+      
+      if (formattedTime) {
+        updates.startTime = formattedTime;
+      } else {
+        updates.startTime = ""; // clear if empty
+      }
+      
+      await updateDoc(taskRef, updates as any);
+      setTasks(prev => prev.map(t => t.id === editingTaskId ? { ...t, ...updates } : t));
+      setEditingTaskId(null);
+    } else {
+      const newRef = doc(collection(db, "tasks"));
+      const t: Partial<Task> = {
+        agencyId: userData?.agencyId,
+        sellerId: userData?.id,
+        clientId: client.id,
+        title: newTaskTitle,
+        dueDate: newTaskDate,
+        completed: false,
+        createdAt: new Date().toISOString(),
+      };
+      if (formattedTime) {
+        t.startTime = formattedTime;
+      }
+      await setDoc(newRef, t);
+      setTasks((prev) => [{ id: newRef.id, ...t } as Task, ...prev]);
     }
-    await setDoc(newRef, t);
-    setTasks((prev) => [{ id: newRef.id, ...t } as Task, ...prev]);
+
+    setNewTaskTitle("");
+    setNewTaskDate("");
+    setNewTaskTime("");
+  };
+
+  const handleEditTaskClick = (task: Task) => {
+    setActiveTab("activity");
+    setEditingTaskId(task.id);
+    setNewTaskTitle(task.title);
+    setNewTaskDate(task.dueDate);
+    
+    // Convert h:mm a.m. back to HH:mm for the input
+    if (task.startTime) {
+      try {
+        const timeRegex = /(\d+):(\d+)\s*(a\.m\.|p\.m\.|am|pm)/i;
+        const match = task.startTime.match(timeRegex);
+        if (match) {
+          let [ , hStr, m, p] = match;
+          let h = parseInt(hStr, 10);
+          if (p.toLowerCase().includes("p") && h < 12) h += 12;
+          if (p.toLowerCase().includes("a") && h === 12) h = 0;
+          setNewTaskTime(`${h.toString().padStart(2, "0")}:${m}`);
+        } else {
+          setNewTaskTime(task.startTime);
+        }
+      } catch (e) {
+        setNewTaskTime(task.startTime);
+      }
+    } else {
+      setNewTaskTime("");
+    }
+  };
+
+  const cancelEditTask = () => {
+    setEditingTaskId(null);
     setNewTaskTitle("");
     setNewTaskDate("");
     setNewTaskTime("");
@@ -498,78 +555,71 @@ export function ClientDetailModal({
                 .toUpperCase()}
             </div>
             <div className="flex-1 min-w-[200px]">
-              {!formData.dealTitle && !isNew ? (
-                <>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">
-                    {formData.name}
-                  </h2>
-                  <p className="text-sm font-medium text-gray-500 dark:text-slate-400 mt-1">
-                    Contacto sin trato activo.
-                  </p>
-                </>
-              ) : (
-                <>
+              <input
+                name={formData.dealTitle || isNew ? "dealTitle" : "name"}
+                value={formData.dealTitle || formData.name || ""}
+                onChange={(e) => {
+                  if (formData.dealTitle || isNew) {
+                    handleChange(e); // Updates dealTitle
+                  } else {
+                    handleChange({ target: { name: 'name', value: e.target.value } } as any); // Updates name if no deal
+                  }
+                }}
+                placeholder={isNew ? "Nuevo Trato" : "Nombre"}
+                className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+              />
+              
+              {(formData.dealTitle || isNew) && (
+                <div className="flex items-center mt-1">
+                  <span className="text-gray-500 font-medium mr-1">$</span>
                   <input
-                    name="dealTitle"
-                    value={formData.dealTitle || ""}
+                    type="number"
+                    name="dealValue"
+                    value={formData.dealValue !== undefined ? formData.dealValue : ""}
                     onChange={handleChange}
-                    placeholder={isNew ? "Nuevo Trato" : "Nombre del trato"}
-                    className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                    placeholder="Monto"
+                    className="w-24 text-sm bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none text-gray-700 dark:text-slate-300"
                   />
-                  {isNew ? (
-                    <select
-                      name="status"
-                      value={formData.status || pipelineStages[0]?.id || "new"}
-                      onChange={handleChange}
-                      className="mt-1 block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      {pipelineStages.map((stage) => (
-                        <option key={stage.id} value={stage.id}>
-                          {stage.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <>
-                      <p
-                        className={`text-sm border inline-block px-2 py-0.5 rounded mt-0.5 font-medium ${
-                          formData.status === "won"
-                            ? "border-green-200 bg-green-50 text-green-700"
-                            : formData.status === "lost"
-                              ? "border-red-200 bg-red-50 text-red-700"
-                              : "border-blue-200 bg-blue-50 text-blue-700"
-                        }`}
-                      >
-                        {pipelineStages.find((s) => s.id === formData.status)
-                          ?.title ||
-                          (formData.status === "won"
-                            ? "Ganado"
-                            : formData.status === "lost"
-                              ? "Perdido"
-                              : "Abierto")}
-                      </p>
-                    </>
+                </div>
+              )}
+              
+              {formData.status === "won" || formData.status === "lost" ? (
+                <p
+                  className={`text-sm border inline-block px-2 py-0.5 rounded mt-0.5 font-medium ${
+                    formData.status === "won"
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {formData.status === "won" ? "Ganado" : "Perdido"}
+                </p>
+              ) : (
+                <select
+                  name="status"
+                  value={formData.status || ""}
+                  onChange={(e) => {
+                    const newStatus = e.target.value;
+                    setFormData((prev) => ({
+                      ...prev,
+                      status: newStatus,
+                      dealTitle: prev.dealTitle || (prev.name ? `${prev.name} deal` : "Nuevo Trato"),
+                    }));
+                  }}
+                  className="mt-1 block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  {!formData.dealTitle && !isNew && (
+                    <option value="" disabled>Contacto sin trato activo</option>
                   )}
-                </>
+                  {pipelineStages.map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.title}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!isNew && !formData.dealTitle && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFormData((prev) => ({
-                    ...prev,
-                    dealTitle: `${formData.name} deal`,
-                    status: prev.status || "new",
-                  }));
-                }}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
-              >
-                + Crear Trato
-              </button>
-            )}
             {!isNew &&
               formData.dealTitle &&
               formData.status !== "won" &&
@@ -649,6 +699,7 @@ export function ClientDetailModal({
                             ...formData,
                             vehicle: `${v.year} ${v.make} ${v.model}`,
                             vehicleId: v.id,
+                            dealValue: v.price || formData.dealValue,
                           });
                         } else {
                           setFormData({
@@ -1091,17 +1142,42 @@ export function ClientDetailModal({
                           />
                           <input
                             type="time"
+                            step="900"
                             value={newTaskTime}
                             onChange={(e) => setNewTaskTime(e.target.value)}
+                            onClick={(e) => {
+                              if (!newTaskTime) {
+                                // Round current time to nearest 15 mins
+                                const now = new Date();
+                                let m = now.getMinutes();
+                                const h = now.getHours();
+                                m = Math.ceil(m / 15) * 15;
+                                let addH = 0;
+                                if (m === 60) {
+                                  m = 0;
+                                  addH = 1;
+                                }
+                                const finalH = (h + addH) % 24;
+                                setNewTaskTime(`${finalH.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+                              }
+                            }}
                             className="w-24 text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                           />
                         </div>
-                        <div className="flex justify-end items-center">
+                        <div className="flex justify-end items-center gap-2">
+                          {editingTaskId && (
+                            <button
+                              onClick={cancelEditTask}
+                              className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-1.5 rounded transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                          )}
                           <button
                             onClick={handleAddTask}
                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
                           >
-                            Programar Tarea
+                            {editingTaskId ? "Guardar Cambios" : "Programar Tarea"}
                           </button>
                         </div>
                       </div>
@@ -1165,13 +1241,24 @@ export function ClientDetailModal({
                               onClick={() => toggleTaskCompletion(t)}
                               className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-green-500 transition-colors"
                             ></button>
-                            <span className="text-sm font-medium text-gray-800 dark:text-slate-200">
+                            <span 
+                              onClick={() => handleEditTaskClick(t)}
+                              className="text-sm font-medium text-gray-800 dark:text-slate-200 cursor-pointer hover:text-blue-600 transition-colors"
+                              title="Editar tarea"
+                            >
                               {t.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400 font-medium">
                             <Clock className="w-3.5 h-3.5" />
                             {t.dueDate}
+                            <button
+                              onClick={() => handleEditTaskClick(t)}
+                              className="ml-2 text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Editar tarea"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1198,11 +1285,24 @@ export function ClientDetailModal({
                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">
                               Tarea completada
                             </span>
-                            <span className="text-[10px] text-gray-400">
-                              {t.dueDate}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-400">
+                                {t.dueDate}
+                              </span>
+                              <button
+                                onClick={() => handleEditTaskClick(t)}
+                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                title="Editar tarea"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-800 dark:text-slate-200 line-through opacity-70">
+                          <p 
+                            onClick={() => handleEditTaskClick(t)}
+                            className="text-sm text-gray-800 dark:text-slate-200 line-through opacity-70 cursor-pointer hover:opacity-100 hover:text-blue-600 transition-colors"
+                            title="Editar tarea"
+                          >
                             {t.title}
                           </p>
                         </div>

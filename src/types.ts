@@ -72,6 +72,7 @@ export interface Client {
   visibility?: "private" | "all";
   name: string;
   dealTitle?: string;
+  dealValue?: number;
   organization?: string;
   address: string;
   phone: string;
