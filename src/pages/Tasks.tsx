@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import {
   collection,
@@ -83,9 +83,22 @@ export function Tasks() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState<
     "all" | "pending" | "completed"
-  >("all");
+  >("pending");
   const [filterDate, setFilterDate] = useState<string>("all");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  const handleSort = (key: string) => {
+    let direction: "asc" | "desc" = "desc";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "desc") {
+      direction = "asc";
+    }
+    setSortConfig({ key, direction });
+  };
 
   const [visibleColumns, setVisibleColumns] = useState({
     status: true,
@@ -647,7 +660,7 @@ export function Tasks() {
             <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
               Actividades {format(parseISO(filterDate), "MMM d", { locale: es })}
             </div>
-            {filteredTasks
+            {sortedTasks
               .filter(t => t.task.dueDate === filterDate)
               .sort((a, b) => {
                  const timeA = a.task.startTime ? a.task.startTime : "24:00";
@@ -675,7 +688,7 @@ export function Tasks() {
                   </div>
                 </div>
               ))}
-              {filteredTasks.filter(t => t.task.dueDate === filterDate).length === 0 && (
+              {sortedTasks.filter(t => t.task.dueDate === filterDate).length === 0 && (
                 <div className="text-center text-xs text-gray-400 py-4">
                   No hay actividades
                 </div>
@@ -844,6 +857,63 @@ export function Tasks() {
 
     return true;
   });
+
+  const sortedTasks = useMemo(() => {
+    let sortableTasks = [...filteredTasks];
+    
+    sortableTasks.sort((a, b) => {
+      // If a sortConfig is applied, use it
+      if (sortConfig) {
+        let aValue: any = null;
+        let bValue: any = null;
+
+        switch (sortConfig.key) {
+          case 'status':
+            aValue = a.task.completed ? 1 : 0;
+            bValue = b.task.completed ? 1 : 0;
+            break;
+          case 'title':
+            aValue = a.task.title || '';
+            bValue = b.task.title || '';
+            break;
+          case 'deal':
+            aValue = a.client?.dealTitle || a.client?.name || '';
+            bValue = b.client?.dealTitle || b.client?.name || '';
+            break;
+          case 'dueDate':
+            aValue = a.task.dueDate ? new Date(a.task.dueDate).getTime() : 0;
+            bValue = b.task.dueDate ? new Date(b.task.dueDate).getTime() : 0;
+            break;
+          case 'contact':
+            aValue = a.client?.name || '';
+            bValue = b.client?.name || '';
+            break;
+          case 'email':
+            aValue = a.client?.email || '';
+            bValue = b.client?.email || '';
+            break;
+          case 'phone':
+            aValue = a.client?.phone || '';
+            bValue = b.client?.phone || '';
+            break;
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === "asc" ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === "asc" ? 1 : -1;
+        }
+      }
+
+      // Default secondary sorting: by due date
+      const dateA = a.task.dueDate ? new Date(a.task.dueDate).getTime() : Infinity;
+      const dateB = b.task.dueDate ? new Date(b.task.dueDate).getTime() : Infinity;
+      return dateA - dateB;
+    });
+
+    return sortableTasks;
+  }, [filteredTasks, sortConfig]);
 
   if (loading)
     return (
@@ -1196,15 +1266,40 @@ export function Tasks() {
             <span
               className={clsx(
                 "cursor-pointer",
+                filterStatus === "all"
+                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
+                  : "hover:text-gray-800 dark:text-slate-200",
+              )}
+              onClick={() => setFilterStatus("all")}
+            >
+              Todas
+            </span>
+            <span
+              className={clsx(
+                "cursor-pointer",
                 filterStatus === "pending"
                   ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
                   : "hover:text-gray-800 dark:text-slate-200",
               )}
-              onClick={() =>
-                setFilterStatus(filterStatus === "pending" ? "all" : "pending")
-              }
+              onClick={() => setFilterStatus("pending")}
             >
               Pendientes
+            </span>
+            <span
+              className={clsx(
+                "cursor-pointer",
+                filterStatus === "completed"
+                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
+                  : "hover:text-gray-800 dark:text-slate-200",
+              )}
+              onClick={() => setFilterStatus("completed")}
+            >
+              Completadas
+            </span>
+            <span
+              className="mx-2 text-gray-300 dark:text-slate-600"
+            >
+              |
             </span>
             <span
               className={clsx(
@@ -1251,12 +1346,12 @@ export function Tasks() {
                       type="checkbox"
                       className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 cursor-pointer"
                       checked={
-                        selectedTaskIds.length === filteredTasks.length &&
-                        filteredTasks.length > 0
+                        selectedTaskIds.length === sortedTasks.length &&
+                        sortedTasks.length > 0
                       }
                       onChange={() =>
                         toggleSelectAllTasks(
-                          filteredTasks.map((t) => t.task.id),
+                          sortedTasks.map((t) => t.task.id),
                         )
                       }
                     />
@@ -1267,92 +1362,141 @@ export function Tasks() {
                   </th>
                   {visibleColumns.status && (
                     <th
-                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.status }}
+                      onClick={() => handleSort('status')}
                     >
                       Finalizada
+                      {sortConfig?.key === 'status' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "status")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "status");
+                        }}
                       />
                     </th>
                   )}
                   {visibleColumns.title && (
                     <th
-                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.title }}
+                      onClick={() => handleSort('title')}
                     >
                       Asunto
+                      {sortConfig?.key === 'title' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "title")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "title");
+                        }}
                       />
                     </th>
                   )}
                   {visibleColumns.deal && (
                     <th
-                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.deal }}
+                      onClick={() => handleSort('deal')}
                     >
                       Trato
+                      {sortConfig?.key === 'deal' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "deal")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "deal");
+                        }}
                       />
                     </th>
                   )}
                   {visibleColumns.dueDate && (
                     <th
-                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.dueDate }}
+                      onClick={() => handleSort('dueDate')}
                     >
                       Vencimiento
+                      {sortConfig?.key === 'dueDate' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "dueDate")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "dueDate");
+                        }}
                       />
                     </th>
                   )}
                   {visibleColumns.contact && (
                     <th
-                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.contact }}
+                      onClick={() => handleSort('contact')}
                     >
                       Persona de contacto
+                      {sortConfig?.key === 'contact' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "contact")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "contact");
+                        }}
                       />
                     </th>
                   )}
                   {visibleColumns.email && (
                     <th
-                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative"
+                      className="px-4 py-2 border-r border-gray-200 dark:border-slate-700 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.email }}
+                      onClick={() => handleSort('email')}
                     >
                       Correo electrónico
+                      {sortConfig?.key === 'email' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "email")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "email");
+                        }}
                       />
                     </th>
                   )}
                   {visibleColumns.phone && (
                     <th
-                      className="px-4 py-2 relative border-r border-gray-200 dark:border-slate-700"
+                      className="px-4 py-2 relative border-r border-gray-200 dark:border-slate-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: columnWidths.phone }}
+                      onClick={() => handleSort('phone')}
                     >
                       Teléfono
+                      {sortConfig?.key === 'phone' && (
+                        <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 z-10"
-                        onMouseDown={(e) => handleMouseDown(e, "phone")}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, "phone");
+                        }}
                       />
                     </th>
                   )}
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-slate-800">
-                {filteredTasks.map(({ task, client }) => (
+                {sortedTasks.map(({ task, client }) => (
                   <tr
                     key={task.id}
                     className={clsx(
@@ -1456,7 +1600,7 @@ export function Tasks() {
                     )}
                   </tr>
                 ))}
-                {filteredTasks.length === 0 && (
+                {sortedTasks.length === 0 && (
                   <tr>
                     <td
                       colSpan={8}
@@ -1898,17 +2042,8 @@ export function Tasks() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-                  {filteredTasks
+                  {sortedTasks
                     .filter((t) => !t.task.completed)
-                    .sort((a, b) => {
-                      const dateA = a.task.dueDate
-                        ? new Date(a.task.dueDate).getTime()
-                        : Infinity;
-                      const dateB = b.task.dueDate
-                        ? new Date(b.task.dueDate).getTime()
-                        : Infinity;
-                      return dateA - dateB;
-                    })
                     .map(({ task, client }) => (
                       <div
                         key={task.id}
@@ -1955,7 +2090,7 @@ export function Tasks() {
                       </div>
                     ))}
 
-                  {filteredTasks.filter((t) => !t.task.completed).length ===
+                  {sortedTasks.filter((t) => !t.task.completed).length ===
                     0 && (
                     <div className="text-center p-6 text-gray-400 dark:text-slate-500 text-sm">
                       No tienes tareas pendientes. ¡Buen trabajo!
