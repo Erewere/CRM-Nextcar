@@ -1,26 +1,24 @@
-# Phase 0: Payload-First Security TDD
+# Security Spec
 
-## 1. Data Invariants
-- A user must have an explicit role defined in `users/{userId}` to access any resources via RBAC.
-- Admin role can only read and write data (`clients`, `tasks`, `files`) that matches their `agencyId`.
-- Seller role can only read and write data where both `agencyId` matches theirs, and `sellerId` matches their `userId`.
-- Master role can read all `agencies` and `users`, but is restricted from reading/writing `clients`, `tasks`, and `files` specifically to ensure data privacy.
-- WhatsApp WebHook inputs (`clients`) might not be authenticated by a frontend user but will be handled securely by the backend via Firebase Admin SDK, bypassing these frontend client rules. Thus, these rules secure ONLY the client web app inputs.
+## Data Invariants
+- A user must have a valid agencyId to access agency-specific data (except for 'master' role which can access everything).
+- Clients, tasks, deals, vehicles, vehicleExpenses, files, notes, agency_tags must belong to an agency.
+- Users can only read/write data for their own agency.
+- 'seller' role can only read/write clients/tasks assigned to them (or public clients in the agency if visibility is 'all'). Actually, let's keep it simple: sellers can only see their own stuff and public stuff. But wait, in Kanban they see `agencyQuery` combined with `sellerId`. Let's assume standard agency isolation: users in the same agency can see agency data, but 'seller' might be restricted. Let's look at how the app queries.
 
-## 2. The "Dirty Dozen" Payloads
-Payloads to test logic leaks:
-1. `Ghost Field`: A seller tries to update `client` and adds `isVerified Admin: true`. Should fail schema constraints.
-2. `Spoof Agent ID`: Seller tries creating a client for a different `agencyId`.
-3. `Spoof Seller ID`: Seller tries creating a client where `sellerId` points to another seller.
-4. `Privilege Escalation`: User tries to update their own `role` to `master` in `users/{userId}`.
-5. `Cross-tenant Admin`: Administrator of Agency A trying to read `clients` of Agency B.
-6. `Master Data Breach`: Master tries to read a `client` doc. Should fail because Masters explicitly have no client read access.
-7. `Task Relational Mismatch`: Creating a task for a `clientId` that belongs to another agency.
-8. `File Relational Mismatch`: Uploading a file record for a `clientId` that does not belong to the user's agency.
-9. `Invalid Status Status`: Changing a client status to `super-won`.
-10. `Orphaned Task`: Creating a task pointing to a non-existent `clientId`.
-11. `Time Travel`: Updating `createdAt` or providing a bad timestamp.
-12. `ID Poisoning`: Pushing 1.5Kb ID data.
+## The "Dirty Dozen" Payloads
+1. Spoofing User Role: Updating own user profile to set role = 'master'.
+2. Cross-Agency Access: Reading a client document from another agency.
+3. Poisoning ID: Creating a task with a 5000 character title.
+4. Unauthenticated Access: Read without login.
+5. Missing Agency: Creating a client without an agencyId.
+6. Spoofing Email: Using a fake email without email_verified.
+7. Shadow Update: Updating client with an extraneous field `isAdmin: true`.
+8. Updating Terminal State: Changing a closed deal back to open (if not admin).
+9. Denial of Wallet: Querying tasks without `agencyId` filter.
+10. Orphaned Record: Creating a task for a non-existent client.
+11. PII Access: Reading user emails across agencies.
+12. Immortal Field Edit: Changing `createdAt` timestamp.
 
-## 3. Security boundaries summary
-All rules correctly enforce: Auth, Schema, and Identity.
+## Test Runner
+Implemented in `firestore.rules.test.ts`.

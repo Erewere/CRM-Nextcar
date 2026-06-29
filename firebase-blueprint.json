@@ -2,95 +2,68 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile with RBAC roles",
+      "description": "User profile",
       "type": "object",
-      "required": ["email", "role", "createdAt"],
       "properties": {
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["master", "admin", "seller"] },
+        "role": { "type": "string", "enum": ["master", "admin", "seller", "unassigned"] },
         "agencyId": { "type": "string" },
         "name": { "type": "string" },
         "createdAt": { "type": "string" }
-      }
+      },
+      "required": ["email", "role"]
     },
     "Agency": {
       "title": "Agency",
-      "description": "Automotive agency",
+      "description": "Agency details",
       "type": "object",
-      "required": ["name", "createdAt"],
       "properties": {
         "name": { "type": "string" },
         "createdAt": { "type": "string" }
-      }
-    },
-    "Client": {
-      "title": "Client",
-      "description": "Sales lead / contact",
-      "type": "object",
-      "required": ["agencyId", "name", "address", "phone", "email", "vehicle", "status", "createdAt", "updatedAt"],
-      "properties": {
-        "agencyId": { "type": "string" },
-        "sellerId": { "type": "string" },
-        "name": { "type": "string" },
-        "address": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "vehicle": { "type": "string" },
-        "status": { "type": "string", "enum": ["new", "contacted", "negotiation", "won", "lost"] },
-        "origin": { "type": "string", "enum": ["manual", "whatsapp", "web"] },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      }
-    },
-    "Task": {
-      "title": "Task",
-      "description": "Follow-up task for a client",
-      "type": "object",
-      "required": ["agencyId", "sellerId", "clientId", "title", "completed", "createdAt"],
-      "properties": {
-        "agencyId": { "type": "string" },
-        "sellerId": { "type": "string" },
-        "clientId": { "type": "string" },
-        "title": { "type": "string" },
-        "dueDate": { "type": "string" },
-        "completed": { "type": "boolean" },
-        "createdAt": { "type": "string" }
-      }
-    },
-    "File": {
-      "title": "File",
-      "description": "Attached document for a client",
-      "type": "object",
-      "required": ["agencyId", "clientId", "filename", "url", "uploadedAt"],
-      "properties": {
-        "agencyId": { "type": "string" },
-        "clientId": { "type": "string" },
-        "filename": { "type": "string" },
-        "url": { "type": "string" },
-        "uploadedAt": { "type": "string" }
-      }
+      },
+      "required": ["name"]
     }
   },
   "firestore": {
-    "users/{userId}": {
+    "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
-      "description": "Global users collection with their RBAC roles."
+      "description": "User profiles"
     },
-    "agencies/{agencyId}": {
+    "/agencies/{agencyId}": {
       "schema": { "$ref": "#/entities/Agency" },
-      "description": "Agencies."
+      "description": "Agencies"
     },
-    "clients/{clientId}": {
-      "schema": { "$ref": "#/entities/Client" },
-      "description": "All clients. Grouped by agencyId and sellerId logically via fields."
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Clients"
     },
-    "tasks/{taskId}": {
-      "schema": { "$ref": "#/entities/Task" },
-      "description": "All tasks."
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Tasks"
     },
-    "files/{fileId}": {
-      "schema": { "$ref": "#/entities/File" },
-      "description": "All client document metadata."
+    "/vehicles/{vehicleId}": {
+      "schema": "Vehicle",
+      "description": "Vehicles"
+    },
+    "/vehicleExpenses/{expenseId}": {
+      "schema": "VehicleExpense",
+      "description": "Vehicle Expenses"
+    },
+    "/deals/{dealId}": {
+      "schema": "Deal",
+      "description": "Deals"
+    },
+    "/files/{fileId}": {
+      "schema": "File",
+      "description": "Files"
+    },
+    "/notes/{noteId}": {
+      "schema": "Note",
+      "description": "Notes"
+    },
+    "/agency_tags/{tagId}": {
+      "schema": "AgencyTag",
+      "description": "Agency Tags"
     }
   }
 }

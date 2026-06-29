@@ -301,6 +301,16 @@ export function Dashboard() {
   const activeContacts = filteredClients.filter((c) => isActive(c.status));
   const wonContacts = filteredClients.filter((c) => isWon(c.status));
 
+  const totalWonAmount = wonContacts.reduce((sum, contact) => {
+    const vehicle = vehicles.find((v) => v.id === contact.vehicleId);
+    return sum + (vehicle?.price || 0);
+  }, 0);
+
+  const totalProfit = wonContacts.reduce((sum, contact) => {
+    const vehicle = vehicles.find((v) => v.id === contact.vehicleId);
+    return sum + ((vehicle?.price || 0) - (vehicle?.purchasePrice || 0));
+  }, 0);
+
   // Inventory
   const availableVehicles = filteredVehicles.filter(
     (v) => v.status === "available" || !v.status,
@@ -633,6 +643,7 @@ export function Dashboard() {
           </div>
         </Link>
 
+        {/* Additional Stats for Won Deals & Profits */}
         <Link
           to="/kanban"
           className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-green-300 hover:shadow-md transition-all"
@@ -641,11 +652,17 @@ export function Dashboard() {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
               Ventas Cerradas
             </p>
-            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">
+            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-2">
               {wonContacts.length}
             </p>
+            <div className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
+              <p>Monto: <span className="font-semibold text-slate-800 dark:text-slate-200">${totalWonAmount.toLocaleString()}</span></p>
+              {(userData?.role === 'admin' || userData?.role === 'master') && (
+                <p>Utilidad: <span className="font-semibold text-green-600 dark:text-green-400">${totalProfit.toLocaleString()}</span></p>
+              )}
+            </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 self-start">
             <TrendingUp className="w-5 h-5 text-green-600" />
           </div>
         </Link>
