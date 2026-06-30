@@ -4,6 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import admin from "firebase-admin";
 import { Resend } from "resend";
+import Stripe from "stripe";
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
 let adminApp: admin.app.App | null = null;
@@ -26,12 +27,124 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
+let stripeClient: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error("STRIPE_SECRET_KEY environment variable is required");
+    }
+    stripeClient = new Stripe(key, { apiVersion: "2023-10-16" as any });
+  }
+  return stripeClient;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Use JSON middleware for webhook bodies
+  // === Stripe Webhook Endpoint (Must be before express.json) ===
+  app.post(
+    "/api/stripe/webhook",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      const sig = req.headers["stripe-signature"];
+      let event;
+
+      try {
+        const stripe = getStripe();
+        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+          throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
+        }
+        event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
+      } catch (err: any) {
+        console.error("Webhook Error:", err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+      }
+
+      const adminDb = getAdminApp().firestore();
+
+      // Handle the event
+      switch (event.type) {
+        case "checkout.session.completed":
+          const checkoutSession = event.data.object as Stripe.Checkout.Session;
+          const agencyId = checkoutSession.client_reference_id;
+          if (agencyId) {
+            // Update agency status to active
+            await adminDb.collection("agencies").doc(agencyId).set(
+              {
+                subscriptionStatus: "active",
+                stripeCustomerId: checkoutSession.customer,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
+          break;
+        case "customer.subscription.deleted":
+          const subscription = event.data.object as Stripe.Subscription;
+          const customerId = subscription.customer as string;
+          // Find agency by customerId and update status
+          const agenciesSnapshot = await adminDb
+            .collection("agencies")
+            .where("stripeCustomerId", "==", customerId)
+            .get();
+          
+          if (!agenciesSnapshot.empty) {
+            const agencyDoc = agenciesSnapshot.docs[0];
+            await agencyDoc.ref.set(
+              {
+                subscriptionStatus: "canceled",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
+          break;
+        // ... handle other event types
+        default:
+          console.log(`Unhandled event type ${event.type}`);
+      }
+
+      res.send();
+    }
+  );
+
+  // Use JSON middleware for other webhook bodies
   app.use(express.json());
+
+  // === Stripe Create Checkout Session ===
+  app.post("/api/create-checkout-session", async (req, res) => {
+    try {
+      const { agencyId, priceId } = req.body;
+      if (!agencyId || !priceId) {
+        return res.status(400).json({ error: "Missing agencyId or priceId" });
+      }
+
+      const stripe = getStripe();
+      const origin = req.headers.origin || process.env.APP_URL || `http://localhost:${PORT}`;
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "subscription",
+        line_items: [
+          {
+            price: priceId, // e.g. price_1...
+            quantity: 1,
+          },
+        ],
+        client_reference_id: agencyId,
+        success_url: `${origin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/billing?canceled=true`,
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {

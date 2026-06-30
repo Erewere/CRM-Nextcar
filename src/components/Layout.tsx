@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
+  CreditCard,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import clsx from "clsx";
@@ -123,6 +124,12 @@ export function Layout() {
       name: "Agencias & Usuarios",
       path: "/users",
       icon: Building,
+      roles: ["master", "admin"],
+    },
+    {
+      name: "Facturación",
+      path: "/billing",
+      icon: CreditCard,
       roles: ["master", "admin"],
     },
   ].filter((item) => {
