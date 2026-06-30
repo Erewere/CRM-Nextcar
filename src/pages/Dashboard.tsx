@@ -852,6 +852,45 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* Vehículos Buscados (Demanda Activa) */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden mb-6">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            Demanda Activa (Vehículos Buscados)
+          </h3>
+        </div>
+        <div className="p-5 flex-1 max-h-[300px] overflow-y-auto">
+          {activeContacts.filter(c => c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model)).length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeContacts.filter(c => c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model)).map(client => (
+                <Link to="/persons" state={{ clientId: client.id }} key={client.id} className="block p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="font-bold text-indigo-700 dark:text-indigo-400">
+                      {client.wantedVehicle?.make} {client.wantedVehicle?.model}
+                    </p>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                      Buscado
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 space-y-1 mb-3">
+                    <p>{client.wantedVehicle?.yearMin || '2000'} - {client.wantedVehicle?.yearMax || new Date().getFullYear()}</p>
+                    {client.wantedVehicle?.priceMax && <p>Presupuesto: ${client.wantedVehicle.priceMax.toLocaleString()}</p>}
+                    {client.wantedVehicle?.bodyType && <p>Carrocería: {client.wantedVehicle.bodyType}</p>}
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 border-t border-slate-200 dark:border-slate-700 pt-2">
+                    Cliente: {client.name}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-24 text-slate-400 text-sm">
+              No hay registros de vehículos buscados actualmente.
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Drill-down view if a stage is selected */}
       {selectedStage && (
         <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-blue-200 shadow-md">

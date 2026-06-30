@@ -25,7 +25,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       make: '', model: '', year: new Date().getFullYear(), color: '',
       transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
       price: 0, purchasePrice: 0, vin: '',
-      km: 0, receivedAt: new Date().toISOString().split('T')[0], cylinders: 4, liters: 0, equipment: ''
+      km: 0, receivedAt: new Date().toISOString().split('T')[0], cylinders: 4, liters: 0, equipment: '', passengers: 5
     } : vehicle
   );
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
@@ -426,8 +426,12 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     <input type="date" value={typeof formData.receivedAt === 'string' ? formData.receivedAt.split('T')[0] : ''} onChange={e=>setFormData({...formData, receivedAt: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Pasajeros</label>
+                    <input type="number" value={formData.passengers || ''} onChange={e=>setFormData({...formData, passengers: parseInt(e.target.value) || undefined})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. 5" />
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Equipamiento</label>
-                    <input type="text" value={formData.equipment} onChange={e=>setFormData({...formData, equipment: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. Quemacocos, Piel..." />
+                    <input type="text" value={formData.equipment || ''} onChange={e=>setFormData({...formData, equipment: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. Quemacocos, Piel..." />
                   </div>
                 </div>
 

@@ -358,10 +358,24 @@ export function ClientDetailModal({
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const [showWantedVehicleMenu, setShowWantedVehicleMenu] = useState(false);
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!userData || !formData.agencyId || formData.agencyId === "unassigned") {
       alert("Debes pertenecer a una agencia para guardar clientes.");
+      return;
+    }
+
+    const hasBuscaAutoTag = formData.tags?.some(t => 
+      t.toLowerCase().includes('busca de auto') || 
+      t.toLowerCase().includes('busca auto') ||
+      t.toLowerCase().includes('compra')
+    );
+
+    // Intercept to show the Wanted Vehicle form if needed
+    if (hasBuscaAutoTag && !showWantedVehicleMenu && (!formData.wantedVehicle || !formData.wantedVehicle.make)) {
+      setShowWantedVehicleMenu(true);
       return;
     }
 
@@ -675,7 +689,141 @@ export function ClientDetailModal({
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+        {showWantedVehicleMenu ? (
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900 flex flex-col items-center">
+            <div className="max-w-2xl w-full bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Características del Vehículo Buscado</h2>
+                <p className="text-slate-500 dark:text-slate-400 mt-2">
+                  El cliente tiene la etiqueta de "Busca de auto". Por favor, detalla qué es lo que está buscando para poder recomendarle vehículos del inventario.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Marca</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Toyota, Honda..."
+                    value={formData.wantedVehicle?.make || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, make: e.target.value } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Modelo / Versión</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Civic, CR-V EX..."
+                    value={formData.wantedVehicle?.model || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, model: e.target.value } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año Mínimo</label>
+                  <input
+                    type="number"
+                    placeholder="2015"
+                    value={formData.wantedVehicle?.yearMin || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, yearMin: e.target.value ? parseInt(e.target.value) : undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año Máximo</label>
+                  <input
+                    type="number"
+                    placeholder="2024"
+                    value={formData.wantedVehicle?.yearMax || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, yearMax: e.target.value ? parseInt(e.target.value) : undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Presupuesto Máximo</label>
+                  <input
+                    type="number"
+                    placeholder="$300,000"
+                    value={formData.wantedVehicle?.priceMax || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, priceMax: e.target.value ? parseInt(e.target.value) : undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Pasajeros</label>
+                  <input
+                    type="number"
+                    placeholder="5"
+                    value={formData.wantedVehicle?.passengers || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, passengers: e.target.value ? parseInt(e.target.value) : undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de Carrocería</label>
+                  <select
+                    value={formData.wantedVehicle?.bodyType || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, bodyType: e.target.value } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    <option value="">Cualquiera</option>
+                    <option value="SUV">SUV</option>
+                    <option value="Sedan">Sedán</option>
+                    <option value="Hatchback">Hatchback</option>
+                    <option value="Pickup">Pickup</option>
+                    <option value="Coupe">Coupé</option>
+                    <option value="Minivan">Minivan</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-8 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowWantedVehicleMenu(false)}
+                  className="px-5 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors"
+                >
+                  Omitir por ahora
+                </button>
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    // Save client with wanted vehicle
+                    setShowWantedVehicleMenu(false);
+                    // We must bypass the showWantedVehicleMenu check now
+                    const mockEvent = { preventDefault: () => {} } as React.FormEvent;
+                    
+                    if (!userData || !formData.agencyId || formData.agencyId === "unassigned") {
+                      alert("Debes pertenecer a una agencia para guardar clientes.");
+                      return;
+                    }
+                    try {
+                      if (isNew) {
+                        const newRef = doc(collection(db, "clients"));
+                        const dataToSave = { ...formData, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+                        Object.keys(dataToSave).forEach(k => dataToSave[k as keyof typeof dataToSave] === undefined && delete dataToSave[k as keyof typeof dataToSave]);
+                        await setDoc(newRef, dataToSave);
+                      } else {
+                        const dataToUpdate = { ...formData, updatedAt: new Date().toISOString() };
+                        Object.keys(dataToUpdate).forEach(k => dataToUpdate[k as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[k as keyof typeof dataToUpdate]);
+                        await updateDoc(doc(db, "clients", client.id as string), dataToUpdate);
+                      }
+                      onClose();
+                    } catch (err) {
+                      console.error(err);
+                      alert("Error guardando cliente");
+                    }
+                  }}
+                  className="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors"
+                >
+                  Guardar Preferencias
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
           {/* LEFT SIDEBAR (DETAILS) */}
           <div className="w-full md:w-[320px] shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 md:overflow-y-auto">
             <div className="p-5">
@@ -1084,6 +1232,16 @@ export function ClientDetailModal({
                       Sin etiquetas personalizadas.
                     </p>
                   )}
+
+                  {(formData.wantedVehicle?.make || formData.tags?.some(t => t.toLowerCase().includes('busca de auto') || t.toLowerCase().includes('compra'))) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowWantedVehicleMenu(true)}
+                      className="mt-3 w-full text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-1.5 rounded transition-colors"
+                    >
+                      Ver / Editar Búsqueda de Auto
+                    </button>
+                  )}
                 </div>
 
                 <div className="pt-4 border-t border-gray-100 dark:border-slate-700">
@@ -1404,6 +1562,7 @@ export function ClientDetailModal({
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

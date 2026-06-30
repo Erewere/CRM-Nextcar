@@ -43,6 +43,7 @@ export interface Vehicle {
   cylinders?: number;
   liters?: number;
   equipment?: string;
+  passengers?: number;
 }
 
 export interface Agency {
@@ -87,6 +88,15 @@ export interface Client {
   status: string;
   origin: "manual" | "whatsapp" | "web" | "google_contacts";
   tags?: string[];
+  wantedVehicle?: {
+    make?: string;
+    model?: string;
+    yearMin?: number;
+    yearMax?: number;
+    priceMax?: number;
+    passengers?: number;
+    bodyType?: string;
+  };
   createdAt: any;
   updatedAt: any;
 }

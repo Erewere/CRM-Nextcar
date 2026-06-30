@@ -140,9 +140,21 @@ export function AgencyUsers() {
       const newAgencyRef = doc(collection(db, 'agencies'));
       const agencyData = { name: newAgencyName, createdAt: new Date().toISOString() };
       await setDoc(newAgencyRef, agencyData);
+      
+      // Copy current tags to the new agency
+      for (const tag of agencyTags) {
+        const newTagRef = doc(collection(db, 'agency_tags'));
+        await setDoc(newTagRef, {
+          id: newTagRef.id,
+          name: tag.name,
+          agencyId: newAgencyRef.id,
+          createdAt: new Date().toISOString()
+        });
+      }
+
       setAgencies([...agencies, { id: newAgencyRef.id, ...agencyData }]);
       setNewAgencyName('');
-      alert('Agencia creada exitosamente.');
+      alert('Agencia creada exitosamente con las etiquetas actuales.');
     } catch (e) {
       console.error(e);
       alert('Error al crear agencia.');

@@ -1,15 +1,123 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Vehicle } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings } from 'lucide-react';
+import { Vehicle, Client } from '../types';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import clsx from 'clsx';
+
+export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
+
+export interface VehicleMatch {
+  client: Client;
+  level: MatchLevel;
+}
+
+export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleMatch[] => {
+  const matches: VehicleMatch[] = [];
+
+  clients.forEach(c => {
+    if (!c.wantedVehicle) return;
+    const wv = c.wantedVehicle;
+    
+    // Si no hay ningún criterio, no hacemos match
+    if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && (!wv.bodyType || wv.bodyType === "Cualquiera")) {
+      return;
+    }
+
+    let isExact = true;
+    let isSimilar = true;
+    let hasSimilarBase = false;
+    let differences = 0;
+
+    // Make & Model
+    const makeMatches = wv.make ? vehicle.make.toLowerCase().includes(wv.make.toLowerCase()) : true;
+    const modelMatches = wv.model ? vehicle.model.toLowerCase().includes(wv.model.toLowerCase()) : true;
+
+    if (wv.make && !makeMatches) {
+        isExact = false;
+        differences += 2;
+    }
+    if (wv.model && !modelMatches) {
+        isExact = false;
+        differences += 1;
+    }
+
+    // Year
+    const yearMin = wv.yearMin || 0;
+    const yearMax = wv.yearMax || 9999;
+    if (vehicle.year < yearMin || vehicle.year > yearMax) {
+        isExact = false;
+        if (vehicle.year < yearMin - 2 || vehicle.year > yearMax + 2) {
+            isSimilar = false; // Not even similar
+        } else if (vehicle.year < yearMin - 1 || vehicle.year > yearMax + 1) {
+            differences += 2;
+        } else {
+            differences += 1;
+        }
+    }
+
+    // Price
+    const priceMax = wv.priceMax || Infinity;
+    if (vehicle.price > priceMax) {
+        isExact = false;
+        if (vehicle.price > priceMax * 1.2) {
+            isSimilar = false; // More than 20% over budget
+        } else if (vehicle.price > priceMax * 1.1) {
+            differences += 2;
+        } else {
+            differences += 1;
+        }
+    }
+
+    // Body Type
+    if (wv.bodyType && wv.bodyType !== "Cualquiera") {
+        if (vehicle.bodyType !== wv.bodyType) {
+            isExact = false;
+            differences += 2;
+        }
+    }
+    
+    // Passengers
+    if (wv.passengers) {
+        if (vehicle.passengers !== undefined) {
+            if (vehicle.passengers !== wv.passengers) {
+                isExact = false;
+                // Si el cliente pide un número específico de pasajeros, es un requerimiento fuerte (ej. SUV de 3 filas)
+                // No sugerimos como similar si no coincide el número de pasajeros
+                isSimilar = false; 
+            }
+        } else {
+            // Si el vehículo no tiene pasajeros definidos, asumimos que no es un match exacto si están pidiendo una cantidad específica
+            isExact = false;
+            differences += 1;
+        }
+    }
+
+    if (wv.make && makeMatches) hasSimilarBase = true;
+    if (wv.bodyType && wv.bodyType !== "Cualquiera" && vehicle.bodyType === wv.bodyType) hasSimilarBase = true;
+    if (!wv.make && !wv.bodyType) hasSimilarBase = true; // Si solo busca por precio/año, es base
+    
+    if (isExact) {
+      matches.push({ client: c, level: 'exact' });
+    } else if (isSimilar && hasSimilarBase) {
+      let level: MatchLevel = 'high';
+      if (differences >= 3) level = 'low';
+      else if (differences >= 2) level = 'medium';
+      
+      matches.push({ client: c, level });
+    }
+  });
+
+  return matches;
+};
 
 export function Inventory() {
   const { userData } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -70,11 +178,14 @@ export function Inventory() {
     if (!userData?.agencyId && userData?.role !== 'master') return;
 
     let q = query(collection(db, 'vehicles'));
+    let clientsQ = query(collection(db, 'clients'));
+
     if (userData?.role !== 'master') {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
+      clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
     }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeVehicles = onSnapshot(q, (snapshot) => {
       const now = new Date();
       const loadedVehicles = snapshot.docs.map(d => {
         const data = d.data() as Vehicle & { pendingValidation?: any };
@@ -97,7 +208,14 @@ export function Inventory() {
       setVehicles(loadedVehicles);
     });
 
-    return () => unsubscribe();
+    const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
+      setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+    });
+
+    return () => {
+      unsubscribeVehicles();
+      unsubscribeClients();
+    };
   }, [userData]);
 
   const handleDelete = async (id: string) => {
@@ -219,12 +337,38 @@ export function Inventory() {
         {viewMode === 'grid' ? (
           <div className="flex-1 overflow-auto p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredVehicles.map(vehicle => (
+              {filteredVehicles.map(vehicle => {
+                const matches = getVehicleMatches(vehicle, clients);
+                const totalMatches = matches.length;
+
+                return (
               <div 
                 key={vehicle.id} 
-                className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-slate-800 group"
+                className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-slate-800 group relative"
                 onClick={() => setSelectedVehicle(vehicle)}
               >
+                {totalMatches > 0 && (
+                  <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                    {matches.map((match, idx) => {
+                      let bgColor = 'bg-indigo-500';
+                      let label = `¡Exacto! (${match.client.name})`;
+                      if (match.level === 'high') { bgColor = 'bg-emerald-500'; label = `Muy similar (${match.client.name})`; }
+                      if (match.level === 'medium') { bgColor = 'bg-yellow-500'; label = `Algo similar (${match.client.name})`; }
+                      if (match.level === 'low') { bgColor = 'bg-orange-500'; label = `Posible match (${match.client.name})`; }
+
+                      return (
+                        <div 
+                          key={idx}
+                          onClick={(e) => { e.stopPropagation(); navigate('/persons', { state: { clientId: match.client.id } }); }}
+                          className={`${bgColor} hover:brightness-110 transition-all text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1 w-max cursor-pointer`}
+                          title="Ver cliente"
+                        >
+                          <Target className="w-3 h-3" /> {label}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
                 <div className="h-48 bg-slate-100 dark:bg-slate-700 relative">
                   {vehicle.photoUrl ? (
                     <img src={vehicle.photoUrl} alt={`${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
@@ -289,7 +433,8 @@ export function Inventory() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {filteredVehicles.length === 0 && (
               <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center">
                 <CarIcon className="w-12 h-12 mb-3 text-slate-300" />
@@ -331,12 +476,37 @@ export function Inventory() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-slate-800">
-                {filteredVehicles.map(vehicle => (
+                {filteredVehicles.map(vehicle => {
+                  const matches = getVehicleMatches(vehicle, clients);
+                  const totalMatches = matches.length;
+
+                  return (
                   <tr key={vehicle.id} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
                     {columns.filter(c => c.visible).map(col => {
                       let val: React.ReactNode = '';
                       if (col.id === 'year') val = vehicle.year;
-                      if (col.id === 'make') val = <span className="font-medium text-blue-600">{vehicle.make}</span>;
+                      if (col.id === 'make') val = (
+                        <div className="flex items-center gap-1">
+                          {matches.map((match, idx) => {
+                            let textColor = 'text-indigo-500';
+                            let title = `¡Exacto! (${match.client.name})`;
+                            if (match.level === 'high') { textColor = 'text-emerald-500'; title = `Muy similar (${match.client.name})`; }
+                            if (match.level === 'medium') { textColor = 'text-yellow-500'; title = `Algo similar (${match.client.name})`; }
+                            if (match.level === 'low') { textColor = 'text-orange-500'; title = `Posible match (${match.client.name})`; }
+                            return (
+                              <button
+                                key={idx}
+                                onClick={(e) => { e.stopPropagation(); navigate('/persons', { state: { clientId: match.client.id } }); }}
+                                className={`p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}
+                                title={title}
+                              >
+                                <Target className={`w-4 h-4 ${textColor}`} />
+                              </button>
+                            );
+                          })}
+                          <span className="font-medium text-blue-600">{vehicle.make}</span>
+                        </div>
+                      );
                       if (col.id === 'model') val = vehicle.model;
                       if (col.id === 'color') val = vehicle.color;
                       if (col.id === 'transmission') val = vehicle.transmission;
@@ -368,7 +538,8 @@ export function Inventory() {
                       ) : '...'}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {filteredVehicles.length === 0 && (
                   <tr>
                     <td colSpan={columns.filter(c => c.visible).length + 1} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400 font-medium border-b border-gray-100 dark:border-slate-700">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { useLocation } from "react-router";
 import {
   collection,
   query,
@@ -35,6 +36,7 @@ import { es } from "date-fns/locale";
 
 export function Persons() {
   const { userData, googleToken, connectGoogleServices } = useAuth();
+  const location = useLocation();
   const [persons, setPersons] = useState<Client[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -44,6 +46,19 @@ export function Persons() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Client | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+
+  // Check navigation state for selected person
+  useEffect(() => {
+    if (location.state?.clientId && persons.length > 0) {
+      const client = persons.find((p) => p.id === location.state.clientId);
+      if (client) {
+        setSelectedPerson(client);
+        // Clear state so it doesn't reopen if they navigate away and back without the intent
+        window.history.replaceState({}, document.title)
+      }
+    }
+  }, [location.state, persons]);
+
   const [pipelineStages, setPipelineStages] = useState<
     { id: string; title: string }[]
   >([]);
