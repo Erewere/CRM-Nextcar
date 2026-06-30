@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import {
   collection,
   query,
@@ -37,6 +37,7 @@ import { es } from "date-fns/locale";
 export function Persons() {
   const { userData, googleToken, connectGoogleServices } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [persons, setPersons] = useState<Client[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -53,11 +54,12 @@ export function Persons() {
       const client = persons.find((p) => p.id === location.state.clientId);
       if (client) {
         setSelectedPerson(client);
+        setSearchTerm(client.name);
         // Clear state so it doesn't reopen if they navigate away and back without the intent
-        window.history.replaceState({}, document.title)
+        navigate(location.pathname, { replace: true, state: {} });
       }
     }
-  }, [location.state, persons]);
+  }, [location.state, persons, navigate, location.pathname]);
 
   const [pipelineStages, setPipelineStages] = useState<
     { id: string; title: string }[]
