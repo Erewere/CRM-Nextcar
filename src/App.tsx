@@ -10,6 +10,7 @@ import { Persons } from './pages/Persons';
 import { AgencyUsers } from './pages/AgencyUsers';
 import { Inventory } from './pages/Inventory';
 import { Emails } from './pages/Emails';
+import { VehiclePrint } from './pages/VehiclePrint';
 
 const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller')[] }) => {
   const { currentUser, userData, loading } = useAuth();
@@ -34,6 +35,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><VehiclePrint /></ProtectedRoute>} />
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />

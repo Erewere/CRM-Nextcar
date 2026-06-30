@@ -5,7 +5,7 @@ import { db, storage } from '../lib/firebase';
 import { collection, doc, setDoc, onSnapshot, query, where, deleteDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client } from '../types';
-import { X, Upload, Trash2, Plus, DollarSign, Edit2 } from 'lucide-react';
+import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer } from 'lucide-react';
 
 interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
@@ -232,9 +232,23 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               </button>
             )}
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isNew && (
+              <a 
+                href={`/print/vehicle/${vehicle.id}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors mr-2"
+                title="Imprimir Ficha Técnica"
+              >
+                <Printer className="w-4 h-4" />
+                <span className="hidden sm:inline">Imprimir Ficha</span>
+              </a>
+            )}
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto p-6">
