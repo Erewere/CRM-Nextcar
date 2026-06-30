@@ -116,6 +116,7 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
 
 export function Inventory() {
   const { userData } = useAuth();
+  const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
