@@ -208,7 +208,11 @@ export function AgencyUsers() {
     
     setInviting(true);
     try {
-        const appUrl = window.location.origin + '/login';
+        let origin = window.location.origin;
+        if (origin.includes('-dev-')) {
+            origin = origin.replace('-dev-', '-pre-');
+        }
+        const appUrl = origin + '/login?register=true';
         const subject = 'Invitación oficial para unirte a Nextcar CRM';
         const messageHtml = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 40px 20px;">
@@ -394,9 +398,10 @@ export function AgencyUsers() {
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Invitar al Equipo (Enviar correo electrónico)</label>
             <input
               type="email"
+              multiple
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="correo@ejemplo.com"
+              placeholder="correo1@ejemplo.com, correo2@ejemplo.com"
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             />
           </div>

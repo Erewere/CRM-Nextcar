@@ -161,19 +161,15 @@ async function startServer() {
     }
     try {
       let fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-      if (!fromEmail.includes("@")) {
-        fromEmail = "Nextcar CRM <onboarding@resend.dev>";
+      if (!fromEmail.includes("<") && fromEmail.includes("@")) {
+        fromEmail = `Nextcar CRM <${fromEmail}>`;
       }
       
-      let finalTo = to;
-      // Resend sandbox restricts sending emails to the verified address only
-      if (fromEmail.includes("onboarding@resend.dev")) {
-        finalTo = "luisfj@gmail.com";
-      }
+      const toList = to.split(',').map((e: string) => e.trim()).filter(Boolean);
 
       const { data, error } = await resend.emails.send({
         from: fromEmail,
-        to: finalTo,
+        to: toList,
         subject,
         html,
       });

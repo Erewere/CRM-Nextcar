@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
-import { Navigate } from 'react-router';
+import { Navigate, useLocation } from 'react-router';
 
 export function Login() {
   const { currentUser, loading, connectGoogleServices } = useAuth();
-  const [isRegistering, setIsRegistering] = useState(false);
+  const location = useLocation();
+  const [isRegistering, setIsRegistering] = useState(() => new URLSearchParams(location.search).get('register') === 'true');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

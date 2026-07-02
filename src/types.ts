@@ -86,7 +86,7 @@ export interface Client {
   vehicle: string;
   vehicleId?: string;
   status: string;
-  origin: "manual" | "whatsapp" | "web" | "google_contacts";
+  origin: "manual" | "whatsapp" | "web" | "google_contacts" | "excel_import";
   tags?: string[];
   wantedVehicle?: {
     make?: string;
