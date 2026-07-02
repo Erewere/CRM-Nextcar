@@ -10,6 +10,7 @@ import {
   setDoc,
   writeBatch,
   deleteDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task } from "../types";
@@ -28,11 +29,13 @@ import {
   Trash2,
   Download,
   User as UserIcon,
+  FileSpreadsheet,
 } from "lucide-react";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import clsx from "clsx";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import * as XLSX from "xlsx";
 
 export function Persons() {
   const { userData, googleToken, connectGoogleServices } = useAuth();
@@ -45,8 +48,21 @@ export function Persons() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUndoModal, setShowUndoModal] = useState(false);
+  const [undoList, setUndoList] = useState<Client[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Client | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [showImportExcel, setShowImportExcel] = useState(false);
+  const [excelData, setExcelData] = useState<any[]>([]);
+  const [excelColumns, setExcelColumns] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({
+    name: "",
+    email: "",
+    phone: "",
+    organization: "",
+    notes: "",
+    vehicle: "",
+  });
 
   // Check navigation state for selected person
   useEffect(() => {
@@ -452,6 +468,149 @@ export function Persons() {
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      if (typeof bstr !== "string" && !(bstr instanceof ArrayBuffer)) return;
+      const wb = XLSX.read(bstr, { type: "binary" });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws);
+      if (data.length > 0) {
+        const columns = Object.keys(data[0] as object);
+        setExcelColumns(columns);
+        setExcelData(data);
+        setShowImportExcel(true);
+        // Autoselect if column names match somewhat
+        const newMapping = { name: "", email: "", phone: "", organization: "", notes: "", vehicle: "" };
+        columns.forEach((col) => {
+          const lcol = col.toLowerCase();
+          if (lcol.includes("nombre") || lcol.includes("name")) newMapping.name = col;
+          if (lcol.includes("correo") || lcol.includes("email")) newMapping.email = col;
+          if (lcol.includes("telefono") || lcol.includes("teléfono") || lcol.includes("phone")) newMapping.phone = col;
+          if (lcol.includes("organizacion") || lcol.includes("empresa") || lcol.includes("company") || lcol.includes("organization")) newMapping.organization = col;
+          if (lcol.includes("nota") || lcol.includes("comentario") || lcol.includes("notes") || lcol.includes("comment")) newMapping.notes = col;
+          if (lcol.includes("vehiculo") || lcol.includes("vehículo") || lcol.includes("auto") || lcol.includes("car") || lcol.includes("vehicle")) newMapping.vehicle = col;
+        });
+        setColumnMapping(newMapping);
+      } else {
+        alert("El archivo parece estar vacío.");
+      }
+    };
+    reader.readAsBinaryString(file);
+    // Reset file input
+    e.target.value = "";
+  };
+
+  const handleImportExcelData = async () => {
+    if (!columnMapping.name) {
+      alert("Debes seleccionar al menos la columna para el Nombre.");
+      return;
+    }
+    
+    setImportingContacts(true);
+    let importedCount = 0;
+    let newPersons: Client[] = [];
+    
+    try {
+      for (const row of excelData) {
+        const personName = row[columnMapping.name] ? String(row[columnMapping.name]) : "";
+        const personEmail = columnMapping.email && row[columnMapping.email] ? String(row[columnMapping.email]) : "";
+        const personPhone = columnMapping.phone && row[columnMapping.phone] ? String(row[columnMapping.phone]) : "";
+        const personOrganization = columnMapping.organization && row[columnMapping.organization] ? String(row[columnMapping.organization]) : "";
+        const personNotes = columnMapping.notes && row[columnMapping.notes] ? String(row[columnMapping.notes]) : "";
+        const personVehicle = columnMapping.vehicle && row[columnMapping.vehicle] ? String(row[columnMapping.vehicle]) : "";
+
+        if (personName && (personEmail || personPhone || personName.length > 1)) {
+          const exists = [...persons, ...newPersons].find(
+            (p) =>
+              (personEmail && p.email?.includes(personEmail)) ||
+              (personPhone && p.phone?.includes(personPhone)) ||
+              (p.name && String(p.name).toLowerCase() === String(personName).toLowerCase()),
+          );
+
+          if (!exists) {
+            const newRef = doc(collection(db, "clients"));
+            const newPerson: Client = {
+              id: newRef.id,
+              agencyId: userData?.agencyId || "",
+              sellerId: userData?.id || "",
+              name: personName,
+              email: personEmail,
+              phone: personPhone,
+              organization: personOrganization,
+              address: "",
+              vehicle: personVehicle,
+              status: "",
+              origin: "excel_import",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            await setDoc(newRef, newPerson);
+            newPersons.push(newPerson);
+            importedCount++;
+
+            if (personNotes) {
+              const newNoteRef = doc(collection(db, "notes"));
+              await setDoc(newNoteRef, {
+                id: newNoteRef.id,
+                clientId: newPerson.id,
+                agencyId: userData?.agencyId || "",
+                sellerId: userData?.id || "",
+                content: personNotes,
+                createdAt: new Date().toISOString()
+              });
+            }
+          } else {
+            // Update existing person if they lack a vehicle and we have one
+            let needsUpdate = false;
+            let updates: any = {};
+            if (personVehicle && !exists.vehicle) {
+              updates.vehicle = personVehicle;
+              needsUpdate = true;
+            }
+            if (needsUpdate && exists.id) {
+              await updateDoc(doc(db, "clients", exists.id), updates);
+              const idx = persons.findIndex((p) => p.id === exists.id);
+              if (idx >= 0) {
+                persons[idx] = { ...persons[idx], ...updates };
+              }
+            }
+
+            // Always add the note to the existing person if provided
+            if (personNotes && exists.id) {
+              const newNoteRef = doc(collection(db, "notes"));
+              await setDoc(newNoteRef, {
+                id: newNoteRef.id,
+                clientId: exists.id,
+                agencyId: userData?.agencyId || "",
+                sellerId: userData?.id || "",
+                content: personNotes,
+                createdAt: new Date().toISOString()
+              });
+            }
+          }
+        }
+      }
+
+      if (newPersons.length > 0) {
+        setPersons((prev) => [...newPersons, ...prev]);
+      }
+      alert(`Se importaron ${importedCount} contactos nuevos desde Excel.`);
+      setShowImportExcel(false);
+      setExcelData([]);
+    } catch (e) {
+      console.error(e);
+      alert("Hubo un error al importar.");
+    } finally {
+      setImportingContacts(false);
+    }
+  };
+
   const filteredPersons = persons.filter(
     (p) =>
       String(p.name || "")
@@ -574,6 +733,23 @@ export function Persons() {
                 </span>
               </button>
             )}
+            <button
+              onClick={() => {
+                const today = new Date().toISOString().split('T')[0];
+                const toDelete = persons.filter(p => p.origin === 'excel_import' && p.createdAt.startsWith(today));
+                setUndoList(toDelete);
+                setShowUndoModal(true);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-rose-100 text-rose-700 rounded font-semibold hover:bg-rose-200 shadow-sm text-xs md:text-sm"
+            >
+              <Trash2 className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">Deshacer Importación</span>
+            </button>
+            <label className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
+              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">Importar Excel</span>
+              <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
+            </label>
             <button
               onClick={handleImportGoogleContacts}
               disabled={importingContacts}
@@ -869,6 +1045,136 @@ export function Persons() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Import Excel Modal */}
+      {showImportExcel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 flex justify-between items-center border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
+                Importar Contactos de Excel
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportExcel(false);
+                  setExcelData([]);
+                }}
+                className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4 text-sm">
+              <p className="text-slate-600 dark:text-slate-400">
+                Mapea las columnas de tu archivo Excel con los campos del CRM. 
+                Se importarán <strong>{excelData.length}</strong> filas.
+              </p>
+
+              {['name', 'email', 'phone', 'organization', 'notes', 'vehicle'].map((field) => (
+                <div key={field} className="flex flex-col gap-1">
+                  <label className="font-semibold text-slate-700 dark:text-slate-300 capitalize">
+                    {field === 'name' ? 'Nombre (Requerido)' : field === 'email' ? 'Correo' : field === 'phone' ? 'Teléfono' : field === 'organization' ? 'Organización' : field === 'notes' ? 'Notas / Comentarios' : 'Vehículo (Interés / Inventario)'}
+                  </label>
+                  <select
+                    value={columnMapping[field] || ''}
+                    onChange={(e) => setColumnMapping({ ...columnMapping, [field]: e.target.value })}
+                    className="border border-slate-300 dark:border-slate-600 rounded p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="">-- Ignorar este campo --</option>
+                    {excelColumns.map((col) => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportExcel(false);
+                  setExcelData([]);
+                }}
+                className="px-4 py-2 text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={importingContacts || !columnMapping.name}
+                onClick={handleImportExcelData}
+                className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded disabled:opacity-50"
+              >
+                {importingContacts ? "Importando..." : "Comenzar Importación"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Modal */}
+      {showUndoModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div className="px-6 py-4 flex justify-between items-center border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
+                Deshacer Importación
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowUndoModal(false)}
+                className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              {undoList.length === 0 ? (
+                <p className="text-slate-600 dark:text-slate-400 text-sm">
+                  No se encontraron contactos nuevos importados hoy desde Excel. (Si los contactos ya existían y solo se actualizaron, no se pueden eliminar por aquí).
+                </p>
+              ) : (
+                <p className="text-slate-600 dark:text-slate-400 text-sm">
+                  Se encontraron <strong>{undoList.length}</strong> contactos importados hoy. ¿Deseas eliminarlos de manera permanente? Esta acción no se puede deshacer.
+                </p>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowUndoModal(false)}
+                className="px-4 py-2 text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-200 dark:hover:bg-slate-700 rounded text-sm"
+              >
+                Cerrar
+              </button>
+              {undoList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const batch = writeBatch(db);
+                      undoList.forEach(p => {
+                        if (p.id) batch.delete(doc(db, "clients", p.id));
+                      });
+                      await batch.commit();
+                      setPersons(prev => prev.filter(p => !undoList.find(u => u.id === p.id)));
+                      setShowUndoModal(false);
+                      setUndoList([]);
+                    } catch (e) {
+                      console.error(e);
+                      alert("Hubo un error al eliminar.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 text-white font-medium hover:bg-rose-700 rounded text-sm"
+                >
+                  Eliminar Contactos
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Mail,
   CreditCard,
+  Blocks,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import clsx from "clsx";
@@ -130,6 +131,12 @@ export function Layout() {
       name: "Facturación",
       path: "/billing",
       icon: CreditCard,
+      roles: ["master", "admin"],
+    },
+    {
+      name: "Integraciones",
+      path: "/integrations",
+      icon: Blocks,
       roles: ["master", "admin"],
     },
   ].filter((item) => {

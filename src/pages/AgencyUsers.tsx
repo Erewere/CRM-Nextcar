@@ -161,6 +161,16 @@ export function AgencyUsers() {
     }
   };
 
+  const handleToggleFreeAccess = async (agencyId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, 'agencies', agencyId), { hasFreeAccess: !currentStatus });
+      setAgencies(agencies.map(a => a.id === agencyId ? { ...a, hasFreeAccess: !currentStatus } : a));
+    } catch (e) {
+      console.error(e);
+      alert('Error updating agency free access.');
+    }
+  };
+
   const handleUpdateRole = async (userId: string, newRole: string, currentName: string, email: string) => {
     try {
       const updates: any = { role: newRole };
@@ -325,6 +335,56 @@ export function AgencyUsers() {
             <Plus className="w-4 h-4" />
             Crear Agencia
           </button>
+        </div>
+      )}
+
+      {isMaster && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="p-5 border-b border-slate-200 dark:border-slate-700">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Building className="w-5 h-5 text-indigo-500" />
+              Gestión de Agencias
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Administra las agencias y otorga accesos de prueba gratuita.
+            </p>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-700/50 max-h-[400px] overflow-y-auto">
+            {agencies.map(a => (
+              <li key={a.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
+                <div className="flex-1">
+                  <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    {a.name}
+                    {a.hasFreeAccess && (
+                      <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-[10px] font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                        Prueba Gratis
+                      </span>
+                    )}
+                    {a.subscriptionStatus === 'active' && (
+                      <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">
+                        Premium
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono">
+                    ID: {a.id}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleToggleFreeAccess(a.id, !!a.hasFreeAccess)}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                      a.hasFreeAccess 
+                        ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
+                        : 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-200'
+                    }`}
+                  >
+                    {a.hasFreeAccess ? 'Revocar Prueba' : 'Otorgar Prueba'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
