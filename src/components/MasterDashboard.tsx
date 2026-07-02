@@ -158,9 +158,9 @@ export function MasterDashboard() {
                       value={u.role || 'unassigned'}
                       onChange={(e) => handleUpdateRole(u.id, e.target.value)}
                       className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      disabled={u.role === 'master'}
+                      disabled={u.email === 'luisfj@gmail.com'}
                     >
-                      <option value="master">Master</option>
+                      {u.email === 'luisfj@gmail.com' && <option value="master">Master</option>}
                       <option value="admin">Administrador</option>
                       <option value="seller">Vendedor</option>
                       <option value="unassigned">Desasignado</option>

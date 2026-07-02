@@ -97,7 +97,7 @@ export function AgencyUsers() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        if (userData.role === 'master' || userData.id === 'vxFIfZ5bdQSzaekW5d5c1TbNVCO2') {
+        if (userData.role === 'master' || userData.email === 'luisfj@gmail.com') {
           // Master gets all users and all agencies
           const usersSnap = await getDocs(collection(db, 'users'));
           const agenciesSnap = await getDocs(collection(db, 'agencies'));
@@ -305,7 +305,7 @@ export function AgencyUsers() {
 
   if (loading) return <div className="p-8">Cargando...</div>;
 
-  const isMaster = userData?.role === 'master' || userData?.id === 'vxFIfZ5bdQSzaekW5d5c1TbNVCO2';
+  const isMaster = userData?.role === 'master' || userData?.email === 'luisfj@gmail.com';
 
   return (
     <div className="max-w-6xl mx-auto py-8 space-y-6">
@@ -602,7 +602,7 @@ export function AgencyUsers() {
                     className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     disabled={(!isMaster && u.role === 'master')}
                   >
-                    {isMaster && <option value="master">Master</option>}
+                    {isMaster && u.email === 'luisfj@gmail.com' && <option value="master">Master</option>}
                     <option value="admin">Administrador</option>
                     <option value="seller">Vendedor</option>
                     <option value="unassigned">Desasignado</option>

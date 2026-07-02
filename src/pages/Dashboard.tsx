@@ -120,7 +120,7 @@ export function Dashboard() {
     if (
       !userData ||
       userData.role === "master" ||
-      userData.id === "vxFIfZ5bdQSzaekW5d5c1TbNVCO2" ||
+      userData.email === 'luisfj@gmail.com' ||
       userData.role === "unassigned"
     ) {
       setLoading(false);
@@ -259,7 +259,7 @@ export function Dashboard() {
 
   if (
     userData?.role === "master" ||
-    userData?.id === "vxFIfZ5bdQSzaekW5d5c1TbNVCO2"
+    userData?.email === 'luisfj@gmail.com'
   ) {
     return <MasterDashboard />;
   }
