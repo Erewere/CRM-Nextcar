@@ -307,9 +307,11 @@ export function Layout() {
               </div>
             )}
             <div className="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 shrink-0 transition-colors">
-              <span className="h-2 w-2 rounded-full bg-green-500"></span>
-              <span className="text-[10px] md:text-xs font-medium text-slate-600 dark:text-slate-400 hidden sm:inline">
-                En línea
+              <span className="text-[10px] md:text-xs font-medium text-slate-600 dark:text-slate-400 capitalize">
+                {userData?.role === 'master' ? 'Master' : 
+                 userData?.role === 'admin' ? 'Administrador' : 
+                 userData?.role === 'seller' ? 'Vendedor' : 
+                 userData?.role || 'Desasignado'}
               </span>
             </div>
           </div>
