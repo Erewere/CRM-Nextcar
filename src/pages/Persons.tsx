@@ -62,6 +62,7 @@ export function Persons() {
     organization: "",
     notes: "",
     vehicle: "",
+    tags: "",
   });
 
   // Check navigation state for selected person
@@ -486,7 +487,7 @@ export function Persons() {
         setExcelData(data);
         setShowImportExcel(true);
         // Autoselect if column names match somewhat
-        const newMapping = { name: "", email: "", phone: "", organization: "", notes: "", vehicle: "" };
+        const newMapping = { name: "", email: "", phone: "", organization: "", notes: "", vehicle: "", tags: "" };
         columns.forEach((col) => {
           const lcol = col.toLowerCase();
           if (lcol.includes("nombre") || lcol.includes("name")) newMapping.name = col;
@@ -495,6 +496,7 @@ export function Persons() {
           if (lcol.includes("organizacion") || lcol.includes("empresa") || lcol.includes("company") || lcol.includes("organization")) newMapping.organization = col;
           if (lcol.includes("nota") || lcol.includes("comentario") || lcol.includes("notes") || lcol.includes("comment")) newMapping.notes = col;
           if (lcol.includes("vehiculo") || lcol.includes("vehículo") || lcol.includes("auto") || lcol.includes("car") || lcol.includes("vehicle")) newMapping.vehicle = col;
+          if (lcol.includes("etiqueta") || lcol.includes("tag") || lcol.includes("label")) newMapping.tags = col;
         });
         setColumnMapping(newMapping);
       } else {
@@ -524,6 +526,8 @@ export function Persons() {
         const personOrganization = columnMapping.organization && row[columnMapping.organization] ? String(row[columnMapping.organization]) : "";
         const personNotes = columnMapping.notes && row[columnMapping.notes] ? String(row[columnMapping.notes]) : "";
         const personVehicle = columnMapping.vehicle && row[columnMapping.vehicle] ? String(row[columnMapping.vehicle]) : "";
+        const personTagsStr = columnMapping.tags && row[columnMapping.tags] ? String(row[columnMapping.tags]) : "";
+        const personTags = personTagsStr.split(',').map(t => t.trim()).filter(Boolean);
 
         if (personName && (personEmail || personPhone || personName.length > 1)) {
           const exists = [...persons, ...newPersons].find(
@@ -545,6 +549,7 @@ export function Persons() {
               organization: personOrganization,
               address: "",
               vehicle: personVehicle,
+              tags: personTags,
               status: "",
               origin: "excel_import",
               createdAt: new Date().toISOString(),
@@ -566,12 +571,20 @@ export function Persons() {
               });
             }
           } else {
-            // Update existing person if they lack a vehicle and we have one
+            // Update existing person if they lack a vehicle and we have one, or missing tags
             let needsUpdate = false;
             let updates: any = {};
             if (personVehicle && !exists.vehicle) {
               updates.vehicle = personVehicle;
               needsUpdate = true;
+            }
+            if (personTags.length > 0) {
+              const currentTags = exists.tags || [];
+              const newTags = personTags.filter(t => !currentTags.includes(t));
+              if (newTags.length > 0) {
+                updates.tags = [...currentTags, ...newTags];
+                needsUpdate = true;
+              }
             }
             if (needsUpdate && exists.id) {
               await updateDoc(doc(db, "clients", exists.id), updates);
@@ -735,8 +748,7 @@ export function Persons() {
             )}
             <button
               onClick={() => {
-                const today = new Date().toISOString().split('T')[0];
-                const toDelete = persons.filter(p => p.origin === 'excel_import' && p.createdAt.startsWith(today));
+                const toDelete = persons.filter(p => p.origin === 'excel_import');
                 setUndoList(toDelete);
                 setShowUndoModal(true);
               }}
@@ -1073,10 +1085,10 @@ export function Persons() {
                 Se importarán <strong>{excelData.length}</strong> filas.
               </p>
 
-              {['name', 'email', 'phone', 'organization', 'notes', 'vehicle'].map((field) => (
+              {['name', 'email', 'phone', 'organization', 'notes', 'vehicle', 'tags'].map((field) => (
                 <div key={field} className="flex flex-col gap-1">
                   <label className="font-semibold text-slate-700 dark:text-slate-300 capitalize">
-                    {field === 'name' ? 'Nombre (Requerido)' : field === 'email' ? 'Correo' : field === 'phone' ? 'Teléfono' : field === 'organization' ? 'Organización' : field === 'notes' ? 'Notas / Comentarios' : 'Vehículo (Interés / Inventario)'}
+                    {field === 'name' ? 'Nombre (Requerido)' : field === 'email' ? 'Correo' : field === 'phone' ? 'Teléfono' : field === 'organization' ? 'Organización' : field === 'notes' ? 'Notas / Comentarios' : field === 'vehicle' ? 'Vehículo (Interés / Inventario)' : 'Etiquetas (separadas por coma)'}
                   </label>
                   <select
                     value={columnMapping[field] || ''}
@@ -1134,11 +1146,11 @@ export function Persons() {
             <div className="p-6">
               {undoList.length === 0 ? (
                 <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  No se encontraron contactos nuevos importados hoy desde Excel. (Si los contactos ya existían y solo se actualizaron, no se pueden eliminar por aquí).
+                  No se encontraron contactos importados desde Excel. (Si los contactos ya existían y solo se actualizaron, no se pueden eliminar por aquí).
                 </p>
               ) : (
                 <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  Se encontraron <strong>{undoList.length}</strong> contactos importados hoy. ¿Deseas eliminarlos de manera permanente? Esta acción no se puede deshacer.
+                  Se encontraron <strong>{undoList.length}</strong> contactos importados de Excel. ¿Deseas eliminarlos de manera permanente? Esta acción no se puede deshacer.
                 </p>
               )}
             </div>
