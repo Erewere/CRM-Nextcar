@@ -396,7 +396,7 @@ export function AgencyUsers() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row items-end gap-4 w-full">
-          {userData?.role === 'master' && (
+          {isMaster && (
             <div className="w-full md:w-64">
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Agencia Destino</label>
               <select
@@ -424,7 +424,7 @@ export function AgencyUsers() {
           </div>
           <button
             onClick={handleSendInvitation}
-            disabled={!inviteEmail.trim() || inviting || (userData?.role === 'master' && !inviteTargetAgencyId)}
+            disabled={!inviteEmail.trim() || inviting || (isMaster && !inviteTargetAgencyId)}
             className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
           >
             <Send className="w-4 h-4" />
