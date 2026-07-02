@@ -41,11 +41,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             setUserData({ id: userDoc.id, ...userDoc.data() } as User);
           } else {
+            const params = new URLSearchParams(window.location.search);
+            const inviteAgencyId = params.get('agencyId');
+            
             // Auto provision a pending user document
             const newUserData = {
               email: user.email || '',
-              role: 'unassigned',
-              agencyId: 'unassigned',
+              role: inviteAgencyId ? 'seller' : 'unassigned',
+              agencyId: inviteAgencyId || 'unassigned',
               name: user.displayName || 'Usuario Pendiente',
               createdAt: serverTimestamp()
             };

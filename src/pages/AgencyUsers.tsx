@@ -12,6 +12,7 @@ export function AgencyUsers() {
   const [loading, setLoading] = useState(true);
   const [newAgencyName, setNewAgencyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteTargetAgencyId, setInviteTargetAgencyId] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState('');
   
@@ -212,7 +213,8 @@ export function AgencyUsers() {
         if (origin.includes('-dev-')) {
             origin = origin.replace('-dev-', '-pre-');
         }
-        const appUrl = origin + '/login?register=true';
+        const targetAgencyId = inviteTargetAgencyId || userData?.agencyId;
+        const appUrl = origin + '/login?register=true' + (targetAgencyId ? `&agencyId=${targetAgencyId}` : '');
         const subject = 'Invitación oficial para unirte a Nextcar CRM';
         const messageHtml = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 40px 20px;">
@@ -394,6 +396,21 @@ export function AgencyUsers() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row items-end gap-4 w-full">
+          {userData?.role === 'master' && (
+            <div className="w-full md:w-64">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Agencia Destino</label>
+              <select
+                value={inviteTargetAgencyId}
+                onChange={(e) => setInviteTargetAgencyId(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                <option value="">Selecciona una agencia...</option>
+                {agencies.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex-1 w-full">
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Invitar al Equipo (Enviar correo electrónico)</label>
             <input
@@ -407,7 +424,7 @@ export function AgencyUsers() {
           </div>
           <button
             onClick={handleSendInvitation}
-            disabled={!inviteEmail.trim() || inviting}
+            disabled={!inviteEmail.trim() || inviting || (userData?.role === 'master' && !inviteTargetAgencyId)}
             className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
           >
             <Send className="w-4 h-4" />
