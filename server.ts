@@ -161,9 +161,6 @@ async function startServer() {
     }
     try {
       let fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-      if (!fromEmail.includes("<") && fromEmail.includes("@")) {
-        fromEmail = `Nextcar CRM <${fromEmail}>`;
-      }
       
       const toList = to.split(',').map((e: string) => e.trim()).filter(Boolean);
 
