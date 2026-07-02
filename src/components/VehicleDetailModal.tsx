@@ -127,8 +127,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     if (!formData.agencyId || formData.agencyId === 'unassigned') {
       setErrorStatus('Debes seleccionar una agencia antes de subir fotos.');
       return;
@@ -141,19 +141,44 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         maxWidthOrHeight: 1920,
         useWebWorker: true
       };
-      const compressedFile = await imageCompression(file, options);
       
       const vId = vehicle.id || 'temp_' + Date.now();
-      const storageRef = ref(storage, `users/${userData?.id}/vehicles/${vId}/${compressedFile.name}`);
-      await uploadBytes(storageRef, compressedFile);
-      const url = await getDownloadURL(storageRef);
-      setFormData(prev => ({ ...prev, photoUrl: url }));
+      const newUrls: string[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const compressedFile = await imageCompression(file, options);
+        const fileName = `${Date.now()}_${compressedFile.name}`;
+        const storageRef = ref(storage, `users/${userData?.id}/vehicles/${vId}/${fileName}`);
+        await uploadBytes(storageRef, compressedFile);
+        const url = await getDownloadURL(storageRef);
+        newUrls.push(url);
+      }
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        photoUrl: prev.photoUrl || newUrls[0],
+        photoUrls: [...(prev.photoUrls || []), ...newUrls]
+      }));
     } catch (err) {
       console.error('Upload failed', err);
       setErrorStatus('Error al subir foto (revisa permisos)');
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
+  };
+
+  const removePhoto = (index: number) => {
+    setFormData(prev => {
+      const newUrls = [...(prev.photoUrls || [])];
+      newUrls.splice(index, 1);
+      return {
+        ...prev,
+        photoUrl: newUrls.length > 0 ? newUrls[0] : '',
+        photoUrls: newUrls
+      };
+    });
   };
 
   const handleAddOrEditExpense = async () => {
@@ -262,24 +287,34 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               {/* Left Column - Photo & Status */}
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Foto del Vehículo</label>
-                  <div className="aspect-video bg-slate-100 dark:bg-slate-700 rounded-xl relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600">
-                    {formData.photoUrl ? (
-                      <>
-                        <img src={formData.photoUrl} alt="Vehicle" className="absolute inset-0 w-full h-full object-cover" />
-                        <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer text-white">
-                          <Upload className="w-8 h-8 mb-2" />
-                          <span className="font-medium">Cambiar Foto</span>
-                          <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-                        </label>
-                      </>
-                    ) : (
-                      <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-slate-500 dark:text-slate-400 hover:text-blue-600 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
-                        {uploading ? <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-2"></div> : <Upload className="w-8 h-8 mb-2" />}
-                        <span className="font-medium">{uploading ? 'Subiendo...' : 'Subir Imagen'}</span>
-                        <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-                      </label>
-                    )}
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Fotos del Vehículo</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
+                    {/* Render existing photos */}
+                    {(formData.photoUrls || (formData.photoUrl ? [formData.photoUrl] : [])).map((url, idx) => (
+                      <div key={idx} className="aspect-square relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
+                        <img src={url} alt={`Vehicle ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(idx)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {/* Add new photo button */}
+                    <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                      {uploading ? (
+                        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600 mb-1"></div>
+                      ) : (
+                        <Plus className="w-6 h-6 text-slate-400 mb-1" />
+                      )}
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        {uploading ? '...' : 'Añadir'}
+                      </span>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                    </label>
                   </div>
                 </div>
 

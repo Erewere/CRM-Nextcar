@@ -31,6 +31,7 @@ export interface Vehicle {
   transmission: string;
   bodyType: string;
   photoUrl: string;
+  photoUrls?: string[];
   price: number;
   purchasePrice: number;
   vin: string;
