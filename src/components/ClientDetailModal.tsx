@@ -370,6 +370,7 @@ export function ClientDetailModal({
     const hasBuscaAutoTag = formData.tags?.some(t => 
       t.toLowerCase().includes('busca de auto') || 
       t.toLowerCase().includes('busca auto') ||
+      t.toLowerCase().includes('buscan auto') ||
       t.toLowerCase().includes('compra')
     );
 
@@ -379,11 +380,16 @@ export function ClientDetailModal({
       return;
     }
 
+    let finalFormData = { ...formData };
+    if (!hasBuscaAutoTag) {
+      finalFormData.wantedVehicle = null as any;
+    }
+
     try {
       if (isNew) {
         const newRef = doc(collection(db, "clients"));
         const dataToSave = {
-          ...formData,
+          ...finalFormData,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -395,7 +401,7 @@ export function ClientDetailModal({
         await setDoc(newRef, dataToSave);
       } else {
         const dataToUpdate = {
-          ...formData,
+          ...finalFormData,
           updatedAt: new Date().toISOString(),
         };
         Object.keys(dataToUpdate).forEach(
