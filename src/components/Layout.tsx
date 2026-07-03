@@ -144,7 +144,7 @@ export function Layout() {
     },
   ].filter((item) => {
     if (
-      userData?.email === 'luisfj@gmail.com' &&
+      userData?.role === 'master' &&
       item.roles.includes("master")
     )
       return true;

@@ -23,7 +23,7 @@ const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, 
   if (!userData) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E4002B]"></div></div>;
   
   if (requireRole) {
-    const isSpecialMaster = userData.email === 'luisfj@gmail.com';
+    const isSpecialMaster = userData.role === 'master';
     if (!requireRole.includes(userData.role as any) && !(isSpecialMaster && requireRole.includes('master'))) {
       return <Navigate to="/" replace />;
     }

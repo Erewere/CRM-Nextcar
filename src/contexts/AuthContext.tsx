@@ -40,13 +40,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             let data = userDoc.data();
-            if (data.email === 'luisfj@gmail.com' && data.role !== 'master') {
-                data.role = 'master';
-                await setDoc(doc(db, 'users', user.uid), { role: 'master' }, { merge: true });
-            } else if (data.email !== 'luisfj@gmail.com' && data.role === 'master') {
-                data.role = 'admin'; // Downgrade to admin instead of unassigned so they don't lose access completely, or unassigned. Let's just make them admin
-                await setDoc(doc(db, 'users', user.uid), { role: 'admin' }, { merge: true });
-            }
             setUserData({ id: userDoc.id, ...data } as User);
           } else {
             const params = new URLSearchParams(window.location.search);

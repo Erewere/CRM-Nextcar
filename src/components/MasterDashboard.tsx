@@ -309,9 +309,9 @@ export function MasterDashboard() {
                                   value={u.role || 'unassigned'}
                                   onChange={(e) => handleUpdateRole(u.id, e.target.value)}
                                   className="text-xs border border-slate-300 dark:border-slate-600 rounded py-1 px-2 bg-white dark:bg-slate-800 w-full max-w-[140px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                  disabled={u.email === 'luisfj@gmail.com'}
+                                  disabled={u.role === 'master'}
                                 >
-                                  {u.email === 'luisfj@gmail.com' && <option value="master">Master</option>}
+                                  {u.role === 'master' && <option value="master">Master</option>}
                                   <option value="admin">Administrador</option>
                                   <option value="seller">Vendedor</option>
                                   <option value="unassigned">Desasignado</option>
@@ -347,7 +347,7 @@ export function MasterDashboard() {
                               </td>
                               <td className="py-3 text-right">
                                 <div className="flex items-center justify-end gap-2">
-                                  {u.email !== 'luisfj@gmail.com' && (
+                                  {u.role !== 'master' && (
                                     <button
                                       onClick={() => handleDeleteUser(u.id, u.name || u.email || 'Usuario')}
                                       className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
