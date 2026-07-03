@@ -19,11 +19,13 @@ import {
   Mail,
   CreditCard,
   Blocks,
+  Key,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import clsx from "clsx";
 
 import { TaskReminders } from "./TaskReminders";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 
 export function Layout() {
   const { userData } = useAuth();
@@ -33,6 +35,7 @@ export function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -271,6 +274,24 @@ export function Layout() {
             )}
           </div>
           <button
+            onClick={() => setShowPasswordModal(true)}
+            title={isSidebarCollapsed ? "Cambiar Contraseña" : undefined}
+            className={clsx(
+              "w-full flex items-center rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors mb-1",
+              isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2",
+            )}
+          >
+            <Key
+              className={clsx(
+                "shrink-0",
+                isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5",
+              )}
+            />
+            {!isSidebarCollapsed && (
+              <span className="truncate">Cambiar Contraseña</span>
+            )}
+          </button>
+          <button
             onClick={handleLogout}
             title={isSidebarCollapsed ? "Cerrar Sesión" : undefined}
             className={clsx(
@@ -346,6 +367,8 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }

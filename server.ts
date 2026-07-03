@@ -146,6 +146,36 @@ async function startServer() {
     }
   });
 
+  app.post("/api/create-user", async (req, res) => {
+    try {
+      const { email, password, name, role, agencyId } = req.body;
+      if (!email || !password || !role || !agencyId) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos" });
+      }
+
+      const auth = getAdminApp().auth();
+      const userRecord = await auth.createUser({
+        email,
+        password,
+        displayName: name || email.split('@')[0],
+      });
+
+      const db = getAdminApp().firestore();
+      await db.collection("users").doc(userRecord.uid).set({
+        email,
+        role,
+        agencyId,
+        name: name || email.split('@')[0],
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
+    } catch (err: any) {
+      console.error("Create User Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {
     if (!resend) {

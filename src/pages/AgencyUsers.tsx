@@ -201,69 +201,64 @@ export function AgencyUsers() {
     }
   };
 
-  const handleSendInvitation = async () => {
+  const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState('seller');
+  const [createdUserPassword, setCreatedUserPassword] = useState('');
+
+  const handleCreateUser = async () => {
     if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
         alert('Por favor, ingresa un correo electrónico válido.');
         return;
     }
+    if (!inviteName.trim()) {
+        alert('Por favor, ingresa un nombre para el usuario.');
+        return;
+    }
     
     setInviting(true);
+    setCreatedUserPassword('');
     try {
-        let origin = window.location.origin;
-        if (origin.includes('-dev-')) {
-            origin = origin.replace('-dev-', '-pre-');
-        }
         const targetAgencyId = inviteTargetAgencyId || userData?.agencyId;
-        const appUrl = origin + '/login?register=true' + (targetAgencyId ? `&agencyId=${targetAgencyId}` : '');
-        const subject = 'Invitación oficial para unirte a Nextcar CRM';
-        const messageHtml = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 40px 20px;">
-  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-    <div style="background-color: #1e293b; padding: 40px 30px; text-align: center;">
-      <img src="https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80" alt="Nextcar" style="width: 100%; height: 160px; object-fit: cover; border-radius: 8px; margin-bottom: 20px; opacity: 0.9;" />
-      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Nextcar CRM</h1>
-    </div>
-    <div style="padding: 40px 30px;">
-      <p style="color: #334155; font-size: 16px; line-height: 24px; margin-top: 0;">Estimado(a) colaborador(a),</p>
-      <p style="color: #334155; font-size: 16px; line-height: 24px;">Has sido cordialmente invitado(a) a unirte al equipo de ventas en nuestro sistema <strong>Nextcar CRM</strong>.</p>
-      <p style="color: #334155; font-size: 16px; line-height: 24px;">Nuestra plataforma de alto rendimiento te proporcionará las herramientas necesarias para gestionar de manera integral el inventario de vehículos, dar un seguimiento preciso a tus clientes potenciales y organizar tus tareas estratégicas para maximizar los cierres de ventas.</p>
-      <div style="text-align: center; margin: 40px 0;">
-        <a href="${appUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">Acceder a la Plataforma</a>
-      </div>
-      <p style="color: #64748b; font-size: 14px; line-height: 24px;">Si tienes problemas con el botón, puedes copiar y pegar este enlace en tu navegador:</p>
-      <p style="color: #2563eb; font-size: 14px; word-break: break-all; margin-bottom: 0;">${appUrl}</p>
-    </div>
-    <div style="background-color: #f1f5f9; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
-      <p style="color: #64748b; font-size: 13px; margin: 0;">© ${new Date().getFullYear()} Nextcar CRM. Todos los derechos reservados.</p>
-    </div>
-  </div>
-</div>`;
+        const tempPassword = Math.random().toString(36).slice(-8) + 'Aa1!'; // Generate a random password
 
-        const res = await fetch('/api/send-invite', {
+        const res = await fetch('/api/create-user', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                to: inviteEmail.trim(),
-                subject: subject,
-                html: messageHtml
+                email: inviteEmail.trim(),
+                name: inviteName.trim(),
+                role: inviteRole,
+                agencyId: targetAgencyId,
+                password: tempPassword
             })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-            const errorMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error)) || 'Error al enviar la invitación';
+            const errorMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error)) || 'Error al crear el usuario';
             throw new Error(errorMsg);
         }
 
-        setInviteSuccessMsg(`¡Invitación enviada con éxito a ${inviteEmail.trim()}!`);
+        // Add the new user to the local list
+        setUsers(prev => [...prev, {
+            id: data.uid,
+            email: data.email,
+            name: inviteName.trim(),
+            role: inviteRole,
+            agencyId: targetAgencyId,
+            createdAt: new Date().toISOString()
+        }]);
+
+        setInviteSuccessMsg(`¡Usuario creado con éxito!`);
+        setCreatedUserPassword(data.tempPassword);
         setInviteEmail('');
-        setTimeout(() => setInviteSuccessMsg(''), 5000);
+        setInviteName('');
     } catch (e: any) {
         console.error(e);
-        alert('Error al enviar invitación. ' + (e.message || ''));
+        alert('Error al crear usuario. ' + (e.message || ''));
     } finally {
         setInviting(false);
     }
@@ -395,9 +390,10 @@ export function AgencyUsers() {
       )}
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col gap-4">
-        <div className="flex flex-col md:flex-row items-end gap-4 w-full">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Añadir Nuevo Usuario</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full items-end">
           {isMaster && (
-            <div className="w-full md:w-64">
+            <div className="w-full">
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Agencia Destino</label>
               <select
                 value={inviteTargetAgencyId}
@@ -411,30 +407,65 @@ export function AgencyUsers() {
               </select>
             </div>
           )}
-          <div className="flex-1 w-full">
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Invitar al Equipo (Enviar correo electrónico)</label>
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nombre Completo</label>
             <input
-              type="email"
-              multiple
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="correo1@ejemplo.com, correo2@ejemplo.com"
+              type="text"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              placeholder="Ej. Juan Pérez"
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             />
           </div>
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Correo Electrónico</label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="usuario@ejemplo.com"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            />
+          </div>
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Rol</label>
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            >
+              <option value="seller">Vendedor</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end mt-2">
           <button
-            onClick={handleSendInvitation}
-            disabled={!inviteEmail.trim() || inviting || (isMaster && !inviteTargetAgencyId)}
+            onClick={handleCreateUser}
+            disabled={!inviteEmail.trim() || !inviteName.trim() || inviting || (isMaster && !inviteTargetAgencyId)}
             className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
           >
-            <Send className="w-4 h-4" />
-            {inviting ? 'Enviando...' : 'Enviar Invitación'}
+            <Plus className="w-4 h-4" />
+            {inviting ? 'Creando...' : 'Crear Usuario'}
           </button>
         </div>
         {inviteSuccessMsg && (
-          <div className="text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg flex items-center gap-2">
-            <CheckCircle className="w-4 h-4" />
-            {inviteSuccessMsg}
+          <div className="mt-4 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-4 rounded-lg flex flex-col gap-2 border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckCircle className="w-5 h-5" />
+              {inviteSuccessMsg}
+            </div>
+            {createdUserPassword && (
+              <div className="mt-2 bg-white dark:bg-slate-800 p-3 rounded border border-green-100 dark:border-green-900 select-all">
+                <p className="text-slate-600 dark:text-slate-300 mb-1">Contraseña temporal generada:</p>
+                <code className="text-lg font-mono font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">
+                  {createdUserPassword}
+                </code>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                  Copia esta contraseña y entrégasela al usuario. Podrá cambiarla una vez que inicie sesión.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
