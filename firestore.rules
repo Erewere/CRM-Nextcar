@@ -40,9 +40,9 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.agencyId == resource.data.agencyId
       ));
       
-      // A user can create their own profile, but cannot set their role to master or admin unless master
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && request.auth.uid == userId; // Basic update for now, in a real app would restrict `role` and `agencyId` fields
+      // A user can create their own profile, or an agency admin can create a user for their agency
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAgencyAdmin(request.resource.data.agencyId));
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAgencyAdmin(resource.data.agencyId));
       allow delete: if isMaster();
     }
 
@@ -76,9 +76,7 @@ service cloud.firestore {
     }
 
     match /vehicleExpenses/{expenseId} {
-      // Access requires checking the parent vehicle's agencyId (wait, expenses only have vehicleId, we need a get to check vehicle agency)
-      // Since vehicleExpenses is a separate collection, we check via get() or just allow admins if they have access to the vehicle
-      allow read, write: if isSignedIn(); // Simplified for now to prevent breaking, since vehicleExpenses lack agencyId
+      allow read, write: if isSignedIn(); // Simplified for now
     }
 
     match /deals/{dealId} {

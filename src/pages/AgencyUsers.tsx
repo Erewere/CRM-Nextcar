@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
 import { Users, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, Trash2, X, Clock } from 'lucide-react';
 import { Task, Client } from '../types';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 export function AgencyUsers() {
   const { userData } = useAuth();
@@ -221,30 +222,40 @@ export function AgencyUsers() {
         const targetAgencyId = inviteTargetAgencyId || userData?.agencyId;
         const tempPassword = Math.random().toString(36).slice(-8) + 'Aa1!'; // Generate a random password
 
-        const res = await fetch('/api/create-user', {
+        // Use Firebase Auth REST API directly to avoid signing out the current admin
+        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 email: inviteEmail.trim(),
-                name: inviteName.trim(),
-                role: inviteRole,
-                agencyId: targetAgencyId,
-                password: tempPassword
+                password: tempPassword,
+                returnSecureToken: true
             })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-            const errorMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error)) || 'Error al crear el usuario';
+            const errorMsg = data.error?.message || 'Error al crear el usuario en Auth';
             throw new Error(errorMsg);
         }
+        
+        const newUserId = data.localId;
+
+        // Save user data to Firestore
+        await setDoc(doc(db, 'users', newUserId), {
+            email: inviteEmail.trim(),
+            name: inviteName.trim(),
+            role: inviteRole,
+            agencyId: targetAgencyId,
+            createdAt: new Date().toISOString()
+        });
 
         // Add the new user to the local list
         setUsers(prev => [...prev, {
-            id: data.uid,
+            id: newUserId,
             email: data.email,
             name: inviteName.trim(),
             role: inviteRole,
@@ -253,7 +264,7 @@ export function AgencyUsers() {
         }]);
 
         setInviteSuccessMsg(`¡Usuario creado con éxito!`);
-        setCreatedUserPassword(data.tempPassword);
+        setCreatedUserPassword(tempPassword);
         setInviteEmail('');
         setInviteName('');
     } catch (e: any) {
