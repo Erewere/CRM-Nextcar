@@ -275,6 +275,37 @@ export function AgencyUsers() {
     }
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (userData?.role !== 'admin' && userData?.role !== 'master') return;
+    if (userId === userData?.id) {
+        alert("No puedes eliminar tu propia cuenta.");
+        return;
+    }
+    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${userName}? Esta acción no se puede deshacer.`);
+    if (!confirmDelete) return;
+
+    try {
+        const res = await fetch('/api/delete-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ uid: userId })
+        });
+        
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Error al eliminar usuario');
+        }
+
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        alert('Usuario eliminado correctamente.');
+    } catch (e: any) {
+        console.error("Error deleting user:", e);
+        alert('Error al eliminar usuario: ' + e.message);
+    }
+  };
+
   const inactivityThresholdMs = inactivityAlertDays * 24 * 60 * 60 * 1000;
   const inactiveAlerts = useMemo(() => {
     const alerts: { task: Task, client: Client | null }[] = [];
@@ -636,19 +667,31 @@ export function AgencyUsers() {
                   </div>
                 )}
                 
-                <div className="w-full sm:w-auto">
-                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Rol</label>
-                  <select
-                    value={u.role || 'unassigned'}
-                    onChange={(e) => handleUpdateRole(u.id, e.target.value, u.name, u.email)}
-                    className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    disabled={(!isMaster && u.role === 'master')}
-                  >
-                    {isMaster && u.email === 'luisfj@gmail.com' && <option value="master">Master</option>}
-                    <option value="admin">Administrador</option>
-                    <option value="seller">Vendedor</option>
-                    <option value="unassigned">Desasignado</option>
-                  </select>
+                <div className="w-full sm:w-auto flex items-end gap-2">
+                  <div className="w-full sm:w-auto">
+                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Rol</label>
+                    <select
+                      value={u.role || 'unassigned'}
+                      onChange={(e) => handleUpdateRole(u.id, e.target.value, u.name, u.email)}
+                      className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={(!isMaster && u.role === 'master')}
+                    >
+                      {isMaster && u.email === 'luisfj@gmail.com' && <option value="master">Master</option>}
+                      <option value="admin">Administrador</option>
+                      <option value="seller">Vendedor</option>
+                      <option value="unassigned">Desasignado</option>
+                    </select>
+                  </div>
+                  
+                  {u.id !== userData?.id && (userData?.role === 'admin' || userData?.role === 'master') && (
+                    <button
+                      onClick={() => handleDeleteUser(u.id, u.name || u.email || 'Usuario')}
+                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      title="Eliminar usuario"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </li>

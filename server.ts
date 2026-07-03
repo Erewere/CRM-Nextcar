@@ -176,6 +176,28 @@ async function startServer() {
     }
   });
 
+  app.post("/api/delete-user", async (req, res) => {
+    try {
+      const { uid } = req.body;
+      if (!uid) {
+        return res.status(400).json({ error: "Falta el parámetro uid" });
+      }
+
+      // Delete from Firebase Auth
+      const auth = getAdminApp().auth();
+      await auth.deleteUser(uid);
+
+      // Delete from Firestore
+      const db = getAdminApp().firestore();
+      await db.collection("users").doc(uid).delete();
+
+      res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("Delete User Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {
     if (!resend) {
