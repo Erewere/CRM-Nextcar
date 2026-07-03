@@ -1,30 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Mail } from 'lucide-react';
+import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-
 export function Integrations() {
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const { userData, connectGoogleServices, googleToken } = useAuth();
-
-  const handleGoogleConnect = async () => {
-    setGoogleLoading(true);
-    try {
-      await connectGoogleServices();
-      alert("Cuenta conectada exitosamente!");
-    } catch (err: any) {
-      alert("Error conectando cuenta: " + err.message);
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    // Note: Disconnection logic goes here if implemented in AuthContext, 
-    // for now we just show an alert or handle it via a new function if needed
-    alert("Para desconectar, revoca el acceso desde tu cuenta de Google.");
-  };
+  const { userData } = useAuth();
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [accessToken, setAccessToken] = useState('');
@@ -224,66 +204,6 @@ export function Integrations() {
           </div>
         </div>
 
-        {/* Email Integration (OAuth Secure Flow) */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mt-6">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shrink-0">
-                <Mail className="w-6 h-6 text-blue-600 dark:text-blue-500" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Integración de Correos (Gmail / Workspace)</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Conecta tu cuenta de Google mediante inicio de sesión seguro (OAuth) para leer y enviar correos.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6">
-            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center max-w-xl mx-auto">
-              <Mail className="w-12 h-12 text-blue-500 mb-4" />
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Conectar cuenta de Google</h3>
-              <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
-                Al conectar tu cuenta, el CRM podrá acceder a tus correos y enviar mensajes en tu nombre de forma totalmente segura. No necesitamos conocer tu contraseña.
-              </p>
-              
-              {googleToken ? (
-                <div className="flex flex-col items-center">
-                  <div className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-medium flex items-center gap-2 mb-4 text-sm">
-                    <CheckCircle2 className="w-4 h-4" /> Cuenta de Google Conectada
-                  </div>
-                  <button
-                    onClick={handleDisconnectGoogle}
-                    className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline"
-                  >
-                    Desconectar o cambiar cuenta
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleGoogleConnect}
-                  disabled={googleLoading}
-                  className="flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-medium py-2 px-6 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm w-full sm:w-auto"
-                >
-                  {googleLoading ? (
-                    <span className="text-sm">Conectando...</span>
-                  ) : (
-                    <>
-                      <svg width="18" height="18" viewBox="0 0 48 48">
-                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                        <path fill="none" d="M0 0h48v48H0z"></path>
-                      </svg>
-                      <span className="text-sm">Sign in with Google</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

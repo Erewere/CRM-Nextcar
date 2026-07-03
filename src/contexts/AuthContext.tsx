@@ -18,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   bootstrapUser: (role: 'master' | 'admin' | 'seller', agencyId: string, name: string) => Promise<void>;
   connectGoogleServices: () => Promise<string | null>;
+  disconnectGoogleServices: () => void;
   googleToken: string | null;
 }
 
@@ -122,8 +123,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
+  const disconnectGoogleServices = () => {
+    cachedAccessToken = null;
+    setGoogleToken(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, userData, loading, bootstrapUser, connectGoogleServices, googleToken }}>
+    <AuthContext.Provider value={{ currentUser, userData, loading, bootstrapUser, connectGoogleServices, disconnectGoogleServices, googleToken }}>
       {children}
     </AuthContext.Provider>
   );
