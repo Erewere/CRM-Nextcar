@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { User, ClientFile, Agency, Client, Task } from '../types';
-import { Shield, FileText, Calendar, Mail, FileUp, X, ExternalLink, Plus, Building, Users, Activity, CheckCircle, ChevronDown, ChevronRight, Briefcase } from 'lucide-react';
+import { Shield, FileText, Calendar, Mail, FileUp, X, ExternalLink, Plus, Building, Users, Activity, CheckCircle, ChevronDown, ChevronRight, Briefcase, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import clsx from 'clsx';
 
@@ -31,9 +31,6 @@ export function MasterDashboard() {
   const [users, setUsers] = useState<UserStats[]>([]);
   const [agenciesStats, setAgenciesStats] = useState<AgencyStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
-  const [userFiles, setUserFiles] = useState<ClientFile[]>([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
   const [allFiles, setAllFiles] = useState<ClientFile[]>([]);
   const [newAgencyName, setNewAgencyName] = useState('');
   const [expandedAgencies, setExpandedAgencies] = useState<Record<string, boolean>>({});
@@ -135,12 +132,30 @@ export function MasterDashboard() {
     }
   };
 
-  const handleUserClick = (u: UserStats) => {
-    setSelectedUser(u);
-    setLoadingFiles(true);
-    const uFiles = allFiles.filter(f => f.userId === u.id);
-    setUserFiles(uFiles);
-    setLoadingFiles(false);
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${userName}? Esta acción no se puede deshacer.`);
+    if (!confirmDelete) return;
+
+    try {
+        const res = await fetch('/api/delete-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ uid: userId })
+        });
+        
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Error al eliminar usuario');
+        }
+
+        fetchUsersAndFiles();
+        alert('Usuario eliminado correctamente.');
+    } catch (e: any) {
+        console.error("Error deleting user:", e);
+        alert('Error al eliminar usuario: ' + e.message);
+    }
   };
 
   const toggleAgency = (agencyId: string) => {
@@ -270,7 +285,7 @@ export function MasterDashboard() {
                             <th className="pb-3 font-medium">Usuario</th>
                             <th className="pb-3 font-medium">Rol</th>
                             <th className="pb-3 font-medium">Estadísticas de CRM</th>
-                            <th className="pb-3 font-medium text-right">Archivos</th>
+                            <th className="pb-3 font-medium text-right">Acciones</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
@@ -324,16 +339,24 @@ export function MasterDashboard() {
                                     <CheckCircle className="w-3.5 h-3.5 text-slate-400" />
                                     {u.tasksCount}
                                   </div>
+                                  <div className="flex items-center gap-1" title="Archivos Subidos">
+                                    <FileUp className="w-3.5 h-3.5 text-slate-400" />
+                                    {u.filesCount}
+                                  </div>
                                 </div>
                               </td>
                               <td className="py-3 text-right">
-                                <button 
-                                  onClick={() => handleUserClick(u)}
-                                  className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 px-2.5 py-1.5 rounded transition-colors"
-                                >
-                                  <FileUp className="w-3.5 h-3.5" />
-                                  Ver ({u.filesCount})
-                                </button>
+                                <div className="flex items-center justify-end gap-2">
+                                  {u.email !== 'luisfj@gmail.com' && (
+                                    <button
+                                      onClick={() => handleDeleteUser(u.id, u.name || u.email || 'Usuario')}
+                                      className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                      title="Eliminar usuario"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -347,51 +370,6 @@ export function MasterDashboard() {
           );
         })}
       </div>
-
-      {selectedUser && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-         <div className="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
-           <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
-             <div>
-               <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">Archivos de Usuario</h2>
-               <p className="text-sm text-slate-500 dark:text-slate-400">{selectedUser.name} ({selectedUser.email})</p>
-             </div>
-             <button onClick={() => setSelectedUser(null)} className="text-gray-400 hover:text-black">
-               <X className="w-6 h-6" />
-             </button>
-           </div>
-           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-             {userFiles.length === 0 ? (
-               <div className="text-center py-8 text-slate-500 dark:text-slate-400 flex flex-col items-center">
-                  <FileText className="w-8 h-8 text-slate-300 mb-2" />
-                  Este usuario no ha subido ningún archivo.
-               </div>
-             ) : (
-               <div className="space-y-3">
-                 {userFiles.map(f => (
-                   <div key={f.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 gap-3">
-                     <div className="flex items-center gap-3 overflow-hidden">
-                       <FileText className="w-5 h-5 text-indigo-500 flex-shrink-0" />
-                       <div className="truncate">
-                         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{f.filename}</p>
-                         <p className="text-xs text-slate-500 dark:text-slate-400">{f.uploadedAt ? format(safeDate(f.uploadedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</p>
-                       </div>
-                     </div>
-                     <a href={f.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0">
-                       <ExternalLink className="w-4 h-4"/>
-                       Abrir
-                     </a>
-                   </div>
-                 ))}
-               </div>
-             )}
-           </div>
-           <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end">
-             <button onClick={() => setSelectedUser(null)} className="px-5 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-black bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">Cerrar</button>
-           </div>
-         </div>
-       </div>
-      )}
     </div>
   );
 }
