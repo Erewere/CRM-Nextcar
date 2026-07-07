@@ -82,17 +82,18 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
     
     // Passengers
     if (wv.passengers) {
-        if (vehicle.passengers !== undefined) {
-            if (vehicle.passengers !== wv.passengers) {
+        const vPassengers = vehicle.passengers;
+        if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
+            if (Number(vPassengers) !== Number(wv.passengers)) {
                 isExact = false;
                 // Si el cliente pide un número específico de pasajeros, es un requerimiento fuerte (ej. SUV de 3 filas)
                 // No sugerimos como similar si no coincide el número de pasajeros
                 isSimilar = false; 
             }
         } else {
-            // Si el vehículo no tiene pasajeros definidos, asumimos que no es un match exacto si están pidiendo una cantidad específica
+            // Si el vehículo no tiene pasajeros definidos y piden cantidad, no lo recomendamos.
             isExact = false;
-            differences += 1;
+            isSimilar = false;
         }
     }
 

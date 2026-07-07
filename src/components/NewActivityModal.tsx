@@ -699,7 +699,7 @@ export function NewActivityModal({
                 onChange={(e) => setSyncToCalendar(e.target.checked)}
                 className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 text-blue-600 focus:ring-blue-500"
               />
-              <CalendarIcon className="w-4 h-4" /> Sincronizar en Calendar
+              <CalendarIcon className="w-4 h-4" /> Sincronizar con Google (Calendar / Tasks)
             </label>
           </div>
 

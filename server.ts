@@ -117,7 +117,7 @@ async function startServer() {
   // === Stripe Create Checkout Session ===
   app.post("/api/create-checkout-session", async (req, res) => {
     try {
-      const { agencyId, priceId } = req.body;
+      const { agencyId, priceId, quantity } = req.body;
       if (!agencyId || !priceId) {
         return res.status(400).json({ error: "Missing agencyId or priceId" });
       }
@@ -131,7 +131,7 @@ async function startServer() {
         line_items: [
           {
             price: priceId, // e.g. price_1...
-            quantity: 1,
+            quantity: quantity || 1,
           },
         ],
         client_reference_id: agencyId,
@@ -184,8 +184,12 @@ async function startServer() {
       }
 
       // Delete from Firebase Auth
-      const auth = getAdminApp().auth();
-      await auth.deleteUser(uid);
+      try {
+        const auth = getAdminApp().auth();
+        await auth.deleteUser(uid);
+      } catch (authErr: any) {
+        console.warn("Could not delete from Firebase Auth (ignoring):", authErr.message);
+      }
 
       // Delete from Firestore
       const db = getAdminApp().firestore();

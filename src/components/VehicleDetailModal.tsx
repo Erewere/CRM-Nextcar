@@ -25,8 +25,21 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       make: '', model: '', year: new Date().getFullYear(), color: '',
       transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
       price: 0, purchasePrice: 0, vin: '',
-      km: 0, receivedAt: new Date().toISOString().split('T')[0], cylinders: 4, liters: 0, equipment: '', passengers: 5
-    } : vehicle
+      km: 0, 
+      receivedAt: (() => {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      })(), 
+      cylinders: 4, liters: 0, equipment: '', passengers: 5
+    } : {
+      status: 'available', 
+      agencyId: '', 
+      make: '', model: '', year: new Date().getFullYear(), color: '',
+      transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
+      price: 0, purchasePrice: 0, vin: '',
+      km: 0, receivedAt: '', cylinders: 4, liters: 0, equipment: '', passengers: 5,
+      ...vehicle
+    }
   );
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -37,7 +50,11 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
-  const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
+  const getLocalDateString = () => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+  const [expDate, setExpDate] = useState(getLocalDateString());
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
 
@@ -216,7 +233,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
     setEditingExpenseId(null);
     setExpDesc('');
     setExpAmount('');
-    setExpDate(new Date().toISOString().split('T')[0]);
+    setExpDate(getLocalDateString());
   };
 
   const handleDeleteExpense = async (id: string) => {
@@ -248,7 +265,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             >
               Info del Vehículo
             </button>
-            {!isNew && (
+            {!isNew && userData?.role !== 'seller' && (
               <button 
                  onClick={() => setActiveTab('expenses')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -489,7 +506,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     <h4 className="text-sm font-bold text-green-900 mb-2">Resumen Financiero</h4>
                     <div className="space-y-1 text-sm text-green-800">
                       <div className="flex justify-between">
-                        <span>Venta Promyectada:</span>
+                        <span>Venta Proyectada:</span>
                         <span>${Number(formData.price || 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
@@ -511,7 +528,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             </form>
           )}
 
-          {activeTab === 'expenses' && !isNew && (
+          {activeTab === 'expenses' && !isNew && userData?.role !== 'seller' && (
             <div className="h-full flex flex-col">
               <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border items-center">
                 <input 

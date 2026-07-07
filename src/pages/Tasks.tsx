@@ -158,6 +158,7 @@ export function Tasks() {
   };
 
   const [showSyncBanner, setShowSyncBanner] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // New task form
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -780,10 +781,113 @@ export function Tasks() {
   };
 
   const handleSyncCalendar = async () => {
-    const token = await connectGoogleServices();
-    if (token) {
-      alert("¡Calendario sincronizado con éxito!");
+    setIsSyncing(true);
+    try {
+      const token = await connectGoogleServices();
+      if (!token) {
+        setIsSyncing(false);
+        return;
+      }
+
+      let syncedCount = 0;
+      for (const { task } of tasks) {
+        if (task.googleEventId) {
+          try {
+            const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${task.googleEventId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.status === 404) {
+              await deleteDoc(doc(db, "tasks", task.id));
+              syncedCount++;
+            } else if (res.ok) {
+              const data = await res.json();
+              if (data.status === 'cancelled') {
+                await deleteDoc(doc(db, "tasks", task.id));
+                syncedCount++;
+              }
+            }
+          } catch (e) {
+            console.error("Error fetching event", e);
+          }
+        }
+        if (task.googleTaskId && !task.completed) {
+          try {
+            const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/@default/tasks/${task.googleTaskId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.status === 200) {
+              const data = await res.json();
+              if (data.status === 'completed') {
+                await updateDoc(doc(db, "tasks", task.id), { completed: true });
+                syncedCount++;
+              }
+            } else if (res.status === 404) {
+              await deleteDoc(doc(db, "tasks", task.id));
+              syncedCount++;
+            }
+          } catch (e) {
+            console.error("Error fetching task", e);
+          }
+        }
+
+        if (!task.completed && !task.googleEventId && !task.googleTaskId) {
+          const eventPayload = {
+            summary: task.title,
+            description: task.notes || "",
+            start: {
+              dateTime: `${task.dueDate}T${task.startTime || "09:00"}:00`,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            end: {
+              dateTime: `${task.dueDate}T${task.endTime || task.startTime || "10:00"}:00`,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+          };
+          const taskPayload = {
+            title: task.title,
+            notes: task.notes || "",
+            due: new Date(`${task.dueDate}T${task.startTime || '00:00'}:00`).toISOString()
+          };
+          try {
+            const [calRes, taskRes] = await Promise.all([
+              fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify(eventPayload),
+              }),
+              fetch("https://tasks.googleapis.com/tasks/v1/lists/@default/tasks", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify(taskPayload),
+              })
+            ]);
+
+            let updates: any = {};
+            if (calRes.ok) {
+              const calData = await calRes.json();
+              updates.googleEventId = calData.id;
+            }
+            if (taskRes.ok) {
+              const taskData = await taskRes.json();
+              updates.googleTaskId = taskData.id;
+            }
+
+            if (Object.keys(updates).length > 0) {
+              await updateDoc(doc(db, "tasks", task.id), updates);
+              syncedCount++;
+            }
+          } catch (e) {
+            console.error("Error creating Google items", e);
+          }
+        }
+      }
+
+      alert(syncedCount > 0 ? `¡Sincronización completada! ${syncedCount} elementos actualizados.` : "¡Calendario conectado! Todo está al día.");
       setShowSyncBanner(false);
+    } catch (error: any) {
+      alert("Error al sincronizar: " + (error.message || "Error desconocido"));
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -983,9 +1087,23 @@ export function Tasks() {
             <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">
               {tasks.length} actividades
             </span>
-            <span className="text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded-full uppercase">
-              Sincronización Inactiva
-            </span>
+            {googleToken ? (
+              <button
+                onClick={handleSyncCalendar}
+                disabled={isSyncing}
+                className="text-[10px] font-bold text-green-600 border border-green-200 bg-green-50 hover:bg-green-100 px-2 py-0.5 rounded-full uppercase cursor-pointer transition-colors"
+              >
+                {isSyncing ? 'Sincronizando...' : 'Sincronización Activa (Actualizar)'}
+              </button>
+            ) : (
+              <button
+                onClick={handleSyncCalendar}
+                disabled={isSyncing}
+                className="text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-full uppercase cursor-pointer transition-colors disabled:opacity-50"
+              >
+                {isSyncing ? 'Conectando...' : 'Sincronización Inactiva (Conectar)'}
+              </button>
+            )}
 
             {view === "list" && (
               <div className="relative flex items-center gap-2 ml-auto sm:ml-0">
@@ -2341,25 +2459,59 @@ export function Tasks() {
                   },
                 };
 
+                const taskPayload = {
+                  title: taskData.title,
+                  notes: taskData.notes,
+                  due: new Date(`${taskData.dueDate}T${taskData.startTime || '00:00'}:00`).toISOString()
+                };
+
                 try {
-                  await fetch(
-                    "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-                    {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify(event),
-                    },
-                  );
+                  const [calRes, taskRes] = await Promise.all([
+                    fetch(
+                      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                      {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(event),
+                      }
+                    ),
+                    fetch(
+                      "https://tasks.googleapis.com/tasks/v1/lists/@default/tasks",
+                      {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(taskPayload),
+                      }
+                    )
+                  ]);
+
+                  let updates: any = {};
+                  if (calRes.ok) {
+                    const calData = await calRes.json();
+                    updates.googleEventId = calData.id;
+                  }
+                  if (taskRes.ok) {
+                    const taskData = await taskRes.json();
+                    updates.googleTaskId = taskData.id;
+                  }
+
+                  if (Object.keys(updates).length > 0) {
+                    await updateDoc(newRef, updates);
+                  }
+
                   alert(
-                    "¡Actividad guardada y evento agregado a tu Calendario de Google con éxito!",
+                    "¡Actividad guardada y evento agregado a tu Calendario y Tareas de Google con éxito!",
                   );
                 } catch (calendarError) {
-                  console.error("Error syncing to calendar", calendarError);
+                  console.error("Error syncing to calendar/tasks", calendarError);
                   alert(
-                    "Actividad guardada, pero ocurrió un error al sincronizar con Google Calendar.",
+                    "Actividad guardada, pero ocurrió un error al sincronizar con Google.",
                   );
                 }
               }

@@ -94,6 +94,7 @@ export function Dashboard() {
   const [pipelineStages, setPipelineStages] = useState<
     { id: string; title: string }[]
   >([]);
+  const [inactivityAlertDays, setInactivityAlertDays] = useState(14);
 
   useEffect(() => {
     if (userData?.agencyId) {
@@ -108,6 +109,9 @@ export function Dashboard() {
                 data.pipelineStages.length > 0
               ) {
                 setPipelineStages(data.pipelineStages);
+              }
+              if (data.inactivityAlertDays) {
+                setInactivityAlertDays(data.inactivityAlertDays);
               }
             }
           })
@@ -253,6 +257,24 @@ export function Dashboard() {
       return true;
     });
   }, [tasks, filterSeller]);
+
+  const inactiveAlerts = useMemo(() => {
+    const alerts: { task: Task, client: Client | null }[] = [];
+    const nowMs = Date.now();
+    const inactivityThresholdMs = inactivityAlertDays * 24 * 60 * 60 * 1000;
+    tasks.forEach(task => {
+      if (!task.completed && task.dueDate) {
+        const taskDate = new Date(task.dueDate).getTime();
+        if (nowMs - taskDate > inactivityThresholdMs) {
+          alerts.push({
+            task,
+            client: clients.find(c => c.id === task.clientId) || null
+          });
+        }
+      }
+    });
+    return alerts;
+  }, [tasks, clients, inactivityAlertDays]);
 
   if (loading) return <div>Cargando dashboard...</div>;
 
@@ -469,7 +491,9 @@ export function Dashboard() {
                 <option value="all">Todos los vendedores</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name}
+                    {(!u.name || u.name === 'Usuario Pendiente')
+                      ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
+                      : u.name}
                   </option>
                 ))}
               </select>
@@ -847,6 +871,28 @@ export function Dashboard() {
                 {thisWeekTasks.length}
               </span>
             </Link>
+
+            {userData?.role === "admin" && (
+              <Link
+                to="/users"
+                className="block flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                      Alertas de Inactividad
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Clientes sin atención (&#62;{inactivityAlertDays}d)
+                    </p>
+                  </div>
+                </div>
+                <span className="text-orange-600 font-black text-xl">
+                  {inactiveAlerts.length}
+                </span>
+              </Link>
+            )}
           </div>
         </div>
       </div>

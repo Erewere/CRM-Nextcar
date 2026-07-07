@@ -115,6 +115,8 @@ export interface Task {
   startTime?: string;
   endTime?: string;
   completed: boolean;
+  googleEventId?: string;
+  googleTaskId?: string;
   createdAt: any;
   updatedAt?: any;
 }

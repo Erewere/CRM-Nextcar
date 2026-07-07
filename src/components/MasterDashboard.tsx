@@ -133,9 +133,6 @@ export function MasterDashboard() {
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${userName}? Esta acción no se puede deshacer.`);
-    if (!confirmDelete) return;
-
     try {
         const res = await fetch('/api/delete-user', {
             method: 'POST',

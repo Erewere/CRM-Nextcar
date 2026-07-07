@@ -4,8 +4,14 @@ service cloud.firestore {
     // Basic helpers
     function isSignedIn() { return request.auth != null; }
     function isMaster() {
-      // Hardcoded master user
-      return isSignedIn() && request.auth.uid == 'vxFIfZ5bdQSzaekW5d5c1TbNVCO2';
+      // Hardcoded master user OR role is master
+      return isSignedIn() && (
+        request.auth.uid == 'vxFIfZ5bdQSzaekW5d5c1TbNVCO2' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master'
+        )
+      );
     }
     
     // Check if user belongs to the requested agency
@@ -43,7 +49,7 @@ service cloud.firestore {
       // A user can create their own profile, or an agency admin can create a user for their agency
       allow create: if isSignedIn() && (request.auth.uid == userId || isAgencyAdmin(request.resource.data.agencyId));
       allow update: if isSignedIn() && (request.auth.uid == userId || isAgencyAdmin(resource.data.agencyId));
-      allow delete: if isMaster();
+      allow delete: if isAgencyAdmin(resource.data.agencyId);
     }
 
     match /agencies/{agencyId} {

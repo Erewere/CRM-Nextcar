@@ -1,31 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { CreditCard, Check, AlertCircle } from 'lucide-react';
+import { CreditCard, Check, AlertCircle, Users } from 'lucide-react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export function Billing() {
   const { userData } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [userCount, setUserCount] = useState(0);
+
+  const PRICE_PER_USER = 9.99;
 
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("success")) {
+    const queryParams = new URLSearchParams(window.location.search);
+    if (queryParams.get("success")) {
       setSuccess("¡Suscripción completada con éxito!");
     }
-    if (query.get("canceled")) {
+    if (queryParams.get("canceled")) {
       setError("El proceso de pago fue cancelado.");
     }
-  }, []);
+
+    const fetchUserCount = async () => {
+      if (!userData?.agencyId) return;
+      try {
+        const q = query(
+          collection(db, 'users'),
+          where('agencyId', '==', userData.agencyId)
+        );
+        const querySnapshot = await getDocs(q);
+        setUserCount(querySnapshot.size);
+      } catch (err) {
+        console.error("Error fetching user count", err);
+      }
+    };
+
+    fetchUserCount();
+  }, [userData?.agencyId]);
 
   const handleSubscribe = async () => {
     if (!userData?.agencyId) {
       setError('No agency ID found.');
       return;
     }
-
     setLoading(true);
     setError('');
+
     try {
       // In a real app, this priceId would probably come from an env var or database
       const priceId = import.meta.env.VITE_STRIPE_PRICE_ID || 'price_...';
@@ -37,11 +58,13 @@ export function Billing() {
         },
         body: JSON.stringify({
           agencyId: userData.agencyId,
-          priceId: priceId
+          priceId: priceId,
+          quantity: Math.max(1, userCount)
         }),
       });
 
       const data = await response.json();
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create checkout session');
       }
@@ -54,11 +77,14 @@ export function Billing() {
         // Mostrar mensaje indicando que se abrió en otra pestaña
         setSuccess("Se ha abierto la pasarela de pago en una nueva pestaña. Si no la ves, revisa que tu navegador no esté bloqueando ventanas emergentes.");
       }
+
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
     }
   };
+
+  const totalMonthlyCost = (userCount * PRICE_PER_USER).toFixed(2);
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -122,11 +148,22 @@ export function Billing() {
             </button>
           </div>
           
-          <div className="md:w-[300px] bg-slate-50 dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-            <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Precio</div>
-            <div className="text-5xl font-black text-slate-900 dark:text-white mb-2">$9.99</div>
-            <div className="text-slate-500 dark:text-slate-400 mb-6">USD / mes por usuario</div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">Facturado mensualmente según la cantidad de usuarios. Cancela cuando quieras.</div>
+          <div className="md:w-[350px] bg-slate-50 dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800 text-center flex flex-col justify-center">
+            <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Desglose Mensual</div>
+            
+            <div className="flex justify-between items-center text-slate-600 dark:text-slate-400 mb-2 text-sm border-b border-slate-200 dark:border-slate-700 pb-2">
+              <span className="flex items-center gap-1.5"><Users className="w-4 h-4"/> Usuarios ({userCount})</span>
+              <span>{userCount} x ${PRICE_PER_USER}</span>
+            </div>
+            
+            <div className="flex justify-between items-center text-slate-900 dark:text-white font-bold text-xl mt-4 mb-2">
+              <span>Total a pagar</span>
+              <span>${totalMonthlyCost}</span>
+            </div>
+
+            <div className="text-xs text-slate-400 dark:text-slate-500 mt-4">
+              Facturado mensualmente según la cantidad de usuarios activos en la agencia.
+            </div>
           </div>
         </div>
       </div>

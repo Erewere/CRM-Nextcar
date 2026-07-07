@@ -477,7 +477,9 @@ export function Kanban() {
                   <option value="all">Todos los vendedores</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name || u.email}
+                      {(!u.name || u.name === 'Usuario Pendiente')
+                        ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
+                        : u.name}
                     </option>
                   ))}
                 </select>

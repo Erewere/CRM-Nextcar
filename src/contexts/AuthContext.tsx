@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User } from '../types';
@@ -11,6 +11,8 @@ provider.addScope('https://www.googleapis.com/auth/calendar.events');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
 provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
 provider.addScope('https://www.googleapis.com/auth/gmail.send');
+provider.addScope('https://www.googleapis.com/auth/tasks');
+provider.setCustomParameters({ prompt: 'select_account' });
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -94,13 +96,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       let result;
       if (auth.currentUser) {
-        try {
-          result = await linkWithPopup(auth.currentUser, provider);
-        } catch (linkErr: any) {
-          if (linkErr.code === 'auth/credential-already-in-use') {
-            throw new Error('Esta cuenta de Google ya está vinculada a otro usuario. Por favor, utiliza otra cuenta de Google o contacta a soporte.');
-          } else {
-            throw linkErr;
+        const isGoogleLinked = auth.currentUser.providerData.some(p => p.providerId === 'google.com');
+        if (isGoogleLinked) {
+          result = await reauthenticateWithPopup(auth.currentUser, provider);
+        } else {
+          try {
+            result = await linkWithPopup(auth.currentUser, provider);
+          } catch (linkErr: any) {
+            if (linkErr.code === 'auth/credential-already-in-use' || linkErr.code === 'auth/email-already-in-use') {
+              const credential = GoogleAuthProvider.credentialFromError(linkErr);
+              if (credential && credential.accessToken) {
+                cachedAccessToken = credential.accessToken;
+                setGoogleToken(credential.accessToken);
+                return credential.accessToken;
+              }
+              throw new Error('Esta cuenta de Google ya está registrada. Por favor, selecciona OTRA cuenta de Google en la ventana emergente, o cierra sesión e ingresa directamente con Google.');
+            } else {
+              throw linkErr;
+            }
           }
         }
       } else {

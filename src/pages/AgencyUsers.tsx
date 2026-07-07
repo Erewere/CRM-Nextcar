@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
-import { Users, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, Trash2, X, Clock } from 'lucide-react';
+import { Users, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2 } from 'lucide-react';
 import { Task, Client } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 export function AgencyUsers() {
+  const navigate = useNavigate();
   const { userData } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [agencies, setAgencies] = useState<any[]>([]);
@@ -278,18 +280,14 @@ export function AgencyUsers() {
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (userData?.role !== 'admin' && userData?.role !== 'master') return;
     if (userId === userData?.id) {
-        alert("No puedes eliminar tu propia cuenta.");
+        console.warn("No puedes eliminar tu propia cuenta.");
         return;
     }
-    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${userName}? Esta acción no se puede deshacer.`);
-    if (!confirmDelete) return;
 
     try {
         const res = await fetch('/api/delete-user', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ uid: userId })
         });
         
@@ -553,7 +551,15 @@ export function AgencyUsers() {
                 </div>
               ) : (
                 inactiveAlerts.map(({ task, client }) => (
-                  <div key={task.id} className="p-3 rounded-lg bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30">
+                  <div 
+                    key={task.id} 
+                    className="p-3 rounded-lg bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 cursor-pointer hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-colors"
+                    onClick={() => {
+                      if (client) {
+                        navigate('/persons', { state: { clientId: client.id } });
+                      }
+                    }}
+                  >
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
                       {client ? client.name : 'Sin cliente asignado'}
                     </p>
@@ -637,7 +643,9 @@ export function AgencyUsers() {
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <div className="font-bold text-slate-800 dark:text-slate-200">
-                    {u.name === 'Usuario Pendiente' && u.role !== 'unassigned' ? (u.email?.split('@')[0] || 'Usuario') : (u.name || 'Sin Nombre')}
+                    {(!u.name || u.name === 'Usuario Pendiente') && u.role !== 'unassigned'
+                      ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
+                      : (u.name || 'Sin Nombre')}
                   </div>
                   {u.role === 'master' && <span className="inline-flex items-center rounded-md bg-stone-100 px-2 py-1 text-[10px] font-medium text-stone-600 ring-1 ring-inset ring-stone-500/10"><Shield className="w-3 h-3 mr-1"/> Master</span>}
                   {u.role === 'admin' && <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Admin</span>}

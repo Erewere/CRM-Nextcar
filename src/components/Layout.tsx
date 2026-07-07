@@ -101,7 +101,7 @@ export function Layout() {
       roles: ["admin", "seller", "master"],
     },
     {
-      name: "Kanban",
+      name: "Embudo",
       path: "/kanban",
       icon: Trello,
       roles: ["admin", "seller"],

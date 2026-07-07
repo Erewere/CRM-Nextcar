@@ -119,7 +119,9 @@ export function ClientDetailModal({
   const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files">(
     "activity",
   );
-  const [showFullAddress, setShowFullAddress] = useState(false);
+  const [showFullAddress, setShowFullAddress] = useState(
+    !!(client.street || client.exteriorNumber || client.neighborhood || client.city || client.zipCode)
+  );
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
   const getDefaultTime = () => {
@@ -383,6 +385,15 @@ export function ClientDetailModal({
     let finalFormData = { ...formData };
     if (!hasBuscaAutoTag) {
       finalFormData.wantedVehicle = null as any;
+    }
+
+    if (showFullAddress) {
+      const parts = [finalFormData.street, finalFormData.exteriorNumber, finalFormData.neighborhood, finalFormData.city, finalFormData.zipCode].filter(Boolean);
+      if (parts.length > 0) {
+         finalFormData.address = parts.join(", ");
+      }
+    } else {
+      // If using single field, we don't clear the parts, just in case they have them, but the main `address` is what matters.
     }
 
     try {
@@ -834,7 +845,7 @@ export function ClientDetailModal({
           <div className="w-full md:w-[320px] shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 md:overflow-y-auto">
             <div className="p-5">
               <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center justify-between">
-                Resumen
+                Perfil
                 <MoreHorizontal className="w-4 h-4 text-gray-400" />
               </h3>
 
@@ -1013,44 +1024,42 @@ export function ClientDetailModal({
                       </div>
                     )}
                   </div>
-                  {userData?.role !== "seller" && (
-                    <>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Users className="w-4 h-4 text-gray-400" />
-                        <select
-                          name="sellerId"
-                          value={formData.sellerId || ""}
-                          onChange={handleChange}
-                          className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
-                        >
-                          <option value="" disabled>
-                            Seleccionar Asignado...
+                  <div className="flex items-center gap-2 mt-2">
+                    <Users className="w-4 h-4 text-gray-400" />
+                    <select
+                      name="sellerId"
+                      value={formData.sellerId || ""}
+                      onChange={handleChange}
+                      className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                    >
+                      <option value="" disabled>
+                        Seleccionar Asignado...
+                      </option>
+                      {agencyUsers
+                        .filter((u) => u.role !== "unassigned")
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {(!u.name || u.name === 'Usuario Pendiente')
+                              ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
+                              : u.name}
                           </option>
-                          {agencyUsers
-                            .filter((u) => u.role !== "unassigned")
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name || u.email}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Eye className="w-4 h-4 text-gray-400" />
-                        <select
-                          name="visibility"
-                          value={formData.visibility || "all"}
-                          onChange={handleChange}
-                          className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
-                        >
-                          <option value="all">Visible para todos</option>
-                          <option value="private">
-                            Privado (Solo asignado y admin)
-                          </option>
-                        </select>
-                      </div>
-                    </>
-                  )}
+                        ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Eye className="w-4 h-4 text-gray-400" />
+                    <select
+                      name="visibility"
+                      value={formData.visibility || "all"}
+                      onChange={handleChange}
+                      className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                    >
+                      <option value="all">Visible para todos</option>
+                      <option value="private">
+                        Privado (Solo asignado y admin)
+                      </option>
+                    </select>
+                  </div>
                   {existingPersons.find(
                     (p) =>
                       p.phone &&
@@ -1123,7 +1132,24 @@ export function ClientDetailModal({
                     </label>
                     <button
                       type="button"
-                      onClick={() => setShowFullAddress(!showFullAddress)}
+                      onClick={() => {
+                        if (showFullAddress) {
+                          const parts = [
+                            formData.street,
+                            formData.exteriorNumber,
+                            formData.neighborhood,
+                            formData.city,
+                            formData.zipCode,
+                          ].filter(Boolean);
+                          if (parts.length > 0) {
+                            setFormData((prev) => ({
+                              ...prev,
+                              address: parts.join(", "),
+                            }));
+                          }
+                        }
+                        setShowFullAddress(!showFullAddress);
+                      }}
                       className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold uppercase tracking-wider"
                     >
                       {showFullAddress
@@ -1163,7 +1189,7 @@ export function ClientDetailModal({
                       <div>
                         <input
                           name="city"
-                          placeholder="Ciudad"
+                          placeholder="Ciudad y estado"
                           value={formData.city || ""}
                           onChange={handleChange}
                           className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
