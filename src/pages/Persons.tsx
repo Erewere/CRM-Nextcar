@@ -126,6 +126,33 @@ export function Persons() {
   const [resizingCol, setResizingCol] = useState<string | null>(null);
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartWidth, setDragStartWidth] = useState(0);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(() => {
+    const saved = localStorage.getItem('personsSortConfig');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('personsSortConfig', JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem('personsSortConfig');
+    }
+  }, [sortConfig]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   useEffect(() => {
     if (!resizingCol) return;
@@ -624,17 +651,6 @@ export function Persons() {
     }
   };
 
-  const filteredPersons = persons.filter(
-    (p) =>
-      String(p.name || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (p.organization &&
-        String(p.organization)
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())),
-  );
-
   const getPersonStats = (personId: string) => {
     const personDeals = deals.filter((d) => d.clientId === personId);
     let openDeals = personDeals.filter(
@@ -691,6 +707,49 @@ export function Persons() {
       nextTaskDate: formattedNextTaskDate,
     };
   };
+  const filteredPersons = React.useMemo(() => {
+    let result = persons.filter(
+      (p) =>
+        String(p.name || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        (p.organization &&
+          String(p.organization)
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())),
+    );
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aVal: any = a[sortConfig.key as keyof Client] || '';
+        let bVal: any = b[sortConfig.key as keyof Client] || '';
+
+        if (sortConfig.key === 'owner') {
+           aVal = agencyUsers[a.sellerId] || '';
+           bVal = agencyUsers[b.sellerId] || '';
+        } else if (sortConfig.key === 'closedDeals') {
+           aVal = getPersonStats(a.id).closedDeals;
+           bVal = getPersonStats(b.id).closedDeals;
+        } else if (sortConfig.key === 'openDeals') {
+           aVal = getPersonStats(a.id).openDeals;
+           bVal = getPersonStats(b.id).openDeals;
+        } else if (sortConfig.key === 'nextTaskDate') {
+           aVal = getPersonStats(a.id).nextTaskDate || '';
+           bVal = getPersonStats(b.id).nextTaskDate || '';
+        } else if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [persons, searchTerm, sortConfig, agencyUsers, deals, tasks]);
+
 
   if (loading)
     return (
@@ -890,15 +949,22 @@ export function Persons() {
                   .map((col) => (
                     <th
                       key={col.id}
-                      className="relative border-r border-gray-200 dark:border-slate-700 truncate group"
+                      className="relative border-r border-gray-200 dark:border-slate-700 truncate group cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: col.width }}
+                      onClick={() => handleSort(col.id)}
                     >
-                      <div className="px-4 py-3 truncate">{col.label}</div>
+                      <div className="px-4 py-3 truncate flex items-center">
+                        {col.label}
+                        {sortConfig?.key === col.id && (
+                          <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
-                        onMouseDown={(e) =>
-                          handleMouseDown(e, col.id, col.width)
-                        }
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, col.id, col.width);
+                        }}
                       />
                     </th>
                   ))}

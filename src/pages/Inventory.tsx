@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { Vehicle, Client, VehicleExpense } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target } from 'lucide-react';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import clsx from 'clsx';
+import * as XLSX from "xlsx";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -127,6 +128,12 @@ export function Inventory() {
 
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
 
+  const [showImportExcel, setShowImportExcel] = useState(false);
+  const [excelData, setExcelData] = useState<any[]>([]);
+  const [excelColumns, setExcelColumns] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [importingVehicles, setImportingVehicles] = useState(false);
+
   const [columns, setColumns] = useState([
     { id: 'year', label: 'Año', visible: true, width: 100 },
     { id: 'make', label: 'Marca', visible: true, width: 150 },
@@ -150,6 +157,140 @@ export function Inventory() {
   const [resizingCol, setResizingCol] = useState<string | null>(null);
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartWidth, setDragStartWidth] = useState(0);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(() => {
+    const saved = localStorage.getItem('inventorySortConfig');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      if (typeof bstr !== "string" && !(bstr instanceof ArrayBuffer)) return;
+      const wb = XLSX.read(bstr, { type: "binary" });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws);
+      if (data.length > 0) {
+        const columns = Object.keys(data[0] as object);
+        setExcelColumns(columns);
+        setExcelData(data);
+        setShowImportExcel(true);
+        // Autoselect if column names match somewhat
+        const newMapping = { 
+            make: "", model: "", year: "", price: "", purchasePrice: "",
+            vin: "", color: "", transmission: "", bodyType: "", km: ""
+        };
+        columns.forEach((col) => {
+          const lcol = col.toLowerCase();
+          if (lcol.includes("marca") || lcol.includes("make")) newMapping.make = col;
+          if (lcol.includes("modelo") || lcol.includes("model")) newMapping.model = col;
+          if (lcol.includes("año") || lcol.includes("year") || lcol.includes("ano")) newMapping.year = col;
+          if (lcol.includes("precio") || lcol.includes("price") || lcol.includes("venta")) newMapping.price = col;
+          if (lcol.includes("costo") || lcol.includes("compra") || lcol.includes("purchase")) newMapping.purchasePrice = col;
+          if (lcol.includes("vin") || lcol.includes("serie")) newMapping.vin = col;
+          if (lcol.includes("color")) newMapping.color = col;
+          if (lcol.includes("transmision") || lcol.includes("transmisión")) newMapping.transmission = col;
+          if (lcol.includes("carroceria") || lcol.includes("carrocería") || lcol.includes("tipo")) newMapping.bodyType = col;
+          if (lcol.includes("km") || lcol.includes("kilometraje")) newMapping.km = col;
+        });
+        setColumnMapping(newMapping);
+      } else {
+        alert("El archivo parece estar vacío.");
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = "";
+  };
+
+  const handleImportExcelData = async () => {
+    if (!columnMapping.make || !columnMapping.model) {
+      alert("Debes seleccionar al menos la columna para Marca y Modelo.");
+      return;
+    }
+    
+    setImportingVehicles(true);
+    let importedCount = 0;
+    
+    try {
+      for (const row of excelData) {
+        const vMake = row[columnMapping.make] ? String(row[columnMapping.make]) : "";
+        const vModel = row[columnMapping.model] ? String(row[columnMapping.model]) : "";
+        const vYearStr = columnMapping.year && row[columnMapping.year] ? String(row[columnMapping.year]) : "";
+        const vYear = parseInt(vYearStr) || new Date().getFullYear();
+        const vPriceStr = columnMapping.price && row[columnMapping.price] ? String(row[columnMapping.price]).replace(/[^0-9.-]+/g,"") : "0";
+        const vPrice = parseFloat(vPriceStr) || 0;
+        const vCostStr = columnMapping.purchasePrice && row[columnMapping.purchasePrice] ? String(row[columnMapping.purchasePrice]).replace(/[^0-9.-]+/g,"") : "0";
+        const vCost = parseFloat(vCostStr) || 0;
+        const vVin = columnMapping.vin && row[columnMapping.vin] ? String(row[columnMapping.vin]) : "";
+        const vColor = columnMapping.color && row[columnMapping.color] ? String(row[columnMapping.color]) : "";
+        const vTransmission = columnMapping.transmission && row[columnMapping.transmission] ? String(row[columnMapping.transmission]) : "Automática";
+        const vBodyType = columnMapping.bodyType && row[columnMapping.bodyType] ? String(row[columnMapping.bodyType]) : "Sedán";
+        const vKmStr = columnMapping.km && row[columnMapping.km] ? String(row[columnMapping.km]).replace(/[^0-9.-]+/g,"") : "0";
+        const vKm = parseInt(vKmStr) || 0;
+
+        if (vMake && vModel) {
+          const newRef = doc(collection(db, "vehicles"));
+          const newVehicle: any = {
+            id: newRef.id,
+            agencyId: userData?.agencyId || "",
+            make: vMake,
+            model: vModel,
+            year: vYear,
+            price: vPrice,
+            purchasePrice: vCost,
+            vin: vVin,
+            color: vColor,
+            transmission: vTransmission,
+            bodyType: vBodyType,
+            km: vKm,
+            status: "available",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(doc(db, "vehicles", newRef.id), newVehicle);
+          importedCount++;
+        }
+      }
+
+      alert(`Se importaron ${importedCount} vehículos nuevos desde Excel.`);
+      setShowImportExcel(false);
+      setExcelData([]);
+    } catch (e) {
+      console.error("Error al importar vehículos:", e);
+      alert("Hubo un error al importar los vehículos.");
+    } finally {
+      setImportingVehicles(false);
+    }
+  };
+
+
+  useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('inventorySortConfig', JSON.stringify(sortConfig));
+    } else {
+      localStorage.removeItem('inventorySortConfig');
+    }
+  }, [sortConfig]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   useEffect(() => {
     if (!resizingCol) return;
@@ -244,9 +385,37 @@ export function Inventory() {
     }
   };
 
-  const filteredVehicles = vehicles.filter(v => 
-    `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color} ${v.equipment || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVehicles = React.useMemo(() => {
+    let result = vehicles.filter(v => 
+      `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color} ${v.equipment || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aVal: any = a[sortConfig.key as keyof Vehicle] || '';
+        let bVal: any = b[sortConfig.key as keyof Vehicle] || '';
+        
+        if (sortConfig.key === 'expenses') {
+          aVal = expenses.filter(e => e.vehicleId === a.id).reduce((sum, e) => sum + e.amount, 0);
+          bVal = expenses.filter(e => e.vehicleId === b.id).reduce((sum, e) => sum + e.amount, 0);
+        } else if (sortConfig.key === 'profit') {
+          const aExp = expenses.filter(e => e.vehicleId === a.id).reduce((sum, e) => sum + e.amount, 0);
+          const bExp = expenses.filter(e => e.vehicleId === b.id).reduce((sum, e) => sum + e.amount, 0);
+          aVal = (a.price || 0) - (a.purchasePrice || 0) - aExp;
+          bVal = (b.price || 0) - (b.purchasePrice || 0) - bExp;
+        } else if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [vehicles, searchTerm, sortConfig, expenses]);
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
 
@@ -257,13 +426,19 @@ export function Inventory() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Inventario</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">Gestiona los vehículos de la agencia</p>
         </div>
-        <button 
-          onClick={() => setSelectedVehicle({} as Vehicle)}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Agregar Vehículo
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
+            <Download className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Importar Excel</span>
+            <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
+          </label>
+          <button 
+            onClick={() => setSelectedVehicle({} as Vehicle)}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar Vehículo
+          </button>
+        </div>
       </div>
 
       {(userData?.role === 'admin' || userData?.role === 'master') && pendingVehicles.length > 0 && (
@@ -466,11 +641,24 @@ export function Inventory() {
               <thead className="bg-[#fcfdfd] dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 font-medium sticky top-0 z-10 shadow-sm">
                 <tr>
                   {columns.filter(c => c.visible).map(col => (
-                    <th key={col.id} className="relative border-r border-gray-200 dark:border-slate-700 truncate group" style={{ width: col.width }}>
-                      <div className="px-4 py-3 truncate">{col.label}</div>
+                    <th 
+                      key={col.id} 
+                      className="relative border-r border-gray-200 dark:border-slate-700 truncate group cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50" 
+                      style={{ width: col.width }}
+                      onClick={() => handleSort(col.id)}
+                    >
+                      <div className="px-4 py-3 truncate flex items-center">
+                        {col.label}
+                        {sortConfig?.key === col.id && (
+                          <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
-                        onMouseDown={(e) => handleMouseDown(e, col.id, col.width)}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, col.id, col.width);
+                        }}
                       />
                     </th>
                   ))}
@@ -612,6 +800,72 @@ export function Inventory() {
           </div>
         </div>
       )}
+      {showImportExcel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 flex justify-between items-center border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
+                Importar Inventario de Excel
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportExcel(false);
+                  setExcelData([]);
+                }}
+                className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4 text-sm">
+              <p className="text-slate-600 dark:text-slate-400">
+                Mapea las columnas de tu archivo Excel con los campos del vehículo. 
+                Se importarán <strong>{excelData.length}</strong> filas.
+              </p>
+
+              {['make', 'model', 'year', 'price', 'purchasePrice', 'vin', 'color', 'transmission', 'bodyType', 'km'].map((field) => (
+                <div key={field} className="flex flex-col gap-1">
+                  <label className="font-semibold text-slate-700 dark:text-slate-300 capitalize">
+                    {field === 'make' ? 'Marca (Requerido)' : field === 'model' ? 'Modelo (Requerido)' : field === 'year' ? 'Año' : field === 'price' ? 'Precio de Venta' : field === 'purchasePrice' ? 'Costo / Precio de Compra' : field === 'vin' ? 'VIN / Serie' : field === 'color' ? 'Color' : field === 'transmission' ? 'Transmisión' : field === 'bodyType' ? 'Carrocería' : 'Kilometraje'}
+                  </label>
+                  <select
+                    value={columnMapping[field] || ''}
+                    onChange={(e) => setColumnMapping({ ...columnMapping, [field]: e.target.value })}
+                    className="border border-slate-300 dark:border-slate-600 rounded p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="">-- Ignorar este campo --</option>
+                    {excelColumns.map((col) => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 flex justify-end gap-3 border-t border-gray-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportExcel(false);
+                  setExcelData([]);
+                }}
+                className="px-4 py-2 text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={importingVehicles}
+                onClick={handleImportExcelData}
+                className="px-4 py-2 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {importingVehicles ? "Importando..." : "Importar Datos"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
