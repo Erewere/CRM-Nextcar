@@ -45,6 +45,7 @@ export interface Vehicle {
   liters?: number;
   equipment?: string;
   passengers?: number;
+  soldAt?: string;
 }
 
 export interface Agency {
@@ -87,6 +88,7 @@ export interface Client {
   vehicle: string;
   vehicleId?: string;
   status: string;
+  soldAt?: string;
   origin: "manual" | "whatsapp" | "web" | "google_contacts" | "excel_import";
   tags?: string[];
   wantedVehicle?: {

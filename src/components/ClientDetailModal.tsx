@@ -347,13 +347,23 @@ export function ClientDetailModal({
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    setFormData((prev) => ({ ...prev, status: newStatus }));
+    setFormData((prev) => {
+      const updates: Partial<Client> = { status: newStatus };
+      if (newStatus === "won" && !prev.soldAt) {
+        updates.soldAt = new Date().toISOString().split('T')[0];
+      }
+      return { ...prev, ...updates };
+    });
     if (!isNew && client.id) {
       try {
-        await updateDoc(doc(db, "clients", client.id as string), {
+        const updates: any = {
           status: newStatus,
           updatedAt: new Date().toISOString(),
-        });
+        };
+        if (newStatus === "won" && !formData.soldAt) {
+          updates.soldAt = new Date().toISOString().split('T')[0];
+        }
+        await updateDoc(doc(db, "clients", client.id as string), updates);
       } catch (err) {
         console.error("Error updating status:", err);
       }
@@ -644,11 +654,16 @@ export function ClientDetailModal({
                   value={formData.status || ""}
                   onChange={(e) => {
                     const newStatus = e.target.value;
-                    setFormData((prev) => ({
-                      ...prev,
-                      status: newStatus,
-                      dealTitle: prev.dealTitle || (prev.name ? `${prev.name} deal` : "Nuevo Trato"),
-                    }));
+                    setFormData((prev) => {
+                      const updates: any = {
+                        status: newStatus,
+                        dealTitle: prev.dealTitle || (prev.name ? `${prev.name} deal` : "Nuevo Trato"),
+                      };
+                      if (newStatus === "won" && !prev.soldAt) {
+                        updates.soldAt = new Date().toISOString().split('T')[0];
+                      }
+                      return { ...prev, ...updates };
+                    });
                   }}
                   className="mt-1 block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 >
@@ -661,6 +676,19 @@ export function ClientDetailModal({
                     </option>
                   ))}
                 </select>
+              )}
+              {formData.status === 'won' && (
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase whitespace-nowrap">
+                    Fecha Venta
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.soldAt || ''}
+                    onChange={(e) => setFormData(p => ({ ...p, soldAt: e.target.value }))}
+                    className="block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -1460,6 +1488,26 @@ export function ClientDetailModal({
                   </h3>
 
                   <div className="relative pl-6 space-y-6 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-gray-200">
+                    {formData.soldAt && (
+                      <div className="relative">
+                        <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm flex items-center justify-center">
+                          <CheckSquare className="w-2.5 h-2.5 text-white" />
+                        </div>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-3 rounded-lg mr-2">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">
+                              Trato Ganado / Vehículo Vendido
+                            </span>
+                            <span className="text-[10px] text-blue-500 font-medium">
+                              {formData.soldAt.split('T')[0]}
+                            </span>
+                          </div>
+                          <p className="text-sm text-blue-800 dark:text-blue-300">
+                            Venta realizada y registrada.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {/* History items: Files and Completed Tasks interleaved pseudo-chronologically */}
                     {completedTasks.map((t) => (
                       <div key={`hist-t-${t.id}`} className="relative">

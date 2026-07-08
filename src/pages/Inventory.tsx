@@ -147,6 +147,7 @@ export function Inventory() {
     { id: 'profit', label: 'Utilidad', visible: true, width: 150 },
     { id: 'vin', label: 'VIN', visible: true, width: 220 },
     { id: 'status', label: 'Estado', visible: true, width: 120 },
+    { id: 'soldAt', label: 'Fecha Venta', visible: false, width: 150 },
     { id: 'km', label: 'Km', visible: false, width: 120 },
     { id: 'cylinders', label: 'Cilindros', visible: false, width: 120 },
     { id: 'liters', label: 'Motor (L)', visible: false, width: 120 },
@@ -378,6 +379,9 @@ export function Inventory() {
       const payload: any = { pendingValidation: null };
       if (approve && newStatus) {
         payload.status = newStatus;
+        if (newStatus === 'sold') {
+          payload.soldAt = new Date().toISOString().split('T')[0];
+        }
       }
       await updateDoc(doc(db, 'vehicles', vehicleId), payload);
     } catch (error) {
@@ -733,6 +737,7 @@ export function Inventory() {
                       }
                       if (col.id === 'vin') val = <span className="font-mono text-xs">{vehicle.vin}</span>;
                       if (col.id === 'status') val = (vehicle as any).pendingValidation ? <span className="text-amber-600">Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</span> : vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado';
+                      if (col.id === 'soldAt') val = vehicle.soldAt ? vehicle.soldAt.split('T')[0] : '-';
                       if (col.id === 'km') val = vehicle.km?.toLocaleString() || '0';
                       if (col.id === 'cylinders') val = vehicle.cylinders || '4';
                       if (col.id === 'liters') val = vehicle.liters || '0';

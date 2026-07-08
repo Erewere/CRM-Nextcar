@@ -357,7 +357,14 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Estado</label>
                     <select
                       value={formData.status}
-                      onChange={e => setFormData({...formData, status: e.target.value})}
+                      onChange={e => {
+                        const newStatus = e.target.value;
+                        const newFormData = { ...formData, status: newStatus };
+                        if (newStatus === 'sold' && !formData.soldAt) {
+                          newFormData.soldAt = new Date().toISOString().split('T')[0];
+                        }
+                        setFormData(newFormData);
+                      }}
                       className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 dark:text-slate-300"
                     >
                       <option value="available">Disponible</option>
@@ -365,6 +372,17 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                       <option value="sold">Vendido</option>
                     </select>
                   </div>
+                  {formData.status === 'sold' && (
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Fecha de Venta</label>
+                      <input 
+                        type="date" 
+                        value={formData.soldAt ? formData.soldAt.split('T')[0] : ''} 
+                        onChange={e => setFormData({...formData, soldAt: e.target.value})}
+                        className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Precio de Venta</label>
                     <div className="relative">
