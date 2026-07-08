@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Vehicle, Client } from '../types';
+import { Vehicle, Client, VehicleExpense } from '../types';
 import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import clsx from 'clsx';
@@ -120,6 +120,7 @@ export function Inventory() {
   const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -135,6 +136,8 @@ export function Inventory() {
     { id: 'bodyType', label: 'Carrocería', visible: true, width: 150 },
     { id: 'price', label: 'Precio', visible: true, width: 150 },
     { id: 'purchasePrice', label: 'Costo', visible: true, width: 150 },
+    { id: 'expenses', label: 'Gastos', visible: true, width: 150 },
+    { id: 'profit', label: 'Utilidad', visible: true, width: 150 },
     { id: 'vin', label: 'VIN', visible: true, width: 220 },
     { id: 'status', label: 'Estado', visible: true, width: 120 },
     { id: 'km', label: 'Km', visible: false, width: 120 },
@@ -181,10 +184,12 @@ export function Inventory() {
 
     let q = query(collection(db, 'vehicles'));
     let clientsQ = query(collection(db, 'clients'));
+    let expensesQ = query(collection(db, 'vehicleExpenses'));
 
     if (userData?.role !== 'master') {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
       clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
+      expensesQ = query(collection(db, 'vehicleExpenses'));
     }
 
     const unsubscribeVehicles = onSnapshot(q, (snapshot) => {
@@ -192,17 +197,14 @@ export function Inventory() {
       const loadedVehicles = snapshot.docs.map(d => {
         const data = d.data() as Vehicle & { pendingValidation?: any };
         
-        // Check for expired pending validations (24 hours)
         if (data.pendingValidation?.requestedAt) {
           const reqTime = new Date(data.pendingValidation.requestedAt).getTime();
           const diffHours = (now.getTime() - reqTime) / (1000 * 60 * 60);
-          if (diffHours >= 24) {
-             // Auto revert: Just strip pending validation on write to DB
-             // We do this asynchronously to avoid blocking the render
+          if (diffHours >= 24) { 
              setTimeout(() => {
                updateDoc(doc(db, 'vehicles', d.id), { pendingValidation: null }).catch(console.error);
-             }, Math.random() * 2000); // jitter to prevent stampede
-             delete data.pendingValidation; // also remove locally immediately
+             }, Math.random() * 2000);
+             delete data.pendingValidation;
           }
         }
         return { id: d.id, ...data };
@@ -214,9 +216,14 @@ export function Inventory() {
       setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
     });
 
+    const unsubscribeExpenses = onSnapshot(expensesQ, (snapshot) => {
+      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as VehicleExpense)));
+    });
+
     return () => {
       unsubscribeVehicles();
       unsubscribeClients();
+      unsubscribeExpenses();
     };
   }, [userData]);
 
@@ -426,11 +433,19 @@ export function Inventory() {
                     <span className="text-lg font-bold text-blue-600">${Number(vehicle.price || 0).toLocaleString()}</span>
                   </div>
                   {(userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice && (
-                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex justify-between items-center border-t pt-2">
-                       <span>Costo: ${Number(vehicle.purchasePrice).toLocaleString()}</span>
-                       <span className="font-semibold text-green-600">
-                         Ut: ${Number((vehicle.price || 0) - (vehicle.purchasePrice || 0)).toLocaleString()}
-                       </span>
+                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex flex-col gap-1 border-t pt-2">
+                       <div className="flex justify-between items-center">
+                         <span>Costo: ${Number(vehicle.purchasePrice).toLocaleString()}</span>
+                         <span>
+                           Gastos: ${expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0).toLocaleString()}
+                         </span>
+                       </div>
+                       <div className="flex justify-between items-center">
+                         <span className="font-semibold">Utilidad Neta:</span>
+                         <span className={((vehicle.price || 0) - (vehicle.purchasePrice || 0) - expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0)) >= 0 ? "font-semibold text-green-600" : "font-semibold text-red-600"}>
+                           ${Number((vehicle.price || 0) - (vehicle.purchasePrice || 0) - expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0)).toLocaleString()}
+                         </span>
+                       </div>
                     </div>
                   )}
                 </div>
@@ -515,6 +530,19 @@ export function Inventory() {
                       if (col.id === 'bodyType') val = vehicle.bodyType;
                       if (col.id === 'price') val = `$${Number(vehicle.price || 0).toLocaleString()}`;
                       if (col.id === 'purchasePrice') val = (userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '-';
+                      if (col.id === 'expenses') {
+                        const vehicleTotalExpenses = expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0);
+                        val = (userData?.role === 'admin' || userData?.role === 'master') ? `$${vehicleTotalExpenses.toLocaleString()}` : '-';
+                      }
+                      if (col.id === 'profit') {
+                        const vehicleTotalExpenses = expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0);
+                        const utility = (vehicle.price || 0) - (vehicle.purchasePrice || 0) - vehicleTotalExpenses;
+                        val = (userData?.role === 'admin' || userData?.role === 'master') ? (
+                          <span className={utility >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                            ${utility.toLocaleString()}
+                          </span>
+                        ) : '-';
+                      }
                       if (col.id === 'vin') val = <span className="font-mono text-xs">{vehicle.vin}</span>;
                       if (col.id === 'status') val = (vehicle as any).pendingValidation ? <span className="text-amber-600">Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</span> : vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado';
                       if (col.id === 'km') val = vehicle.km?.toLocaleString() || '0';
