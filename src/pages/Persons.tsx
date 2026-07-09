@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Client, Deal, Task } from "../types";
+import { Client, Deal, Task, Vehicle } from "../types";
 import {
   Users,
   Search,
@@ -37,11 +37,121 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
 
+
+export interface MatchLevel {
+  level: 'exact' | 'high' | 'medium' | 'low';
+  vehicle: Vehicle;
+}
+
+export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLevel[] => {
+  const matches: MatchLevel[] = [];
+  if (client.status === 'won' || client.status === 'lost') return matches;
+  if (!client.wantedVehicle) return matches;
+  
+  const wv = client.wantedVehicle;
+  if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && (!wv.bodyType || wv.bodyType === "Cualquiera")) {
+    return matches;
+  }
+
+  vehicles.forEach(vehicle => {
+    if (vehicle.status !== 'available') return; // only match available vehicles
+    let isExact = true;
+    let isSimilar = true;
+    let hasSimilarBase = false;
+    let differences = 0;
+
+    const normalize = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+    const checkMatch = (v?: string, w?: string) => {
+        const nv = normalize(v);
+        const nw = normalize(w);
+        if (!nw) return true;
+        if (nv.includes(nw) || nw.includes(nv)) return true;
+        if ((nv === 'vw' || nv === 'volkswagen') && (nw === 'vw' || nw === 'volkswagen')) return true;
+        if ((nv === 'chevy' || nv === 'chevrolet') && (nw === 'chevy' || nw === 'chevrolet')) return true;
+        return false;
+    };
+
+    const makeMatches = wv.make ? checkMatch(vehicle.make, wv.make) : true;
+    const modelMatches = wv.model ? checkMatch(vehicle.model, wv.model) : true;
+
+    if (wv.make && !makeMatches) {
+        isExact = false;
+        differences += 2;
+    }
+    if (wv.model && !modelMatches) {
+        isExact = false;
+        differences += 1;
+    }
+
+    const yearMin = wv.yearMin || 0;
+    const yearMax = wv.yearMax || 9999;
+    if (vehicle.year < yearMin || vehicle.year > yearMax) {
+        isExact = false;
+        if (vehicle.year < yearMin - 2 || vehicle.year > yearMax + 2) {
+            isSimilar = false;
+        } else if (vehicle.year < yearMin - 1 || vehicle.year > yearMax + 1) {
+            differences += 2;
+        } else {
+            differences += 1;
+        }
+    }
+
+    const priceMax = wv.priceMax || Infinity;
+    if (vehicle.price > priceMax) {
+        isExact = false;
+        if (vehicle.price > priceMax * 1.2) {
+            isSimilar = false;
+        } else if (vehicle.price > priceMax * 1.1) {
+            differences += 2;
+        } else {
+            differences += 1;
+        }
+    }
+
+    if (wv.bodyType && wv.bodyType !== "Cualquiera") {
+        if (!vehicle.bodyType || vehicle.bodyType.toLowerCase() !== wv.bodyType.toLowerCase()) {
+            isExact = false;
+            differences += 1;
+        }
+    }
+
+    if (wv.passengers) {
+        const vPassengers = vehicle.passengers;
+        if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
+            if (Number(vPassengers) !== Number(wv.passengers)) {
+                isExact = false;
+                differences += 1;
+            }
+        } else {
+            isExact = false;
+        }
+    }
+
+    if (wv.make && makeMatches) hasSimilarBase = true;
+    if (wv.model && modelMatches) hasSimilarBase = true;
+    if (wv.bodyType && wv.bodyType !== "Cualquiera" && (!vehicle.bodyType || vehicle.bodyType.toLowerCase() === wv.bodyType.toLowerCase())) hasSimilarBase = true;
+    if (!wv.make && !wv.bodyType) hasSimilarBase = true;
+
+    if (isExact) {
+      matches.push({ vehicle, level: 'exact' });
+    } else if (isSimilar && hasSimilarBase) {
+      let level: 'high'|'medium'|'low' = 'high';
+      if (differences >= 3) level = 'low';
+      else if (differences >= 2) level = 'medium';
+      
+      matches.push({ vehicle, level });
+    }
+  });
+
+  return matches;
+};
+
 export function Persons() {
   const { userData, googleToken, connectGoogleServices } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [persons, setPersons] = useState<Client[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -259,8 +369,14 @@ export function Persons() {
       let clientsDocs: any[] = [];
       let dealsDocs: any[] = [];
       let tasksDocs: any[] = [];
+      let vehiclesDocs: any[] = [];
+
       const uq = query(
         collection(db, "users"),
+        where("agencyId", "==", userData.agencyId),
+      );
+      const vq = query(
+        collection(db, "vehicles"),
         where("agencyId", "==", userData.agencyId),
       );
 
@@ -289,12 +405,14 @@ export function Persons() {
             where("sellerId", "==", userData.id),
           );
 
-          const [csnap1, csnap2, dsnap, tsnap] = await Promise.all([
+          const [csnap1, csnap2, dsnap, tsnap, vsnap] = await Promise.all([
             getDocs(cq1),
             getDocs(cq2),
             getDocs(dq1).catch(() => ({ docs: [] }) as any),
             getDocs(tq1).catch(() => ({ docs: [] }) as any),
+            getDocs(vq).catch(() => ({ docs: [] }) as any),
           ]);
+          vehiclesDocs = vsnap.docs;
 
           const cMap = new Map();
           csnap1.docs.forEach((d) => cMap.set(d.id, d));
@@ -357,6 +475,9 @@ export function Persons() {
           dealsDocs
             ? dealsDocs.map((d: any) => ({ id: d.id, ...d.data() }) as Deal)
             : [],
+        );
+        setVehicles(
+          vehiclesDocs.map((d: any) => ({ id: d.id, ...d.data() }) as Vehicle)
         );
         setTasks(
           tasksDocs
@@ -855,7 +976,9 @@ export function Persons() {
       {viewMode === "grid" ? (
         <div className="p-6 flex-1 overflow-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredPersons.map((person) => (
+            {filteredPersons.map((person) => {
+              const matches = getClientMatches(person, vehicles);
+              return (
               <div
                 key={person.id}
                 className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -904,10 +1027,17 @@ export function Persons() {
                         <span className="truncate">{person.phone}</span>
                       </div>
                     )}
+                    {matches.length > 0 && (
+                      <div className="mt-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold border border-green-200 dark:border-green-800/50 uppercase tracking-wider">
+                          {matches.length} {matches.length === 1 ? 'Posible Match' : 'Posibles Matches'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       ) : (
@@ -1059,8 +1189,19 @@ export function Persons() {
                           val = person.organization;
                         if (col.id === "email") val = person.email;
                         if (col.id === "phone") val = person.phone;
-                        if (col.id === "vehicle")
-                          val = person.vehicle || person.dealTitle || "";
+                        if (col.id === "vehicle") {
+                          const matches = getClientMatches(person, vehicles);
+                          val = (
+                            <div className="flex flex-col gap-1 items-start justify-center min-h-[32px]">
+                              <span className="truncate">{person.vehicle || person.dealTitle || "-"}</span>
+                              {matches.length > 0 && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold border border-green-200 dark:border-green-800/50 uppercase tracking-wider">
+                                  {matches.length} {matches.length === 1 ? 'Match' : 'Matches'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
                         if (col.id === "status") {
                           const stage = pipelineStages.find(
                             (s) => s.id === person.status,

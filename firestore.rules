@@ -82,7 +82,9 @@ service cloud.firestore {
     }
 
     match /vehicleExpenses/{expenseId} {
-      allow read, write: if isSignedIn(); // Simplified for now
+      allow read: if hasAgencyAccess(resource.data.agencyId);
+      allow create, update: if hasAgencyAccess(request.resource.data.agencyId);
+      allow delete: if isAgencyAdmin(resource.data.agencyId);
     }
 
     match /deals/{dealId} {

@@ -26,6 +26,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
       price: 0, purchasePrice: 0, vin: '',
       km: 0, 
+      ownership: 'propio',
       receivedAt: (() => {
         const d = new Date();
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -37,7 +38,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       make: '', model: '', year: new Date().getFullYear(), color: '',
       transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
       price: 0, purchasePrice: 0, vin: '',
-      km: 0, receivedAt: '', cylinders: 4, liters: 0, equipment: '', passengers: 5,
+      km: 0, ownership: 'propio', receivedAt: '', cylinders: 4, liters: 0, equipment: '', passengers: 5,
       ...vehicle
     }
   );
@@ -516,6 +517,13 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Equipamiento</label>
                     <input type="text" value={formData.equipment || ''} onChange={e=>setFormData({...formData, equipment: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. Quemacocos, Piel..." />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de Propiedad</label>
+                    <select value={formData.ownership || 'propio'} onChange={e=>setFormData({...formData, ownership: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
+                      <option value="propio">Propio</option>
+                      <option value="consignacion">Consignación</option>
+                    </select>
                   </div>
                 </div>
 

@@ -50,6 +50,9 @@ import {
 import { MasterDashboard } from "../components/MasterDashboard";
 
 import { Link } from "react-router";
+import { getClientMatches } from './Persons';
+
+
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -332,10 +335,19 @@ export function Dashboard() {
     return sum + ((vehicle?.price || 0) - (vehicle?.purchasePrice || 0));
   }, 0);
 
+  
   // Inventory
   const availableVehicles = filteredVehicles.filter(
     (v) => v.status === "available" || !v.status,
   );
+
+  // Match Calculation
+  let allClientMatches = 0;
+  activeContacts.forEach((client) => {
+    const matches = getClientMatches(client, availableVehicles);
+    allClientMatches += matches.length;
+  });
+
 
   // Pipeline Stats
   const statusCounts = activeContacts.reduce(
@@ -482,23 +494,23 @@ export function Dashboard() {
               </span>
             </div>
 
+            
             {userData?.role === "admin" && (
               <select
-                className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300"
+                className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[150px] truncate"
                 value={filterSeller}
                 onChange={(e) => setFilterSeller(e.target.value)}
               >
                 <option value="all">Todos los vendedores</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {(!u.name || u.name === 'Usuario Pendiente')
-                      ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
-                      : u.name}
-                  </option>
-                ))}
+                {users
+                  .filter((u) => u.role === "seller")
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
               </select>
             )}
-
             <select
               className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[180px] truncate"
               value={filterCategory}
@@ -513,7 +525,6 @@ export function Dashboard() {
                 </option>
               ))}
             </select>
-
             <div className="relative">
               <button
                 onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
@@ -569,7 +580,6 @@ export function Dashboard() {
                 </>
               )}
             </div>
-
             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
               <span className="text-xs text-slate-400 font-medium">Desde</span>
               <input
@@ -579,7 +589,6 @@ export function Dashboard() {
                 onChange={(e) => { setFilterStartDate(e.target.value); setActiveDateFilter(""); }}
               />
             </div>
-
             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
               <span className="text-xs text-slate-400 font-medium">Hasta</span>
               <input
@@ -589,7 +598,6 @@ export function Dashboard() {
                 onChange={(e) => { setFilterEndDate(e.target.value); setActiveDateFilter(""); }}
               />
             </div>
-
             {(filterSeller !== "all" ||
               filterCategory !== "all" ||
               filterTags.length > 0 ||
@@ -598,212 +606,96 @@ export function Dashboard() {
               <button
                 onClick={() => {
                   setFilterSeller("all");
-                  setFilterCategory("all");
-                  setFilterTags([]);
                   setFilterStartDate("");
                   setFilterEndDate("");
+                  setFilterCategory("all");
+                  setFilterTags([]);
                   setActiveDateFilter("");
                 }}
-                className="text-xs underline text-slate-400 hover:text-slate-600 dark:text-slate-400 px-2"
+                className="text-xs text-red-500 hover:text-red-700 font-medium px-2"
               >
-                Limpiar
+                Limpiar Filtros
               </button>
             )}
+
+
           </div>
         </div>
       </div>
 
-      {/* Primary KPI Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link
-          to="/kanban"
-          className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-blue-300 hover:shadow-md transition-all"
-        >
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-              Oportunidades Activas
-            </p>
-            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">
-              {activeContacts.length}
-            </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Prospectos</p>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100">{filteredClients.length}</h2>
           </div>
-          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-blue-600" />
+        </div>
+        
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Target className="w-16 h-16 text-blue-500" />
           </div>
-        </Link>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 relative z-10">Activos (En Pipeline)</p>
+          <div className="flex items-baseline gap-2 relative z-10">
+            <h2 className="text-3xl font-black text-blue-600 dark:text-blue-400">{activeContacts.length}</h2>
+          </div>
+        </div>
 
-        <Link
-          to="/inventory"
-          className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-emerald-300 hover:shadow-md transition-all"
-        >
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-              Inventario Disponible
-            </p>
-            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">
-              {availableVehicles.length}
-            </p>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Ventas Cerradas</p>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{wonContacts.length}</h2>
           </div>
-          <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-            <Car className="w-5 h-5 text-emerald-600" />
-          </div>
-        </Link>
+        </div>
 
-        <Link
-          to="/kanban"
-          className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-amber-300 hover:shadow-md transition-all"
-        >
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-              Oportunidades ('Hot')
-            </p>
-            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200">
-              {hotLeads.length}
-            </p>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Ingresos (Ventas)</p>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100">
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
+            </h2>
           </div>
-          <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
-            <Target className="w-5 h-5 text-amber-600" />
-          </div>
-        </Link>
-
-        {/* Additional Stats for Won Deals & Profits */}
-        <Link
-          to="/kanban"
-          className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:border-green-300 hover:shadow-md transition-all"
-        >
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-              Ventas Cerradas
-            </p>
-            <p className="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-2">
-              {wonContacts.length}
-            </p>
-            <div className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
-              <p>Monto: <span className="font-semibold text-slate-800 dark:text-slate-200">${totalWonAmount.toLocaleString()}</span></p>
-              {(userData?.role === 'admin' || userData?.role === 'master') && (
-                <p>Utilidad: <span className="font-semibold text-green-600 dark:text-green-400">${totalProfit.toLocaleString()}</span></p>
-              )}
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 self-start">
-            <TrendingUp className="w-5 h-5 text-green-600" />
-          </div>
-        </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Embudo de Ventas Interactivo */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              Oportunidades por Etapa Activa
-            </h3>
-            {selectedStage && (
-              <button
-                onClick={() => setSelectedStage(null)}
-                className="text-xs text-blue-600 bg-blue-50 px-3 py-1 rounded-full font-medium hover:bg-blue-100"
-              >
-                Ver Todas
-              </button>
-            )}
-          </div>
-          <div className="flex-1 min-h-[300px]">
-            {pipelineData.length > 0 ? (
+        {/* Main Chart */}
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col min-h-[350px]">
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-6">
+            Embudo de Ventas (Pipeline)
+          </h3>
+          {pipelineData.length > 0 ? (
+            <div className="flex-1 w-full h-full min-h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={pipelineData}
-                  onClick={(data: any) => {
-                    if (
-                      data &&
-                      data.activePayload &&
-                      data.activePayload.length > 0
-                    ) {
-                      setSelectedStage(data.activePayload[0].payload.id);
-                    }
-                  }}
-                >
-                  <defs>
-                    <linearGradient id="colorBlue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.4} />
-                    </linearGradient>
-                    <linearGradient id="colorGreen" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.9} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.4} />
-                    </linearGradient>
-                    <linearGradient id="colorOrange" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.9} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.4} />
-                    </linearGradient>
-                    <linearGradient id="colorPurple" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.9} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                    </linearGradient>
-                    <linearGradient id="colorPink" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.9} />
-                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0.4} />
-                    </linearGradient>
-                    <linearGradient id="colorInactive" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#cbd5e1" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#cbd5e1" stopOpacity={0.3} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#f8fafc"
-                  />
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: "#94a3b8" }}
-                    dy={10}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: "#94a3b8" }}
-                    dx={-10}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "transparent" }}
-                    content={<CustomTooltip />}
-                  />
-                  <Bar dataKey="total" radius={[6, 6, 0, 0]} barSize={36}>
+                <BarChart data={pipelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} dy={10} />
+                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                     {pipelineData.map((entry, index) => {
-                      const gradients = [
-                        "url(#colorBlue)",
-                        "url(#colorGreen)",
-                        "url(#colorOrange)",
-                        "url(#colorPurple)",
-                        "url(#colorPink)",
-                      ];
                       const isActive = selectedStage === entry.id || !selectedStage;
-                      const fillColor = isActive
-                        ? gradients[index % gradients.length]
-                        : "url(#colorInactive)";
-
                       return (
                         <Cell
                           key={`cell-${index}`}
-                          fill={fillColor}
+                          fill={isActive ? COLORS[index % COLORS.length] : '#cbd5e1'}
                           className="cursor-pointer transition-all duration-300 hover:opacity-80"
+                          onClick={() => setSelectedStage(selectedStage === entry.id ? null : entry.id)}
                         />
                       );
                     })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-400">
-                No hay oportunidades activas.
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+             <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+                No hay oportunidades activas para mostrar.
+             </div>
+          )}
         </div>
 
-        {/* Action Center (Tasks) */}
+        {/* Action Center (Tasks & Alerts) */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
           <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
@@ -812,90 +704,77 @@ export function Dashboard() {
             </h3>
           </div>
           <div className="p-5 flex-1 space-y-4">
-            <Link
-              to="/tasks"
-              className="block flex items-center justify-between p-3 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors"
-            >
+            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-rose-500" />
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    Tareas Atrasadas
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Requieren atención urgente
-                  </p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Tareas Atrasadas</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Requieren atención urgente</p>
                 </div>
               </div>
-              <span className="text-rose-600 font-black text-xl">
-                {overdueTasks.length}
-              </span>
+              <span className="text-rose-600 font-black text-xl">{overdueTasks.length}</span>
             </Link>
 
-            <Link
-              to="/tasks"
-              className="block flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
-            >
+            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-blue-500" />
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    Para Hoy
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Actividades programadas
-                  </p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Para Hoy</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Actividades programadas</p>
                 </div>
               </div>
-              <span className="text-blue-600 font-black text-xl">
-                {todayTasks.length}
-              </span>
+              <span className="text-blue-600 font-black text-xl">{todayTasks.length}</span>
             </Link>
 
-            <Link
-              to="/tasks"
-              className="block flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
+            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
               <div className="flex items-center gap-3">
                 <Calendar className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    Esta Semana
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Tareas futuras próximas
-                  </p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Esta Semana</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Tareas futuras próximas</p>
                 </div>
               </div>
-              <span className="text-slate-600 dark:text-slate-400 font-black text-xl">
-                {thisWeekTasks.length}
-              </span>
+              <span className="text-slate-600 dark:text-slate-400 font-black text-xl">{thisWeekTasks.length}</span>
             </Link>
 
-            {userData?.role === "admin" && (
-              <Link
-                to="/users"
-                className="block flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition-colors"
-              >
+            {userData?.role === "admin" && inactiveAlerts.length > 0 && (
+              <Link to="/users" className="block flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition-colors">
                 <div className="flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-orange-500" />
                   <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Alertas de Inactividad</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Clientes sin atención (&#62;{inactivityAlertDays}d)</p>
+                  </div>
+                </div>
+                <span className="text-orange-600 font-black text-xl">{inactiveAlerts.length}</span>
+              </Link>
+            )}
+
+            {allClientMatches > 0 && (
+              <Link
+                to="/persons"
+                className="block flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Target className="w-5 h-5 text-emerald-500" />
+                  <div>
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                      Alertas de Inactividad
+                      Matches de Inventario
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Clientes sin atención (&#62;{inactivityAlertDays}d)
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                      Posibles coincidencias
                     </p>
                   </div>
                 </div>
-                <span className="text-orange-600 font-black text-xl">
-                  {inactiveAlerts.length}
+                <span className="text-emerald-600 font-black text-xl">
+                  {allClientMatches}
                 </span>
               </Link>
             )}
           </div>
         </div>
       </div>
+
 
       {/* Vehículos Buscados (Demanda Activa) */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden mb-6">

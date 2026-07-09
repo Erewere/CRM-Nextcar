@@ -20,6 +20,7 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
   const matches: VehicleMatch[] = [];
 
   clients.forEach(c => {
+    if (c.status === 'won' || c.status === 'lost') return;
     if (!c.wantedVehicle) return;
     const wv = c.wantedVehicle;
     
@@ -31,11 +32,27 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
     let isExact = true;
     let isSimilar = true;
     let hasSimilarBase = false;
+
     let differences = 0;
 
+    const normalize = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+    const checkMatch = (v?: string, w?: string) => {
+        const nv = normalize(v);
+        const nw = normalize(w);
+        if (!nw) return true;
+        if (nv.includes(nw) || nw.includes(nv)) return true;
+        
+        // Aliases make
+        if ((nv === 'vw' || nv === 'volkswagen') && (nw === 'vw' || nw === 'volkswagen')) return true;
+        if ((nv === 'chevy' || nv === 'chevrolet') && (nw === 'chevy' || nw === 'chevrolet')) return true;
+        
+        return false;
+    };
+
     // Make & Model
-    const makeMatches = wv.make ? vehicle.make.toLowerCase().includes(wv.make.toLowerCase()) : true;
-    const modelMatches = wv.model ? vehicle.model.toLowerCase().includes(wv.model.toLowerCase()) : true;
+    const makeMatches = wv.make ? checkMatch(vehicle.make, wv.make) : true;
+    const modelMatches = wv.model ? checkMatch(vehicle.model, wv.model) : true;
+
 
     if (wv.make && !makeMatches) {
         isExact = false;
@@ -75,9 +92,9 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
 
     // Body Type
     if (wv.bodyType && wv.bodyType !== "Cualquiera") {
-        if (vehicle.bodyType !== wv.bodyType) {
+        if (!vehicle.bodyType || vehicle.bodyType.toLowerCase() !== wv.bodyType.toLowerCase()) {
             isExact = false;
-            differences += 2;
+            differences += 1;
         }
     }
     
@@ -87,19 +104,16 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
         if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
             if (Number(vPassengers) !== Number(wv.passengers)) {
                 isExact = false;
-                // Si el cliente pide un número específico de pasajeros, es un requerimiento fuerte (ej. SUV de 3 filas)
-                // No sugerimos como similar si no coincide el número de pasajeros
-                isSimilar = false; 
+                differences += 1;
             }
         } else {
-            // Si el vehículo no tiene pasajeros definidos y piden cantidad, no lo recomendamos.
             isExact = false;
-            isSimilar = false;
         }
     }
 
     if (wv.make && makeMatches) hasSimilarBase = true;
-    if (wv.bodyType && wv.bodyType !== "Cualquiera" && vehicle.bodyType === wv.bodyType) hasSimilarBase = true;
+    if (wv.model && modelMatches) hasSimilarBase = true;
+    if (wv.bodyType && wv.bodyType !== "Cualquiera" && (!vehicle.bodyType || vehicle.bodyType.toLowerCase() === wv.bodyType.toLowerCase())) hasSimilarBase = true;
     if (!wv.make && !wv.bodyType) hasSimilarBase = true; // Si solo busca por precio/año, es base
     
     if (isExact) {
@@ -123,6 +137,7 @@ export function Inventory() {
   const [clients, setClients] = useState<Client[]>([]);
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterOwnership, setFilterOwnership] = useState<string>('all');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -152,7 +167,8 @@ export function Inventory() {
     { id: 'cylinders', label: 'Cilindros', visible: false, width: 120 },
     { id: 'liters', label: 'Motor (L)', visible: false, width: 120 },
     { id: 'receivedAt', label: 'F. Recepción', visible: false, width: 150 },
-    { id: 'equipment', label: 'Equipamiento', visible: false, width: 200 }
+    { id: 'equipment', label: 'Equipamiento', visible: false, width: 200 },
+    { id: 'ownership', label: 'Propiedad', visible: true, width: 150 }
   ]);
   const [showColSettings, setShowColSettings] = useState(false);
   const [resizingCol, setResizingCol] = useState<string | null>(null);
@@ -394,6 +410,10 @@ export function Inventory() {
       `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color} ${v.equipment || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    if (filterOwnership !== 'all') {
+      result = result.filter(v => (v.ownership || 'propio') === filterOwnership);
+    }
+
     if (sortConfig) {
       result.sort((a, b) => {
         let aVal: any = a[sortConfig.key as keyof Vehicle] || '';
@@ -419,7 +439,7 @@ export function Inventory() {
     }
 
     return result;
-  }, [vehicles, searchTerm, sortConfig, expenses]);
+  }, [vehicles, searchTerm, filterOwnership, sortConfig, expenses]);
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
 
@@ -490,15 +510,26 @@ export function Inventory() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Buscar por marca, modelo, año, VIN, carrocería..." 
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex flex-1 max-w-md gap-3">
+            <div className="relative flex-1">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Buscar por marca, modelo, año, VIN, carrocería..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <select
+              value={filterOwnership}
+              onChange={(e) => setFilterOwnership(e.target.value)}
+              className="px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Todos</option>
+              <option value="propio">Propio</option>
+              <option value="consignacion">Consignación</option>
+            </select>
           </div>
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-700 rounded-lg shrink-0">
             <button
@@ -575,13 +606,25 @@ export function Inventory() {
                       </button>
                     )}
                   </div>
-                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded font-medium backdrop-blur-sm">
-                    {(vehicle as any).pendingValidation ? (
-                      <span className="text-amber-300">
-                         Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}
-                      </span>
-                    ) : (
-                      vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado'
+                  <div className="absolute bottom-2 left-2 flex gap-2">
+                    <div className="px-2 py-1 bg-black/60 text-white text-xs rounded font-medium backdrop-blur-sm">
+                      {(vehicle as any).pendingValidation ? (
+                        <span className="text-amber-300">
+                           Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}
+                        </span>
+                      ) : (
+                        vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado'
+                      )}
+                    </div>
+                    {vehicle.ownership === 'consignacion' && (
+                      <div className="px-2 py-1 bg-purple-600/80 text-white text-xs rounded font-medium backdrop-blur-sm">
+                        Consignación
+                      </div>
+                    )}
+                    {(vehicle.ownership === 'propio' || !vehicle.ownership) && (
+                      <div className="px-2 py-1 bg-blue-600/80 text-white text-xs rounded font-medium backdrop-blur-sm">
+                        Propio
+                      </div>
                     )}
                   </div>
                 </div>
@@ -743,6 +786,7 @@ export function Inventory() {
                       if (col.id === 'liters') val = vehicle.liters || '0';
                       if (col.id === 'receivedAt') val = vehicle.receivedAt && typeof vehicle.receivedAt === 'string' ? vehicle.receivedAt.split('T')[0] : '-';
                       if (col.id === 'equipment') val = vehicle.equipment || '-';
+                      if (col.id === 'ownership') val = vehicle.ownership === 'consignacion' ? 'Consignación' : 'Propio';
                       
                       return (
                         <td key={col.id} className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate" style={{ width: col.width, maxWidth: col.width }}>

@@ -39,6 +39,7 @@ export interface Vehicle {
   createdAt: string;
   updatedAt: string;
   // New fields
+  ownership?: 'propio' | 'consignacion' | string;
   km?: number;
   receivedAt?: string;
   cylinders?: number;
