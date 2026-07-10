@@ -83,7 +83,8 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 relative z-10">
         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">
             Configuración de Usuario

@@ -71,7 +71,8 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] relative z-10">
         <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-900">
           <h2 className="font-bold text-lg text-slate-800 dark:text-slate-200">Configurar Etapas</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">✕</button>

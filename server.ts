@@ -2,22 +2,24 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import admin from "firebase-admin";
+import { initializeApp, App as FirebaseApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldValue, Firestore } from "firebase-admin/firestore";
 import { Resend } from "resend";
 import Stripe from "stripe";
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
-let adminApp: admin.app.App | null = null;
+let adminApp: FirebaseApp | null = null;
 function getAdminApp() {
   if (!adminApp) {
     if (process.env.FIREBASE_PROJECT_ID) {
-      adminApp = admin.initializeApp({
+      adminApp = initializeApp({
         projectId: process.env.FIREBASE_PROJECT_ID,
       });
     } else {
       // In AI Studio / local dev, default init often works if set up through gcloud
       // but without a service account it might fail. We attempt.
-      adminApp = admin.initializeApp();
+      adminApp = initializeApp();
     }
   }
   return adminApp;
@@ -63,7 +65,7 @@ async function startServer() {
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
-      const adminDb = getAdminApp().firestore();
+      const adminDb = getFirestore(getAdminApp()!);
 
       // Handle the event
       switch (event.type) {
@@ -76,7 +78,7 @@ async function startServer() {
               {
                 subscriptionStatus: "active",
                 stripeCustomerId: checkoutSession.customer,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true }
             );
@@ -96,7 +98,7 @@ async function startServer() {
             await agencyDoc.ref.set(
               {
                 subscriptionStatus: "canceled",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true }
             );
@@ -153,20 +155,20 @@ async function startServer() {
         return res.status(400).json({ error: "Faltan parámetros requeridos" });
       }
 
-      const auth = getAdminApp().auth();
+      const auth = getAuth(getAdminApp()!);
       const userRecord = await auth.createUser({
         email,
         password,
         displayName: name || email.split('@')[0],
       });
 
-      const db = getAdminApp().firestore();
+      const db = getFirestore(getAdminApp()!);
       await db.collection("users").doc(userRecord.uid).set({
         email,
         role,
         agencyId,
         name: name || email.split('@')[0],
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
@@ -185,14 +187,14 @@ async function startServer() {
 
       // Delete from Firebase Auth
       try {
-        const auth = getAdminApp().auth();
+        const auth = getAuth(getAdminApp()!);
         await auth.deleteUser(uid);
       } catch (authErr: any) {
         console.warn("Could not delete from Firebase Auth (ignoring):", authErr.message);
       }
 
       // Delete from Firestore
-      const db = getAdminApp().firestore();
+      const db = getFirestore(getAdminApp()!);
       await db.collection("users").doc(uid).delete();
 
       res.status(200).json({ success: true });
@@ -263,7 +265,7 @@ async function startServer() {
 
     if (body.object === "whatsapp_business_account" || body.object === "page") {
       try {
-        const adminDb = getAdminApp().firestore();
+        const adminDb = getFirestore(getAdminApp()!);
 
         for (const entry of body.entry) {
           // For WhatsApp
@@ -317,7 +319,7 @@ async function startServer() {
   });
 
   async function createMetaLead(
-    adminDb: admin.firestore.Firestore,
+    adminDb: Firestore,
     name: string,
     phone: string,
     origin: string,
@@ -337,8 +339,8 @@ async function startServer() {
       status: "new",
       origin: origin,
       sellerId: "",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
     await adminDb.collection("clients").add(newClient);
   }
