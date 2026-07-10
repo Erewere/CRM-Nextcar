@@ -23,6 +23,9 @@ import {
   PieChart,
   Pie,
   Legend,
+  FunnelChart,
+  Funnel,
+  LabelList,
 } from "recharts";
 import {
   Users,
@@ -83,15 +86,28 @@ export function Dashboard() {
   const [filterSeller, setFilterSeller] = useState<string>(() => {
     return localStorage.getItem("dashboard_filterSeller") || "all";
   });
-  const [filterStartDate, setFilterStartDate] = useState<string>("");
-  const [filterEndDate, setFilterEndDate] = useState<string>("");
-  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterStartDate, setFilterStartDate] = useState<string>(() => localStorage.getItem("dashboard_filterStartDate") || "");
+  const [filterEndDate, setFilterEndDate] = useState<string>(() => localStorage.getItem("dashboard_filterEndDate") || "");
+  const [filterCategory, setFilterCategory] = useState<string>(() => localStorage.getItem("dashboard_filterCategory") || "all");
 
   // For interactive stage selection
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
-  const [activeDateFilter, setActiveDateFilter] = useState<string>("");
-  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [activeDateFilter, setActiveDateFilter] = useState<string>(() => localStorage.getItem("dashboard_activeDateFilter") || "");
+  const [filterTags, setFilterTags] = useState<string[]>(() => {
+    const saved = localStorage.getItem("dashboard_filterTags");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("dashboard_filterSeller", filterSeller);
+    localStorage.setItem("dashboard_filterStartDate", filterStartDate);
+    localStorage.setItem("dashboard_filterEndDate", filterEndDate);
+    localStorage.setItem("dashboard_filterCategory", filterCategory);
+    localStorage.setItem("dashboard_activeDateFilter", activeDateFilter);
+    localStorage.setItem("dashboard_filterTags", JSON.stringify(filterTags));
+  }, [filterSeller, filterStartDate, filterEndDate, filterCategory, activeDateFilter, filterTags]);
+
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>(
     [],
@@ -640,38 +656,38 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Prospectos</p>
+        <Link to="/persons" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Total Prospectos</p>
           <div className="flex items-baseline gap-2">
-            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100">{filteredClients.length}</h2>
+            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{filteredClients.length}</h2>
           </div>
-        </div>
+        </Link>
         
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
+        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center relative overflow-hidden hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all">
             <Target className="w-16 h-16 text-blue-500" />
           </div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 relative z-10">Activos (En Pipeline)</p>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 relative z-10 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Activos (En Pipeline)</p>
           <div className="flex items-baseline gap-2 relative z-10">
-            <h2 className="text-3xl font-black text-blue-600 dark:text-blue-400">{activeContacts.length}</h2>
+            <h2 className="text-3xl font-black text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{activeContacts.length}</h2>
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Ventas Cerradas</p>
+        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Ventas Cerradas</p>
           <div className="flex items-baseline gap-2">
-            <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{wonContacts.length}</h2>
+            <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">{wonContacts.length}</h2>
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Ingresos (Ventas)</p>
+        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 transition-all cursor-pointer group">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Ingresos (Ventas)</p>
           <div className="flex items-baseline gap-2">
-            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100">
+            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
             </h2>
           </div>
-        </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -683,12 +699,15 @@ export function Dashboard() {
           {pipelineData.length > 0 ? (
             <div className="flex-1 w-full h-full min-h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData} layout="vertical" margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} width={100} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={28}>
+                <FunnelChart margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Funnel
+                    dataKey="value"
+                    data={pipelineData}
+                    isAnimationActive
+                  >
+                    <LabelList position="right" fill="#64748b" stroke="none" dataKey="name" fontSize={12} />
+                    <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={14} fontWeight="bold" />
                     {pipelineData.map((entry, index) => {
                       const isActive = selectedStage === entry.id || !selectedStage;
                       return (
@@ -700,8 +719,8 @@ export function Dashboard() {
                         />
                       );
                     })}
-                  </Bar>
-                </BarChart>
+                  </Funnel>
+                </FunnelChart>
               </ResponsiveContainer>
             </div>
           ) : (
