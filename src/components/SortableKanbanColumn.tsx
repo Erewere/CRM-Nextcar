@@ -16,6 +16,8 @@ interface Props {
   isFirst?: boolean;
   isLast?: boolean;
   key?: React.Key;
+  onAddRight?: () => void;
+  autoFocusEdit?: boolean;
 }
 
 export function SortableKanbanColumn(props: Props) {
@@ -41,7 +43,7 @@ export function SortableKanbanColumn(props: Props) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex h-full flex-col shrink-0 relative">
+    <div ref={setNodeRef} style={style} className="flex h-full flex-col shrink-0 md:shrink md:flex-1 md:min-w-[150px] relative w-[85vw] md:w-0 snap-center md:snap-align-none group">
       <KanbanColumn
         {...props}
         dragHandleProps={{ ...attributes, ...listeners }}

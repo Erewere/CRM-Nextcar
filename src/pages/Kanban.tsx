@@ -200,6 +200,7 @@ export function Kanban() {
   const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [columns, setColumns] = useState<PipelineStage[]>(DEFAULT_COLUMNS);
+  const [newColumnId, setNewColumnId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -529,7 +530,7 @@ export function Kanban() {
         </button>
       </div>
 
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -537,7 +538,7 @@ export function Kanban() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="flex flex-1 overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
             <SortableContext items={activeColumns.map(c => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
               {activeColumns.map((col, index) => {
                 const columnClients = filteredClients.filter(
@@ -582,6 +583,22 @@ export function Kanban() {
                         const finalCols = [...newCols, ...terminalColumns];
                         setColumns(finalCols);
                         await updateDoc(doc(db, "agencies", userData.agencyId), { pipelineStages: finalCols });
+                      }
+                    }}
+                    autoFocusEdit={newColumnId === col.id}
+                    onAddRight={async () => {
+                      if (!userData?.agencyId) return;
+                      const newId = `stage_${Date.now()}`;
+                      const newStage = { id: newId, title: "Nueva Etapa" };
+                      const newCols = [...activeColumns];
+                      newCols.splice(index + 1, 0, newStage);
+                      const finalCols = [...newCols, ...terminalColumns];
+                      setColumns(finalCols);
+                      setNewColumnId(newId);
+                      try {
+                        await updateDoc(doc(db, "agencies", userData.agencyId), { pipelineStages: finalCols });
+                      } catch (e) {
+                        console.error(e);
                       }
                     }}
                   />

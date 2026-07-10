@@ -7,7 +7,7 @@ import {
 import { Client } from "../types";
 import { SortableClientCard } from "./ClientCard";
 import clsx from "clsx";
-import { GripHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
+import { GripHorizontal, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 interface Props {
@@ -22,6 +22,8 @@ interface Props {
   onMoveRight?: () => void;
   isFirst?: boolean;
   isLast?: boolean;
+  onAddRight?: () => void;
+  autoFocusEdit?: boolean;
 }
 
 export function KanbanColumn({
@@ -35,14 +37,23 @@ export function KanbanColumn({
   onMoveRight,
   isFirst,
   isLast,
+  onAddRight,
+  autoFocusEdit,
 }: Props) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(autoFocusEdit || false);
   const [editValue, setEditValue] = useState(column.title);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (autoFocusEdit) {
+      setIsEditing(true);
+    }
+  }, [autoFocusEdit]);
+
+  useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
+      inputRef.current.select();
     }
   }, [isEditing]);
 
@@ -71,10 +82,10 @@ export function KanbanColumn({
   const formattedValue = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(totalValue);
 
   return (
-    <div className="flex w-[85vw] md:w-[270px] snap-center md:snap-align-none flex-col shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors h-full">
+    <div className="flex w-full h-full flex-col shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors">
       <div
         className={clsx(
-          "flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
+          "group/header flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
         )}
       >
         <div className="absolute top-0 left-0 h-[3px] w-full bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600">
@@ -82,7 +93,7 @@ export function KanbanColumn({
           {isLost && <div className="h-full bg-gradient-to-r from-rose-400 to-red-500 w-full" />}
           {isNew && <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 w-full" />}
         </div>
-        <div className="flex items-center justify-between mt-1">
+        <div className="flex flex-wrap items-center justify-between mt-1 gap-x-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {dragHandleProps && (
               <button {...dragHandleProps} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-grab active:cursor-grabbing hidden md:block" title="Arrastrar etapa">
@@ -133,7 +144,19 @@ export function KanbanColumn({
             {clients.length}
           </div>
         </div>
-        <div className="flex items-center justify-between mt-1">
+        
+        {onAddRight && (
+          <div className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 opacity-0 group-hover/header:opacity-100 transition-opacity hidden md:block">
+            <button
+              onClick={onAddRight}
+              className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md hover:bg-blue-600 hover:scale-110 transition-transform"
+              title="Añadir etapa aquí"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center justify-between mt-1 gap-x-2">
           <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
             {clients.length} contacto{clients.length !== 1 ? "s" : ""}
           </span>

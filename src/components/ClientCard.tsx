@@ -60,12 +60,13 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
     <div 
       onClick={onClick}
       className={clsx(
-        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all hover:shadow-md cursor-grab active:cursor-grabbing text-left relative overflow-hidden",
+        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl cursor-grab active:cursor-grabbing text-left relative overflow-hidden",
         client.origin === 'whatsapp' && "border-l-4 border-l-green-400"
       )}
     >
-      {/* Activity indicator border top (optional, could be dynamically colored based on tasks) */}
-      <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      {/* Modern water-drop / glass highlight effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-400/0 via-blue-300/5 to-indigo-400/10 dark:from-blue-500/0 dark:via-blue-400/5 dark:to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none mix-blend-overlay" />
+      <div className="absolute -inset-full top-0 left-0 bg-gradient-to-r from-transparent via-white/20 to-transparent dark:via-white/5 opacity-0 group-hover:opacity-100 group-hover:-translate-x-full duration-1000 transition-all ease-out pointer-events-none" />
       
       <div className="p-3 pb-2.5">
         <div className="flex justify-between items-start gap-2 mb-0.5">
