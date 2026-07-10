@@ -65,10 +65,6 @@ export function Integrations() {
 
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900 overflow-y-auto">
-      <div className="px-4 md:px-6 py-6 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-200">Integraciones</h1>
-        <p className="text-gray-500 dark:text-slate-400 mt-1">Conecta tus herramientas favoritas al CRM.</p>
-      </div>
 
       <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">

@@ -449,16 +449,8 @@ export function Kanban() {
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="mb-6 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4 shrink-0">
+      <div className="mb-6 flex flex-col sm:flex-row sm:justify-end items-start sm:items-center gap-4 shrink-0">
         <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-200">
-              Pipeline de Ventas
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Arrastra los prospectos para avanzar su proceso
-            </p>
-          </div>
           {userData?.role === "admin" && (
             <button
               onClick={() => setShowSettings(true)}

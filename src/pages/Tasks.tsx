@@ -1030,14 +1030,6 @@ export function Tasks() {
     <div className="flex flex-col h-full bg-[#f4f5f5]">
       {/* Header and filters */}
       <div className="px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-gray-800 dark:text-slate-200">
-              Acciones
-            </h1>
-            <AlertCircle className="w-4 h-4 text-gray-400" />
-          </div>
-        </div>
 
         {/* Sync alert mock removed for now */}
 

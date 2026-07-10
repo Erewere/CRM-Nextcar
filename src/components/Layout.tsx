@@ -326,27 +326,39 @@ export function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-[calc(100dvh-56px)] md:h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
-        <header className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
-          <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-            <h1 className="text-lg font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors">
-              Panel de Control
-            </h1>
-            {agencyName && (
-              <div className="flex items-center gap-1 md:gap-2 rounded-full bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800/50 px-2 md:px-3 py-1 truncate shrink-0 transition-colors">
-                <Building className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span className="text-[10px] md:text-xs font-medium text-blue-700 dark:text-blue-300 truncate">
-                  {agencyName}
+        <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
+          <div className="flex flex-col justify-center overflow-hidden">
+            <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
+              <h1 className="text-[30px] font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors leading-none">
+                {navItems.find(item => item.path === location.pathname)?.name || "Panel de Control"}
+              </h1>
+              {agencyName && (
+                <div className="flex items-center gap-1 md:gap-2 rounded-full bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800/50 px-2 py-0.5 truncate shrink-0 transition-colors">
+                  <Building className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="text-[10px] md:text-[11px] font-medium text-blue-700 dark:text-blue-300 truncate">
+                    {agencyName}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 shrink-0 transition-colors">
+                <span className="text-[10px] md:text-[11px] font-medium text-slate-600 dark:text-slate-400 capitalize">
+                  {userData?.role === 'master' ? 'Master' : 
+                   userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
                 </span>
               </div>
-            )}
-            <div className="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 shrink-0 transition-colors">
-              <span className="text-[10px] md:text-xs font-medium text-slate-600 dark:text-slate-400 capitalize">
-                {userData?.role === 'master' ? 'Master' : 
-                 userData?.role === 'admin' ? 'Administrador' : 
-                 userData?.role === 'seller' ? 'Vendedor' : 
-                 userData?.role || 'Desasignado'}
-              </span>
             </div>
+            <p className="text-[15px] text-slate-500 dark:text-slate-400 hidden sm:block mt-1.5 truncate max-w-md leading-none">
+              {location.pathname === '/' ? 'Métricas clave y estado de tus ventas' :
+               location.pathname === '/inventory' ? 'Gestiona los vehículos de la agencia' :
+               location.pathname === '/kanban' ? 'Arrastra los prospectos para avanzar su proceso' :
+               location.pathname === '/persons' ? 'Directorio de contactos y prospectos' :
+               location.pathname === '/tasks' ? 'Gestiona tus tareas y recordatorios' :
+               location.pathname === '/emails' ? 'Gestiona tu bandeja de entrada sincronizada' :
+               location.pathname === '/users' ? 'Administra los accesos y roles de usuarios' :
+               location.pathname === '/billing' ? 'Gestiona el plan y facturación de la agencia' :
+               location.pathname === '/integrations' ? 'Conecta tus herramientas favoritas al CRM' :
+               'Administra y controla las actividades del CRM'}
+            </p>
           </div>
           <div className="flex items-center gap-4 shrink-0">
             {/* Dark Mode Toggle */}

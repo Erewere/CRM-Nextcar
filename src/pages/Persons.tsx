@@ -883,9 +883,6 @@ export function Persons() {
       <div className="px-4 md:px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-gray-800 dark:text-slate-200">
-              Personas
-            </h1>
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode("list")}

@@ -88,10 +88,6 @@ export function Billing() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Facturación y Suscripción</h1>
-        <p className="text-slate-500 dark:text-slate-400">Gestiona el plan de tu agencia en Nextcar CRM.</p>
-      </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
         <div className="p-8 md:p-12 text-center md:text-left flex flex-col md:flex-row items-center gap-8">

@@ -345,15 +345,6 @@ export function AgencyUsers() {
   return (
     <div className="max-w-6xl mx-auto py-8 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200 tracking-tight flex items-center gap-2">
-            <Users className="w-6 h-6 text-indigo-600" />
-            Gestión de Usuarios
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {isMaster ? 'Administra todos los usuarios y sus agencias' : 'Administra los roles de los usuarios en tu agencia'}
-          </p>
-        </div>
       </div>
 
       {isMaster && (

@@ -448,20 +448,16 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-200 tracking-tight">
-            Resumen Ejecutivo
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Métricas clave y estado de tus ventas
-          </p>
-        </div>
-
-        {/* Dynamic Filters */}
-        <div className="flex flex-col items-start md:items-end gap-3 w-full md:w-auto">
-          {/* Quick Date Filters */}
-          <div className="flex flex-wrap gap-2">
+      {/* Dynamic Filters */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        {/* Quick Date Filters */}
+        <div className="flex flex-wrap gap-2 items-center w-full xl:w-auto">
+          <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700 hidden sm:flex">
+            <Filter className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+              Filtros
+            </span>
+          </div>
             <button
               onClick={() => {
                 const today = new Date().toISOString().split("T")[0];
@@ -516,13 +512,7 @@ export function Dashboard() {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="flex items-center gap-2 pl-2 border-r border-slate-200 dark:border-slate-700 pr-3">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                Filtros
-              </span>
-            </div>
+          <div className="flex flex-wrap items-center justify-start xl:justify-end gap-3 w-full xl:w-auto">
 
             
             {userData?.role === "admin" && (
@@ -652,7 +642,6 @@ export function Dashboard() {
 
 
           </div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -694,7 +683,7 @@ export function Dashboard() {
         {/* Main Chart */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col min-h-[350px]">
           <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-6">
-            Embudo de Ventas (Pipeline)
+            Embudo de Ventas
           </h3>
           {pipelineData.length > 0 ? (
             <div className="flex-1 w-full h-full min-h-[250px]">

@@ -131,16 +131,7 @@ export function Emails() {
 
   return (
     <div className="h-[calc(100vh-8rem)] min-h-[600px] flex flex-col items-stretch overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-      <div className="px-8 py-6 border-b border-gray-200 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 flex items-center justify-between z-10 relative">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-3">
-            <Mail className="w-8 h-8 text-blue-600" />
-            Correos Electrónicos
-          </h1>
-          <p className="text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-            Gestiona tu bandeja de entrada sincronizada.
-          </p>
-        </div>
+      <div className="px-8 py-6 border-b border-gray-200 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 flex items-center justify-end z-10 relative">
         <div className="flex items-center gap-3">
           {googleToken && (
              <>
