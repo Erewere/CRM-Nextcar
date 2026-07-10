@@ -26,6 +26,7 @@ import clsx from "clsx";
 
 import { TaskReminders } from "./TaskReminders";
 import { ChangePasswordModal } from "./ChangePasswordModal";
+import { UserSettingsModal } from "./UserSettingsModal";
 
 export function Layout() {
   const { userData } = useAuth();
@@ -36,6 +37,7 @@ export function Layout() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -250,18 +252,28 @@ export function Layout() {
         </nav>
 
         <div className="mt-auto border-t border-slate-800 p-4">
-          <div
+          <button
+            onClick={() => setShowUserSettingsModal(true)}
             className={clsx(
-              "flex items-center rounded-xl bg-slate-800/50 mb-2",
+              "w-full flex items-center rounded-xl bg-slate-800/50 mb-2 hover:bg-slate-800 transition-colors cursor-pointer text-left",
               isSidebarCollapsed ? "justify-center p-2" : "gap-3 p-3",
             )}
           >
-            <div
-              className="h-10 w-10 shrink-0 rounded-lg bg-slate-600 flex items-center justify-center text-white font-bold uppercase"
-              title={isSidebarCollapsed ? userData?.name : undefined}
-            >
-              {userData?.name?.substring(0, 2) || "US"}
-            </div>
+            {userData?.photoURL ? (
+              <img
+                src={userData.photoURL}
+                alt="Avatar"
+                className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                title={isSidebarCollapsed ? userData?.name : undefined}
+              />
+            ) : (
+              <div
+                className="h-10 w-10 shrink-0 rounded-lg bg-slate-600 flex items-center justify-center text-white font-bold uppercase"
+                title={isSidebarCollapsed ? userData?.name : undefined}
+              >
+                {userData?.name?.substring(0, 2) || "US"}
+              </div>
+            )}
             {!isSidebarCollapsed && (
               <div className="flex flex-col overflow-hidden">
                 <span className="text-sm font-semibold text-white truncate">
@@ -272,7 +284,7 @@ export function Layout() {
                 </span>
               </div>
             )}
-          </div>
+          </button>
           <button
             onClick={() => setShowPasswordModal(true)}
             title={isSidebarCollapsed ? "Cambiar Contraseña" : undefined}
@@ -369,6 +381,7 @@ export function Layout() {
       </main>
       
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
+      <UserSettingsModal isOpen={showUserSettingsModal} onClose={() => setShowUserSettingsModal(false)} />
     </div>
   );
 }

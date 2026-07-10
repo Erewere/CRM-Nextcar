@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User } from '../types';
 
@@ -33,6 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [googleToken, setGoogleToken] = useState<string | null>(null);
 
   useEffect(() => {
+    let userUnsubscribe: (() => void) | undefined;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
@@ -40,37 +42,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Actually we can't reliably get the Google token onAuthStateChanged without popup.
         // Fetch user data from firestore
         try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            let data = userDoc.data();
-            setUserData({ id: userDoc.id, ...data } as User);
-          } else {
-            const params = new URLSearchParams(window.location.search);
-            const inviteAgencyId = params.get('agencyId');
-            
-            // Auto provision a pending user document
-            const newUserData = {
-              email: user.email || '',
-              role: inviteAgencyId ? 'seller' : 'unassigned',
-              agencyId: inviteAgencyId || 'unassigned',
-              name: user.displayName || 'Usuario Pendiente',
-              createdAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'users', user.uid), newUserData);
-            setUserData({ id: user.uid, ...newUserData } as unknown as User);
-          }
+          userUnsubscribe = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+            if (userDoc.exists()) {
+              let data = userDoc.data();
+              setUserData({ id: userDoc.id, ...data } as User);
+            } else {
+              const params = new URLSearchParams(window.location.search);
+              const inviteAgencyId = params.get('agencyId');
+              
+              // Auto provision a pending user document
+              const newUserData = {
+                email: user.email || '',
+                role: inviteAgencyId ? 'seller' : 'unassigned',
+                agencyId: inviteAgencyId || 'unassigned',
+                name: user.displayName || 'Usuario Pendiente',
+                createdAt: serverTimestamp()
+              };
+              await setDoc(doc(db, 'users', user.uid), newUserData);
+              // The snapshot will automatically re-trigger with the new data
+            }
+          }, (error) => {
+            console.error("Failed to fetch user data", error);
+            setUserData(null);
+          });
         } catch (error) {
-          console.error("Failed to fetch user data", error);
+          console.error("Failed to setup snapshot", error);
           setUserData(null);
         }
       } else {
+        if (userUnsubscribe) {
+          userUnsubscribe();
+          userUnsubscribe = undefined;
+        }
         setUserData(null);
         cachedAccessToken = null;
         setGoogleToken(null);
       }
       setLoading(false);
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (userUnsubscribe) {
+        userUnsubscribe();
+      }
+    };
   }, []);
 
   const bootstrapUser = async (role: 'master' | 'admin' | 'seller', agencyId: string, name: string) => {

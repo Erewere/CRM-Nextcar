@@ -203,7 +203,9 @@ export function Kanban() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
-  const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
+  const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
+    return localStorage.getItem("kanban_filterSeller") || "all";
+  });
   const [showArchived, setShowArchived] = useState(false);
 
   const [tasks, setTasks] = useState<
@@ -478,7 +480,10 @@ export function Kanban() {
               <div className="ml-4">
                 <select
                   value={selectedSellerId}
-                  onChange={(e) => setSelectedSellerId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedSellerId(e.target.value);
+                    localStorage.setItem("kanban_filterSeller", e.target.value);
+                  }}
                   className="text-sm border-slate-200 dark:border-slate-700 rounded-md py-1.5 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800"
                 >
                   <option value="all">Todos los vendedores</option>

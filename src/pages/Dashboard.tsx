@@ -80,7 +80,9 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   // Filters
-  const [filterSeller, setFilterSeller] = useState<string>("all");
+  const [filterSeller, setFilterSeller] = useState<string>(() => {
+    return localStorage.getItem("dashboard_filterSeller") || "all";
+  });
   const [filterStartDate, setFilterStartDate] = useState<string>("");
   const [filterEndDate, setFilterEndDate] = useState<string>("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -192,6 +194,14 @@ export function Dashboard() {
     };
     fetchStats();
   }, [userData]);
+
+  const allSellersAndAdmins = useMemo(() => {
+    const list = [...users];
+    if (userData && !list.some((u) => u.id === userData.id)) {
+      list.push(userData as User);
+    }
+    return list.filter((u) => u.role === "seller" || u.role === "admin");
+  }, [users, userData]);
 
   // --- Process Data With Filters ---
 
@@ -372,10 +382,14 @@ export function Dashboard() {
               : status === "lost"
                 ? "Perdido"
                 : status || "Nuevo",
-        total: statusCounts[status],
+        value: statusCounts[status],
       };
     })
-    .sort((a, b) => b.total - a.total); // Sort highest first
+    .sort((a, b) => {
+      const indexA = pipelineStages.findIndex((s) => s.id === a.id);
+      const indexB = pipelineStages.findIndex((s) => s.id === b.id);
+      return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+    });
 
   // Tasks Insights
   const todayTasks = filteredTasks.filter((t) => {
@@ -499,16 +513,17 @@ export function Dashboard() {
               <select
                 className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[150px] truncate"
                 value={filterSeller}
-                onChange={(e) => setFilterSeller(e.target.value)}
+                onChange={(e) => {
+                  setFilterSeller(e.target.value);
+                  localStorage.setItem("dashboard_filterSeller", e.target.value);
+                }}
               >
                 <option value="all">Todos los vendedores</option>
-                {users
-                  .filter((u) => u.role === "seller")
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
+                {allSellersAndAdmins.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email} {u.role === "admin" ? " (Admin)" : ""}
+                  </option>
+                ))}
               </select>
             )}
             <select
@@ -606,6 +621,7 @@ export function Dashboard() {
               <button
                 onClick={() => {
                   setFilterSeller("all");
+                  localStorage.setItem("dashboard_filterSeller", "all");
                   setFilterStartDate("");
                   setFilterEndDate("");
                   setFilterCategory("all");
@@ -667,12 +683,12 @@ export function Dashboard() {
           {pipelineData.length > 0 ? (
             <div className="flex-1 w-full h-full min-h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} dy={10} />
-                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                <BarChart data={pipelineData} layout="vertical" margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} width={100} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={28}>
                     {pipelineData.map((entry, index) => {
                       const isActive = selectedStage === entry.id || !selectedStage;
                       return (

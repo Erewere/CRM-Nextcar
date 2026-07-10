@@ -5,6 +5,7 @@ export interface User {
   agencyId: string;
   name: string;
   createdAt: string | Date;
+  photoURL?: string;
 }
 
 export interface PipelineStage {
