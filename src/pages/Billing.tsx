@@ -87,10 +87,10 @@ export function Billing() {
   const totalMonthlyCost = (userCount * PRICE_PER_USER).toFixed(2);
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
-        <div className="p-8 md:p-12 text-center md:text-left flex flex-col md:flex-row items-center gap-8">
+        <div className="p-6 md:p-8 text-center md:text-left flex flex-col md:flex-row items-center gap-8">
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Plan Pro - Mensual</h2>
             <p className="text-slate-500 dark:text-slate-400 mb-6">

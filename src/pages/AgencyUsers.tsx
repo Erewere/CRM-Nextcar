@@ -343,12 +343,10 @@ export function AgencyUsers() {
   const isMaster = userData?.role === 'master' ;
 
   return (
-    <div className="max-w-6xl mx-auto py-8 space-y-6">
-      <div className="flex items-center justify-between">
-      </div>
+    <div className="max-w-6xl mx-auto py-4 space-y-4">
 
       {isMaster && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col md:flex-row items-end gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 flex flex-col md:flex-row items-end gap-4">
           <div className="flex-1 w-full">
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nueva Agencia</label>
             <input
@@ -630,7 +628,7 @@ export function AgencyUsers() {
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <ul className="divide-y divide-slate-100">
           {users.map(u => (
-            <li key={u.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
+            <li key={u.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <div className="font-bold text-slate-800 dark:text-slate-200">

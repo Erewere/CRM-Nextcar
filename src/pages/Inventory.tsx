@@ -445,7 +445,7 @@ export function Inventory() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex justify-end items-center mb-6">
+      <div className="flex justify-end items-center mb-4">
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
             <Download className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Importar Excel</span>
@@ -462,7 +462,7 @@ export function Inventory() {
       </div>
 
       {(userData?.role === 'admin' || userData?.role === 'master') && pendingVehicles.length > 0 && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
           <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
             Validaciones Pendientes
@@ -827,7 +827,7 @@ export function Inventory() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm overflow-hidden p-6 text-center">
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Eliminar Vehículo</h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">¿Estás seguro de que deseas eliminar este vehículo? Esta acción no se puede deshacer.</p>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">¿Estás seguro de que deseas eliminar este vehículo? Esta acción no se puede deshacer.</p>
             <div className="flex gap-4">
               <button 
                 onClick={() => setVehicleToDelete(null)}

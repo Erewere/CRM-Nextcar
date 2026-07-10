@@ -1029,7 +1029,7 @@ export function Tasks() {
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5]">
       {/* Header and filters */}
-      <div className="px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+      <div className="p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
 
         {/* Sync alert mock removed for now */}
 

@@ -131,7 +131,7 @@ export function Emails() {
 
   return (
     <div className="h-[calc(100vh-8rem)] min-h-[600px] flex flex-col items-stretch overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-      <div className="px-8 py-6 border-b border-gray-200 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 flex items-center justify-end z-10 relative">
+      <div className="p-4 border-b border-gray-200 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 flex items-center justify-end z-10 relative">
         <div className="flex items-center gap-3">
           {googleToken && (
              <>

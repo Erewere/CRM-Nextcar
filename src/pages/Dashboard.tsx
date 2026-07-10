@@ -447,7 +447,7 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-8">
       {/* Dynamic Filters */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
         {/* Quick Date Filters */}

@@ -387,7 +387,7 @@ export function Layout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8 relative transition-colors">
+        <div className="flex-1 overflow-auto p-4 md:p-6 relative transition-colors">
           <Outlet />
         </div>
       </main>

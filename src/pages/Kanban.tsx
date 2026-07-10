@@ -30,6 +30,7 @@ import {
   horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { KanbanColumn } from "../components/KanbanColumn";
+import { SortableKanbanColumn } from "../components/SortableKanbanColumn";
 import { ClientCard, SortableClientCard } from "../components/ClientCard";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
@@ -305,8 +306,16 @@ export function Kanban() {
 
   const activeOriginalStatusRef = React.useRef<string | null>(null);
 
+  const activeColumnRef = React.useRef<any>(null);
+
   const handleDragStart = (event: any) => {
     setActiveId(event.active.id);
+    
+    if (event.active.data.current?.type === "Column") {
+      activeColumnRef.current = event.active.data.current.column;
+      return;
+    }
+    
     const client = clients.find((c) => c.id === event.active.id);
     if (client) {
       activeOriginalStatusRef.current = client.status || null;
@@ -378,6 +387,28 @@ export function Kanban() {
     const { active, over } = event;
     setActiveId(null);
     if (!over) return;
+    
+    if (active.data.current?.type === "Column" && userData?.agencyId) {
+      const activeId = active.id.replace('col-', '');
+      const overId = over.id.replace('col-', '');
+      
+      if (activeId !== overId) {
+        const oldIndex = activeColumns.findIndex(c => c.id === activeId);
+        const newIndex = activeColumns.findIndex(c => c.id === overId);
+        
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newCols = arrayMove(activeColumns, oldIndex, newIndex);
+          const finalCols = [...newCols, ...terminalColumns];
+          setColumns(finalCols);
+          try {
+            await updateDoc(doc(db, "agencies", userData.agencyId), { pipelineStages: finalCols });
+          } catch(e) {
+            console.error(e);
+          }
+        }
+      }
+      return;
+    }
 
     const clientId = active.id;
     const overClientId = over.id;
@@ -444,12 +475,12 @@ export function Kanban() {
       }
     }
     
-    activeOriginalStatusRef.current = null;
+    activeOriginalStatusRef.current = null; activeColumnRef.current = null;
   };
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="mb-6 flex flex-col sm:flex-row sm:justify-end items-start sm:items-center gap-4 shrink-0">
+      <div className="mb-4 flex flex-col sm:flex-row sm:justify-end items-start sm:items-center gap-4 shrink-0">
         <div className="flex flex-wrap items-center gap-3">
           {userData?.role === "admin" && (
             <button
@@ -507,20 +538,56 @@ export function Kanban() {
           onDragEnd={handleDragEnd}
         >
           <div className="flex overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-            {activeColumns.map((col) => {
-              const columnClients = filteredClients.filter(
-                (c) => c.status === col.id,
-              );
-              return (
-                <KanbanColumn
-                  key={col.id}
-                  column={col}
-                  clients={columnClients}
-                  onClientClick={setSelectedClient}
-                  tasks={tasks}
-                />
-              );
-            })}
+            <SortableContext items={activeColumns.map(c => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
+              {activeColumns.map((col, index) => {
+                const columnClients = filteredClients.filter(
+                  (c) => c.status === col.id,
+                );
+                return (
+                  <SortableKanbanColumn
+                    key={col.id}
+                    column={col}
+                    clients={columnClients}
+                    onClientClick={setSelectedClient}
+                    tasks={tasks}
+                    isFirst={index === 0}
+                    isLast={index === activeColumns.length - 1}
+                    onTitleChange={async (newTitle) => {
+                      if (!userData?.agencyId) return;
+                      const newColumns = columns.map(c => c.id === col.id ? { ...c, title: newTitle } : c);
+                      setColumns(newColumns); // optimistic update
+                      try {
+                        await updateDoc(doc(db, "agencies", userData.agencyId), { pipelineStages: newColumns });
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    onMoveLeft={async () => {
+                      if (index > 0 && userData?.agencyId) {
+                        const newCols = [...activeColumns];
+                        const temp = newCols[index];
+                        newCols[index] = newCols[index - 1];
+                        newCols[index - 1] = temp;
+                        const finalCols = [...newCols, ...terminalColumns];
+                        setColumns(finalCols);
+                        await updateDoc(doc(db, "agencies", userData.agencyId), { pipelineStages: finalCols });
+                      }
+                    }}
+                    onMoveRight={async () => {
+                      if (index < activeColumns.length - 1 && userData?.agencyId) {
+                        const newCols = [...activeColumns];
+                        const temp = newCols[index];
+                        newCols[index] = newCols[index + 1];
+                        newCols[index + 1] = temp;
+                        const finalCols = [...newCols, ...terminalColumns];
+                        setColumns(finalCols);
+                        await updateDoc(doc(db, "agencies", userData.agencyId), { pipelineStages: finalCols });
+                      }
+                    }}
+                  />
+                );
+              })}
+            </SortableContext>
           </div>
 
           <TerminalDropBar
@@ -535,6 +602,14 @@ export function Kanban() {
                   client={activeClient}
                   tasks={tasks.filter((t) => t.clientId === activeClient.id)}
                 />
+              </div>
+            ) : activeColumnRef.current ? (
+              <div className="w-[270px] shadow-2xl opacity-100 rotate-2">
+                <div className="flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative">
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[14px] font-bold text-slate-800 dark:text-slate-100">{activeColumnRef.current.title}</span>
+                  </div>
+                </div>
               </div>
             ) : null}
           </DragOverlay>
