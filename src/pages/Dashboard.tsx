@@ -1,3 +1,4 @@
+import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -221,33 +222,25 @@ export function Dashboard() {
 
   // --- Process Data With Filters ---
 
+  const isWon = (status: string = "") => checkIsWon(status, pipelineStages);
+  const isLost = (status: string = "") => checkIsLost(status, pipelineStages);
+  const isActive = (status: string) => !isWon(status) && !isLost(status);
+
+
   const filteredClients = useMemo(() => {
     return clients.filter((c) => {
       if (filterSeller !== "all" && c.sellerId !== filterSeller) return false;
 
+      const isWonClient = isWon(c.status);
+      const clientDate = isWonClient && c.soldAt ? new Date(c.soldAt + "T00:00:00") : (c.createdAt?.toDate ? c.createdAt.toDate() : new Date(c.createdAt || Date.now()));
+
       if (filterStartDate) {
-        const clientDate = c.createdAt?.toDate
-          ? c.createdAt.toDate()
-          : new Date(c.createdAt || Date.now());
         const startDate = new Date(filterStartDate);
-        if (
-          isValid(startDate) &&
-          isValid(clientDate) &&
-          isAfter(startOfDay(startDate), clientDate)
-        )
-          return false;
+        if (isValid(startDate) && isValid(clientDate) && isAfter(startOfDay(startDate), clientDate)) return false;
       }
       if (filterEndDate) {
-        const clientDate = c.createdAt?.toDate
-          ? c.createdAt.toDate()
-          : new Date(c.createdAt || Date.now());
         const endDate = new Date(filterEndDate);
-        if (
-          isValid(endDate) &&
-          isValid(clientDate) &&
-          isAfter(clientDate, startOfDay(endDate))
-        )
-          return false;
+        if (isValid(endDate) && isValid(clientDate) && isAfter(clientDate, startOfDay(endDate))) return false;
       }
 
       if (filterCategory !== "all") {
@@ -270,6 +263,7 @@ export function Dashboard() {
     filterCategory,
     vehicles,
     filterTags,
+    pipelineStages,
   ]);
 
   const filteredVehicles = useMemo(() => {
@@ -331,29 +325,12 @@ export function Dashboard() {
   }
 
   // Contacts
-  const wonKeywords = ["ganado", "won", "vendid", "cerrad"];
-  const lostKeywords = ["perdid", "lost"];
-
-  const isWon = (status: string = "") =>
-    wonKeywords.some((k) =>
-      String(status || "")
-        .toLowerCase()
-        .includes(k),
-    );
-  const isLost = (status: string = "") =>
-    lostKeywords.some((k) =>
-      String(status || "")
-        .toLowerCase()
-        .includes(k),
-    );
-  const isActive = (status: string) => !isWon(status) && !isLost(status);
 
   const activeContacts = filteredClients.filter((c) => isActive(c.status));
   const wonContacts = filteredClients.filter((c) => isWon(c.status));
 
   const totalWonAmount = wonContacts.reduce((sum, contact) => {
-    const vehicle = vehicles.find((v) => v.id === contact.vehicleId);
-    return sum + (vehicle?.price || 0);
+    return sum + (contact.saleDetails?.price || vehicles.find((v) => v.id === contact.vehicleId)?.price || 0);
   }, 0);
 
   const totalProfit = wonContacts.reduce((sum, contact) => {
@@ -662,14 +639,14 @@ export function Dashboard() {
           </div>
         </Link>
 
-        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group">
+        <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group">
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Ventas Cerradas</p>
           <div className="flex items-baseline gap-2">
             <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">{wonContacts.length}</h2>
           </div>
         </Link>
 
-        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 transition-all cursor-pointer group">
+        <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 transition-all cursor-pointer group">
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Ingresos (Ventas)</p>
           <div className="flex items-baseline gap-2">
             <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">

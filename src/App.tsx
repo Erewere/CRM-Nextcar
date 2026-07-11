@@ -14,6 +14,7 @@ import { VehiclePrint } from './pages/VehiclePrint';
 import { Billing } from './pages/Billing';
 
 import { Integrations } from './pages/Integrations';
+import { ClosedSales } from './pages/ClosedSales';
 
 const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller')[] }) => {
   const { currentUser, userData, loading } = useAuth();
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute requireRole={['master', 'admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
+            <Route path="closed-sales" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><ClosedSales /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

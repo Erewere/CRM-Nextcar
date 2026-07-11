@@ -48,6 +48,7 @@ export interface Vehicle {
   equipment?: string;
   passengers?: number;
   soldAt?: string;
+  saleDetails?: SaleDetails;
 }
 
 export interface Agency {
@@ -68,6 +69,30 @@ export interface Deal {
   stageId?: string;
   createdAt: any;
   updatedAt: any;
+}
+
+
+
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  date: string;
+  method: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
+  notes?: string;
+}
+
+export interface SaleDetails {
+  method: 'contado' | 'credito' | 'credito_bancario';
+  price: number;
+  downPayment?: number;
+  termMonths?: number;
+  interestRate?: number;
+  interestType?: 'mensual' | 'anual';
+  calculatedTotalInterest?: number;
+  calculatedTotalAmount?: number;
+  calculatedMonthlyPayment?: number;
+  firstPaymentDate?: string;
+  payments?: PaymentRecord[];
 }
 
 export interface Client {
@@ -91,6 +116,7 @@ export interface Client {
   vehicleId?: string;
   status: string;
   soldAt?: string;
+  saleDetails?: SaleDetails;
   origin: "manual" | "whatsapp" | "web" | "google_contacts" | "excel_import";
   tags?: string[];
   wantedVehicle?: {

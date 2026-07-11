@@ -31,10 +31,13 @@ import {
   Building2,
   Eye,
   Users,
-  Edit2, Target,
+  Edit2, Target, Calculator,
 } from "lucide-react";
 import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
+import { DealWonModal } from "./DealWonModal";
+import { PaymentModal } from "./PaymentModal";
+import { createPaymentTasks } from "../lib/paymentTasks";
 
 interface Props {
   client: Client | Partial<Client>;
@@ -49,6 +52,8 @@ export function ClientDetailModal({
 }: Props) {
   const { userData } = useAuth();
   const isNew = !client.id;
+  const [showDealWonModal, setShowDealWonModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [formData, setFormData] = useState<Partial<Client>>(
     isNew
       ? {
@@ -348,25 +353,98 @@ export function ClientDetailModal({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === "won") {
+      setShowDealWonModal(true);
+      return;
+    }
+
     setFormData((prev) => {
       const updates: Partial<Client> = { status: newStatus };
-      if (newStatus === "won" && !prev.soldAt) {
-        updates.soldAt = new Date().toISOString().split('T')[0];
-      }
       return { ...prev, ...updates };
     });
+
     if (!isNew && client.id) {
       try {
         const updates: any = {
           status: newStatus,
           updatedAt: new Date().toISOString(),
         };
-        if (newStatus === "won" && !formData.soldAt) {
-          updates.soldAt = new Date().toISOString().split('T')[0];
-        }
         await updateDoc(doc(db, "clients", client.id as string), updates);
       } catch (err) {
         console.error("Error updating status:", err);
+      }
+    }
+  };
+
+  const handleDealWonConfirm = async (saleDetails: any) => {
+    setShowDealWonModal(false);
+    
+    setFormData((prev) => {
+      const updates: Partial<Client> = { 
+        status: "won",
+        soldAt: new Date().toISOString().split('T')[0],
+        saleDetails 
+      };
+      return { ...prev, ...updates };
+    });
+
+    if (!isNew && client.id) {
+      try {
+        const updates: any = {
+          status: "won",
+          soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          updatedAt: new Date().toISOString(),
+        };
+        await updateDoc(doc(db, "clients", client.id as string), updates);
+        
+        if (formData.vehicleId) {
+          await updateDoc(doc(db, "vehicles", formData.vehicleId), {
+            pendingValidation: {
+              type: "sold",
+              requestedBy: userData?.id,
+              requestedByName: userData?.name || userData?.email,
+              clientId: client.id,
+              clientName: client.name || formData.name,
+              requestedAt: new Date().toISOString(),
+            },
+          });
+        }
+        
+        await createPaymentTasks(db, {...client, ...formData}, saleDetails, userData);
+      } catch (err) {
+        console.error("Error updating status:", err);
+      }
+    }
+  };
+  
+  const handlePaymentConfirm = async (payment: any) => {
+    setShowPaymentModal(false);
+    if (!formData.saleDetails) return;
+    
+    const newPayment = {
+      ...payment,
+      id: Math.random().toString(36).substr(2, 9)
+    };
+    
+    const updatedSaleDetails = {
+      ...formData.saleDetails,
+      payments: [...(formData.saleDetails.payments || []), newPayment]
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      saleDetails: updatedSaleDetails
+    }));
+    
+    if (!isNew && client.id) {
+      try {
+        await updateDoc(doc(db, "clients", client.id as string), {
+          saleDetails: updatedSaleDetails,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Error saving payment", err);
       }
     }
   };
@@ -639,15 +717,11 @@ export function ClientDetailModal({
                 </div>
               )}
               
-              {formData.status === "won" || formData.status === "lost" ? (
+              {formData.status === "won" ? (
                 <p
-                  className={`text-sm border inline-block px-2 py-0.5 rounded mt-0.5 font-medium ${
-                    formData.status === "won"
-                      ? "border-green-200 bg-green-50 text-green-700"
-                      : "border-red-200 bg-red-50 text-red-700"
-                  }`}
+                  className="text-sm border inline-block px-2 py-0.5 rounded mt-0.5 font-medium border-green-200 bg-green-50 text-green-700"
                 >
-                  {formData.status === "won" ? "Ganado" : "Perdido"}
+                  Ganado
                 </p>
               ) : (
                 <select
@@ -673,7 +747,7 @@ export function ClientDetailModal({
                   )}
                   {pipelineStages.map((stage) => (
                     <option key={stage.id} value={stage.id}>
-                      {stage.title}
+                      {stage.id === "lost" ? "Contacto" : stage.title}
                     </option>
                   ))}
                 </select>
@@ -693,6 +767,110 @@ export function ClientDetailModal({
               )}
             </div>
           </div>
+          
+          
+              {formData.saleDetails && (
+                <div className="mt-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
+                      <Calculator className="w-4 h-4" />
+                      Detalles de Venta
+                    </h4>
+                    {formData.saleDetails.method === 'contado' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentModal(true)}
+                        className="text-xs px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded shadow-sm"
+                      >
+                        + Registrar Pago
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Método</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize">
+                        {formData.saleDetails.method.replace('_', ' ')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Precio de Venta</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.price)}
+                      </p>
+                    </div>
+                    {formData.saleDetails.method === 'credito' && (
+                      <>
+                        <div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Enganche</p>
+                          <p className="font-semibold text-slate-800 dark:text-slate-200">
+                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.downPayment || 0)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Plazo / Tasa</p>
+                          <p className="font-semibold text-slate-800 dark:text-slate-200">
+                            {formData.saleDetails.termMonths} meses @ {formData.saleDetails.interestRate}% ({formData.saleDetails.interestType})
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Total a Pagar</p>
+                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.calculatedTotalAmount || 0)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Mensualidad</p>
+                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.calculatedMonthlyPayment || 0)}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  
+                  {formData.saleDetails.method === 'contado' && (
+                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800/50">
+                      <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 border-b border-slate-100 dark:border-slate-700 pb-1">
+                        Historial de Pagos
+                      </h5>
+                      {formData.saleDetails.payments && formData.saleDetails.payments.length > 0 ? (
+                        <div className="space-y-2">
+                          {formData.saleDetails.payments.map(payment => (
+                            <div key={payment.id} className="flex justify-between items-center text-xs">
+                              <div>
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payment.amount)}
+                                </span>
+                                <span className="text-slate-500 dark:text-slate-400 ml-2">
+                                  • {new Date(payment.date + "T00:00:00").toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                <span className="text-slate-400 ml-2 capitalize">
+                                  ({payment.method})
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-slate-100 dark:border-slate-700">
+                            <span className="text-slate-600 dark:text-slate-400">Restante</span>
+                            <span className={formData.saleDetails.price - formData.saleDetails.payments.reduce((a, p) => a + p.amount, 0) > 0 ? "text-rose-500" : "text-emerald-600"}>
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(
+                                Math.max(0, formData.saleDetails.price - formData.saleDetails.payments.reduce((a, p) => a + p.amount, 0))
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
+                          No hay pagos registrados
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
           <div className="flex items-center gap-3">
             {!isNew &&
               formData.dealTitle &&
@@ -711,16 +889,16 @@ export function ClientDetailModal({
                     onClick={() => handleStatusChange("lost")}
                     className="bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
                   >
-                    Perdido
+                    Solo contacto
                   </button>
                 </>
               )}
             {!isNew &&
-              (formData.status === "won" || formData.status === "lost") && (
+              (formData.status === "won") && (
                 <button
                   type="button"
-                  onClick={() => handleStatusChange("open")}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-slate-200 text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                  onClick={() => handleStatusChange("new")}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
                 >
                   Reabrir trato
                 </button>

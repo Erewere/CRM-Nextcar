@@ -34,6 +34,9 @@ import { SortableKanbanColumn } from "../components/SortableKanbanColumn";
 import { ClientCard, SortableClientCard } from "../components/ClientCard";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
+import { DealWonModal } from "../components/DealWonModal";
+import { checkIsWon, checkIsLost } from "../lib/clientUtils";
+import { createPaymentTasks } from "../lib/paymentTasks";
 import { Settings, ChevronUp, ChevronDown, Archive, X } from "lucide-react";
 import clsx from "clsx";
 
@@ -46,17 +49,7 @@ const DEFAULT_COLUMNS: PipelineStage[] = [
 ];
 
 function isTerminalColumn(col: PipelineStage) {
-  const t = String(col.title || "").toLowerCase();
-  const id = String(col.id || "").toLowerCase();
-  return (
-    id === "won" ||
-    id === "lost" ||
-    t.includes("ganad") ||
-    t.includes("vendid") ||
-    t.includes("perdid") ||
-    t.includes("closed") ||
-    t.includes("cerrad")
-  );
+  return checkIsWon(col.id, [col]) || checkIsLost(col.id, [col]);
 }
 
 function TerminalDropBar({
@@ -203,6 +196,7 @@ export function Kanban() {
   const [newColumnId, setNewColumnId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [clientToMarkWon, setClientToMarkWon] = useState<{ client: Client, originalStatus: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
@@ -426,57 +420,79 @@ export function Kanban() {
       // we only need to persist to Firebase if the status is different from start
       try {
         const overStr = String(overColumnId || "").toLowerCase();
-        const isWon =
-          overColumnId === "won" ||
-          overStr.includes("ganado") ||
-          overStr.includes("vendido");
+        const overColumn = columns.find(c => c.id === overColumnId);
+        const isWon = overColumn ? checkIsWon(overColumnId, [overColumn]) : false;
+
+        if (isWon) {
+          setClientToMarkWon({ client, originalStatus: originalStatus as string });
+          activeOriginalStatusRef.current = null; activeColumnRef.current = null;
+          return;
+        }
 
         const updates: any = {
           status: overColumnId,
           updatedAt: new Date().toISOString(),
         };
 
-        if (isWon && !client.soldAt) {
-          updates.soldAt = new Date().toISOString().split('T')[0];
-        }
-
         await updateDoc(doc(db, "clients", clientId), updates);
-
-        // Trigger vehicle status pending validation if moved to "won"
-        if (isWon && client.vehicleId) {
-          await updateDoc(doc(db, "vehicles", client.vehicleId), {
-            pendingValidation: {
-              type: "sold",
-              requestedBy: userData?.id,
-              requestedByName: userData?.name || userData?.email,
-              clientId: client.id,
-              clientName: client.name,
-              requestedAt: new Date().toISOString(),
-            },
-          });
-        }
       } catch (e) {
         console.error("Status update error", e);
-        // If it failed, we'd theoretically want to revert the array change
-        // but for now we let snapshot catch up or ignore
-      }
-
-      const overStrEnd = String(overColumnId || "").toLowerCase();
-      if (
-        overColumnId === "won" ||
-        overStrEnd.includes("ganado") ||
-        overStrEnd.includes("vendido")
-      ) {
-        confetti({
-          particleCount: 150,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ["#E4002B", "#25D366", "#000000"],
-        });
       }
     }
     
     activeOriginalStatusRef.current = null; activeColumnRef.current = null;
+  };
+
+
+  const handleDealWonConfirm = async (saleDetails: any) => {
+    if (!clientToMarkWon) return;
+    const { client } = clientToMarkWon;
+    
+    try {
+      const updates: any = {
+        status: "won",
+        soldAt: new Date().toISOString().split('T')[0],
+        saleDetails,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await updateDoc(doc(db, "clients", client.id), updates);
+
+      if (client.vehicleId) {
+        await updateDoc(doc(db, "vehicles", client.vehicleId), {
+          pendingValidation: {
+            type: "sold",
+            requestedBy: userData?.id,
+            requestedByName: userData?.name || userData?.email,
+            clientId: client.id,
+            clientName: client.name,
+            requestedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      await createPaymentTasks(db, client, saleDetails, userData);
+
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#E4002B", "#25D366", "#000000"],
+      });
+    } catch (e) {
+      console.error("Status update error", e);
+    } finally {
+      setClientToMarkWon(null);
+    }
+  };
+
+  const handleDealWonCancel = () => {
+    if (!clientToMarkWon) return;
+    const { client, originalStatus } = clientToMarkWon;
+    
+    // Revert local state to originalStatus
+    setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus } : c));
+    setClientToMarkWon(null);
   };
 
   return (
@@ -648,6 +664,13 @@ export function Kanban() {
         />
       )}
 
+      {clientToMarkWon && (
+        <DealWonModal
+          client={clientToMarkWon.client}
+          onConfirm={handleDealWonConfirm}
+          onCancel={handleDealWonCancel}
+        />
+      )}
       {showArchived && (
         <ArchivedClientsModal
           onClose={() => setShowArchived(false)}

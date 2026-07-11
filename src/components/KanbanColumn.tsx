@@ -1,3 +1,4 @@
+import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -71,11 +72,8 @@ export function KanbanColumn({
   });
 
   const lowerTitle = String(column.title || "").toLowerCase();
-  const isWon =
-    column.id === "won" ||
-    lowerTitle.includes("ganad") ||
-    lowerTitle.includes("vendid");
-  const isLost = column.id === "lost" || lowerTitle.includes("perdid");
+  const isWon = checkIsWon(column.id, [column]);
+  const isLost = checkIsLost(column.id, [column]);
   const isNew = column.id === "new" || lowerTitle.includes("nuev");
 
   const totalValue = clients.reduce((acc, client) => acc + (Number(client.dealValue) || 0), 0);

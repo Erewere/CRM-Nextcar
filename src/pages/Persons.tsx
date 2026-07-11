@@ -49,7 +49,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
   if (!client.wantedVehicle) return matches;
   
   const wv = client.wantedVehicle;
-  if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && (!wv.bodyType || wv.bodyType === "Cualquiera")) {
+  if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && (!wv.bodyType || wv.bodyType === "Cualquiera") && !wv.passengers) {
     return matches;
   }
 
@@ -57,7 +57,6 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
     if (vehicle.status !== 'available') return; // only match available vehicles
     let isExact = true;
     let isSimilar = true;
-    let hasSimilarBase = false;
     let differences = 0;
 
     const normalize = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -71,6 +70,41 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
         return false;
     };
 
+    // 1. Tipo de Auto (Body Type) - STRICT FILTER
+    if (wv.bodyType && wv.bodyType !== "Cualquiera") {
+        if (!vehicle.bodyType || vehicle.bodyType.toLowerCase() !== wv.bodyType.toLowerCase()) {
+            isExact = false;
+            isSimilar = false; // Strongly filter out different body types
+        }
+    }
+
+    // 2. Pasajeros - STRICT FILTER
+    if (wv.passengers && String(wv.passengers).trim() !== "") {
+        const vPassengers = vehicle.passengers;
+        if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
+            if (Number(vPassengers) !== Number(wv.passengers)) {
+                isExact = false;
+                isSimilar = false; // Strongly filter out different passenger capacities
+            }
+        } else {
+            isExact = false;
+        }
+    }
+
+    // 3. Precio
+    const priceMax = wv.priceMax || Infinity;
+    if (vehicle.price > priceMax) {
+        isExact = false;
+        if (vehicle.price > priceMax * 1.2) {
+            isSimilar = false; // Too expensive
+        } else if (vehicle.price > priceMax * 1.1) {
+            differences += 2;
+        } else {
+            differences += 1;
+        }
+    }
+
+    // 4. Marca & Modelo
     const makeMatches = wv.make ? checkMatch(vehicle.make, wv.make) : true;
     const modelMatches = wv.model ? checkMatch(vehicle.model, wv.model) : true;
 
@@ -83,12 +117,13 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
         differences += 1;
     }
 
+    // 5. Año
     const yearMin = wv.yearMin || 0;
     const yearMax = wv.yearMax || 9999;
     if (vehicle.year < yearMin || vehicle.year > yearMax) {
         isExact = false;
         if (vehicle.year < yearMin - 2 || vehicle.year > yearMax + 2) {
-            isSimilar = false;
+            differences += 3;
         } else if (vehicle.year < yearMin - 1 || vehicle.year > yearMax + 1) {
             differences += 2;
         } else {
@@ -96,47 +131,14 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
         }
     }
 
-    const priceMax = wv.priceMax || Infinity;
-    if (vehicle.price > priceMax) {
-        isExact = false;
-        if (vehicle.price > priceMax * 1.2) {
-            isSimilar = false;
-        } else if (vehicle.price > priceMax * 1.1) {
-            differences += 2;
-        } else {
-            differences += 1;
-        }
-    }
-
-    if (wv.bodyType && wv.bodyType !== "Cualquiera") {
-        if (!vehicle.bodyType || vehicle.bodyType.toLowerCase() !== wv.bodyType.toLowerCase()) {
-            isExact = false;
-            differences += 1;
-        }
-    }
-
-    if (wv.passengers) {
-        const vPassengers = vehicle.passengers;
-        if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
-            if (Number(vPassengers) !== Number(wv.passengers)) {
-                isExact = false;
-                differences += 1;
-            }
-        } else {
-            isExact = false;
-        }
-    }
-
-    if (wv.make && makeMatches) hasSimilarBase = true;
-    if (wv.model && modelMatches) hasSimilarBase = true;
-    if (wv.bodyType && wv.bodyType !== "Cualquiera" && (!vehicle.bodyType || vehicle.bodyType.toLowerCase() === wv.bodyType.toLowerCase())) hasSimilarBase = true;
-    if (!wv.make && !wv.bodyType) hasSimilarBase = true;
+    // Prevent everything matching if only one vague criteria is given and it fails
+    if (!isSimilar) return;
 
     if (isExact) {
       matches.push({ vehicle, level: 'exact' });
-    } else if (isSimilar && hasSimilarBase) {
+    } else {
       let level: 'high'|'medium'|'low' = 'high';
-      if (differences >= 3) level = 'low';
+      if (differences >= 4) level = 'low';
       else if (differences >= 2) level = 'medium';
       
       matches.push({ vehicle, level });
@@ -1206,17 +1208,15 @@ export function Persons() {
                           const stage = pipelineStages.find(
                             (s) => s.id === person.status,
                           );
+                          let statusText = stage ? stage.title : person.status || "Nuevo";
+                          if (person.status === "open") statusText = "Abierto";
+                          if (person.status === "won") statusText = "Ganado";
+                          if (person.status === "lost") statusText = "Contacto"; // Previously Perdido
+                          if (stage && stage.id === "lost") statusText = "Contacto";
+                          
                           val = (
                             <span className="capitalize">
-                              {stage
-                                ? stage.title
-                                : person.status === "open"
-                                  ? "Abierto"
-                                  : person.status === "won"
-                                    ? "Ganado"
-                                    : person.status === "lost"
-                                      ? "Perdido"
-                                      : person.status || "Nuevo"}
+                              {statusText}
                             </span>
                           );
                         }

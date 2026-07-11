@@ -38,6 +38,7 @@ import {
   Settings,
   Trash2,
   Clock,
+  DollarSign,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -678,8 +679,19 @@ export function Tasks() {
                     {task.startTime || "-"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={clsx("text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1", task.completed && "line-through text-gray-400")}>
+                    <div className={clsx("text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1 flex items-center gap-1", task.completed && "line-through text-gray-400")}>
                       {task.title}
+                      {task.type === "payment" && client && (
+                        <span 
+                          className="px-1 py-0.5 rounded text-[8px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedClient(client);
+                          }}
+                        >
+                          Ver Venta
+                        </span>
+                      )}
                     </div>
                     {client && (
                       <div className="text-[10px] text-blue-500 truncate">
@@ -700,8 +712,9 @@ export function Tasks() {
     );
   };
 
-  const getTaskIcon = (title: string = "") => {
-    const t = String(title || "").toLowerCase();
+  const getTaskIcon = (task: Task) => {
+    if (task.type === "payment") return <DollarSign className="w-3.5 h-3.5" />;
+    const t = String(task.title || "").toLowerCase();
     if (t.includes("llama")) return <Phone className="w-3.5 h-3.5" />;
     if (
       t.includes("cita") ||
@@ -902,6 +915,8 @@ export function Tasks() {
     // Very basic filter logic based on title string matching (since Tasks don't have an explicit 'type' field yet)
     const t = String(task.title || "").toLowerCase();
     switch (filterType) {
+      case "payment":
+        return task.type === "payment";
       case "call":
         return t.includes("llama");
       case "appointment":
@@ -919,6 +934,7 @@ export function Tasks() {
         return t.includes("firma") || t.includes("contrato");
       case "task":
         return (
+          task.type !== "payment" &&
           !t.includes("llama") &&
           !t.includes("cita") &&
           !t.includes("prueba") &&
@@ -1368,6 +1384,17 @@ export function Tasks() {
           <span
             className={clsx(
               "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
+              filterType === "payment"
+                ? "text-emerald-600 bg-emerald-100"
+                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
+            )}
+            onClick={() => setFilterType("payment")}
+          >
+            <DollarSign className="w-3 h-3" /> Pago
+          </span>
+          <span
+            className={clsx(
+              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
               filterType === "task"
                 ? "text-blue-600 bg-blue-100"
                 : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
@@ -1664,7 +1691,18 @@ export function Tasks() {
                             getTaskColorClass(task),
                           )}
                         >
-                          {getTaskIcon(task.title)} {task.title}
+                          {getTaskIcon(task)} {task.title}
+                          {task.type === "payment" && client && (
+                            <span 
+                              className="ml-2 px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedClient(client);
+                              }}
+                            >
+                              Ver Venta
+                            </span>
+                          )}
                         </span>
                       </td>
                     )}
@@ -1832,13 +1870,24 @@ export function Tasks() {
                                       key={task.id}
                                       onClick={() => handleTaskClick(task)}
                                       className={clsx(
-                                        "text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border",
+                                        "text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border group",
                                         task.completed
                                           ? "bg-gray-100 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 line-through hover:border-gray-300"
                                           : "bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100 hover:border-blue-300",
                                       )}
                                     >
-                                      {task.title}
+                                      <span className="truncate flex-1">{task.title}</span>
+                                      {task.type === "payment" && client && (
+                                        <span 
+                                          className="hidden group-hover:inline-block shrink-0 px-1 py-0.5 rounded text-[8px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedClient(client);
+                                          }}
+                                        >
+                                          Ver Venta
+                                        </span>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -2007,6 +2056,20 @@ export function Tasks() {
                                   <div className="font-bold text-[11px] leading-tight group-hover:text-blue-800 dark:group-hover:text-blue-200 line-clamp-2">
                                     {task.title}
                                   </div>
+                                  {task.type === "payment" && client && (
+                                    <span 
+                                      className="hidden group-hover:inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 w-fit"
+                                      onPointerDown={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      onPointerUp={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedClient(client);
+                                      }}
+                                    >
+                                      Ver Venta
+                                    </span>
+                                  )}
                                   {task.startTime && (
                                     <div className="text-[10px] mt-0.5 opacity-80 flex items-center gap-1">
                                       <CalendarIcon className="w-2 h-2" />
@@ -2175,8 +2238,19 @@ export function Tasks() {
                           <Circle className="w-4 h-4" />
                         </button>
                         <div className="flex-1 min-w-0 flex flex-col">
-                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight">
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight flex items-center flex-wrap gap-1">
                             {task.title}
+                            {task.type === "payment" && client && (
+                              <span 
+                                className="hidden group-hover:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 w-fit"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedClient(client);
+                                }}
+                              >
+                                Ver Venta
+                              </span>
+                            )}
                           </span>
                           {task.dueDate && (
                             <span
