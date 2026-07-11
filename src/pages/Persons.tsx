@@ -44,7 +44,7 @@ export interface MatchLevel {
 }
 
 export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLevel[] => {
-  const matches: MatchLevel[] = [];
+  const matches: (MatchLevel & { score: number })[] = [];
   if (client.status === 'won' || client.status === 'lost') return matches;
   if (!client.wantedVehicle) return matches;
   
@@ -54,12 +54,10 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
   }
 
   vehicles.forEach(vehicle => {
-    if (vehicle.status !== 'available') return; // only match available vehicles
-    let isExact = true;
-    let isSimilar = true;
-    let differences = 0;
+    if (vehicle.status !== 'available') return; 
+    let score = 100;
 
-    const normalize = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalize = (str?: string) => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
     const checkMatch = (v?: string, w?: string) => {
         const nv = normalize(v);
         const nw = normalize(w);
@@ -70,38 +68,41 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
         return false;
     };
 
-    // 1. Tipo de Auto (Body Type) - STRICT FILTER
+    // 1. Tipo de Auto (Body Type) - MAIN FILTER
     if (wv.bodyType && wv.bodyType !== "Cualquiera") {
-        if (!vehicle.bodyType || vehicle.bodyType.toLowerCase() !== wv.bodyType.toLowerCase()) {
-            isExact = false;
-            isSimilar = false; // Strongly filter out different body types
+        const vBody = normalize(vehicle.bodyType);
+        const wBody = normalize(wv.bodyType);
+        if (!vBody || (vBody !== wBody && !vBody.includes(wBody) && !wBody.includes(vBody))) {
+            score -= 70; // Huge penalty for wrong body type
         }
     }
 
-    // 2. Pasajeros - STRICT FILTER
+    // 2. Pasajeros
     if (wv.passengers && String(wv.passengers).trim() !== "") {
         const vPassengers = vehicle.passengers;
         if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
-            if (Number(vPassengers) !== Number(wv.passengers)) {
-                isExact = false;
-                isSimilar = false; // Strongly filter out different passenger capacities
+            const diff = Math.abs(Number(vPassengers) - Number(wv.passengers));
+            if (diff > 0) {
+                score -= (diff * 20); // Penalty per passenger diff
             }
         } else {
-            isExact = false;
+            score -= 10;
         }
     }
 
     // 3. Precio
     const priceMax = wv.priceMax || Infinity;
     if (vehicle.price > priceMax) {
-        isExact = false;
         if (vehicle.price > priceMax * 1.2) {
-            isSimilar = false; // Too expensive
+            score -= 40;
         } else if (vehicle.price > priceMax * 1.1) {
-            differences += 2;
+            score -= 20;
         } else {
-            differences += 1;
+            score -= 10;
         }
+    } else if (vehicle.price < priceMax * 0.5) {
+        // Way too cheap, might not be what they want, but small penalty
+        score -= 5;
     }
 
     // 4. Marca & Modelo
@@ -109,42 +110,37 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLeve
     const modelMatches = wv.model ? checkMatch(vehicle.model, wv.model) : true;
 
     if (wv.make && !makeMatches) {
-        isExact = false;
-        differences += 2;
+        score -= 20;
     }
     if (wv.model && !modelMatches) {
-        isExact = false;
-        differences += 1;
+        score -= 15;
     }
 
     // 5. Año
     const yearMin = wv.yearMin || 0;
     const yearMax = wv.yearMax || 9999;
     if (vehicle.year < yearMin || vehicle.year > yearMax) {
-        isExact = false;
         if (vehicle.year < yearMin - 2 || vehicle.year > yearMax + 2) {
-            differences += 3;
+            score -= 30;
         } else if (vehicle.year < yearMin - 1 || vehicle.year > yearMax + 1) {
-            differences += 2;
+            score -= 15;
         } else {
-            differences += 1;
+            score -= 5;
         }
     }
 
-    // Prevent everything matching if only one vague criteria is given and it fails
-    if (!isSimilar) return;
+    // Final decision
+    if (score < 40) return; // Ignore terrible matches
 
-    if (isExact) {
-      matches.push({ vehicle, level: 'exact' });
-    } else {
-      let level: 'high'|'medium'|'low' = 'high';
-      if (differences >= 4) level = 'low';
-      else if (differences >= 2) level = 'medium';
-      
-      matches.push({ vehicle, level });
-    }
+    let level: 'exact'|'high'|'medium'|'low' = 'low';
+    if (score >= 95) level = 'exact';
+    else if (score >= 80) level = 'high';
+    else if (score >= 60) level = 'medium';
+
+    matches.push({ vehicle, level, score });
   });
 
+  matches.sort((a, b) => b.score - a.score);
   return matches;
 };
 
