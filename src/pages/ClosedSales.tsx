@@ -12,6 +12,7 @@ import clsx from "clsx";
 export function ClosedSales() {
   const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
+  const [deals, setDeals] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   

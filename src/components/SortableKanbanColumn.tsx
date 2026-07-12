@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { KanbanColumn } from "./KanbanColumn";
-import { Client } from "../types";
+import { Client, Task } from "../types";
 import { GripHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Props {
   column: { id: string; title: string };
   clients: Client[];
   onClientClick: (client: Client) => void;
-  tasks?: { clientId: string; dueDate: string; completed: boolean }[];
+  tasks?: Task[];
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
   onTitleChange?: (newTitle: string) => void;

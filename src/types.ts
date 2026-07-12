@@ -63,10 +63,13 @@ export interface Deal {
   id: string;
   agencyId: string;
   clientId: string;
+  sellerId?: string;
   title: string;
   value?: number;
-  status: "open" | "won" | "lost";
-  stageId?: string;
+  status: string; // The pipeline stage ID or 'won' / 'lost'
+  vehicleId?: string;
+  vehicle?: string;
+  origin?: string;
   createdAt: any;
   updatedAt: any;
 }

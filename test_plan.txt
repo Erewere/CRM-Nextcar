@@ -1,0 +1,7 @@
+Refactoring Plan:
+1. Update Deal interface in types.ts
+2. Update ClientCard.tsx to accept `deal` (Deal) and `client` (Client) or just merge them into a single display object `dealInfo`.
+3. Update KanbanColumn.tsx to take `deals` instead of `clients`.
+4. Update Kanban.tsx to query `deals` instead of `clients`, and also fetch `clients` (Persons) to lookup names/phones.
+5. Update Dashboard.tsx to count `deals` instead of `clients`.
+6. Update Persons.tsx to show a list of Deals under a Person, and allow adding a Deal.

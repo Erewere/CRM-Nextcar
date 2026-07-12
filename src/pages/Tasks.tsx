@@ -168,6 +168,22 @@ export function Tasks() {
 
   useEffect(() => {
     if (!userData || userData.role === "master") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskIdParam = urlParams.get('taskId');
+    if (taskIdParam && tasks.length > 0) {
+      const taskObj = tasks.find((t) => t.task.id === taskIdParam);
+      if (taskObj && !editingTask) {
+        setEditingTask(taskObj.task);
+        
+        // Remove param from url to prevent reopening on reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [tasks, userData, editingTask]);
+
+  useEffect(() => {
+    if (!userData || userData.role === "master") return;
 
     const fetchTasksAndClients = async () => {
       let q = query(

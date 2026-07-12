@@ -1,11 +1,14 @@
-const fs = require('fs');
+import { Client, Vehicle } from "../types";
 
-let code = fs.readFileSync('src/pages/Persons.tsx', 'utf8');
+export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
+export interface ClientMatch {
+  vehicle: Vehicle;
+  level: MatchLevel;
+  score: number;
+}
 
-const matchLogicRegex = /export const getClientMatches = \(client: Client, vehicles: Vehicle\[\]\): MatchLevel\[\] => \{[\s\S]*?return matches;\n\};/;
-
-const newMatchLogic = `export const getClientMatches = (client: Client, vehicles: Vehicle[]): MatchLevel[] => {
-  const matches: (MatchLevel & { score: number })[] = [];
+export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMatch[] => {
+  const matches: ClientMatch[] = [];
   if (client.status === 'won' || client.status === 'lost') return matches;
   if (!client.wantedVehicle) return matches;
   
@@ -18,7 +21,7 @@ const newMatchLogic = `export const getClientMatches = (client: Client, vehicles
     if (vehicle.status !== 'available') return; 
     let score = 100;
 
-    const normalize = (str?: string) => (str || "").toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+    const normalize = (str?: string) => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
     const checkMatch = (v?: string, w?: string) => {
         const nv = normalize(v);
         const nw = normalize(w);
@@ -93,7 +96,7 @@ const newMatchLogic = `export const getClientMatches = (client: Client, vehicles
     // Final decision
     if (score < 40) return; // Ignore terrible matches
 
-    let level: 'exact'|'high'|'medium'|'low' = 'low';
+    let level: MatchLevel = 'low';
     if (score >= 95) level = 'exact';
     else if (score >= 80) level = 'high';
     else if (score >= 60) level = 'medium';
@@ -101,14 +104,5 @@ const newMatchLogic = `export const getClientMatches = (client: Client, vehicles
     matches.push({ vehicle, level, score });
   });
 
-  matches.sort((a, b) => b.score - a.score);
-  return matches;
-};`;
-
-if (!matchLogicRegex.test(code)) {
-    console.error("Could not find match logic");
-} else {
-    code = code.replace(matchLogicRegex, newMatchLogic);
-    fs.writeFileSync('src/pages/Persons.tsx', code);
-    console.log("Patched getClientMatches successfully.");
-}
+  return matches.sort((a, b) => b.score - a.score);
+};

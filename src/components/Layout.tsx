@@ -27,6 +27,7 @@ import clsx from "clsx";
 import { TaskReminders } from "./TaskReminders";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
+import { NotificationsPopover } from "./NotificationsPopover";
 
 export function Layout() {
   const { userData } = useAuth();
@@ -361,6 +362,7 @@ export function Layout() {
             </p>
           </div>
           <div className="flex items-center gap-4 shrink-0">
+            <NotificationsPopover />
             {/* Dark Mode Toggle */}
             <button
               onClick={toggleDarkMode}

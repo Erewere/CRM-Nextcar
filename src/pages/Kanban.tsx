@@ -11,7 +11,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Client, PipelineStage } from "../types";
+import { Client, PipelineStage, Task, Deal } from "../types";
 import confetti from "canvas-confetti";
 import {
   DndContext,
@@ -192,6 +192,7 @@ function ArchivedClientsModal({
 export function Kanban() {
   const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [columns, setColumns] = useState<PipelineStage[]>(DEFAULT_COLUMNS);
   const [newColumnId, setNewColumnId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -267,6 +268,16 @@ export function Kanban() {
         console.error("Error with snapshot", error);
       },
     );
+    const unsubscribeDeals = onSnapshot(
+      query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)),
+      (snapshot) => {
+        let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Deal);
+        if (userData.role === "seller") {
+          data = data.filter((d) => d.sellerId === userData.id);
+        }
+        setDeals(data);
+      }
+    );
 
     const unsubscribeTasks = onSnapshot(tq, (snapshot) => {
       let dataDocs = snapshot.docs;
@@ -274,12 +285,10 @@ export function Kanban() {
         dataDocs = dataDocs.filter((d) => d.data().sellerId === userData.id);
       }
       const data = dataDocs.map((d) => {
-        const t = d.data();
         return {
-          clientId: t.clientId,
-          dueDate: t.dueDate,
-          completed: t.completed,
-        };
+          id: d.id,
+          ...d.data(),
+        } as Task;
       });
       setTasks(data);
     });
@@ -368,12 +377,31 @@ export function Kanban() {
     });
   };
 
-  const activeClient = activeId ? clients.find((c) => c.id === activeId) : null;
+  const displayClients: Client[] = [
+    ...deals.map(deal => {
+      const person = clients.find(c => c.id === deal.clientId) || {} as Client;
+      return {
+        ...person,
+        id: deal.id, // Use Deal ID so DnD and updates affect the deal
+        originalClientId: person.id,
+        dealTitle: deal.title,
+        dealValue: deal.value,
+        status: deal.status || deal.stageId || "open",
+        sellerId: deal.sellerId || person.sellerId,
+        vehicle: deal.vehicle || person.vehicle,
+      } as Client;
+    }),
+    ...clients.filter(c => !deals.some(d => d.clientId === c.id)).map(c => ({
+      ...c,
+      originalClientId: c.id,
+      dealTitle: c.name ? `Trato con ${c.name}` : "Trato",
+    }))
+  ];
+
+  const activeClient = activeId ? displayClients.find((c) => c.id === activeId) : null;
 
   const filteredClients =
-    selectedSellerId === "all"
-      ? clients
-      : clients.filter((c) => c.sellerId === selectedSellerId);
+    selectedSellerId === "all" ? displayClients : displayClients.filter((c) => c.sellerId === selectedSellerId);
 
   const activeColumns = columns.filter((c) => !isTerminalColumn(c));
   const terminalColumns = columns.filter((c) => isTerminalColumn(c));
@@ -434,7 +462,7 @@ export function Kanban() {
           updatedAt: new Date().toISOString(),
         };
 
-        await updateDoc(doc(db, "clients", clientId), updates);
+        await updateDoc(doc(db, "deals", clientId), updates);
       } catch (e) {
         console.error("Status update error", e);
       }
@@ -456,7 +484,7 @@ export function Kanban() {
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, "clients", client.id), updates);
+      await updateDoc(doc(db, "deals", client.id), updates);
 
       if (client.vehicleId) {
         await updateDoc(doc(db, "vehicles", client.vehicleId), {
@@ -558,7 +586,15 @@ export function Kanban() {
             <SortableContext items={activeColumns.map(c => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
               {activeColumns.map((col, index) => {
                 const columnClients = filteredClients.filter(
-                  (c) => c.status === col.id,
+                  (c) => {
+                    if (c.status === col.id) return true;
+                    if (index === 0) {
+                      const isActiveCol = activeColumns.some(ac => ac.id === c.status);
+                      const isTermCol = terminalColumns.some(tc => tc.id === c.status);
+                      if (!isActiveCol && !isTermCol && !checkIsWon(c.status, columns) && !checkIsLost(c.status, columns)) return true;
+                    }
+                    return false;
+                  }
                 );
                 return (
                   <SortableKanbanColumn

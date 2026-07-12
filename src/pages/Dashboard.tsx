@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Vehicle, Task, User } from "../types";
+import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
 import {
   BarChart,
   Bar,
@@ -54,7 +55,7 @@ import {
 import { MasterDashboard } from "../components/MasterDashboard";
 
 import { Link } from "react-router";
-import { getClientMatches } from './Persons';
+import { getClientMatches } from '../services/matchingEngine';
 
 
 
@@ -78,6 +79,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export function Dashboard() {
   const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
+  const [deals, setDeals] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -157,6 +159,7 @@ export function Dashboard() {
         const agencyQuery = where("agencyId", "==", userData.agencyId);
 
         let clientsQ = query(collection(db, "clients"), agencyQuery);
+        let dealsQ = query(collection(db, "deals"), agencyQuery);
         let tasksQ = query(collection(db, "tasks"), agencyQuery);
         let vehiclesQ = query(collection(db, "vehicles"), agencyQuery);
         let usersQ = query(collection(db, "users"), agencyQuery);
@@ -227,13 +230,52 @@ export function Dashboard() {
   const isActive = (status: string) => !isWon(status) && !isLost(status);
 
 
-  const filteredClients = useMemo(() => {
-    return clients.filter((c) => {
-      if (filterSeller !== "all" && c.sellerId !== filterSeller) return false;
+  const displayClients = useMemo(() => {
+    const dealClients = deals.map(deal => {
+      const person = clients.find(c => c.id === deal.clientId) || {} as Client;
+      return {
+        ...person,
+        id: deal.id,
+        originalClientId: person.id,
+        dealTitle: deal.title,
+        dealValue: deal.value,
+        status: deal.status || deal.stageId || "open",
+        sellerId: deal.sellerId || person.sellerId,
+        vehicle: deal.vehicle || person.vehicle,
+        vehicleId: deal.vehicleId || person.vehicleId,
+        createdAt: deal.createdAt || person.createdAt,
+        updatedAt: deal.updatedAt || person.updatedAt,
+      } as Client;
+    });
 
+    const legacyClients = clients.filter(c => !deals.some(d => d.clientId === c.id)).map(c => ({
+      ...c,
+      originalClientId: c.id,
+      dealTitle: c.name ? `Trato con ${c.name}` : "Trato",
+    } as Client));
+
+    return [...dealClients, ...legacyClients];
+  }, [deals, clients]);
+  
+  const baseFilteredClients = useMemo(() => {
+    return displayClients.filter((c) => {
+      if (filterSeller !== "all" && c.sellerId !== filterSeller) return false;
+      if (filterCategory !== "all") {
+        const clientVehicle = vehicles.find((v) => v.id === c.vehicleId);
+        if (clientVehicle?.bodyType !== filterCategory) return false;
+      }
+      if (filterTags.length > 0) {
+        if (!c.tags || !filterTags.every((tag) => c.tags.includes(tag)))
+          return false;
+      }
+      return true;
+    });
+  }, [clients, filterSeller, filterCategory, vehicles, filterTags]);
+
+  const filteredClients = useMemo(() => {
+    return baseFilteredClients.filter((c) => {
       const isWonClient = isWon(c.status);
       const clientDate = isWonClient && c.soldAt ? new Date(c.soldAt + "T00:00:00") : (c.createdAt?.toDate ? c.createdAt.toDate() : new Date(c.createdAt || Date.now()));
-
       if (filterStartDate) {
         const startDate = new Date(filterStartDate);
         if (isValid(startDate) && isValid(clientDate) && isAfter(startOfDay(startDate), clientDate)) return false;
@@ -242,29 +284,9 @@ export function Dashboard() {
         const endDate = new Date(filterEndDate);
         if (isValid(endDate) && isValid(clientDate) && isAfter(clientDate, startOfDay(endDate))) return false;
       }
-
-      if (filterCategory !== "all") {
-        const clientVehicle = vehicles.find((v) => v.id === c.vehicleId);
-        if (clientVehicle?.bodyType !== filterCategory) return false;
-      }
-
-      if (filterTags.length > 0) {
-        if (!c.tags || !filterTags.every((tag) => c.tags.includes(tag)))
-          return false;
-      }
-
       return true;
     });
-  }, [
-    clients,
-    filterSeller,
-    filterStartDate,
-    filterEndDate,
-    filterCategory,
-    vehicles,
-    filterTags,
-    pipelineStages,
-  ]);
+  }, [baseFilteredClients, filterStartDate, filterEndDate, pipelineStages]);
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((v) => {
@@ -326,7 +348,7 @@ export function Dashboard() {
 
   // Contacts
 
-  const activeContacts = filteredClients.filter((c) => isActive(c.status));
+  const activeContacts = baseFilteredClients.filter((c) => isActive(c.status));
   const wonContacts = filteredClients.filter((c) => isWon(c.status));
 
   const totalWonAmount = wonContacts.reduce((sum, contact) => {
@@ -425,6 +447,14 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 pb-8">
+      {/* AI Advisor Panel */}
+      <AiAdvisorPanel 
+        userName={userData?.name || userData?.email || "Asesor"}
+        activeContacts={activeContacts}
+        tasks={tasks}
+        pipelineStages={pipelineStages}
+      />
+
       {/* Dynamic Filters */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
         {/* Quick Date Filters */}

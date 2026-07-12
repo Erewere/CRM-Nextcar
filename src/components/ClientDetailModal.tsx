@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import imageCompression from "browser-image-compression";
-import { Client, Task, ClientFile, Vehicle } from "../types";
-import { getClientMatches } from "../pages/Persons";
+import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
+import { getClientMatches } from "../services/matchingEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
 import {
@@ -122,9 +122,8 @@ export function ClientDetailModal({
     });
   };
 
-  const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files">(
-    "activity",
-  );
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files" | "deals">("activity");
   const [showFullAddress, setShowFullAddress] = useState(
     !!(client.street || client.exteriorNumber || client.neighborhood || client.city || client.zipCode)
   );
@@ -1637,7 +1636,55 @@ export function ClientDetailModal({
                         </div>
                       </div>
                     )}
-                    {activeTab === "files" && (
+                    {activeTab === "deals" && (
+      <div className="flex flex-col gap-3">
+        <button
+          onClick={async () => {
+            const title = prompt("Nombre del trato (ej: Compra de Ford Lobo):");
+            if (!title) return;
+            const ref = doc(collection(db, "deals"));
+            await setDoc(ref, {
+              id: ref.id,
+              agencyId: userData?.agencyId || "",
+              clientId: client.id,
+              sellerId: client.sellerId || userData?.id || "",
+              title,
+              status: "open",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }}
+          className="w-full py-2 bg-blue-600 text-white rounded text-sm font-medium shadow-sm hover:bg-blue-700 transition-colors"
+        >
+          + Nuevo Trato
+        </button>
+        {deals.length === 0 ? (
+          <p className="text-sm text-center text-slate-500 py-4">No hay tratos activos para este contacto.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {deals.map(deal => (
+              <div key={deal.id} className="p-3 border border-slate-200 dark:border-slate-700 rounded shadow-sm bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+                <div>
+                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">{deal.title}</h4>
+                  <p className="text-xs text-slate-500">Estado: {deal.status || deal.stageId || 'Open'}</p>
+                </div>
+                <button 
+                  onClick={async () => {
+                    if (confirm("¿Marcar trato como ganado?")) {
+                      await updateDoc(doc(db, "deals", deal.id), { status: "won" });
+                    }
+                  }}
+                  className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
+                >
+                  Marcar Ganado
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+    {activeTab === "files" && (
                       <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
                         <label className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">

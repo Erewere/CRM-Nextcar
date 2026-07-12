@@ -5,7 +5,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Client } from "../types";
+import { Client, Task } from "../types";
 import { SortableClientCard } from "./ClientCard";
 import clsx from "clsx";
 import { GripHorizontal, ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -15,7 +15,7 @@ interface Props {
   column: { id: string; title: string };
   clients: Client[];
   onClientClick: (client: Client) => void;
-  tasks?: { clientId: string; dueDate: string; completed: boolean }[];
+  tasks?: Task[];
   key?: React.Key;
   dragHandleProps?: any;
   onTitleChange?: (newTitle: string) => void;

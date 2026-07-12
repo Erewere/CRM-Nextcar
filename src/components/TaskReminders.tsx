@@ -70,7 +70,7 @@ export function TaskReminders() {
             const diff = taskTimeInMinutes - currentTimeInMinutes;
 
             // Trigger if diff is exactly 15 minutes, or exactly 0 (now), or if we missed it by less than 5 mins
-            if (diff === 15 || diff === 0 || (diff < 0 && diff > -5 && !notifiedTasks.current.has(task.id))) {
+            if ((diff > 0 && diff <= 15) || diff === 0 || (diff < 0 && diff > -5 && !notifiedTasks.current.has(task.id))) {
               newReminders.push(task);
               notifiedTasks.current.add(task.id);
               
