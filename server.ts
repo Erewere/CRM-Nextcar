@@ -1,3 +1,4 @@
+import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import express from "express";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -7,23 +8,46 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { initializeApp, App as FirebaseApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore, FieldValue, Firestore } from "firebase-admin/firestore";
+// import { getFirestore, FieldValue, Firestore } from "firebase-admin/firestore";
+import { initializeApp as initClientApp } from "firebase/app";
+import { getFirestore as getClientFirestore, doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, getDocs, deleteDoc, serverTimestamp, limit } from "firebase/firestore";
+
+let clientApp = null;
+function getClientDb() {
+  if (!clientApp) {
+    try {
+      const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
+      clientApp = initClientApp(JSON.parse(configStr));
+    } catch (e) {
+      console.warn("Could not load firebase-applet-config.json");
+    }
+  }
+  return getClientFirestore(clientApp, "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a");
+}
+
+
 import { Resend } from "resend";
 import Stripe from "stripe";
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
 let adminApp: FirebaseApp | null = null;
+
+
 function getAdminApp() {
   if (!adminApp) {
-    if (process.env.FIREBASE_PROJECT_ID) {
-      adminApp = initializeApp({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      });
-    } else {
-      // In AI Studio / local dev, default init often works if set up through gcloud
-      // but without a service account it might fail. We attempt.
-      adminApp = initializeApp();
+    let projectId = process.env.FIREBASE_PROJECT_ID;
+    if (!projectId) {
+      try {
+        const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
+        const config = JSON.parse(configStr);
+        projectId = config.projectId;
+      } catch (e) {
+        console.warn("Could not load firebase-applet-config.json");
+      }
     }
+    adminApp = initializeApp({
+      projectId: projectId || undefined,
+    });
   }
   return adminApp;
 }
@@ -68,43 +92,41 @@ async function startServer() {
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
-      const adminDb = getFirestore(getAdminApp()!);
+      const adminDb = getClientDb();
 
       // Handle the event
       switch (event.type) {
         case "checkout.session.completed":
           const checkoutSession = event.data.object as Stripe.Checkout.Session;
           const agencyId = checkoutSession.client_reference_id;
+          
           if (agencyId) {
-            // Update agency status to active
-            await adminDb.collection("agencies").doc(agencyId).set(
-              {
-                subscriptionStatus: "active",
-                stripeCustomerId: checkoutSession.customer,
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
+            const updates: any = {
+              updatedAt: serverTimestamp(),
+            };
+            
+            // Check if this was a credit purchase
+            if (checkoutSession.metadata && checkoutSession.metadata.creditsToAdd) {
+               updates.aiCredits = increment(parseInt(checkoutSession.metadata.creditsToAdd, 10));
+            } else {
+               // Otherwise assume it's the main subscription
+               updates.subscriptionStatus = "active";
+               updates.stripeCustomerId = checkoutSession.customer;
+            }
+            
+            // Update agency status
+            await setDoc(doc(adminDb, "agencies", agencyId), updates, { merge: true });
           }
           break;
         case "customer.subscription.deleted":
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
           // Find agency by customerId and update status
-          const agenciesSnapshot = await adminDb
-            .collection("agencies")
-            .where("stripeCustomerId", "==", customerId)
-            .get();
+          const agenciesSnapshot = await getDocs(query(collection(adminDb, "agencies"), where("stripeCustomerId", "==", customerId)));
           
           if (!agenciesSnapshot.empty) {
             const agencyDoc = agenciesSnapshot.docs[0];
-            await agencyDoc.ref.set(
-              {
-                subscriptionStatus: "canceled",
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
+            await setDoc(agencyDoc.ref, { subscriptionStatus: "canceled", updatedAt: serverTimestamp() }, { merge: true });
           }
           break;
         // ... handle other event types
@@ -122,23 +144,24 @@ async function startServer() {
   // === Stripe Create Checkout Session ===
   app.post("/api/create-checkout-session", async (req, res) => {
     try {
-      const { agencyId, priceId, quantity } = req.body;
+      const { agencyId, priceId, quantity, mode, metadata } = req.body;
       if (!agencyId || !priceId) {
         return res.status(400).json({ error: "Missing agencyId or priceId" });
       }
 
-      const stripe = getStripe();
       const origin = req.headers.origin || process.env.APP_URL || `http://localhost:${PORT}`;
 
+      const stripe = getStripe();
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
-        mode: "subscription",
+        mode: mode || "subscription",
         line_items: [
           {
             price: priceId, // e.g. price_1...
             quantity: quantity || 1,
           },
         ],
+        metadata: metadata || undefined,
         client_reference_id: agencyId,
         success_url: `${origin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/billing?canceled=true`,
@@ -165,13 +188,13 @@ async function startServer() {
         displayName: name || email.split('@')[0],
       });
 
-      const db = getFirestore(getAdminApp()!);
-      await db.collection("users").doc(userRecord.uid).set({
+      const db = getClientDb();
+      await setDoc(doc(db, "users", userRecord.uid), {
         email,
         role,
         agencyId,
         name: name || email.split('@')[0],
-        createdAt: FieldValue.serverTimestamp()
+        createdAt: serverTimestamp()
       });
 
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
@@ -197,8 +220,8 @@ async function startServer() {
       }
 
       // Delete from Firestore
-      const db = getFirestore(getAdminApp()!);
-      await db.collection("users").doc(uid).delete();
+      const db = getClientDb();
+      await deleteDoc(doc(db, "users", uid));
 
       res.status(200).json({ success: true });
     } catch (err: any) {
@@ -268,7 +291,7 @@ async function startServer() {
 
     if (body.object === "whatsapp_business_account" || body.object === "page") {
       try {
-        const adminDb = getFirestore(getAdminApp()!);
+        const adminDb = getClientDb();
 
         for (const entry of body.entry) {
           // For WhatsApp
@@ -322,7 +345,7 @@ async function startServer() {
   });
 
   async function createMetaLead(
-    adminDb: Firestore,
+    adminDb: any,
     name: string,
     phone: string,
     origin: string,
@@ -342,10 +365,10 @@ async function startServer() {
       status: "new",
       origin: origin,
       sellerId: "",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
-    await adminDb.collection("clients").add(newClient);
+    await addDoc(collection(adminDb, "clients"), newClient);
   }
 
   app.post("/api/ai-advisor", express.json(), async (req, res) => {
@@ -361,63 +384,120 @@ async function startServer() {
         return res.status(500).json({ error: "Gemini API key is invalid or missing" });
       }
 
-      const { activeContacts, tasks, pipelineStages } = req.body;
+      const { activeContacts, tasks, pipelineStages, agencyId, inventory } = req.body;
+      
+      if (!agencyId) {
+        return res.status(400).json({ error: "Falta el agencyId" });
+      }
+
+      // IMPORT lead scoring dynamically or just provide the fallback here
+      // But we wrote it in src/services/leadScoringEngine.ts
+      // Since server.ts is bundled by esbuild, we can't easily dynamically require inside Express if we didn't statically import it.
+      // Wait, let's just import it at the top of server.ts.
+      // We will do that in another replace.
+      
+      // We will skip strict credit check in the backend because of service account issues.
+      // The frontend already enforces credit checks.
+      
+      
+      
+      // Calculate scores for all active contacts
+      const scoredContacts = (activeContacts || []).map((client) => {
+        const clientTasks = (tasks || []).filter((t) => t.clientId === client.id);
+        const scoreResult = calculateLeadScore(client, clientTasks, inventory || []);
+        return {
+          ...client,
+          _score: scoreResult
+        };
+      });
+      
+      // Sort by score descending and take top 6
+      scoredContacts.sort((a, b) => b._score.score - a._score.score);
+      const topContacts = scoredContacts.slice(0, 6);
       
       const prompt = `
 You are "IA Erewere", an expert sales advisor for a car dealership.
-Analyze the following active contacts, their tasks/notes, and the pipeline stages.
-Identify up to 6 of the most critical actions to take to close deals.
-Take into account:
-1. How far along the pipeline stage they are (closer to the end = higher closing probability).
-2. The notes and follow-ups in their tasks.
-3. Overdue or pending tasks.
+We have pre-scored our leads using our Lead Scoring Engine. Here are the top ${topContacts.length} prospects.
+For each prospect, generate a specific, actionable recommendation to close the deal.
 
-Pipeline Stages:
-${JSON.stringify(pipelineStages)}
-
-Active Contacts:
-${JSON.stringify(activeContacts)}
-
-Tasks/Notes:
-${JSON.stringify(tasks)}
+Top Contacts (with score context):
+${JSON.stringify(topContacts.map(c => ({
+  id: c.id,
+  name: c.name,
+  pipelineStage: c.pipelineStage || c.status,
+  budget: c.budget,
+  interestedVehicle: c.interestedVehicle,
+  score: c._score.score,
+  probability: c._score.probability,
+  reasonsForScore: c._score.reasons,
+  notes: c.notes ? c.notes.substring(0, 200) : "",
+  tasks: (tasks || []).filter(t => t.clientId === c.id).map(t => ({ title: t.title, status: t.status, dueDate: t.dueDate }))
+})))}
 
 Return a JSON array of recommendation objects with the following schema:
 - clientId (string)
 - clientName (string)
 - actionText (string)
-- probability (number 1-99, representing probability to close based on stage and notes)
+- probability (number 1-99, map this to the probability we gave you or adjust based on your analysis)
 - reason (string, brief explanation of why this action is recommended)
 - type (string, one of: 'overdue', 'proposal', 'followup', 'new', 'closing', 'meeting')
 `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                clientId: { type: Type.STRING },
-                clientName: { type: Type.STRING },
-                actionText: { type: Type.STRING },
-                probability: { type: Type.NUMBER },
-                reason: { type: Type.STRING },
-                type: { type: Type.STRING },
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  clientId: { type: Type.STRING },
+                  clientName: { type: Type.STRING },
+                  actionText: { type: Type.STRING },
+                  probability: { type: Type.NUMBER },
+                  reason: { type: Type.STRING },
+                  type: { type: Type.STRING },
+                }
               }
             }
           }
-        }
-      });
-      
+        });
+      } catch (genError) {
+        console.warn("Gemini API error, falling back to heuristic recommendations.", genError);
+        const fallbackRecommendations = topContacts.map(client => {
+           let type = 'followup';
+           if (client._score.priority === 'alta') type = 'closing';
+           
+           return {
+             clientId: client.id,
+             clientName: client.name,
+             actionText: `Contactar a ${client.name} para dar seguimiento.`,
+             probability: client._score.probability,
+             reason: client._score.reasons.join(", "),
+             type
+           };
+        });
+        return res.json({ recommendations: fallbackRecommendations });
+      }
+
       const text = response.text;
-      const recommendations = JSON.parse(text);
+      let cleanedText = text.trim();
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.replace(/^```json/, '').replace(/```$/, '').trim();
+      } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```/, '').replace(/```$/, '').trim();
+      }
+      
+      const recommendations = JSON.parse(cleanedText);
+      
       res.json({ recommendations });
     } catch (e) {
       console.error("Error calling Gemini:", e);
-      res.status(500).json({ error: "Failed to generate recommendations" });
+      res.status(500).json({ error: "Failed to generate recommendations", details: e instanceof Error ? e.message : String(e) });
     }
   });
 

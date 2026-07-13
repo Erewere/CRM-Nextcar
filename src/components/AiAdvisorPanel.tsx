@@ -6,15 +6,63 @@ import { generateRecommendations } from '../services/recommendations';
 
 interface AiAdvisorPanelProps {
   userName: string;
+  agencyId: string;
   activeContacts: Client[]; 
   tasks: Task[];
   pipelineStages: PipelineStage[];
 }
 
-export function AiAdvisorPanel({ userName, activeContacts, tasks, pipelineStages }: AiAdvisorPanelProps) {
+export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipelineStages }: AiAdvisorPanelProps) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   
+  const handleAnalyzeWithAI = () => {
+    if (activeContacts.length === 0) return;
+    setIsLoading(true);
+    setErrorMsg(null);
+    fetch("/api/ai-advisor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agencyId,
+        activeContacts: activeContacts.slice(0, 10),
+        tasks,
+        pipelineStages
+      })
+    })
+    .then(res => {
+      if (!res.ok) {
+         return res.json().then(err => { throw new Error(err.error || 'Error calling AI'); });
+      }
+      return res.json();
+    })
+    .then(data => {
+      if (data.recommendations && Array.isArray(data.recommendations)) {
+        const aiMapped = data.recommendations.map((rec: any) => {
+          let icon = null;
+          switch (rec.type) {
+            case 'overdue': icon = <Phone className="w-4 h-4 text-rose-400" />; break;
+            case 'proposal': icon = <FileText className="w-4 h-4 text-purple-400" />; break;
+            case 'followup': icon = <Clock className="w-4 h-4 text-amber-400" />; break;
+            case 'new': icon = <Phone className="w-4 h-4 text-blue-400" />; break;
+            case 'closing': icon = <CheckCircle className="w-4 h-4 text-emerald-400" />; break;
+            case 'meeting': icon = <Phone className="w-4 h-4 text-indigo-400" />; break;
+            default: icon = <Phone className="w-4 h-4 text-slate-400" />;
+          }
+          return { ...rec, icon };
+        }).slice(0, 8);
+        
+        if (aiMapped.length > 0) {
+          setRecommendations(aiMapped);
+        }
+      }
+    })
+    .catch(err => { console.error(err); setErrorMsg(err.message || "Error al obtener recomendaciones"); })
+    .finally(() => setIsLoading(false));
+  };
+
   useEffect(() => {
     // Generate initial fast recommendations locally
     const rawRecs = generateRecommendations(activeContacts, tasks, pipelineStages);
@@ -34,44 +82,8 @@ export function AiAdvisorPanel({ userName, activeContacts, tasks, pipelineStages
     
     setRecommendations(mapped);
     
-    // Call AI in the background
-    if (activeContacts.length > 0) {
-      setIsLoading(true);
-      fetch("/api/ai-advisor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activeContacts: activeContacts.slice(0, 10), // send top 10 to save tokens
-          tasks,
-          pipelineStages
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.recommendations && Array.isArray(data.recommendations)) {
-          const aiMapped = data.recommendations.map((rec: any) => {
-            let icon = null;
-            switch (rec.type) {
-              case 'overdue': icon = <Phone className="w-4 h-4 text-rose-400" />; break;
-              case 'proposal': icon = <FileText className="w-4 h-4 text-purple-400" />; break;
-              case 'followup': icon = <Clock className="w-4 h-4 text-amber-400" />; break;
-              case 'new': icon = <Phone className="w-4 h-4 text-blue-400" />; break;
-              case 'closing': icon = <CheckCircle className="w-4 h-4 text-emerald-400" />; break;
-              case 'meeting': icon = <Phone className="w-4 h-4 text-indigo-400" />; break;
-              default: icon = <Phone className="w-4 h-4 text-slate-400" />;
-            }
-            return { ...rec, icon };
-          }).slice(0, 8); // Allow up to 8 from AI
-          
-          if (aiMapped.length > 0) {
-            setRecommendations(aiMapped);
-          }
-        }
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
-    }
-  }, [activeContacts, tasks, pipelineStages]);
+
+  }, [activeContacts, tasks, pipelineStages, agencyId]);
 
   if (recommendations.length === 0) {
     return (
@@ -107,14 +119,30 @@ export function AiAdvisorPanel({ userName, activeContacts, tasks, pipelineStages
             <p className="text-xs text-indigo-200/80">Asesor: <span className="text-indigo-100 font-medium">{userName.split(' ')[0]}</span> • Prospectos activos: {activeContacts.length}</p>
           </div>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-xs bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-full text-indigo-200">
+        <div className="flex items-center gap-2">
           {isLoading ? (
-            <><Loader2 className="w-3 h-3 animate-spin text-indigo-300" /> Analizando con Gemini...</>
+            <div className="hidden sm:flex items-center gap-2 text-xs bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-full text-indigo-200">
+              <Loader2 className="w-3 h-3 animate-spin text-indigo-300" /> Analizando con Gemini...
+            </div>
           ) : (
-            <><span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Recomendaciones en tiempo real</>
+            <button onClick={handleAnalyzeWithAI} className="hidden sm:flex items-center gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/50 px-3 py-1.5 rounded-full text-white transition-colors cursor-pointer shadow-sm">
+              <Bot className="w-3 h-3" /> Analizar con Gemini
+            </button>
           )}
         </div>
       </div>
+      
+      {errorMsg && (
+        <div className="p-3 bg-rose-900/40 border-b border-rose-500/30 text-rose-200 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-rose-400">Atención:</span>
+            <span>{errorMsg}</span>
+          </div>
+          <Link to="/billing" className="whitespace-nowrap px-3 py-1.5 bg-rose-600 hover:bg-rose-500 rounded text-xs font-medium text-white transition-colors shadow-sm">
+            Recargar Créditos
+          </Link>
+        </div>
+      )}
       
       <div className="p-5">
         <h4 className="text-xs font-bold text-indigo-300 mb-3 uppercase tracking-widest">IA Recomienda:</h4>
@@ -133,10 +161,15 @@ export function AiAdvisorPanel({ userName, activeContacts, tasks, pipelineStages
                   {rec.icon}
                 </div>
                 <div>
+                  <div className="mb-1">
+                    <p className="text-xs font-bold text-indigo-300 truncate">
+                      {rec.clientName}
+                    </p>
+                  </div>
                   <p className="text-sm font-semibold text-white leading-tight pr-2 group-hover:text-indigo-200 transition-colors">
-                    {idx + 1}. {rec.actionText}
+                    {rec.actionText}
                   </p>
-                  <p className="text-xs text-indigo-200/70 mt-1">{rec.reason}</p>
+                  <p className="text-[10px] text-indigo-200/70 mt-1 line-clamp-2">{rec.reason}</p>
                 </div>
               </div>
               <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between relative z-10">

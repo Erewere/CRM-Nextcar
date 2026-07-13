@@ -450,6 +450,7 @@ export function Dashboard() {
       {/* AI Advisor Panel */}
       <AiAdvisorPanel 
         userName={userData?.name || userData?.email || "Asesor"}
+        agencyId={userData?.agencyId || ''}
         activeContacts={activeContacts}
         tasks={tasks}
         pipelineStages={pipelineStages}
