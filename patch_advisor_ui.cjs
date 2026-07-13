@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect } from 'react';
 import { Bot, Phone, FileText, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Client, Task, PipelineStage } from '../types';
 import { Link } from 'react-router';
@@ -141,7 +143,7 @@ export function AiAdvisorPanel({ userName, activeContacts, tasks, pipelineStages
               </div>
               <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between relative z-10">
                 <span className="text-[11px] text-indigo-300/80 uppercase tracking-wider font-semibold">Probabilidad cierre</span>
-                <span className={`text-sm font-black ${rec.probability > 75 ? 'text-emerald-400' : rec.probability > 50 ? 'text-amber-400' : 'text-blue-400'} drop-shadow-md`}>
+                <span className={\`text-sm font-black \${rec.probability > 75 ? 'text-emerald-400' : rec.probability > 50 ? 'text-amber-400' : 'text-blue-400'} drop-shadow-md\`}>
                   {rec.probability}%
                 </span>
               </div>
@@ -152,3 +154,7 @@ export function AiAdvisorPanel({ userName, activeContacts, tasks, pipelineStages
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/AiAdvisorPanel.tsx', code);
+console.log("Patched AiAdvisorPanel.tsx");

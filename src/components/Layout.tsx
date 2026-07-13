@@ -20,6 +20,7 @@ import {
   CreditCard,
   Blocks,
   Key,
+  TrendingUp,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import clsx from "clsx";
@@ -96,6 +97,12 @@ export function Layout() {
       path: "/",
       icon: LayoutDashboard,
       roles: ["master", "admin", "seller"],
+    },
+    {
+      name: "Inteligencia",
+      path: "/intelligence",
+      icon: TrendingUp,
+      roles: ["master", "admin"],
     },
     {
       name: "Inventario",

@@ -14,6 +14,7 @@ import { VehiclePrint } from './pages/VehiclePrint';
 import { Billing } from './pages/Billing';
 
 import { Integrations } from './pages/Integrations';
+import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
 import { ClosedSales } from './pages/ClosedSales';
 
 const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller')[] }) => {
@@ -43,6 +44,7 @@ export default function App() {
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="intelligence" element={<ProtectedRoute requireRole={['master', 'admin']}><IntelligenceDashboard /></ProtectedRoute>} />
             <Route path="inventory" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><Inventory /></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
