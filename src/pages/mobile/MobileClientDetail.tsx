@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car } from 'lucide-react';
 import { Client } from '../../types';
 import { db } from '../../lib/firebase';
-import { doc, setDoc, addDoc, collection, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
 import { format } from 'date-fns';
@@ -22,6 +22,22 @@ export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
   const [quickNote, setQuickNote] = useState('');
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState(false);
+  const [notes, setNotes] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadNotes = async () => {
+      try {
+        const q = query(collection(db, "notes"), where("clientId", "==", client.id));
+        const s = await getDocs(q);
+        const n = s.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
+        n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setNotes(n);
+      } catch (error) {
+        console.error("Error loading notes:", error);
+      }
+    };
+    loadNotes();
+  }, [client.id]);
 
   useEffect(() => {
     if (!userData?.agencyId) return;
@@ -98,6 +114,13 @@ export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
       setNoteSuccess(true);
       setTimeout(() => setNoteSuccess(false), 2000);
       onUpdated();
+      
+      // refresh notes
+      const q = query(collection(db, "notes"), where("clientId", "==", client.id));
+      const s = await getDocs(q);
+      const n = s.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
+      n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNotes(n);
     } catch (err) {
       console.error(err);
     } finally {
@@ -161,20 +184,23 @@ export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
         </div>
 
         {/* Pipeline Stage */}
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Etapa del Embudo</h3>
-          <div className="flex overflow-x-auto pb-2 -mx-2 px-2 snap-x hide-scrollbar gap-2">
-            {pipelineStages.map((stage) => {
+                <div className="bg-white dark:bg-slate-800 p-4 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
+          <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Etapa del Embudo</h3>
+          <div className="flex overflow-x-auto pb-2 -mx-4 px-4 snap-x hide-scrollbar gap-2 scroll-smooth">
+            {pipelineStages.map((stage, idx) => {
               const isActive = currentStatus === stage.id;
+              const isPast = pipelineStages.findIndex(s => s.id === currentStatus) > idx;
               return (
                 <button
                   key={stage.id}
                   onClick={() => handleStatusChange(stage.id)}
                   className={clsx(
-                    "shrink-0 snap-center px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all border",
+                    "flex items-center shrink-0 snap-center px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
                     isActive 
-                      ? "bg-blue-600 border-blue-600 text-white shadow-md" 
-                      : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400"
+                      ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-800" 
+                      : isPast
+                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50"
+                        : "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400"
                   )}
                 >
                   {stage.title || stage.name}
@@ -235,6 +261,31 @@ export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
               {noteSuccess ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
+        </div>
+
+        {/* Historial (Notas) */}
+        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Historial</h3>
+          {notes.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-4">No hay registros en el historial.</p>
+          ) : (
+            <div className="space-y-4">
+              {notes.map(note => (
+                <div key={note.id} className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700 pb-2 last:border-0 last:pb-0">
+                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      {note.createdByName || "Usuario"}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {format(new Date(note.createdAt), "dd MMM, HH:mm")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-800 dark:text-slate-200">{note.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -39,6 +39,7 @@ export function MobilePersons() {
       
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setClients(list);
+      setSelectedClient(prev => prev ? (list.find(c => c.id === prev.id) || prev) : null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -58,7 +59,7 @@ export function MobilePersons() {
     return `https://wa.me/${cleaned}`;
   };
 
-  if (loading) {
+  if (loading && clients.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
