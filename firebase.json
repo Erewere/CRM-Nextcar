@@ -2,5 +2,14 @@
   "firestore": {
     "rules": "firestore.rules",
     "database": "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a"
+  },
+  "hosting": {
+    "public": "dist",
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }

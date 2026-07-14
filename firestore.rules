@@ -46,7 +46,11 @@ service cloud.firestore {
                     (request.resource.data.role == 'seller' || request.resource.data.role == 'unassigned');
                     
       allow update: if isMaster() || 
-                    (isAdmin() && getUserAgencyId() == resource.data.agencyId && request.resource.data.agencyId == resource.data.agencyId) ||
+                     (isAdmin() && 
+                      getUserAgencyId() == resource.data.agencyId && 
+                      request.resource.data.agencyId == resource.data.agencyId &&
+                      request.auth.uid != userId &&
+                      request.resource.data.role != 'master') ||
                     (isAuthenticated() && request.auth.uid == userId && 
                      request.resource.data.role == resource.data.role && 
                      request.resource.data.agencyId == resource.data.agencyId &&

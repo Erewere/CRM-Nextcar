@@ -52,6 +52,7 @@ export function ClientDetailModal({
 }: Props) {
   const { userData } = useAuth();
   const isNew = !client.id;
+  const isDealContext = client.originalClientId !== undefined || isNew;
   const [showDealWonModal, setShowDealWonModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [formData, setFormData] = useState<Partial<Client>>(
@@ -476,7 +477,6 @@ export function ClientDetailModal({
       t.toLowerCase().includes('buscan auto') ||
       t.toLowerCase().includes('compra')
     );
-  const isDealContext = client.originalClientId !== undefined || isNew;
 
     // Intercept to show the Wanted Vehicle form if needed
     if (hasBuscaAutoTag && !showWantedVehicleMenu && (!formData.wantedVehicle || !formData.wantedVehicle.make)) {
