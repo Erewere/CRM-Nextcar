@@ -56,6 +56,11 @@ export function ClosedSales() {
       setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() } as Vehicle)));
     });
 
+    let dealsQ = userData?.role !== 'master' ? query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)) : query(collection(db, "deals"));
+    const unsubDeals = onSnapshot(dealsQ, (snap) => {
+      setDeals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
     const unsubExpenses = onSnapshot(expensesQ, (snap) => {
       setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as VehicleExpense)));
       setLoading(false);
@@ -65,13 +70,28 @@ export function ClosedSales() {
       unsubClients();
       unsubVehicles();
       unsubExpenses();
+      unsubDeals();
     };
   }, [userData]);
 
   
   const isWon = (status: string = "") => checkIsWon(status, pipelineStages);
 
-  const wonClients = clients.filter(c => isWon(c.status));
+  const displayClients = [
+    ...deals.map(deal => {
+      const person = clients.find(c => c.id === deal.clientId) || {};
+      return {
+        ...person,
+        ...deal,
+        id: deal.id,
+        originalClientId: deal.clientId,
+      } as Client;
+    }),
+    ...clients.filter(c => !deals.some(d => d.clientId === c.id))
+  ];
+
+  const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
+  const wonClients = deduplicatedClients.filter(c => isWon(c.status));
 
   const filteredSales = wonClients.filter(c => {
     const search = searchTerm.toLowerCase();

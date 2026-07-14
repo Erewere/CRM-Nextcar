@@ -176,16 +176,26 @@ export function Dashboard() {
             agencyQuery,
             where("sellerId", "==", userData.id),
           );
+          dealsQ = query(
+            collection(db, "deals"),
+            agencyQuery,
+            where("sellerId", "==", userData.id),
+          );
         }
 
-        const [clientsSnap, vehiclesSnap, tasksSnap, usersSnap, tagsSnap] =
+        const [clientsSnap, dealsSnap, vehiclesSnap, tasksSnap, usersSnap, tagsSnap] =
           await Promise.all([
             getDocs(clientsQ),
+            getDocs(dealsQ),
             getDocs(vehiclesQ),
             getDocs(tasksQ),
             getDocs(usersQ),
             getDocs(tagsQ),
           ]);
+        
+        setDeals(
+          dealsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+        );
 
         setClients(
           clientsSnap.docs.map(
@@ -236,7 +246,7 @@ export function Dashboard() {
       return {
         ...person,
         id: deal.id,
-        originalClientId: person.id,
+        originalClientId: deal.clientId,
         dealTitle: deal.title,
         dealValue: deal.value,
         status: deal.status || deal.stageId || "open",
@@ -254,7 +264,8 @@ export function Dashboard() {
       dealTitle: c.name ? `Trato con ${c.name}` : "Trato",
     } as Client));
 
-    return [...dealClients, ...legacyClients];
+    const allClients = [...dealClients, ...legacyClients];
+    return Array.from(new Map(allClients.map(c => [c.id, c])).values());
   }, [deals, clients]);
   
   const baseFilteredClients = useMemo(() => {

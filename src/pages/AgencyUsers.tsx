@@ -1,3 +1,4 @@
+import { getAuth } from "firebase/auth";
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -285,9 +286,14 @@ export function AgencyUsers() {
     }
 
     try {
+        const auth = getAuth();
+        const token = await auth.currentUser?.getIdToken();
         const res = await fetch('/api/delete-user', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ uid: userId })
         });
         

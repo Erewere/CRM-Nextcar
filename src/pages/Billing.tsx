@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { CreditCard, Check, AlertCircle, Users, Bot, Zap } from 'lucide-react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { Agency } from '../types';
 
 export function Billing() {
@@ -59,11 +59,13 @@ export function Billing() {
 
     try {
       const priceId = import.meta.env.VITE_STRIPE_PRICE_ID || 'price_...';
+      const token = await auth.currentUser?.getIdToken();
       
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           agencyId: userData.agencyId,
@@ -102,10 +104,12 @@ export function Billing() {
     setError('');
     
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           agencyId: userData.agencyId,

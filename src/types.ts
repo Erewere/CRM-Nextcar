@@ -100,6 +100,7 @@ export interface SaleDetails {
 
 export interface Client {
   id: string;
+  originalClientId?: string;
   agencyId: string;
   sellerId: string;
   visibility?: "private" | "all";

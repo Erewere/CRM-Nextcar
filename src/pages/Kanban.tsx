@@ -8,7 +8,7 @@ import {
   updateDoc,
   doc,
   onSnapshot,
-  getDoc,
+  getDoc, setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, PipelineStage, Task, Deal } from "../types";
@@ -320,7 +320,7 @@ export function Kanban() {
       return;
     }
     
-    const client = clients.find((c) => c.id === event.active.id);
+    const client = displayClients.find((c) => c.id === event.active.id);
     if (client) {
       activeOriginalStatusRef.current = client.status || null;
     }
@@ -335,14 +335,24 @@ export function Kanban() {
 
     if (activeId === overId) return;
 
-    const isActiveAClient = clients.some((c) => c.id === activeId);
+    const isActiveAClient = displayClients.some((c) => c.id === activeId);
     if (!isActiveAClient) return;
 
-    const overClient = clients.find((c) => c.id === overId);
+    const overClient = displayClients.find((c) => c.id === overId);
     const overColumnId = overClient ? overClient.status : overId;
 
     if (!columns.find((c) => c.id === overColumnId)) return;
 
+    // Instead of just setClients, we update both to handle optimistic UI
+    setDeals((prev) => {
+      const dIndex = prev.findIndex((d) => d.id === activeId);
+      if (dIndex !== -1 && activeId !== overId) {
+        const next = [...prev];
+        next[dIndex] = { ...next[dIndex], status: overColumnId as string };
+        return next;
+      }
+      return prev;
+    });
     setClients((prev) => {
       const activeIndex = prev.findIndex((c) => c.id === activeId);
       const overIndex = overClient
@@ -383,7 +393,7 @@ export function Kanban() {
       return {
         ...person,
         id: deal.id, // Use Deal ID so DnD and updates affect the deal
-        originalClientId: person.id,
+        originalClientId: deal.clientId,
         dealTitle: deal.title,
         dealValue: deal.value,
         status: deal.status || deal.stageId || "open",
@@ -398,10 +408,12 @@ export function Kanban() {
     }))
   ];
 
-  const activeClient = activeId ? displayClients.find((c) => c.id === activeId) : null;
+  const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
+
+  const activeClient = activeId ? deduplicatedClients.find((c) => c.id === activeId) : null;
 
   const filteredClients =
-    selectedSellerId === "all" ? displayClients : displayClients.filter((c) => c.sellerId === selectedSellerId);
+    selectedSellerId === "all" ? deduplicatedClients : deduplicatedClients.filter((c) => c.sellerId === selectedSellerId);
 
   const activeColumns = columns.filter((c) => !isTerminalColumn(c));
   const terminalColumns = columns.filter((c) => isTerminalColumn(c));
@@ -435,12 +447,12 @@ export function Kanban() {
 
     const clientId = active.id;
     const overClientId = over.id;
-    const overClient = clients.find((c) => c.id === overClientId);
+    const overClient = displayClients.find((c) => c.id === overClientId);
     const overColumnId = overClient ? overClient.status : over.id;
 
     if (!columns.find((c) => c.id === overColumnId)) return;
 
-    const client = clients.find((c) => c.id === clientId);
+    const client = displayClients.find((c) => c.id === clientId);
     const originalStatus = activeOriginalStatusRef.current;
     
     if (client && originalStatus !== overColumnId) {
@@ -462,7 +474,25 @@ export function Kanban() {
           updatedAt: new Date().toISOString(),
         };
 
-        await updateDoc(doc(db, "deals", clientId), updates);
+        const isExistingDeal = deals.some(d => d.id === clientId);
+        if (isExistingDeal) {
+          await setDoc(doc(db, "deals", clientId), updates, { merge: true });
+        } else {
+          // It's a legacy client being moved, create a deal
+          const dealRef = doc(collection(db, "deals"));
+          await setDoc(dealRef, {
+            ...updates,
+            id: dealRef.id,
+            clientId: client.originalClientId || client.id,
+            agencyId: userData?.agencyId,
+            sellerId: client.sellerId || userData?.id,
+            createdAt: new Date().toISOString(),
+            title: `Trato con ${client.name}`,
+            value: client.dealValue ? Number(client.dealValue) : 0,
+            vehicle: client.vehicle || null,
+            vehicleId: client.vehicleId || null
+          });
+        }
       } catch (e) {
         console.error("Status update error", e);
       }
@@ -484,7 +514,24 @@ export function Kanban() {
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, "deals", client.id), updates);
+      const isExistingDeal = deals.some(d => d.id === client.id);
+      if (isExistingDeal) {
+        await setDoc(doc(db, "deals", client.id), updates, { merge: true });
+      } else {
+        const dealRef = doc(collection(db, "deals"));
+        await setDoc(dealRef, {
+          ...updates,
+          id: dealRef.id,
+          clientId: client.originalClientId || client.id,
+          agencyId: userData?.agencyId,
+          sellerId: client.sellerId || userData?.id,
+          createdAt: new Date().toISOString(),
+          title: `Trato con ${client.name}`,
+            value: client.dealValue ? Number(client.dealValue) : 0,
+            vehicle: client.vehicle || null,
+            vehicleId: client.vehicleId || null
+        });
+      }
 
       if (client.vehicleId) {
         await updateDoc(doc(db, "vehicles", client.vehicleId), {

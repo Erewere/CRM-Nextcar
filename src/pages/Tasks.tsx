@@ -800,9 +800,9 @@ export function Tasks() {
       setNewTaskDate("");
       setNewTaskClientId("");
 
-      await updateDoc(doc(db, "clients", newTaskClientId), {
+      await setDoc(doc(db, "clients", newTaskClientId), {
         updatedAt: new Date().toISOString(),
-      }).catch(() => {}); // Just to trigger some update if needed
+      }, { merge: true }).catch(() => {}); // Just to trigger some update if needed
     } catch (e) {
       console.error("Error creating task:", e);
       alert("Error al crear la tarea.");
@@ -2470,9 +2470,9 @@ export function Tasks() {
               if (finalClientId && finalDealId) {
                 const matchedDeal = deals.find((d) => d.id === finalDealId);
                 if (matchedDeal && !matchedDeal.clientId) {
-                  await updateDoc(doc(db, "deals", finalDealId), {
+                  await setDoc(doc(db, "deals", finalDealId), {
                     clientId: finalClientId,
-                  });
+                  }, { merge: true });
                   setDeals((prev) =>
                     prev.map((d) =>
                       d.id === finalDealId
@@ -2487,9 +2487,9 @@ export function Tasks() {
               if (finalClientId && taskData.organization) {
                 const c = clients.find((cl) => cl.id === finalClientId);
                 if (c && c.organization !== taskData.organization) {
-                  await updateDoc(doc(db, "clients", finalClientId), {
+                  await setDoc(doc(db, "clients", finalClientId), {
                     organization: taskData.organization,
-                  });
+                  }, { merge: true });
                   setClients((prev) =>
                     prev.map((cl) =>
                       cl.id === finalClientId

@@ -1,3 +1,4 @@
+import { getAuth } from "firebase/auth";
 import React, { useEffect, useState, useMemo } from 'react';
 import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';

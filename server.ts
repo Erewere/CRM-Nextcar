@@ -144,9 +144,29 @@ async function startServer() {
   // === Stripe Create Checkout Session ===
   app.post("/api/create-checkout-session", async (req, res) => {
     try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      
+      const token = authHeader.split("Bearer ")[1];
+      const auth = getAuth(getAdminApp()!);
+      const decodedToken = await auth.verifyIdToken(token);
+      
+      const db = getClientDb();
+      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
+      if (!userDoc.exists()) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+
       const { agencyId, priceId, quantity, mode, metadata } = req.body;
       if (!agencyId || !priceId) {
         return res.status(400).json({ error: "Missing agencyId or priceId" });
+      }
+
+      if (userData.role !== "master" && userData.agencyId !== agencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
       }
 
       const origin = req.headers.origin || process.env.APP_URL || `http://localhost:${PORT}`;
@@ -176,6 +196,19 @@ async function startServer() {
 
   app.post("/api/create-user", async (req, res) => {
     try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.split("Bearer ")[1];
+      let decodedToken;
+      try {
+        const auth = getAuth(getAdminApp()!);
+        decodedToken = await auth.verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
       const { email, password, name, role, agencyId } = req.body;
       if (!email || !password || !role || !agencyId) {
         return res.status(400).json({ error: "Faltan parámetros requeridos" });
@@ -206,6 +239,19 @@ async function startServer() {
 
   app.post("/api/delete-user", async (req, res) => {
     try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.split("Bearer ")[1];
+      let decodedToken;
+      try {
+        const auth = getAuth(getAdminApp()!);
+        decodedToken = await auth.verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
       const { uid } = req.body;
       if (!uid) {
         return res.status(400).json({ error: "Falta el parámetro uid" });
@@ -232,6 +278,30 @@ async function startServer() {
 
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      
+      const token = authHeader.split("Bearer ")[1];
+      const auth = getAuth(getAdminApp()!);
+      const decodedToken = await auth.verifyIdToken(token);
+      
+      const db = getClientDb();
+      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
+      if (!userDoc.exists()) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      
+      const userData = userDoc.data();
+      if (userData.role !== "master" && userData.role !== "admin") {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+    } catch (e) {
+      return res.status(401).json({ error: "Token inválido" });
+    }
+
     if (!resend) {
       return res.status(500).json({
         error: "Servicio de correo no configurado (Falta RESEND_API_KEY)",
@@ -373,6 +443,19 @@ async function startServer() {
 
   app.post("/api/ai-advisor", express.json(), async (req, res) => {
     try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.split("Bearer ")[1];
+      let decodedToken;
+      try {
+        const auth = getAuth(getAdminApp()!);
+        decodedToken = await auth.verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+      
       if (!process.env.GEMINI_API_KEY) {
          return res.status(500).json({ error: "Gemini API key is missing" });
       }

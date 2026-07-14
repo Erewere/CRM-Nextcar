@@ -1,6 +1,8 @@
+import { getAuth } from "firebase/auth";
 import React, { useState, useEffect } from 'react';
 import { Bot, Phone, FileText, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Client, Task, PipelineStage } from '../types';
+import { auth } from "../lib/firebase";
 import { Link } from 'react-router';
 import { generateRecommendations } from '../services/recommendations';
 
@@ -17,28 +19,31 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  
-  const handleAnalyzeWithAI = () => {
+  const handleAnalyzeWithAI = async () => {
     if (activeContacts.length === 0) return;
     setIsLoading(true);
     setErrorMsg(null);
-    fetch("/api/ai-advisor", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agencyId,
-        activeContacts: activeContacts.slice(0, 10),
-        tasks,
-        pipelineStages
-      })
-    })
-    .then(res => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/ai-advisor", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          agencyId,
+          activeContacts: activeContacts.slice(0, 10),
+          tasks,
+          pipelineStages
+        })
+      });
       if (!res.ok) {
-         return res.json().then(err => { throw new Error(err.error || 'Error calling AI'); });
+        const err = await res.json();
+        throw new Error(err.error || 'Error calling AI');
       }
-      return res.json();
-    })
-    .then(data => {
+      const data = await res.json();
+      
       if (data.recommendations && Array.isArray(data.recommendations)) {
         const aiMapped = data.recommendations.map((rec: any) => {
           let icon = null;
@@ -57,10 +62,15 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
         if (aiMapped.length > 0) {
           setRecommendations(aiMapped);
         }
+      } else {
+        setErrorMsg("Respuesta inválida de AI.");
       }
-    })
-    .catch(err => { console.error(err); setErrorMsg(err.message || "Error al obtener recomendaciones"); })
-    .finally(() => setIsLoading(false));
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -81,8 +91,6 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
     }).slice(0, 6);
     
     setRecommendations(mapped);
-    
-
   }, [activeContacts, tasks, pipelineStages, agencyId]);
 
   if (recommendations.length === 0) {

@@ -368,7 +368,11 @@ export function ClientDetailModal({
           status: newStatus,
           updatedAt: new Date().toISOString(),
         };
-        await updateDoc(doc(db, "clients", client.id as string), updates);
+        if (client.originalClientId && client.originalClientId !== client.id) {
+          await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
+        } else {
+          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updates, { merge: true });
+        }
       } catch (err) {
         console.error("Error updating status:", err);
       }
@@ -395,7 +399,11 @@ export function ClientDetailModal({
           saleDetails,
           updatedAt: new Date().toISOString(),
         };
-        await updateDoc(doc(db, "clients", client.id as string), updates);
+        if (client.originalClientId && client.originalClientId !== client.id) {
+          await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
+        } else {
+          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updates, { merge: true });
+        }
         
         if (formData.vehicleId) {
           await updateDoc(doc(db, "vehicles", formData.vehicleId), {
@@ -438,10 +446,15 @@ export function ClientDetailModal({
     
     if (!isNew && client.id) {
       try {
-        await updateDoc(doc(db, "clients", client.id as string), {
+        const updateData = {
           saleDetails: updatedSaleDetails,
           updatedAt: new Date().toISOString()
-        });
+        };
+        if (client.originalClientId && client.originalClientId !== client.id) {
+          await setDoc(doc(db, "deals", client.id as string), updateData, { merge: true });
+        } else {
+          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updateData, { merge: true });
+        }
       } catch (err) {
         console.error("Error saving payment", err);
       }
@@ -463,6 +476,7 @@ export function ClientDetailModal({
       t.toLowerCase().includes('buscan auto') ||
       t.toLowerCase().includes('compra')
     );
+  const isDealContext = client.originalClientId !== undefined || isNew;
 
     // Intercept to show the Wanted Vehicle form if needed
     if (hasBuscaAutoTag && !showWantedVehicleMenu && (!formData.wantedVehicle || !formData.wantedVehicle.make)) {
@@ -471,6 +485,9 @@ export function ClientDetailModal({
     }
 
     let finalFormData = { ...formData };
+    if (finalFormData.dealValue !== undefined) {
+      finalFormData.dealValue = finalFormData.dealValue ? Number(finalFormData.dealValue) : 0;
+    }
     if (!hasBuscaAutoTag) {
       finalFormData.wantedVehicle = null as any;
     }
@@ -503,17 +520,42 @@ export function ClientDetailModal({
           ...finalFormData,
           updatedAt: new Date().toISOString(),
         };
+
+        if (client.originalClientId && client.originalClientId !== client.id) {
+          const dealDataToUpdate: any = {};
+          if ('dealTitle' in dataToUpdate) {
+            dealDataToUpdate.title = dataToUpdate.dealTitle;
+            delete dataToUpdate.dealTitle;
+          }
+          if ('dealValue' in dataToUpdate) {
+            dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
+            delete dataToUpdate.dealValue;
+          }
+          if ('vehicleId' in dataToUpdate) {
+            dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
+            delete dataToUpdate.vehicleId;
+          }
+          if ('vehicle' in dataToUpdate) {
+            dealDataToUpdate.vehicle = dataToUpdate.vehicle;
+            delete dataToUpdate.vehicle;
+          }
+          if (Object.keys(dealDataToUpdate).length > 0) {
+            dealDataToUpdate.updatedAt = new Date().toISOString();
+            await setDoc(doc(db, "deals", client.id as string), dealDataToUpdate, { merge: true });
+          }
+        }
+
         Object.keys(dataToUpdate).forEach(
           (k) =>
             dataToUpdate[k as keyof typeof dataToUpdate] === undefined &&
             delete dataToUpdate[k as keyof typeof dataToUpdate],
         );
-        await updateDoc(doc(db, "clients", client.id as string), dataToUpdate);
+        await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), dataToUpdate, { merge: true });
       }
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Error guardando cliente");
+      alert("Error guardando cliente: " + err.message);
     }
   };
 
@@ -689,20 +731,20 @@ export function ClientDetailModal({
             </div>
             <div className="flex-1 min-w-[200px]">
               <input
-                name={formData.dealTitle || isNew ? "dealTitle" : "name"}
-                value={formData.dealTitle || formData.name || ""}
+                name={isDealContext ? "dealTitle" : "name"}
+                value={isDealContext ? (formData.dealTitle || "") : (formData.name || "")}
                 onChange={(e) => {
-                  if (formData.dealTitle || isNew) {
+                  if (isDealContext) {
                     handleChange(e); // Updates dealTitle
                   } else {
                     handleChange({ target: { name: 'name', value: e.target.value } } as any); // Updates name if no deal
                   }
                 }}
-                placeholder={isNew ? "Nuevo Trato" : "Nombre"}
+                placeholder={isDealContext ? "Nuevo Trato" : "Nombre"}
                 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
               />
               
-              {(formData.dealTitle || isNew) && (
+              {isDealContext && (
                 <div className="flex items-center mt-1">
                   <span className="text-gray-500 font-medium mr-1">$</span>
                   <input
@@ -1029,13 +1071,42 @@ export function ClientDetailModal({
                         await setDoc(newRef, dataToSave);
                       } else {
                         const dataToUpdate = { ...formData, updatedAt: new Date().toISOString() };
+                        if (dataToUpdate.dealValue !== undefined) {
+                          dataToUpdate.dealValue = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
+                        }
+                        
+                        if (client.originalClientId && client.originalClientId !== client.id) {
+                          const dealDataToUpdate: any = {};
+                          if ('dealTitle' in dataToUpdate) {
+                            dealDataToUpdate.title = dataToUpdate.dealTitle;
+                            delete dataToUpdate.dealTitle;
+                          }
+                          if ('dealValue' in dataToUpdate) {
+            dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
+            delete dataToUpdate.dealValue;
+          }
+          if ('vehicleId' in dataToUpdate) {
+            dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
+            delete dataToUpdate.vehicleId;
+          }
+          if ('vehicle' in dataToUpdate) {
+            dealDataToUpdate.vehicle = dataToUpdate.vehicle;
+            delete dataToUpdate.vehicle;
+          }
+                          
+                          if (Object.keys(dealDataToUpdate).length > 0) {
+                            dealDataToUpdate.updatedAt = new Date().toISOString();
+                            await setDoc(doc(db, "deals", client.id as string), dealDataToUpdate, { merge: true });
+                          }
+                        }
+
                         Object.keys(dataToUpdate).forEach(k => dataToUpdate[k as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[k as keyof typeof dataToUpdate]);
-                        await updateDoc(doc(db, "clients", client.id as string), dataToUpdate);
+                        await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), dataToUpdate, { merge: true });
                       }
                       onClose();
                     } catch (err) {
                       console.error(err);
-                      alert("Error guardando cliente");
+                      alert("Error guardando cliente: " + err.message);
                     }
                   }}
                   className="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors"
@@ -1671,7 +1742,7 @@ export function ClientDetailModal({
                 <button 
                   onClick={async () => {
                     if (confirm("¿Marcar trato como ganado?")) {
-                      await updateDoc(doc(db, "deals", deal.id), { status: "won" });
+                      await setDoc(doc(db, "deals", deal.id), { status: "won" }, { merge: true });
                     }
                   }}
                   className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
