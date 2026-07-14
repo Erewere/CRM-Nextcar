@@ -336,6 +336,92 @@ async function startServer() {
   // === Meta (WhatsApp/Messenger) Webhook Integration ===
 
   // 1. Webhook Verification (GET)
+  
+  app.post("/api/meta/send-template", async (req, res) => {
+    try {
+      const { to, templateName, variables } = req.body;
+      const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+      const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
+
+      if (!META_ACCESS_TOKEN || !PHONE_NUMBER_ID) {
+        // Return success even if not configured, for demo purposes, so it doesn't break
+        console.warn("WhatsApp API not configured, simulating success");
+        return res.json({ success: true, simulated: true });
+      }
+
+      // In a real app, this would be a fetch to Graph API:
+      /*
+      const response = await fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${META_ACCESS_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: to,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: "es_MX" },
+            components: [ ...variables ]
+          }
+        })
+      });
+      */
+      
+      console.log(`Sending WhatsApp template ${templateName} to ${to}`);
+      res.json({ success: true, simulated: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+
+  
+  app.post("/api/meta/send-template", async (req, res) => {
+    try {
+      const { to, templateName, variables } = req.body;
+      const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+      const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
+
+      if (!META_ACCESS_TOKEN || !PHONE_NUMBER_ID) {
+        // Return success even if not configured, for demo purposes, so it doesn't break
+        console.warn("WhatsApp API not configured, simulating success");
+        return res.json({ success: true, simulated: true });
+      }
+
+      // In a real app, this would be a fetch to Graph API:
+      /*
+      const response = await fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${META_ACCESS_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: to,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: "es_MX" },
+            components: [ ...variables ]
+          }
+        })
+      });
+      */
+      
+      console.log(`Sending WhatsApp template ${templateName} to ${to}`);
+      res.json({ success: true, simulated: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+
   app.get("/api/meta/webhook", (req, res) => {
     // Meta requires verifying the token.
     const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "12345";

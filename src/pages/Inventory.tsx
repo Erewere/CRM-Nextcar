@@ -6,6 +6,10 @@ import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc
 import { Vehicle, Client, VehicleExpense } from '../types';
 import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
+import { MobileInventory } from './mobile/MobileInventory';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { MobileInventory } from './mobile/MobileInventory';
+import { useIsMobile } from '../hooks/useIsMobile';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 
@@ -132,6 +136,7 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
 
 export function Inventory() {
   const { userData } = useAuth();
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clients, setClients] = useState<Client[]>([]);

@@ -14,6 +14,10 @@ import {
 import { db } from "../lib/firebase";
 import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
+import { MobileTasks } from "./mobile/MobileTasks";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { MobileTasks } from "./mobile/MobileTasks";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { NewActivityModal } from "../components/NewActivityModal";
 import {
   CheckCircle,

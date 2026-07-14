@@ -13,6 +13,10 @@ import {
 import { db } from "../lib/firebase";
 import { Client, Vehicle, Task, User } from "../types";
 import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
+import { MobileHome } from "./mobile/MobileHome";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { MobileHome } from "./mobile/MobileHome";
+import { useIsMobile } from "../hooks/useIsMobile";
 import {
   BarChart,
   Bar,
@@ -78,6 +82,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function Dashboard() {
   const { userData } = useAuth();
+  const isMobile = useIsMobile();
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);

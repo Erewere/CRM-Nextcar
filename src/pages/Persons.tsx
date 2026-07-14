@@ -1,3 +1,5 @@
+import { useIsMobile } from '../hooks/useIsMobile';
+import { MobilePersons } from './mobile/MobilePersons';
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router";
@@ -44,6 +46,7 @@ import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 
 export function Persons() {
+  const isMobile = useIsMobile();
   const { userData, googleToken, connectGoogleServices } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -58,7 +61,7 @@ export function Persons() {
   const [showUndoModal, setShowUndoModal] = useState(false);
   const [undoList, setUndoList] = useState<Client[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Client | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [excelData, setExcelData] = useState<any[]>([]);
   const [excelColumns, setExcelColumns] = useState<string[]>([]);
@@ -769,6 +772,8 @@ export function Persons() {
   }, [persons, searchTerm, sortConfig, agencyUsers, deals, tasks]);
 
 
+  if (isMobile) return <MobilePersons />;
+
   if (loading)
     return (
       <div className="flex justify-center items-center h-full">Cargando...</div>
@@ -826,12 +831,12 @@ export function Persons() {
                 setUndoList(toDelete);
                 setShowUndoModal(true);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-rose-100 text-rose-700 rounded font-semibold hover:bg-rose-200 shadow-sm text-xs md:text-sm"
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-rose-100 text-rose-700 rounded font-semibold hover:bg-rose-200 shadow-sm text-xs md:text-sm"
             >
               <Trash2 className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">Deshacer Importación</span>
             </button>
-            <label className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
+            <label className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
               <FileSpreadsheet className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">Importar Excel</span>
               <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
@@ -839,7 +844,7 @@ export function Persons() {
             <button
               onClick={handleImportGoogleContacts}
               disabled={importingContacts}
-              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm"
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm"
             >
               <Download className="w-4 h-4 shrink-0" />{" "}
               <span className="hidden sm:inline">

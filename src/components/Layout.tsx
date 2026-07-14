@@ -29,6 +29,8 @@ import { TaskReminders } from "./TaskReminders";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 export function Layout() {
   const { userData } = useAuth();
@@ -40,6 +42,7 @@ export function Layout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -164,41 +167,10 @@ export function Layout() {
   return (
     <div className="min-h-[100dvh] bg-gray-50 dark:bg-slate-900 flex flex-col md:flex-row">
       <TaskReminders />
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between bg-slate-900 px-4 py-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-white text-sm">
-            NX
-          </div>
-          <span className="text-lg font-bold tracking-tight text-white">
-            Nextcar <span className="text-blue-500">CRM</span>
-          </span>
-        </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="text-slate-300 hover:text-white p-2"
-        >
-          {isMobileMenuOpen ? (
-            <X className="w-6 h-6" />
-          ) : (
-            <Menu className="w-6 h-6" />
-          )}
-        </button>
-      </div>
-
-      {/* Sidebar overlay for mobile */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-slate-900/50 z-40 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
       {/* Sidebar */}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-50 bg-slate-900 text-slate-300 flex flex-col items-stretch shrink-0 transition-[width,transform] duration-300 md:relative md:translate-x-0",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
+          "hidden md:flex inset-y-0 left-0 z-50 bg-slate-900 text-slate-300 flex-col items-stretch shrink-0 transition-[width,transform] duration-300 relative",
           isSidebarCollapsed ? "w-20" : "w-64",
         )}
       >
@@ -333,8 +305,8 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-[calc(100dvh-56px)] md:h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
-        <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
+      <main className={clsx("flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors", isMobile ? "h-[calc(100dvh-64px)]" : "h-[100dvh]")}>
+        {!isMobile && <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
           <div className="flex flex-col justify-center overflow-hidden">
             <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
               <h1 className="text-[30px] font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors leading-none">
@@ -394,13 +366,53 @@ export function Layout() {
               Ir a Nextcar
             </a>
           </div>
-        </header>
+        </header>}
 
         <div className="flex-1 overflow-auto p-4 md:p-6 relative transition-colors">
           <Outlet />
         </div>
       </main>
       
+      {/* Mobile Bottom Navigation */}
+      {isMobile && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          {[
+            { name: "Inicio", path: "/", icon: LayoutDashboard },
+            { name: "Contactos", path: "/persons", icon: Users },
+            { name: "Inventario", path: "/inventory", icon: Car },
+            { name: "Citas", path: "/tasks", icon: CheckSquare },
+          ].map(item => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === "/"}
+              className={({ isActive }) =>
+                clsx(
+                  "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
+                  isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                )
+              }
+            >
+              <item.icon className="w-5 h-5" />
+              <span className="text-[10px] font-medium">{item.name}</span>
+            </NavLink>
+          ))}
+          <button
+            onClick={() => setShowUserSettingsModal(true)}
+            className="flex flex-col items-center justify-center w-full h-full space-y-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+               {userData?.photoURL ? (
+                  <img src={userData.photoURL} alt="" className="w-full h-full object-cover" />
+               ) : (
+                  <span className="text-[8px] font-bold">{userData?.name?.substring(0, 2) || "US"}</span>
+               )}
+            </div>
+            <span className="text-[10px] font-medium">Perfil</span>
+          </button>
+        </nav>
+      )}
+
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
       <UserSettingsModal isOpen={showUserSettingsModal} onClose={() => setShowUserSettingsModal(false)} />
     </div>
