@@ -25,7 +25,7 @@ import {
 import clsx from "clsx";
 import { Client } from "../types";
 import { useAuth } from "../contexts/AuthContext";
-import { getDoc, doc } from "firebase/firestore";
+import { getDoc, onSnapshot, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { format, addDays, subDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -78,23 +78,20 @@ export function NewActivityModal({
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
   const { userData } = useAuth(); // We need userData
   useEffect(() => {
-    const fetchAgencyConfig = async () => {
-      if (userData?.agencyId && userData.agencyId !== 'unassigned') {
-        try {
-          const snap = await getDoc(doc(db, "agencies", userData.agencyId));
-          if (snap.exists() && snap.data().businessHours) {
-            const bh = snap.data().businessHours;
-            setBusinessHours({
-              start: parseInt(bh.start.split(":")[0], 10),
-              end: parseInt(bh.end.split(":")[0], 10)
-            });
-          }
-        } catch (e) {
-          console.error("Error fetching agency config in modal:", e);
+    if (!userData || userData.role === "master") return;
+    
+    if (userData.agencyId && userData.agencyId !== "unassigned") {
+      const unsubscribe = onSnapshot(doc(db, "agencies", userData.agencyId), (snap) => {
+        if (snap.exists() && snap.data().businessHours) {
+          const bh = snap.data().businessHours;
+          setBusinessHours({
+            start: parseInt(bh.start.split(":")[0], 10),
+            end: parseInt(bh.end.split(":")[0], 10)
+          });
         }
-      }
-    };
-    fetchAgencyConfig();
+      });
+      return () => unsubscribe();
+    }
   }, [userData]);
 
   const [clientName, setClientName] = useState(() => {

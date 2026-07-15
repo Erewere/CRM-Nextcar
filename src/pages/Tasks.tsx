@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { AnimatePresence } from "motion/react";
+import { onSnapshot } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 import {
   collection,
@@ -150,6 +151,7 @@ export function Tasks() {
   };
 
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -274,7 +276,7 @@ export function Tasks() {
       }
     };
     fetchTasksAndClients();
-  }, [userData]);
+  }, [userData, refreshKey]);
 
   const toggleTask = async (taskId: string, current: boolean) => {
     try {
@@ -2752,6 +2754,7 @@ export function Tasks() {
         <ClientDetailModal
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
+          onUpdated={() => setRefreshKey(prev => prev + 1)}
         />
       )}
     </div>

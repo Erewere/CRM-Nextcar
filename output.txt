@@ -1,0 +1,6 @@
+                    {person.phone && (
+                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
+                        <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{person.phone}</span>
+                      </div>
+                    )}

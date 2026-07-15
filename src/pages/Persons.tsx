@@ -32,6 +32,7 @@ import {
   Download,
   User as UserIcon,
   FileSpreadsheet,
+  Car,
 } from "lucide-react";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import clsx from "clsx";
@@ -92,6 +93,7 @@ export function Persons() {
     { id: string; title: string }[]
   >([]);
   const [importingContacts, setImportingContacts] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
 
   useEffect(() => {
@@ -260,7 +262,7 @@ export function Persons() {
       }
     };
     fetchAvailableTags();
-  }, [userData]);
+  }, [userData, refreshKey]);
 
   useEffect(() => {
     if (!userData || userData.role === "master") return;
@@ -924,6 +926,12 @@ export function Persons() {
                       <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
                         <Phone className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">{person.phone}</span>
+                      </div>
+                    )}
+                    {(person.vehicle || person.dealTitle) && (
+                      <div className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 mt-1.5">
+                        <Car className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate font-semibold text-[11px] uppercase tracking-wider">{person.vehicle || person.dealTitle}</span>
                       </div>
                     )}
                     {matches.length > 0 && (
@@ -1660,6 +1668,7 @@ export function Persons() {
         <ClientDetailModal
           client={selectedPerson}
           onClose={() => setSelectedPerson(null)}
+          onUpdated={() => setRefreshKey(prev => prev + 1)}
         />
       )}
     </div>

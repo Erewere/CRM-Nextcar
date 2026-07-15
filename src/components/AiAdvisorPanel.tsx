@@ -1,6 +1,6 @@
 import { getAuth } from "firebase/auth";
 import React, { useState, useEffect } from 'react';
-import { Bot, Phone, FileText, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { Bot, Phone, FileText, CheckCircle, Clock, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Client, Task, PipelineStage } from '../types';
 import { auth } from "../lib/firebase";
 import { Link } from 'react-router';
@@ -18,6 +18,7 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const handleAnalyzeWithAI = async () => {
     if (activeContacts.length === 0) return;
@@ -95,52 +96,62 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
 
   if (recommendations.length === 0) {
     return (
-      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-xl shadow-lg border border-indigo-500/30 overflow-hidden text-white mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/20">
+      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-lg shadow border border-indigo-500/30 overflow-hidden text-white mb-4">
+        <div 
+        className="p-2 sm:p-3 flex items-center justify-between bg-black/20 cursor-pointer hover:bg-black/30 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30 shadow-inner">
-              <Bot className="w-5 h-5 text-indigo-300" />
+            <div className="p-1 sm:p-1.5 bg-indigo-500/20 rounded-md border border-indigo-500/30 shadow-inner">
+              <Bot className="w-4 h-4 text-indigo-300" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-wide">IA Erewere</h3>
-              <p className="text-xs text-indigo-200/80">Asesor: <span className="text-indigo-100 font-medium">{userName.split(' ')[0]}</span> • Prospectos activos: {activeContacts.length}</p>
+              <h3 className="text-sm font-bold text-white tracking-wide">IA Erewere</h3>
+              <p className="text-[10px] text-indigo-200/80">Asesor: <span className="text-indigo-100 font-medium">{userName.split(' ')[0]}</span> • {activeContacts.length} activos</p>
             </div>
           </div>
         </div>
-        <div className="p-5 flex flex-col items-center justify-center text-center py-8">
+        {isExpanded && (<div className="p-5 flex flex-col items-center justify-center text-center py-8">
           <Bot className="w-12 h-12 text-indigo-300/50 mb-3" />
           <p className="text-indigo-200 font-medium">Agrega prospectos para recibir recomendaciones de la IA.</p>
         </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-xl shadow-lg border border-indigo-500/30 overflow-hidden text-white mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/20">
+    <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-lg shadow border border-indigo-500/30 overflow-hidden text-white mb-4">
+      <div 
+        className="p-2 sm:p-3 flex items-center justify-between bg-black/20 cursor-pointer hover:bg-black/30 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30 shadow-inner">
-            <Bot className="w-5 h-5 text-indigo-300" />
+          <div className="p-1 sm:p-1.5 bg-indigo-500/20 rounded-md border border-indigo-500/30 shadow-inner">
+            <Bot className="w-4 h-4 text-indigo-300" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white tracking-wide">IA Erewere</h3>
-            <p className="text-xs text-indigo-200/80">Asesor: <span className="text-indigo-100 font-medium">{userName.split(' ')[0]}</span> • Prospectos activos: {activeContacts.length}</p>
+            <h3 className="text-sm font-bold text-white tracking-wide">IA Erewere</h3>
+            <p className="text-[10px] text-indigo-200/80">Asesor: <span className="text-indigo-100 font-medium">{userName.split(' ')[0]}</span> • {activeContacts.length} activos</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isLoading ? (
-            <div className="hidden sm:flex items-center gap-2 text-xs bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-full text-indigo-200">
-              <Loader2 className="w-3 h-3 animate-spin text-indigo-300" /> Analizando con Gemini...
+            <div className="hidden sm:flex items-center gap-2 text-[10px] sm:text-xs bg-indigo-500/20 border border-indigo-500/30 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-indigo-200">
+              <Loader2 className="w-3 h-3 animate-spin text-indigo-300" /> Analizando...
             </div>
           ) : (
-            <button onClick={handleAnalyzeWithAI} className="hidden sm:flex items-center gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/50 px-3 py-1.5 rounded-full text-white transition-colors cursor-pointer shadow-sm">
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleAnalyzeWithAI(); setIsExpanded(true); }} 
+              className="hidden sm:flex items-center gap-2 text-[10px] sm:text-xs bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-white transition-colors cursor-pointer shadow-sm"
+            >
               <Bot className="w-3 h-3" /> Analizar con Gemini
             </button>
           )}
-        </div>
+          {isExpanded ? <ChevronUp className="w-5 h-5 text-indigo-300 ml-2" /> : <ChevronDown className="w-5 h-5 text-indigo-300 ml-2" />}</div>
       </div>
       
-      {errorMsg && (
+      {isExpanded && errorMsg && (
         <div className="p-3 bg-rose-900/40 border-b border-rose-500/30 text-rose-200 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-rose-400">Atención:</span>
@@ -152,7 +163,8 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
         </div>
       )}
       
-      <div className="p-5">
+      {isExpanded && (
+      <div className="p-3 sm:p-5 border-t border-white/10">
         <h4 className="text-xs font-bold text-indigo-300 mb-3 uppercase tracking-widest">IA Recomienda:</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {recommendations.map((rec, idx) => (
@@ -190,6 +202,7 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }

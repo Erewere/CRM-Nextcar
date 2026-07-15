@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Client } from '../../types';
-import { Search, Phone, MessageCircle, User } from 'lucide-react';
+import { Search, Phone, MessageCircle, User, Car } from 'lucide-react';
 import { MobileClientDetail } from './MobileClientDetail';
 
 export function MobilePersons() {
@@ -103,9 +103,19 @@ export function MobilePersons() {
                   <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold shrink-0">
                     {client.name.substring(0,2).toUpperCase()}
                   </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight truncate">
-                    {client.name}
-                  </h3>
+                  
+                  <div className="flex flex-col overflow-hidden">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight truncate">
+                      {client.name}
+                    </h3>
+                    {(client.vehicle || client.dealTitle) && (
+                      <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 mt-1">
+                        <Car className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-xs font-bold uppercase tracking-wider truncate">{client.vehicle || client.dealTitle}</span>
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               </div>
             </div>

@@ -20,6 +20,7 @@ export function ClosedSales() {
   const [searchTerm, setSearchTerm] = useState("");
   
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [pipelineStages, setPipelineStages] = useState<{ id: string; title: string }[]>([]);
 
@@ -72,7 +73,7 @@ export function ClosedSales() {
       unsubExpenses();
       unsubDeals();
     };
-  }, [userData]);
+  }, [userData, refreshKey]);
 
   
   const isWon = (status: string = "") => checkIsWon(status, pipelineStages);
@@ -220,6 +221,7 @@ export function ClosedSales() {
         <ClientDetailModal
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
+          onUpdated={() => setRefreshKey(prev => prev + 1)}
         />
       )}
 

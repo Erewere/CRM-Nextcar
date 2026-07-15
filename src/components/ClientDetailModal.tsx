@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
 import {
   doc,
+  onSnapshot,
   setDoc,
   updateDoc,
   collection,
@@ -43,12 +44,14 @@ interface Props {
   client: Client | Partial<Client>;
   initialStatus?: string;
   onClose: () => void;
+  onUpdated?: () => void;
 }
 
 export function ClientDetailModal({
   client,
   initialStatus = "new",
   onClose,
+  onUpdated,
 }: Props) {
   const { userData } = useAuth();
   const isNew = !client.id;
@@ -126,6 +129,22 @@ export function ClientDetailModal({
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files" | "deals">("activity");
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
+  
+  useEffect(() => {
+    if (!userData || userData.role === "master" ) return;
+    if (userData.agencyId && userData.agencyId !== "unassigned") {
+      const unsubscribe = onSnapshot(doc(db, "agencies", userData.agencyId), (snap) => {
+        if (snap.exists() && snap.data().businessHours) {
+          const bh = snap.data().businessHours;
+          setBusinessHours({
+            start: parseInt(bh.start.split(":")[0], 10),
+            end: parseInt(bh.end.split(":")[0], 10)
+          });
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [userData]);
   const [showFullAddress, setShowFullAddress] = useState(
     !!(client.street || client.exteriorNumber || client.neighborhood || client.city || client.zipCode)
   );
@@ -553,6 +572,7 @@ export function ClientDetailModal({
         );
         await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), dataToUpdate, { merge: true });
       }
+      onUpdated?.();
       onClose();
     } catch (err) {
       console.error(err);

@@ -43,7 +43,7 @@ import {
   AlertCircle,
   Filter,
   Briefcase,
-  ChevronDown,
+
   Check,
 } from "lucide-react";
 import {
@@ -101,6 +101,7 @@ export function Dashboard() {
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
   const [activeDateFilter, setActiveDateFilter] = useState<string>(() => localStorage.getItem("dashboard_activeDateFilter") || "");
+  
   const [filterTags, setFilterTags] = useState<string[]>(() => {
     const saved = localStorage.getItem("dashboard_filterTags");
     return saved ? JSON.parse(saved) : [];
@@ -117,6 +118,7 @@ export function Dashboard() {
 
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>(
     [],
   );
@@ -228,7 +230,7 @@ export function Dashboard() {
       }
     };
     fetchStats();
-  }, [userData]);
+  }, [userData, refreshKey]);
 
   const allSellersAndAdmins = useMemo(() => {
     const list = [...users];
@@ -388,6 +390,11 @@ export function Dashboard() {
     const matches = getClientMatches(client, availableVehicles);
     allClientMatches += matches.length;
   });
+  const buscanAutoClients = activeContacts.filter(c => 
+    c.tags && c.tags.some(t => t.toLowerCase().includes('busca de auto') || t.toLowerCase().includes('busca auto') || t.toLowerCase() === 'compra')
+  );
+  const buscanAutoCount = buscanAutoClients.length;
+
 
 
   // Pipeline Stats
@@ -461,6 +468,17 @@ export function Dashboard() {
     "#64748b",
   ];
 
+
+  const funnelData = [
+    { name: 'Prospectos', value: filteredClients.length },
+    { name: 'Activos', value: activeContacts.length },
+    { name: 'En Cierre', value: activeContacts.filter((c) => {
+      const st = String(c.status || "").toLowerCase();
+      return st.includes("propuesta") || st.includes("demostracion") || st.includes("negociacion");
+    }).length },
+    { name: 'Ventas Cerradas', value: wonContacts.length },
+  ];
+
   return (
     <div className="space-y-4 pb-8">
       {/* AI Advisor Panel */}
@@ -472,16 +490,70 @@ export function Dashboard() {
         pipelineStages={pipelineStages}
       />
 
-      {/* Dynamic Filters */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-        {/* Quick Date Filters */}
-        <div className="flex flex-wrap gap-2 items-center w-full xl:w-auto">
-          <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700 hidden sm:flex">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-              Filtros
-            </span>
-          </div>
+      {isMobile ? (
+        <div className="flex border-b border-gray-200 dark:border-slate-700 mb-6 mt-4">
+          <button
+            onClick={() => {
+              const today = new Date().toISOString().split("T")[0];
+              setFilterStartDate(today);
+              setFilterEndDate(today);
+              setActiveDateFilter("today");
+            }}
+            className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+              activeDateFilter === "today"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Hoy
+          </button>
+          <button
+            onClick={() => {
+              const date = new Date();
+              date.setDate(date.getDate() - date.getDay() + 1); // Monday
+              const start = date.toISOString().split("T")[0];
+              const end = new Date().toISOString().split("T")[0];
+              setFilterStartDate(start);
+              setFilterEndDate(end);
+              setActiveDateFilter("week");
+            }}
+            className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+              activeDateFilter === "week"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Esta Semana
+          </button>
+          <button
+            onClick={() => {
+              const date = new Date();
+              const start = new Date(date.getFullYear(), date.getMonth(), 1)
+                .toISOString()
+                .split("T")[0];
+              const end = new Date().toISOString().split("T")[0];
+              setFilterStartDate(start);
+              setFilterEndDate(end);
+              setActiveDateFilter("month");
+            }}
+            className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+              activeDateFilter === "month"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Este Mes
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
+            <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700 hidden sm:flex">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                Filtros
+              </span>
+            </div>
             <button
               onClick={() => {
                 const today = new Date().toISOString().split("T")[0];
@@ -534,379 +606,319 @@ export function Dashboard() {
             >
               Este Mes
             </button>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start xl:justify-end gap-3 w-full xl:w-auto">
-
-            
-            {userData?.role === "admin" && (
-              <select
-                className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[150px] truncate"
-                value={filterSeller}
-                onChange={(e) => {
-                  setFilterSeller(e.target.value);
-                  localStorage.setItem("dashboard_filterSeller", e.target.value);
-                }}
-              >
-                <option value="all">Todos los vendedores</option>
-                {allSellersAndAdmins.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name || u.email} {u.role === "admin" ? " (Admin)" : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-            <select
-              className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300 max-w-[180px] truncate"
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
+            <button
+              onClick={() => {
+                setFilterStartDate("");
+                setFilterEndDate("");
+                setActiveDateFilter("all");
+              }}
+              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                activeDateFilter === "all"
+                  ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-md"
+                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
+              }`}
             >
-              <option value="all">Todas las categorías</option>
-              {Array.from(
-                new Set(vehicles.map((v) => v.bodyType).filter(Boolean)),
-              ).map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <div className="relative">
-              <button
-                onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm rounded-md focus:outline-none text-slate-700 dark:text-slate-300 max-w-[180px]"
-              >
-                <span className="truncate">
-                  {filterTags.length > 0
-                    ? `${filterTags.length} etiquetas`
-                    : "Todas las etiquetas"}
-                </span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              {isTagDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-0"
-                    onClick={() => setIsTagDropdownOpen(false)}
-                  />
-                  <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-10 py-1 max-h-60 overflow-y-auto">
-                    <div
-                      className="px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer flex items-center justify-between text-sm text-slate-700 dark:text-slate-300"
-                      onClick={() => {
-                        setFilterTags([]);
-                        setIsTagDropdownOpen(false);
-                      }}
-                    >
-                      <span>Todas las etiquetas</span>
-                      {filterTags.length === 0 && (
-                        <Check className="w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                    {agencyTags.map((tag) => (
-                      <div
-                        key={tag.id}
-                        className="px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer flex items-center justify-between text-sm text-slate-700 dark:text-slate-300"
-                        onClick={() => {
-                          if (filterTags.includes(tag.name)) {
-                            setFilterTags(
-                              filterTags.filter((t) => t !== tag.name),
-                            );
-                          } else {
-                            setFilterTags([...filterTags, tag.name]);
-                          }
-                        }}
-                      >
-                        <span>{tag.name}</span>
-                        {filterTags.includes(tag.name) && (
-                          <Check className="w-4 h-4 text-blue-600" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
-              <span className="text-xs text-slate-400 font-medium">Desde</span>
-              <input
-                type="date"
-                className="bg-transparent text-sm focus:outline-none text-slate-700 dark:text-slate-300"
-                value={filterStartDate}
-                onChange={(e) => { setFilterStartDate(e.target.value); setActiveDateFilter(""); }}
-              />
-            </div>
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
-              <span className="text-xs text-slate-400 font-medium">Hasta</span>
-              <input
-                type="date"
-                className="bg-transparent text-sm focus:outline-none text-slate-700 dark:text-slate-300"
-                value={filterEndDate}
-                onChange={(e) => { setFilterEndDate(e.target.value); setActiveDateFilter(""); }}
-              />
-            </div>
-            {(filterSeller !== "all" ||
-              filterCategory !== "all" ||
-              filterTags.length > 0 ||
-              filterStartDate ||
-              filterEndDate) && (
-              <button
-                onClick={() => {
-                  setFilterSeller("all");
-                  localStorage.setItem("dashboard_filterSeller", "all");
-                  setFilterStartDate("");
-                  setFilterEndDate("");
-                  setFilterCategory("all");
-                  setFilterTags([]);
-                  setActiveDateFilter("");
-                }}
-                className="text-xs text-red-500 hover:text-red-700 font-medium px-2"
-              >
-                Limpiar Filtros
-              </button>
-            )}
-
-
-          </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Link to="/persons" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Total Prospectos</p>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{filteredClients.length}</h2>
-          </div>
-        </Link>
-        
-        <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center relative overflow-hidden hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all">
-            <Target className="w-16 h-16 text-blue-500" />
-          </div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 relative z-10 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Activos (En Pipeline)</p>
-          <div className="flex items-baseline gap-2 relative z-10">
-            <h2 className="text-3xl font-black text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{activeContacts.length}</h2>
-          </div>
-        </Link>
-
-        <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Ventas Cerradas</p>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">{wonContacts.length}</h2>
-          </div>
-        </Link>
-
-        <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 transition-all cursor-pointer group">
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Ingresos (Ventas)</p>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
-            </h2>
-          </div>
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col min-h-[350px]">
-          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-6">
-            Embudo de Ventas
-          </h3>
-          {pipelineData.length > 0 ? (
-            <div className="flex-1 w-full h-full min-h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <FunnelChart margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Funnel
-                    dataKey="value"
-                    data={pipelineData}
-                    isAnimationActive
-                  >
-                    <LabelList position="right" fill="#64748b" stroke="none" dataKey="name" fontSize={12} />
-                    <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={14} fontWeight="bold" />
-                    {pipelineData.map((entry, index) => {
-                      const isActive = selectedStage === entry.id || !selectedStage;
-                      return (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={isActive ? COLORS[index % COLORS.length] : '#cbd5e1'}
-                          className="cursor-pointer transition-all duration-300 hover:opacity-80"
-                          onClick={() => setSelectedStage(selectedStage === entry.id ? null : entry.id)}
-                        />
-                      );
-                    })}
-                  </Funnel>
-                </FunnelChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-             <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-                No hay oportunidades activas para mostrar.
-             </div>
-          )}
-        </div>
-
-        {/* Action Center (Tasks & Alerts) */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
-          <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              Centro de Atención
-            </h3>
-          </div>
-          <div className="p-5 flex-1 space-y-4">
-            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-rose-500" />
-                <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Tareas Atrasadas</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Requieren atención urgente</p>
-                </div>
-              </div>
-              <span className="text-rose-600 font-black text-xl">{overdueTasks.length}</span>
-            </Link>
-
-            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-blue-500" />
-                <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Para Hoy</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Actividades programadas</p>
-                </div>
-              </div>
-              <span className="text-blue-600 font-black text-xl">{todayTasks.length}</span>
-            </Link>
-
-            <Link to="/tasks" className="block flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-                <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Esta Semana</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Tareas futuras próximas</p>
-                </div>
-              </div>
-              <span className="text-slate-600 dark:text-slate-400 font-black text-xl">{thisWeekTasks.length}</span>
-            </Link>
-
-            {userData?.role === "admin" && inactiveAlerts.length > 0 && (
-              <Link to="/users" className="block flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition-colors">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-orange-500" />
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Alertas de Inactividad</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Clientes sin atención (&#62;{inactivityAlertDays}d)</p>
-                  </div>
-                </div>
-                <span className="text-orange-600 font-black text-xl">{inactiveAlerts.length}</span>
-              </Link>
-            )}
-
-            {allClientMatches > 0 && (
-              <Link
-                to="/persons"
-                className="block flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Target className="w-5 h-5 text-emerald-500" />
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                      Matches de Inventario
-                    </p>
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                      Posibles coincidencias
-                    </p>
-                  </div>
-                </div>
-                <span className="text-emerald-600 font-black text-xl">
-                  {allClientMatches}
-                </span>
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-
-
-      {/* Vehículos Buscados (Demanda Activa) */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden mb-6">
-        <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
-          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-            Demanda Activa (Vehículos Buscados)
-          </h3>
-        </div>
-        <div className="p-5 flex-1 max-h-[300px] overflow-y-auto">
-          {activeContacts.filter(c => c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model)).length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {activeContacts.filter(c => c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model)).map(client => (
-                <button onClick={() => setSelectedClient(client)} key={client.id} className="block text-left w-full p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group">
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="font-bold text-indigo-700 dark:text-indigo-400">
-                      {client.wantedVehicle?.make} {client.wantedVehicle?.model}
-                    </p>
-                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
-                      Buscado
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-500 space-y-1 mb-3">
-                    <p>{client.wantedVehicle?.yearMin || '2000'} - {client.wantedVehicle?.yearMax || new Date().getFullYear()}</p>
-                    {client.wantedVehicle?.priceMax && <p>Presupuesto: ${client.wantedVehicle.priceMax.toLocaleString()}</p>}
-                    {client.wantedVehicle?.bodyType && <p>Carrocería: {client.wantedVehicle.bodyType}</p>}
-                  </div>
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 border-t border-slate-200 dark:border-slate-700 pt-2">
-                    Cliente: {client.name}
-                  </p>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-24 text-slate-400 text-sm">
-              No hay registros de vehículos buscados actualmente.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Drill-down view if a stage is selected */}
-      {selectedStage && (
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-blue-200 shadow-md">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
-            Prospectos en la etapa:{" "}
-            <span className="text-blue-600">
-              "
-              {pipelineStages.find((s) => s.id === selectedStage)?.title ||
-                selectedStage}
-              "
-            </span>
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeContacts
-              .filter((c) => c.status === selectedStage)
-              .map((client) => (
-                <button
-                  onClick={() => setSelectedClient(client)}
-                  key={client.id}
-                  className="block text-left w-full p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group"
-                >
-                  <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">
-                    {client.name}
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1">
-                    {client.vehicle || "Sin vehículo de interés"}
-                  </p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xs text-slate-400">
-                      {client.origin}
-                    </span>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">
-                      Ver en Kanban
-                    </span>
-                  </div>
-                </button>
-              ))}
+              Todos
+            </button>
           </div>
         </div>
       )}
+
+      {isMobile ? (
+        <>
+          {/* Mobile Action Center */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+            <div className="p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                Centro de Atención
+              </h3>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-3">
+              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-500" />
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Atrasadas</p>
+                </div>
+                <span className="text-rose-600 font-black text-lg">{overdueTasks.length}</span>
+              </Link>
+              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-500" />
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Para Hoy</p>
+                </div>
+                <span className="text-blue-600 font-black text-lg">{todayTasks.length}</span>
+              </Link>
+              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Esta Sem.</p>
+                </div>
+                <span className="text-slate-600 dark:text-slate-400 font-black text-lg">{thisWeekTasks.length}</span>
+              </Link>
+              
+              {buscanAutoCount > 0 && (
+                <Link to="/persons" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Car className="w-4 h-4 text-indigo-500" />
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Buscan Auto</p>
+                  </div>
+                  <span className="text-indigo-600 font-black text-lg">{buscanAutoCount}</span>
+                </Link>
+              )}
+{allClientMatches > 0 && (
+                <Link to="/persons" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-emerald-500" />
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Matches</p>
+                  </div>
+                  <span className="text-emerald-600 font-black text-lg">{allClientMatches}</span>
+                </Link>
+              )}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Link to="/persons" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Total Prospectos</p>
+              <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100">{filteredClients.length}</h2>
+            </Link>
+            <Link to="/kanban" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Activos</p>
+              <h2 className="text-2xl font-black text-blue-600 dark:text-blue-400">{activeContacts.length}</h2>
+            </Link>
+            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Ventas Cerradas</p>
+              <h2 className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{wonContacts.length}</h2>
+            </Link>
+            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Ingresos</p>
+              <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
+              </h2>
+            </Link>
+          </div>
+          
+          {buscanAutoClients.length > 0 && (
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 mt-4">
+              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                <Car className="w-4 h-4 text-indigo-500" />
+                Vehículos Buscados
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {buscanAutoClients.slice(0, 6).map(client => (
+                  <div key={client.id} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
+                    <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
+                      {client.vehicle || client.dealTitle || "Auto no especificado"}
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold">
+                        {client.name.substring(0,1).toUpperCase()}
+                      </div>
+                      <span className="text-xs text-slate-600 dark:text-slate-400 truncate font-medium">{client.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Desktop Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Link to="/persons" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Total Prospectos</p>
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{filteredClients.length}</h2>
+              </div>
+            </Link>
+            
+            <Link to="/kanban" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center relative overflow-hidden hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all">
+                <Target className="w-16 h-16 text-blue-500" />
+              </div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 relative z-10 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Activos (En Pipeline)</p>
+              <div className="flex items-baseline gap-2 relative z-10">
+                <h2 className="text-3xl font-black text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{activeContacts.length}</h2>
+              </div>
+            </Link>
+
+            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Ventas Cerradas</p>
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">{wonContacts.length}</h2>
+              </div>
+            </Link>
+
+            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 transition-all cursor-pointer group">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Ingresos (Ventas)</p>
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-3xl font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
+                </h2>
+              </div>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Filter className="w-5 h-5 text-blue-600" />
+                  Embudo de Ventas
+                </h3>
+              </div>
+              <div className="flex flex-col gap-6">
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <FunnelChart>
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Funnel
+                        dataKey="value"
+                        data={funnelData}
+                        isAnimationActive
+                      >
+                        {funnelData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Funnel>
+                    </FunnelChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                {buscanAutoClients.length > 0 && (
+                  <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                      <Car className="w-4 h-4 text-indigo-500" />
+                      Vehículos Buscados
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {buscanAutoClients.slice(0, 6).map(client => (
+                        <div key={client.id} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
+                          <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
+                            {client.vehicle || client.dealTitle || "Auto no especificado"}
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold">
+                              {client.name.substring(0,1).toUpperCase()}
+                            </div>
+                            <span className="text-xs text-slate-600 dark:text-slate-400 truncate font-medium">{client.name}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+              <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                  Centro de Atención
+                </h3>
+              </div>
+              <div className="p-5 flex flex-col gap-4">
+                <Link to="/tasks" className="flex flex-col gap-2 justify-between p-4 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors h-full">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-rose-500" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Tareas Atrasadas</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Requieren atención urgente</p>
+                    </div>
+                  </div>
+                  <span className="text-rose-600 font-black text-xl">{overdueTasks.length}</span>
+                </Link>
+                <Link to="/tasks" className="flex flex-col gap-2 justify-between p-4 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors h-full">
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-5 h-5 text-blue-500" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Para Hoy</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Actividades programadas</p>
+                    </div>
+                  </div>
+                  <span className="text-blue-600 font-black text-xl">{todayTasks.length}</span>
+                </Link>
+                <Link to="/tasks" className="flex flex-col gap-2 justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors h-full">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Esta Semana</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Tareas futuras próximas</p>
+                    </div>
+                  </div>
+                  <span className="text-slate-600 dark:text-slate-400 font-black text-xl">{thisWeekTasks.length}</span>
+                </Link>
+                {userData?.role === "admin" && inactiveAlerts.length > 0 && (
+                  <Link to="/users" className="flex flex-col gap-2 justify-between p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition-colors h-full">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-orange-500" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Alertas Inactividad</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Sin atención (&#62;{inactivityAlertDays}d)</p>
+                      </div>
+                    </div>
+                    <span className="text-orange-600 font-black text-xl">{inactiveAlerts.length}</span>
+                  </Link>
+                )}
+                
+                {buscanAutoCount > 0 && (
+                  <Link
+                    to="/persons"
+                    className="flex flex-col gap-2 justify-between p-4 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors h-full"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Car className="w-5 h-5 text-indigo-500" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          Buscan Auto
+                        </p>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                          Prospectos en búsqueda
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-indigo-600 font-black text-xl">
+                      {buscanAutoCount}
+                    </span>
+                  </Link>
+                )}
+{allClientMatches > 0 && (
+                  <Link
+                    to="/persons"
+                    className="flex flex-col gap-2 justify-between p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors h-full"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Target className="w-5 h-5 text-emerald-500" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          Matches Inventario
+                        </p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                          Posibles coincidencias
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-emerald-600 font-black text-xl">
+                      {allClientMatches}
+                    </span>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {selectedClient && (
         <ClientDetailModal
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
+          onUpdated={() => setRefreshKey(prev => prev + 1)}
         />
       )}
     </div>
