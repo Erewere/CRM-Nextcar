@@ -30,7 +30,6 @@ import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { useIsMobile } from "../hooks/useIsMobile";
 
 export function Layout() {
   const { userData } = useAuth();

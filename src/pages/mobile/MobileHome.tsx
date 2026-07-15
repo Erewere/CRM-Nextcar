@@ -85,7 +85,7 @@ export function MobileHome() {
         }));
 
         // Sort by time
-        combined.sort((a, b) => (a.task.time || "").localeCompare(b.task.time || ""));
+        combined.sort((a, b) => (a.task.startTime || "").localeCompare(b.task.startTime || ""));
 
         setTasks(combined);
       } catch (err) {
@@ -100,7 +100,7 @@ export function MobileHome() {
 
   const toggleTaskStatus = async (task: Task) => {
     try {
-      const newStatus = task.status === "completed" ? "pending" : "completed";
+      const newStatus = task.completed === true ? "pending" : "completed";
       await updateDoc(doc(db, "tasks", task.id!), { status: newStatus });
       setTasks(tasks.map(t => 
         t.task.id === task.id ? { ...t, task: { ...t.task, status: newStatus } } : t
@@ -175,10 +175,10 @@ export function MobileHome() {
                         <Icon className="w-3.5 h-3.5" />
                         <span className="capitalize">{task.type}</span>
                       </div>
-                      {task.time && (
+                      {task.startTime && (
                         <div className="flex items-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded-full">
                           <Clock className="w-3 h-3" />
-                          {task.time}
+                          {task.startTime}
                         </div>
                       )}
                     </div>

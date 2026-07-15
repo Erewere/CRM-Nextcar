@@ -130,8 +130,8 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
           <>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 shrink-0 flex gap-4 items-center">
                <div className="w-16 h-12 bg-slate-200 dark:bg-slate-700 rounded-lg overflow-hidden shrink-0">
-                  {vehicle.photos?.[0] ? (
-                    <img src={vehicle.photos[0]} className="w-full h-full object-cover" alt="" />
+                  {vehicle.photoUrls?.[0] ? (
+                    <img src={vehicle.photoUrls[0]} className="w-full h-full object-cover" alt="" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center"><Car className="w-6 h-6 text-slate-400" /></div>
                   )}

@@ -6,10 +6,14 @@ export function TimeSelect({
   value,
   onChange,
   placeholder,
+  minHour = 0,
+  maxHour = 23,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
+  minHour?: number;
+  maxHour?: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,7 +32,7 @@ export function TimeSelect({
   }, []);
 
   const timeOptions = [];
-  for (let h = 0; h < 24; h++) {
+  for (let h = minHour; h <= maxHour; h++) {
     for (let m = 0; m < 60; m += 15) {
       const period = h < 12 ? "a.m." : "p.m.";
       const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;

@@ -16,8 +16,6 @@ import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileHome } from "./mobile/MobileHome";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { MobileHome } from "./mobile/MobileHome";
-import { useIsMobile } from "../hooks/useIsMobile";
 import {
   BarChart,
   Bar,
@@ -909,9 +907,6 @@ export function Dashboard() {
         <ClientDetailModal
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
-          onUpdated={() => {
-            // The snapshot listener handles the refresh
-          }}
         />
       )}
     </div>

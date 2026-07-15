@@ -125,6 +125,7 @@ export function ClientDetailModal({
 
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files" | "deals">("activity");
+  const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
   const [showFullAddress, setShowFullAddress] = useState(
     !!(client.street || client.exteriorNumber || client.neighborhood || client.city || client.zipCode)
   );
@@ -1669,6 +1670,8 @@ export function ClientDetailModal({
                             value={newTaskTime}
                             onChange={(val) => setNewTaskTime(val)}
                             placeholder="h:mm"
+                            minHour={businessHours.start}
+                            maxHour={businessHours.end}
                           />
                         </div>
                         <div className="flex justify-end items-center gap-2">

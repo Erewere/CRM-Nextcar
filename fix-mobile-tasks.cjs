@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+const fs = require('fs');
+
+const code = `import { useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
@@ -179,9 +181,9 @@ export function MobileTasks() {
             let label = "";
             let subLabel = "";
             if (hour === 0) { label = "12"; subLabel = "A.M."; }
-            else if (hour < 12) { label = `${hour}`; }
+            else if (hour < 12) { label = \`\${hour}\`; }
             else if (hour === 12) { label = "12"; subLabel = "P.M."; }
-            else { label = `${hour - 12}`; }
+            else { label = \`\${hour - 12}\`; }
 
             return (
               <div key={hour} className="flex h-20 relative px-2">
@@ -220,7 +222,7 @@ export function MobileTasks() {
                      ? "bg-slate-200 dark:bg-slate-800 border-slate-400 opacity-60" 
                      : "bg-blue-100 dark:bg-blue-900/40 border-blue-500"
                  )}
-                 style={{ top: `${top}px`, minHeight: '50px' }}
+                 style={{ top: \`\${top}px\`, minHeight: '50px' }}
                >
                  <h4 className={clsx("text-sm font-bold leading-tight", isCompleted ? "text-slate-600 dark:text-slate-400 line-through" : "text-blue-900 dark:text-blue-100")}>
                    {task.title}
@@ -254,10 +256,10 @@ export function MobileTasks() {
         <NewActivityModal
           onClose={() => setShowNewTaskModal(false)}
           onSave={fetchTasks}
-          clients={[]}
-          currentUser={userData}
         />
       )}
     </div>
   );
 }
+`;
+fs.writeFileSync('src/pages/mobile/MobileTasks.tsx', code);

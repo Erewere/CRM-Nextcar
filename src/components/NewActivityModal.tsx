@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { motion } from "motion/react";
 import {
   X,
   Phone,
@@ -23,6 +24,9 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { Client } from "../types";
+import { useAuth } from "../contexts/AuthContext";
+import { getDoc, doc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { format, addDays, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { TimeSelect } from "./TimeSelect";
@@ -71,6 +75,28 @@ export function NewActivityModal({
   const [endTime, setEndTime] = useState(initialData?.endTime || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [clientId, setClientId] = useState(initialData?.clientId || "");
+  const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
+  const { userData } = useAuth(); // We need userData
+  useEffect(() => {
+    const fetchAgencyConfig = async () => {
+      if (userData?.agencyId && userData.agencyId !== 'unassigned') {
+        try {
+          const snap = await getDoc(doc(db, "agencies", userData.agencyId));
+          if (snap.exists() && snap.data().businessHours) {
+            const bh = snap.data().businessHours;
+            setBusinessHours({
+              start: parseInt(bh.start.split(":")[0], 10),
+              end: parseInt(bh.end.split(":")[0], 10)
+            });
+          }
+        } catch (e) {
+          console.error("Error fetching agency config in modal:", e);
+        }
+      }
+    };
+    fetchAgencyConfig();
+  }, [userData]);
+
   const [clientName, setClientName] = useState(() => {
     if (initialData?.clientName) return initialData.clientName;
     if (initialData?.clientId) {
@@ -295,8 +321,24 @@ export function NewActivityModal({
   const hours = Array.from({ length: 12 }, (_, i) => i + 12); // Simple 12:00 to 23:00
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex justify-center items-end md:items-center p-0 md:p-4">
+      {/* Backdrop */}
+      <motion.div 
+        className="absolute inset-0 bg-black/50"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      />
+      {/* Modal Content */}
+      <motion.div 
+        className="bg-white dark:bg-slate-800 md:rounded-lg rounded-t-3xl shadow-2xl w-full max-w-5xl h-[90dvh] md:h-[85vh] flex flex-col overflow-hidden relative z-10"
+        initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
+        animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
+        exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
+        transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
+        style={{ transformOrigin: "bottom center" }}
+      >
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-slate-700">
           <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
@@ -311,18 +353,18 @@ export function NewActivityModal({
         </div>
 
         {/* Content */}
-        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto overflow-x-hidden md:overflow-hidden">
           {/* Left Column - Form */}
           <div className="w-full md:w-2/3 md:overflow-y-auto p-4 md:p-6 flex flex-col gap-6">
             {/* Title & Type */}
-            <div>
+            <div className="w-full">
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full text-2xl font-medium border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none mb-3"
               />
-              <div className="flex border border-gray-300 rounded w-fit overflow-hidden">
+              <div className="flex border border-gray-300 rounded w-full md:w-fit overflow-hidden">
                 {types.map((t) => {
                   const Icon = t.icon;
                   return (
@@ -330,7 +372,7 @@ export function NewActivityModal({
                       key={t.id}
                       onClick={() => handleTypeSelect(t)}
                       className={clsx(
-                        "p-2 border-r border-gray-300 last:border-r-0 hover:bg-gray-50 dark:bg-slate-900 transition-colors",
+                        "flex-1 md:flex-none p-2 border-r border-gray-300 last:border-r-0 hover:bg-gray-50 dark:bg-slate-900 transition-colors flex justify-center items-center",
                         type === t.id
                           ? "bg-blue-50 text-blue-600"
                           : "text-gray-600 dark:text-slate-400",
@@ -345,9 +387,9 @@ export function NewActivityModal({
             </div>
 
             {/* Date & Time */}
-            <div className="flex items-center gap-4">
-              <Clock className="w-5 h-5 text-gray-500 dark:text-slate-400 flex-shrink-0" />
-              <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-2 md:gap-4 w-full">
+              <Clock className="w-5 h-5 text-gray-500 dark:text-slate-400 flex-shrink-0 hidden md:block" />
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full">
                 <input
                   type="date"
                   value={date}
@@ -358,18 +400,16 @@ export function NewActivityModal({
                   value={startTime}
                   onChange={setStartTime}
                   placeholder="h:mm p.m."
+                  minHour={businessHours.start}
+                  maxHour={businessHours.end}
                 />
                 <span className="text-gray-500 dark:text-slate-400">-</span>
                 <TimeSelect
                   value={endTime}
                   onChange={setEndTime}
                   placeholder="h:mm p.m."
-                />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="border border-gray-300 rounded p-1.5 text-sm w-32 focus:ring-2 focus:ring-blue-500 outline-none"
+                  minHour={businessHours.start}
+                  maxHour={businessHours.end}
                 />
               </div>
             </div>
@@ -687,9 +727,9 @@ export function NewActivityModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900">
-          <div className="flex items-center gap-4">
-            <button className="p-2 border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400">
+        <div className="px-4 md:px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-stretch md:items-center bg-gray-50 dark:bg-slate-900 gap-4 mt-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 md:gap-4">
+            <button className="hidden md:block p-2 border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400">
               <Settings className="w-5 h-5" />
             </button>
             <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700 dark:text-slate-300">
@@ -697,29 +737,31 @@ export function NewActivityModal({
                 type="checkbox"
                 checked={syncToCalendar}
                 onChange={(e) => setSyncToCalendar(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 text-blue-600 focus:ring-blue-500"
+                className="w-4 h-4 shrink-0 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 text-blue-600 focus:ring-blue-500"
               />
-              <CalendarIcon className="w-4 h-4" /> Sincronizar con Google (Calendar / Tasks)
+              <CalendarIcon className="w-4 h-4 shrink-0" /> 
+              <span className="truncate">Sincronizar con Google (Calendar / Tasks)</span>
             </label>
           </div>
 
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700 dark:text-slate-300">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4">
+            <label className="flex items-center justify-start gap-2 cursor-pointer text-sm font-medium text-gray-700 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={completed}
                 onChange={(e) => setCompleted(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 text-green-600 focus:ring-green-500"
+                className="w-4 h-4 shrink-0 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 text-green-600 focus:ring-green-500"
               />
               Marcar como completa
             </label>
-            <button
-              onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-sm"
-            >
-              Cancelar
-            </button>
-            <button
+            <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+              <button
+                onClick={onClose}
+                className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 border border-gray-300 rounded font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-sm text-center"
+              >
+                Cancelar
+              </button>
+              <button
               onClick={() => {
                 const existingDeal = deals.find(
                   (d) =>
@@ -743,13 +785,14 @@ export function NewActivityModal({
                   syncToCalendar,
                 });
               }}
-              className="px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white rounded font-bold text-sm"
+              className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 bg-[#2E914F] hover:bg-[#257A41] text-white rounded font-bold text-sm text-center"
             >
               Guardar
             </button>
+            </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

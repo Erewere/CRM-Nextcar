@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { AnimatePresence } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
 import {
   collection,
   query,
   where,
   getDocs,
+  getDoc,
   updateDoc,
   doc,
   setDoc,
@@ -16,13 +18,12 @@ import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { MobileTasks } from "./mobile/MobileTasks";
-import { useIsMobile } from "../hooks/useIsMobile";
 import { NewActivityModal } from "../components/NewActivityModal";
 import {
   CheckCircle,
   Circle,
   User,
+  Briefcase,
   Calendar as CalendarIcon,
   List as ListIcon,
   Phone,
@@ -169,6 +170,7 @@ export function Tasks() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
   const [newTaskClientId, setNewTaskClientId] = useState("");
+  const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
 
   useEffect(() => {
     if (!userData || userData.role === "master") return;
@@ -190,6 +192,17 @@ export function Tasks() {
     if (!userData || userData.role === "master") return;
 
     const fetchTasksAndClients = async () => {
+      try {
+        const agencyRef = doc(db, "agencies", userData.agencyId);
+        const agencySnap = await getDoc(agencyRef);
+        if (agencySnap.exists() && agencySnap.data().businessHours) {
+          const bh = agencySnap.data().businessHours;
+          setBusinessHours({
+            start: parseInt(bh.start.split(":")[0], 10),
+            end: parseInt(bh.end.split(":")[0], 10)
+          });
+        }
+      } catch(e) { console.error("Error fetching agency config:", e); }
       let q = query(
         collection(db, "tasks"),
         where("agencyId", "==", userData.agencyId),
@@ -497,7 +510,7 @@ export function Tasks() {
 
         if (dragState.type === "move") {
           const top = dragState.currentTop;
-          const startHour = Math.floor(top / 96);
+          const startHour = Math.floor(top / 96) + businessHours.start;
           const startMin = Math.floor(((top % 96) / 96) * 60);
           // Snap to 15 mins
           const snappedStartMin = Math.round(startMin / 15) * 15;
@@ -1063,14 +1076,22 @@ export function Tasks() {
     );
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f5f5]">
+    <div className="flex flex-col h-full bg-[#f4f5f5] relative">
+      {/* FAB for mobile */}
+      <button
+        onClick={() => setShowNewTaskModal(true)}
+        className="md:hidden fixed bottom-[80px] right-4 w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg z-50 hover:bg-blue-700 active:scale-95 transition-transform"
+      >
+        <span className="text-2xl font-light mb-0.5">+</span>
+      </button>
+
       {/* Header and filters */}
-      <div className="p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+      <div className="p-2 md:p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
 
         {/* Sync alert mock removed for now */}
 
         {/* Controls bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-white dark:bg-slate-800 border border-gray-300 rounded shadow-sm overflow-hidden h-8 shrink-0">
               <button
@@ -1100,7 +1121,7 @@ export function Tasks() {
 
             <div
               onClick={() => setShowNewTaskModal(true)}
-              className="flex items-center p-0.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded text-sm font-semibold cursor-pointer hover:bg-green-700 shadow-sm shrink-0"
+              className="hidden md:flex items-center p-0.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded text-sm font-semibold cursor-pointer hover:bg-green-700 shadow-sm shrink-0"
             >
               <div className="px-3 flex items-center gap-1 border-r border-green-500">
                 <span className="text-lg leading-none mb-0.5">+</span> Actividad
@@ -1111,8 +1132,8 @@ export function Tasks() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="hidden md:inline text-xs font-semibold text-gray-500 dark:text-slate-400">
               {tasks.length} actividades
             </span>
             {googleToken ? (
@@ -1123,15 +1144,7 @@ export function Tasks() {
               >
                 {isSyncing ? 'Sincronizando...' : 'Sincronización Activa (Actualizar)'}
               </button>
-            ) : (
-              <button
-                onClick={handleSyncCalendar}
-                disabled={isSyncing}
-                className="text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-full uppercase cursor-pointer transition-colors disabled:opacity-50"
-              >
-                {isSyncing ? 'Conectando...' : 'Sincronización Inactiva (Conectar)'}
-              </button>
-            )}
+            ) : null}
 
             {view === "list" && (
               <div className="relative flex items-center gap-2 ml-auto sm:ml-0">
@@ -1345,7 +1358,7 @@ export function Tasks() {
         </div>
 
         {/* Action types filters */}
-        <div className="flex items-center gap-3 mt-4 overflow-x-auto pb-1 text-xs font-bold scrollbar-hide">
+        <div className="hidden md:flex items-center gap-3 mt-4 overflow-x-auto pb-1 text-xs font-bold scrollbar-hide">
           <span
             className={clsx(
               "shrink-0 cursor-pointer px-2 py-1 rounded",
@@ -1497,7 +1510,8 @@ export function Tasks() {
       <div className="flex-1 flex overflow-hidden bg-white dark:bg-slate-800">
         <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 flex flex-col">
           {view === "list" && (
-            <table className="w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-[800px]">
+            <>
+            <table className="hidden md:table w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-[800px]">
               <thead className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-700 dark:text-slate-300 font-bold">
                 <tr>
                   <th
@@ -1785,12 +1799,101 @@ export function Tasks() {
                 )}
               </tbody>
             </table>
+
+            {/* Mobile List View */}
+            <div className="md:hidden flex flex-col bg-white dark:bg-[#111] min-h-full pb-24">
+              {/* Add Task Row (Mobile) */}
+              <div 
+                className="flex items-center justify-between gap-4 p-4 border-b border-gray-100 dark:border-[#222] cursor-pointer"
+                onClick={() => setShowNewTaskModal(true)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="text-blue-500 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                      <path d="M12 8v8"></path>
+                      <path d="M8 12h8"></path>
+                    </svg>
+                  </div>
+                  <span className="text-[15px] font-medium tracking-wide text-blue-500">
+                    Agregar una tarea
+                  </span>
+                </div>
+                <button className="text-gray-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </button>
+              </div>
+
+              {sortedTasks.map(({ task, client }) => (
+                <div key={task.id} className="flex items-start gap-4 p-4 border-b border-gray-100 dark:border-[#222]" onClick={() => handleTaskClick(task)}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTask(task.id, task.completed);
+                    }}
+                    className={clsx(
+                      "mt-1 shrink-0 transition-colors",
+                      task.completed
+                        ? "text-green-500"
+                        : "text-gray-400 hover:text-green-500"
+                    )}
+                  >
+                    {task.completed ? (
+                      <CheckCircle className="w-6 h-6" />
+                    ) : (
+                      <Circle className="w-6 h-6" />
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    <span className={clsx("text-[15px] font-normal tracking-wide text-slate-900 dark:text-slate-100", task.completed && "line-through text-gray-500 dark:text-slate-400")}>
+                      {task.title}
+                    </span>
+                    
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      {task.dealId && deals && (
+                         <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                           <Briefcase className="w-3.5 h-3.5 opacity-70" />
+                           <span className="truncate">{deals.find(d => d.id === task.dealId)?.title || "Trato"}</span>
+                         </div>
+                      )}
+                      {client && (
+                         <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                           <User className="w-3.5 h-3.5 opacity-70" />
+                           <span className="truncate">{client.name}</span>
+                         </div>
+                      )}
+                    </div>
+
+                    {task.dueDate && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <div className={clsx(
+                          "flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border",
+                          isAfter(startOfDay(new Date()), parseISO(task.dueDate)) && !task.completed
+                            ? "text-rose-500 border-rose-200 bg-rose-50 dark:bg-rose-900/20 dark:border-rose-800"
+                            : "text-slate-600 border-slate-300 dark:text-slate-300 dark:border-slate-600"
+                        )}>
+                          <Clock className="w-3.5 h-3.5" />
+                          {format(parseISO(task.dueDate), "eee, d MMM", { locale: es })}
+                          {task.startTime && ` • ${task.startTime}`}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {sortedTasks.length === 0 && (
+                <div className="p-8 text-center text-sm font-medium text-gray-500 dark:text-slate-400">
+                  No hay actividades para mostrar.
+                </div>
+              )}
+            </div>
+            </>
           )}
 
           {view === "calendar" && (
             <div className="flex flex-col h-full border-t border-gray-200 dark:border-slate-700">
               {/* Calendar Controls */}
-              <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
+              <div className="flex items-center justify-between p-1.5 md:p-3 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
                 <div className="flex items-center gap-3">
                   <select
                     value={calendarMode}
@@ -1823,7 +1926,7 @@ export function Tasks() {
                     </button>
                   </div>
                 </div>
-                <div className="font-bold text-gray-800 dark:text-slate-200 text-sm capitalize">
+                <div className="font-bold text-gray-800 dark:text-slate-200 text-[10px] md:text-sm capitalize truncate max-w-[120px] md:max-w-none text-right">
                   {calendarMode === "day"
                     ? format(start, "EEEE d 'de' MMMM, yyyy", { locale: es })
                     : calendarMode === "week"
@@ -1836,7 +1939,7 @@ export function Tasks() {
 
               {calendarMode === "month" && (
                 <div className="overflow-x-auto flex-1">
-                  <div className="min-w-[500px] h-full flex flex-col">
+                  <div className="min-w-full md:min-w-[500px] h-full flex flex-col">
                     {/* Calendar Grid Header */}
                     <div className="grid grid-cols-7 border-b border-gray-200 bg-white dark:bg-slate-800 shadow-sm z-10 sticky top-0 shrink-0">
                       {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map(
@@ -1927,23 +2030,27 @@ export function Tasks() {
                   ref={calendarGridRef}
                 >
                   {/* Time Column */}
-                  <div className="w-16 shrink-0 border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 sticky left-0 z-20">
+                  <div className="w-10 md:w-16 shrink-0 border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 sticky left-0 z-20">
                     <div className="h-16 border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-gray-50 dark:bg-slate-900 z-30" />
-                    {Array.from({ length: 24 }, (_, i) => (
-                      <div
-                        key={i}
-                        className="h-24 border-b border-gray-200 dark:border-slate-700 text-[10px] text-gray-500 dark:text-slate-400 text-right pr-2 pt-1 font-medium"
-                      >
-                        {i.toString().padStart(2, "0")}:00
-                      </div>
-                    ))}
+                    {Array.from({ length: businessHours.end - businessHours.start + 1 }, (_, i) => {
+                      const hour = i + businessHours.start;
+                      return (
+                        <div
+                          key={hour}
+                          className="h-24 border-b border-gray-200 dark:border-slate-700 text-[10px] text-gray-500 dark:text-slate-400 text-right pr-1 md:pr-2 pt-1 font-medium leading-[1.1]"
+                        >
+                          {hour.toString().padStart(2, "0")}
+                          <span className="hidden md:inline">:00</span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Days Columns */}
                   <div
                     className={clsx(
                       "flex-1 flex",
-                      calendarMode === "week" && "min-w-[700px]",
+                      calendarMode === "week" && "min-w-full md:min-w-[700px]",
                     )}
                   >
                     {calendarDays.map((day, i) => {
@@ -1958,16 +2065,16 @@ export function Tasks() {
                       return (
                         <div
                           key={i}
-                          className="flex-1 flex flex-col border-r border-gray-200 dark:border-slate-700 min-w-[100px]"
+                          className="flex-1 flex flex-col border-r border-gray-200 dark:border-slate-700 min-w-0 md:min-w-[100px]"
                         >
                           {/* Day Header */}
-                          <div className="h-16 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky top-0 z-10 flex flex-col items-center justify-center shrink-0">
-                            <span className="text-[10px] uppercase text-gray-500 dark:text-slate-400 font-bold mb-1">
+                          <div className="h-12 md:h-16 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky top-0 z-10 flex flex-col items-center justify-center shrink-0">
+                            <span className="text-[8px] md:text-[10px] uppercase text-gray-500 dark:text-slate-400 font-bold mb-0.5 md:mb-1">
                               {format(day, "eee", { locale: es })}
                             </span>
                             <span
                               className={clsx(
-                                "text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full",
+                                "text-sm md:text-lg font-bold w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full",
                                 isSameDay(day, today)
                                   ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
                                   : "text-gray-900 dark:text-slate-100",
@@ -1979,7 +2086,7 @@ export function Tasks() {
 
                           {/* Hour Cells */}
                           <div className="relative flex-1">
-                            {Array.from({ length: 24 }, (_, h) => (
+                            {Array.from({ length: businessHours.end - businessHours.start + 1 }, (_, h) => (
                               <div
                                 key={h}
                                 className="h-24 border-b border-gray-100 dark:border-slate-800/50"
@@ -1995,7 +2102,11 @@ export function Tasks() {
                                 ? parseInt(task.startTime.split(":")[1])
                                 : 0;
                               // Cell height is 96px (h-24 = 6rem = 96px)
-                              const top = startHour * 96 + (startMin / 60) * 96;
+                              // Do not render tasks outside business hours
+                              if (startHour < businessHours.start || startHour > businessHours.end) {
+                                return null;
+                              }
+                              const top = (startHour - businessHours.start) * 96 + (startMin / 60) * 96;
 
                               let height = 44;
                               if (task.endTime) {
@@ -2204,7 +2315,7 @@ export function Tasks() {
 
         {/* Right Sidebar */}
         {showRightSidebar ? (
-          <div className="w-80 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col overflow-hidden transition-all duration-300">
+          <div className="hidden md:flex w-80 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-col overflow-hidden transition-all duration-300">
             <div
               className="p-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-800 z-10 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-900 transition-colors"
               onClick={() => setShowRightSidebar(false)}
@@ -2245,7 +2356,7 @@ export function Tasks() {
                     .map(({ task, client }) => (
                       <div
                         key={task.id}
-                        className="group flex gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/50 transition-all"
+                        className="group flex gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/30 transition-all"
                         onClick={() => handleTaskClick(task)}
                       >
                         <button
@@ -2253,47 +2364,50 @@ export function Tasks() {
                             e.stopPropagation();
                             toggleTask(task.id, task.completed);
                           }}
-                          className="mt-0.5 shrink-0 text-gray-300 hover:text-green-500 transition-colors"
+                          className="mt-0.5 shrink-0 text-gray-300 dark:text-slate-500 hover:text-green-500 transition-colors"
                         >
-                          <Circle className="w-4 h-4" />
+                          <Circle className="w-5 h-5" />
                         </button>
-                        <div className="flex-1 min-w-0 flex flex-col">
-                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight flex items-center flex-wrap gap-1">
+                        <div className="flex-1 min-w-0 flex flex-col gap-1">
+                          <span className="text-[14px] font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight">
                             {task.title}
-                            {task.type === "payment" && client && (
-                              <span 
-                                className="hidden group-hover:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 w-fit"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedClient(client);
-                                }}
-                              >
-                                Ver Venta
-                              </span>
-                            )}
                           </span>
+
+                          <div className="flex flex-col gap-0.5">
+                            {task.dealId && deals && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                <Briefcase className="w-3 h-3 opacity-70" />
+                                <span className="truncate">{deals.find(d => d.id === task.dealId)?.title || "Trato"}</span>
+                              </div>
+                            )}
+                            {client && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                <User className="w-3 h-3 opacity-70" />
+                                <span className="truncate">{client.name}</span>
+                              </div>
+                            )}
+                          </div>
+
                           {task.dueDate && (
-                            <span
-                              className={clsx(
-                                "text-[11px] mt-1 font-semibold flex items-center gap-1",
-                                isAfter(
-                                  startOfDay(new Date()),
-                                  parseISO(task.dueDate),
-                                )
-                                  ? "text-rose-500"
-                                  : "text-gray-500 dark:text-slate-400",
-                              )}
-                            >
-                              {format(parseISO(task.dueDate), "MMM d", {
-                                locale: es,
-                              })}
-                              {task.startTime && ` • ${task.startTime}`}
-                            </span>
-                          )}
-                          {client && (
-                            <span className="text-[11px] text-blue-600 truncate mt-0.5">
-                              {client.name}
-                            </span>
+                            <div className="mt-1 flex items-center">
+                              <span
+                                className={clsx(
+                                  "text-[10px] font-medium flex items-center gap-1 px-2 py-0.5 rounded-full border",
+                                  isAfter(
+                                    startOfDay(new Date()),
+                                    parseISO(task.dueDate),
+                                  ) && !task.completed
+                                    ? "text-rose-500 border-rose-200 bg-rose-50 dark:bg-rose-900/20 dark:border-rose-800"
+                                    : "text-slate-600 border-slate-200 dark:text-slate-300 dark:border-slate-700/60 dark:bg-slate-800"
+                                )}
+                              >
+                                <Clock className="w-3 h-3" />
+                                {format(parseISO(task.dueDate), "eee, d MMM", {
+                                  locale: es,
+                                })}
+                                {task.startTime && ` • ${task.startTime}`}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2315,7 +2429,7 @@ export function Tasks() {
           </div>
         ) : (
           <div
-            className="w-12 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex flex-col items-center py-4 transition-all duration-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 border-l-4 border-l-blue-500"
+            className="hidden md:flex w-12 shrink-0 border-l border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex-col items-center py-4 transition-all duration-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 border-l-4 border-l-blue-500"
             onClick={() => setShowRightSidebar(true)}
             title={
               view === "calendar"
@@ -2369,8 +2483,9 @@ export function Tasks() {
       )}
 
       {/* New/Edit Activity Modal */}
-      {(showNewTaskModal || editingTask) && (
-        <NewActivityModal
+      <AnimatePresence>
+        {(showNewTaskModal || editingTask) && (
+          <NewActivityModal
           onClose={() => {
             setShowNewTaskModal(false);
             setEditingTask(null);
@@ -2380,7 +2495,7 @@ export function Tasks() {
           deals={deals}
           currentUser={userData}
           initialData={editingTask}
-          onSave={async (taskData) => {
+            onSave={async (taskData) => {
             if (!taskData.title || !taskData.dueDate || !userData) {
               if (!taskData.title) alert("El título es requerido");
               return;
@@ -2628,8 +2743,9 @@ export function Tasks() {
               console.error("Error creating task", e);
             }
           }}
-        />
-      )}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Client Detail Modal when clicking on a task */}
       {selectedClient && (

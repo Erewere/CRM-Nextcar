@@ -56,6 +56,7 @@ export interface Agency {
   name: string;
   phoneWhatsApp?: string;
   pipelineStages?: PipelineStage[];
+  businessHours?: { start: string; end: string };
   createdAt: string | Date;
 }
 
@@ -121,7 +122,7 @@ export interface Client {
   status: string;
   soldAt?: string;
   saleDetails?: SaleDetails;
-  origin: "manual" | "whatsapp" | "web" | "google_contacts" | "excel_import";
+  origin: "manual" | "whatsapp" | "web" | "website" | "google_contacts" | "excel_import" | "facebook" | "instagram";
   tags?: string[];
   wantedVehicle?: {
     make?: string;

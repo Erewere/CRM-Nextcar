@@ -8,8 +8,6 @@ import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { MobileInventory } from './mobile/MobileInventory';
-import { useIsMobile } from '../hooks/useIsMobile';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 
