@@ -407,7 +407,7 @@ export function Layout() {
                   <span className="text-[8px] font-bold">{userData?.name?.substring(0, 2) || "US"}</span>
                )}
             </div>
-            <span className="text-[10px] font-medium">Perfil</span>
+            <span className="text-[10px] font-medium truncate w-full px-1 text-center">{agencyName || "Perfil"}</span>
           </button>
         </nav>
       )}

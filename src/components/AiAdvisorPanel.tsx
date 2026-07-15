@@ -171,7 +171,7 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
             <Link 
               to="/persons" 
               state={{ clientId: rec.clientId }} 
-              key={rec.clientId} 
+              key={`${rec.clientId}-${idx}`} 
               className="bg-white/5 hover:bg-white/10 transition-colors border border-white/10 rounded-lg p-4 flex flex-col justify-between group relative overflow-hidden cursor-pointer"
             >
               <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>

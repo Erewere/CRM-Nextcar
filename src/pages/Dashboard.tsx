@@ -134,6 +134,7 @@ export function Dashboard() {
     { id: string; title: string }[]
   >([]);
   const [inactivityAlertDays, setInactivityAlertDays] = useState(14);
+  const [agencyName, setAgencyName] = useState<string>("");
 
   useEffect(() => {
     if (userData?.agencyId) {
@@ -142,6 +143,7 @@ export function Dashboard() {
           .then((docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
+              setAgencyName(data.name || "");
               if (
                 data.pipelineStages &&
                 Array.isArray(data.pipelineStages) &&
@@ -494,6 +496,7 @@ export function Dashboard() {
         <MobileHome 
           userName={userData?.name || userData?.email || "Asesor"}
           agencyId={userData?.agencyId || ""}
+          agencyName={agencyName}
           clients={clients}
           activeContacts={activeContacts}
           tasks={tasks}

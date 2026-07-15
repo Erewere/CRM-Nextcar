@@ -14,6 +14,7 @@ import { calculateLeadScore } from "../../services/leadScoring";
 interface MobileHomeProps {
   userName: string;
   agencyId: string;
+  agencyName?: string;
   clients: Client[];
   activeContacts: Client[];
   tasks: Task[];
@@ -32,6 +33,7 @@ const typeIcons: Record<string, any> = {
 export function MobileHome({ 
   userName, 
   agencyId, 
+  agencyName, 
   clients, 
   activeContacts, 
   tasks, 
@@ -121,7 +123,7 @@ export function MobileHome({
           {greeting}, <span className="text-blue-600 dark:text-blue-400">{userName.split(' ')[0]}</span>
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 capitalize">
-          {formattedDate}
+          {formattedDate} {agencyName ? ` • ${agencyName}` : ''}
         </p>
       </div>
 
