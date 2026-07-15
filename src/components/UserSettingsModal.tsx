@@ -1,10 +1,11 @@
 import React, { useState, useRef } from "react";
-import { X, Upload, Camera } from "lucide-react";
+import { X, Upload, Camera, LogOut } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { User } from "../types";
+import { useNavigate } from "react-router";
 import clsx from "clsx";
 
 interface UserSettingsModalProps {
@@ -13,11 +14,12 @@ interface UserSettingsModalProps {
 }
 
 export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
-  const { userData, currentUser } = useAuth();
+  const { userData, currentUser, logout } = useAuth();
   const [name, setName] = useState(userData?.name || "");
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     if (isOpen && userData) {
@@ -26,6 +28,16 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   }, [isOpen, userData]);
 
   if (!isOpen || !userData) return null;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      onClose();
+      navigate("/login");
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
 
   const getInitials = (name: string) => {
     return name.substring(0, 2).toUpperCase() || "US";
@@ -164,6 +176,16 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
               </button>
             </div>
           </form>
+
+          <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-lg font-medium transition-colors text-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              Cerrar Sesión
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -33,3 +33,19 @@ export function checkIsLost(status: string = "", pipelineStages: {id: string, ti
   }
   return false;
 }
+
+import { Client } from "../types";
+export function deduplicateClients(clients: Client[]): Client[] {
+  const uniqueClients: Client[] = [];
+  const seenNames = new Set<string>();
+  for (const c of clients) {
+    const nm = String(c.name || "").trim().toLowerCase();
+    if (nm && !seenNames.has(nm)) {
+      seenNames.add(nm);
+      uniqueClients.push(c);
+    } else if (!nm) {
+      uniqueClients.push(c);
+    }
+  }
+  return uniqueClients;
+}

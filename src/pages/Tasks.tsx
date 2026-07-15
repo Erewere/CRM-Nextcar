@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Client, Deal } from "../types";
+import { deduplicateClients } from "../lib/clientUtils";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -248,11 +249,8 @@ export function Tasks() {
         }
 
         const cSnap = await getDocs(cq);
-        const cMap = new Map();
-        cSnap.docs.forEach((d) =>
-          cMap.set(d.id, { id: d.id, ...d.data() } as Client),
-        );
-        setClients(Array.from(cMap.values()) as Client[]);
+        const list = cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+        setClients(deduplicateClients(list));
 
         try {
           const dSnap = await getDocs(dq);
@@ -264,7 +262,7 @@ export function Tasks() {
 
         const combined = taskList.map((t) => ({
           task: t,
-          client: t.clientId ? cMap.get(t.clientId) : null,
+          client: t.clientId ? list.find((c) => c.id === t.clientId) || null : null,
         }));
         combined.sort((a, b) => {
           const aTime = a.task.dueDate ? new Date(a.task.dueDate).getTime() : 0;
@@ -2032,9 +2030,9 @@ export function Tasks() {
                                   {format(day, "d")}
                                 </div>
                                 <div className="flex flex-col gap-1 overflow-y-auto max-h-[150px] scrollbar-hide">
-                                  {dayTasks.map(({ task, client }) => (
+                                  {dayTasks.map(({ task, client }, idx) => (
                                     <div
-                                      key={task.id}
+                                      key={`${task.id}-${idx}`}
                                       onClick={() => handleTaskClick(task)}
                                       className={clsx(
                                         "text-[9px] md:text-[10px] p-1 rounded truncate font-medium flex items-center gap-1 shadow-sm border group",
@@ -2138,7 +2136,7 @@ export function Tasks() {
                             ))}
 
                             {/* Render Tasks Absolute */}
-                            {dayTasks.map(({ task, client }) => {
+                            {dayTasks.map(({ task, client }, idx) => {
                               const startHour = task.startTime
                                 ? parseInt(task.startTime.split(":")[0])
                                 : 12;
@@ -2184,7 +2182,7 @@ export function Tasks() {
 
                               return (
                                 <div
-                                  key={task.id}
+                                  key={`${task.id}-${idx}`}
                                   onPointerUp={(e) => {
                                     if (!dragState || !dragState.hasMoved) {
                                       handleTaskClick(task);

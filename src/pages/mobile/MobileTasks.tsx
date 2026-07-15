@@ -201,7 +201,7 @@ export function MobileTasks() {
           })}
           
           {/* Tasks Overlay */}
-          {selectedTasks.map(({ task, client }) => {
+          {selectedTasks.map(({ task, client }, idx) => {
              let top = 0;
              if (task.time) {
                const [h, m] = task.time.split(':').map(Number);
@@ -213,7 +213,7 @@ export function MobileTasks() {
 
              return (
                <div 
-                 key={task.id} 
+                 key={`${task.id}-${idx}`} 
                  className={clsx(
                    "absolute left-[60px] right-4 rounded-xl p-3 shadow-sm z-10 border-l-4 overflow-hidden",
                    isCompleted 

@@ -8,6 +8,7 @@ import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { deduplicateClients } from '../lib/clientUtils';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 
@@ -377,7 +378,8 @@ export function Inventory() {
     });
 
     const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
-      setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+      const rawClients = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      setClients(deduplicateClients(rawClients));
     });
 
     const unsubscribeExpenses = onSnapshot(expensesQ, (snapshot) => {
@@ -558,13 +560,13 @@ export function Inventory() {
         {viewMode === 'grid' ? (
           <div className="flex-1 overflow-auto p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredVehicles.map(vehicle => {
+              {filteredVehicles.map((vehicle, idx) => {
                 const matches = getVehicleMatches(vehicle, clients);
                 const totalMatches = matches.length;
 
                 return (
               <div 
-                key={vehicle.id} 
+                key={`${vehicle.id}-${idx}`} 
                 className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-slate-800 group relative"
                 onClick={() => setSelectedVehicle(vehicle)}
               >
@@ -733,12 +735,12 @@ export function Inventory() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-slate-800">
-                {filteredVehicles.map(vehicle => {
+                {filteredVehicles.map((vehicle, idx) => {
                   const matches = getVehicleMatches(vehicle, clients);
                   const totalMatches = matches.length;
 
                   return (
-                  <tr key={vehicle.id} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
+                  <tr key={`${vehicle.id}-${idx}`} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
                     {columns.filter(c => c.visible).map(col => {
                       let val: React.ReactNode = '';
                       if (col.id === 'year') val = vehicle.year;

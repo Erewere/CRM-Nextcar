@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, PipelineStage, Task, Deal } from "../types";
+import { deduplicateClients } from "../lib/clientUtils";
 import confetti from "canvas-confetti";
 import {
   DndContext,
@@ -156,11 +157,11 @@ function ArchivedClientsModal({
                   </span>
                 </h3>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 pb-20">
-                  {columnClients.map((client) => {
+                  {columnClients.map((client, idx) => {
                     const clientIdToUse = (client as any).originalClientId || client.id;
                     return (
                       <div
-                        key={client.id}
+                        key={`${client.id}-${idx}`}
                         onClick={() => {
                           onClientClick(client);
                           onClose();
@@ -257,6 +258,9 @@ export function Kanban() {
         let data = snapshot.docs.map(
           (d) => ({ id: d.id, ...d.data() }) as Client,
         );
+        
+        data = deduplicateClients(data);
+
         if (userData.role === "seller") {
           data = data.filter(
             (c) => c.sellerId === userData.id || c.visibility === "all",
@@ -630,7 +634,7 @@ export function Kanban() {
           onDragEnd={handleDragEnd}
         >
           <div className="flex flex-1 overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-            <SortableContext items={activeColumns.map(c => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
+            <SortableContext items={activeColumns.map((c) => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
               {activeColumns.map((col, index) => {
                 const columnClients = filteredClients.filter(
                   (c) => {
@@ -645,7 +649,7 @@ export function Kanban() {
                 );
                 return (
                   <SortableKanbanColumn
-                    key={col.id}
+                    key={`${col.id}-${index}`}
                     column={col}
                     clients={columnClients}
                     onClientClick={setSelectedClient}

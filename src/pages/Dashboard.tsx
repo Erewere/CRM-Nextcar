@@ -17,6 +17,7 @@ import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileHome } from "./mobile/MobileHome";
 import { MobileClientDetail } from "./mobile/MobileClientDetail";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { deduplicateClients } from "../lib/clientUtils";
 import {
   BarChart,
   Bar,
@@ -214,11 +215,11 @@ export function Dashboard() {
           dealsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
         );
 
-        setClients(
-          clientsSnap.docs.map(
-            (doc) => ({ id: doc.id, ...doc.data() }) as Client,
-          ),
+        const rawClients = clientsSnap.docs.map(
+          (doc) => ({ id: doc.id, ...doc.data() }) as Client,
         );
+        
+        setClients(deduplicateClients(rawClients));
         setVehicles(
           vehiclesSnap.docs.map(
             (doc) => ({ id: doc.id, ...doc.data() }) as Vehicle,
@@ -396,11 +397,14 @@ export function Dashboard() {
 
   // Match Calculation
   let allClientMatches = 0;
-  activeContacts.forEach((client) => {
+  const uniqueActiveContacts = Array.from(new Map(activeContacts.map(c => [c.originalClientId || c.id, c])).values()) as Client[];
+
+  uniqueActiveContacts.forEach((client) => {
     const matches = getClientMatches(client, availableVehicles);
     allClientMatches += matches.length;
   });
-  const buscanAutoClients = activeContacts.filter(c => 
+
+  const buscanAutoClients = uniqueActiveContacts.filter(c => 
     c.tags && c.tags.some(t => t.toLowerCase().includes('busca de auto') || t.toLowerCase().includes('busca auto') || t.toLowerCase() === 'compra')
   );
   const buscanAutoCount = buscanAutoClients.length;
@@ -498,7 +502,8 @@ export function Dashboard() {
           agencyId={userData?.agencyId || ""}
           agencyName={agencyName}
           clients={clients}
-          activeContacts={activeContacts}
+          activeContacts={uniqueActiveContacts}
+          buscanAutoClients={buscanAutoClients}
           tasks={tasks}
           pipelineStages={pipelineStages}
           onSelectClient={setSelectedClient}
@@ -743,8 +748,8 @@ export function Dashboard() {
                 Vehículos Buscados
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {buscanAutoClients.slice(0, 6).map(client => (
-                  <div key={client.id} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
+                {buscanAutoClients.slice(0, 6).map((client, idx) => (
+                  <div key={`${client.id}-${idx}`} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
                     <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
                       {getWantedTitle(client)}
                     </p>
@@ -833,8 +838,8 @@ export function Dashboard() {
                       Vehículos Buscados
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {buscanAutoClients.slice(0, 6).map(client => (
-                        <div key={client.id} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
+                      {buscanAutoClients.slice(0, 6).map((client, idx) => (
+                        <div key={`${client.id}-${idx}`} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
                           <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
                             {getWantedTitle(client)}
                           </p>

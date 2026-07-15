@@ -6,6 +6,7 @@ import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
 import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2 } from 'lucide-react';
 import { Task, Client } from '../types';
+import { deduplicateClients } from '../lib/clientUtils';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 export function AgencyUsers() {
@@ -137,7 +138,8 @@ export function AgencyUsers() {
             getDocs(clientsQ),
             getDocs(tasksQ)
           ]);
-          setClients(clientsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+          const rawClients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+          setClients(deduplicateClients(rawClients));
           setTasks(tasksSnap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
         }
       } catch (e) {

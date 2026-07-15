@@ -362,11 +362,11 @@ export function NewActivityModal({
                 className="w-full text-2xl font-medium border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none mb-3"
               />
               <div className="flex border border-gray-300 rounded w-full md:w-fit overflow-hidden">
-                {types.map((t) => {
+                {types.map((t, idx) => {
                   const Icon = t.icon;
                   return (
                     <button
-                      key={t.id}
+                      key={`${t.id}-${idx}`}
                       onClick={() => handleTypeSelect(t)}
                       className={clsx(
                         "flex-1 md:flex-none p-2 border-r border-gray-300 last:border-r-0 hover:bg-gray-50 dark:bg-slate-900 transition-colors flex justify-center items-center",
@@ -583,7 +583,7 @@ export function NewActivityModal({
                 .filter(
                   (t) => t.task.dueDate === format(previewDate, "yyyy-MM-dd"),
                 )
-                .map((t) => {
+                .map((t, idx) => {
                   const tStartHour = parseInt(
                     t.task.startTime?.split(":")[0] || "12",
                   );
@@ -607,7 +607,7 @@ export function NewActivityModal({
 
                   return (
                     <div
-                      key={t.task.id}
+                      key={`${t.task.id}-${idx}`}
                       className="absolute left-12 right-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700/50 text-xs px-2 py-1 rounded z-0 flex flex-col gap-0.5 overflow-hidden opacity-60 pointer-events-none"
                       style={{ top: `${tTop}px`, height: `${tHeight}px` }}
                     >

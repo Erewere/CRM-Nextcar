@@ -95,7 +95,7 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
 
           <div className="space-y-2">
             {stages.map((stage, i) => (
-              <div key={stage.id} className="flex items-center justify-between border rounded-lg p-2 bg-white dark:bg-slate-800">
+              <div key={`${stage.id}-${i}`} className="flex items-center justify-between border rounded-lg p-2 bg-white dark:bg-slate-800">
                 <span className="font-medium text-sm text-slate-700 dark:text-slate-300">{stage.title}</span>
                 <div className="flex gap-1">
                   <button onClick={() => moveUp(i)} disabled={i === 0} className="p-1 text-slate-400 hover:text-blue-600 disabled:opacity-30">

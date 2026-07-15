@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { checkIsWon } from "../lib/clientUtils";
+import { checkIsWon, deduplicateClients } from "../lib/clientUtils";
 import { db } from "../lib/firebase";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { Client, Vehicle, VehicleExpense } from "../types";
@@ -50,7 +50,8 @@ export function ClosedSales() {
     }
 
     const unsubClients = onSnapshot(clientsQ, (snap) => {
-      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+      const rawClients = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      setClients(deduplicateClients(rawClients));
     });
 
     const unsubVehicles = onSnapshot(vehiclesQ, (snap) => {
@@ -146,7 +147,7 @@ export function ClosedSales() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSales.map((client) => {
+                  filteredSales.map((client, idx) => {
                     const vehicle = vehicles.find(v => v.id === client.vehicleId);
                     const sale = client.saleDetails;
                     const vehicleExpenses = expenses.filter(e => e.vehicleId === vehicle?.id);
@@ -159,7 +160,7 @@ export function ClosedSales() {
                     const utility = salePrice - costPlusExpenses;
 
                     return (
-                      <tr key={client.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <tr key={`${client.id}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                           {client.soldAt ? new Date(client.soldAt + "T00:00:00").toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
                         </td>

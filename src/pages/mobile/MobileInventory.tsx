@@ -77,8 +77,8 @@ export function MobileInventory() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-4 pb-24 space-y-4">
-        {filteredVehicles.map(vehicle => (
-          <div key={vehicle.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        {filteredVehicles.map((vehicle, idx) => (
+          <div key={`${vehicle.id}-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
             <div className="h-48 bg-slate-100 dark:bg-slate-900 relative">
               {vehicle.photos && vehicle.photos.length > 0 ? (
                 <img 

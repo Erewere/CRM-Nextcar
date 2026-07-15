@@ -5,6 +5,7 @@ import { db, storage } from '../lib/firebase';
 import { collection, doc, setDoc, onSnapshot, query, where, deleteDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client } from '../types';
+import { deduplicateClients } from '../lib/clientUtils';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer } from 'lucide-react';
 
 interface Props {
@@ -75,7 +76,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         where('sellerId', '==', userData.id)
       );
       getDocs(q).then(snap => {
-        setClients(snap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+        const rawClients = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+        setClients(deduplicateClients(rawClients));
       });
     }
   }, [userData]);

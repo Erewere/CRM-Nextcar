@@ -5,11 +5,18 @@ import { format, isBefore, startOfToday } from "date-fns";
 import { es } from "date-fns/locale";
 import { 
   CheckCircle, Circle, Clock, Phone, Calendar, MessageCircle, FileText, 
-  User, AlertCircle, TrendingUp, Star, Zap, ChevronRight, Activity, Flame
+  User, AlertCircle, TrendingUp, Star, Zap, ChevronRight, Activity, Flame, Car
 } from "lucide-react";
 import clsx from "clsx";
 import { AiAdvisorPanel } from "../../components/AiAdvisorPanel";
 import { calculateLeadScore } from "../../services/leadScoring";
+
+const getWantedTitle = (c: Client) => {
+  if (c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model || (c.wantedVehicle.bodyType && c.wantedVehicle.bodyType !== 'Cualquiera'))) {
+    return [c.wantedVehicle.make, c.wantedVehicle.model, c.wantedVehicle.bodyType !== 'Cualquiera' ? c.wantedVehicle.bodyType : ''].filter(Boolean).join(" ");
+  }
+  return c.vehicle || c.dealTitle || "Auto no especificado";
+};
 
 interface MobileHomeProps {
   userName: string;
@@ -17,6 +24,7 @@ interface MobileHomeProps {
   agencyName?: string;
   clients: Client[];
   activeContacts: Client[];
+  buscanAutoClients?: Client[];
   tasks: Task[];
   pipelineStages: PipelineStage[];
   onSelectClient: (client: Client) => void;
@@ -36,6 +44,7 @@ export function MobileHome({
   agencyName, 
   clients, 
   activeContacts, 
+  buscanAutoClients = [],
   tasks, 
   pipelineStages,
   onSelectClient
@@ -172,9 +181,9 @@ export function MobileHome({
               <h2 className="text-lg font-bold text-slate-800 dark:text-white">Citas del Día</h2>
             </div>
             <div className="space-y-2">
-              {todayMeetings.map(task => (
+              {todayMeetings.map((task, idx) => (
                 <div 
-                  key={task.id}
+                  key={`${task.id}-${idx}`}
                   onClick={() => handleTaskClick(task.clientId)}
                   className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between active:scale-[0.98] transition-transform"
                 >
@@ -209,7 +218,7 @@ export function MobileHome({
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
               {priorityClients.map((client, idx) => (
                 <div 
-                  key={client.id}
+                  key={`${client.id}-${idx}`}
                   onClick={() => onSelectClient(client)}
                   className={clsx(
                     "p-3 flex items-center justify-between active:bg-slate-50 dark:active:bg-slate-700/50",
@@ -240,11 +249,11 @@ export function MobileHome({
             </div>
           ) : (
             <div className="space-y-2">
-              {todayFollowUps.map(task => {
+              {todayFollowUps.map((task, idx) => {
                 const Icon = typeIcons[task.type] || Clock;
                 return (
                   <div 
-                    key={task.id}
+                    key={`${task.id}-${idx}`}
                     onClick={() => handleTaskClick(task.clientId)}
                     className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-3 active:scale-[0.98] transition-transform"
                   >
@@ -270,9 +279,9 @@ export function MobileHome({
               <h2 className="text-lg font-bold text-slate-800 dark:text-white">Mayor Lead Score</h2>
             </div>
             <div className="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 snap-x">
-              {topLeadScore.map(client => (
+              {topLeadScore.map((client, idx) => (
                 <div 
-                  key={client.id}
+                  key={`${client.id}-${idx}`}
                   onClick={() => onSelectClient(client)}
                   className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 min-w-[140px] snap-center active:scale-95 transition-transform shrink-0"
                 >
@@ -295,11 +304,11 @@ export function MobileHome({
               <h2 className="text-lg font-bold text-slate-800 dark:text-white">Tareas Vencidas</h2>
             </div>
             <div className="space-y-2">
-              {overdueTasks.map(task => {
+              {overdueTasks.map((task, idx) => {
                 const Icon = typeIcons[task.type] || Clock;
                 return (
                   <div 
-                    key={task.id}
+                    key={`${task.id}-${idx}`}
                     onClick={() => handleTaskClick(task.clientId)}
                     className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-rose-200 dark:border-rose-900/50 flex items-center gap-3 active:scale-[0.98] transition-transform"
                   >
@@ -317,6 +326,31 @@ export function MobileHome({
               })}
             </div>
           </section>
+        )}
+
+        {/* Vehículos Buscados */}
+        {buscanAutoClients.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 mt-4 mb-4">
+            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+              <Car className="w-4 h-4 text-indigo-500" />
+              Vehículos Buscados
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {buscanAutoClients.slice(0, 6).map((client, idx) => (
+                <div key={`${client.id}-${idx}`} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer active:scale-95" onClick={() => onSelectClient(client)}>
+                  <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
+                    {getWantedTitle(client)}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold">
+                      {client.name.substring(0,1).toUpperCase()}
+                    </div>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 truncate font-medium">{client.name}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car } from 'lucide-react';
+import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic } from 'lucide-react';
 import { Client } from '../../types';
 import { db } from '../../lib/firebase';
 import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
@@ -24,6 +24,63 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const quickActions = [
+    { id: 'call', label: 'Llamada', prefix: 'Llamada saliente', icon: Phone, color: 'text-blue-500' },
+    { id: 'whatsapp', label: 'WhatsApp', prefix: 'Mensaje de WhatsApp', icon: MessageCircle, color: 'text-green-500' },
+    { id: 'meeting', label: 'Visita', prefix: 'Visitó agencia', icon: MapPin, color: 'text-rose-500' },
+    { id: 'other', label: 'Test Drive', prefix: 'Hizo Test Drive', icon: Car, color: 'text-purple-500' }
+  ];
+
+  useEffect(() => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'es-MX';
+
+      recognitionRef.current.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+             setQuickNote(prev => prev + transcript + ' ');
+          }
+        }
+      };
+      
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        if (event.error === 'not-allowed') {
+          alert('No se pudo acceder al micrófono. Por favor, revisa los permisos.');
+        }
+        setIsRecording(false);
+      };
+      
+      recognitionRef.current.onend = () => {
+         setIsRecording(false);
+      };
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) {
+      alert("El dictado por voz no está soportado en este navegador.");
+      return;
+    }
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      recognitionRef.current.start();
+      setIsRecording(true);
+    }
+  };
 
   const historyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -226,47 +283,47 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Registro Rápido</h3>
           
           <div className="grid grid-cols-2 gap-2 mb-4">
-            <button
-              onClick={() => handleAddQuickNote('call', 'Llamada saliente')}
-              className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 py-3 rounded-xl text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <Phone className="w-4 h-4 text-blue-500" />
-              Llamada
-            </button>
-            <button
-              onClick={() => handleAddQuickNote('whatsapp', 'Mensaje de WhatsApp')}
-              className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 py-3 rounded-xl text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <MessageCircle className="w-4 h-4 text-green-500" />
-              WhatsApp
-            </button>
-            <button
-              onClick={() => handleAddQuickNote('meeting', 'Visitó agencia')}
-              className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 py-3 rounded-xl text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <MapPin className="w-4 h-4 text-rose-500" />
-              Visita
-            </button>
-            <button
-              onClick={() => handleAddQuickNote('other', 'Hizo Test Drive')}
-              className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 py-3 rounded-xl text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <Car className="w-4 h-4 text-purple-500" />
-              Test Drive
-            </button>
+            {quickActions.map(action => (
+              <button
+                key={action.id}
+                onClick={() => setSelectedActionId(selectedActionId === action.id ? null : action.id)}
+                className={clsx(
+                  "flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-colors border",
+                  selectedActionId === action.id 
+                    ? "bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                    : "bg-slate-50 border-transparent dark:bg-slate-900 dark:border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                )}
+              >
+                <action.icon className={clsx("w-4 h-4", action.color)} />
+                {action.label}
+              </button>
+            ))}
           </div>
 
           <div className="relative">
+            <button
+              onClick={toggleRecording}
+              className={clsx(
+                "absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors",
+                isRecording ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 animate-pulse" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              )}
+            >
+              <Mic className="w-4 h-4" />
+            </button>
             <input
               type="text"
-              placeholder="Nota adicional (opcional)..."
+              placeholder={isRecording ? "Escuchando..." : "Nota adicional (opcional)..."}
               value={quickNote}
               onChange={(e) => setQuickNote(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-4 pr-12 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-12 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <button
-              disabled={!quickNote.trim() || isSubmittingNote}
-              onClick={() => handleAddQuickNote('note')}
+              disabled={(!quickNote.trim() && !selectedActionId) || isSubmittingNote}
+              onClick={() => {
+                const action = quickActions.find(a => a.id === selectedActionId);
+                handleAddQuickNote(action ? action.id : 'note', action ? action.prefix : undefined);
+                setSelectedActionId(null);
+              }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg disabled:opacity-50 transition-colors"
             >
               {noteSuccess ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}

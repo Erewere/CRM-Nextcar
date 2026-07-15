@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task, Vehicle } from "../types";
+import { deduplicateClients } from "../lib/clientUtils";
 import {
   Users,
   Search,
@@ -358,20 +359,7 @@ export function Persons() {
         const allClients = clientsDocs.map(
           (d) => ({ id: d.id, ...d.data() }) as Client,
         );
-        const uniqueClients: Client[] = [];
-        const seenNames = new Set<string>();
-        for (const c of allClients) {
-          const nm = String(c.name || "")
-            .trim()
-            .toLowerCase();
-          if (nm && !seenNames.has(nm)) {
-            seenNames.add(nm);
-            uniqueClients.push(c);
-          } else if (!nm) {
-            uniqueClients.push(c);
-          }
-        }
-        setPersons(uniqueClients);
+        setPersons(deduplicateClients(allClients));
 
         setDeals(
           dealsDocs
@@ -877,11 +865,11 @@ export function Persons() {
       {viewMode === "grid" ? (
         <div className="p-6 flex-1 overflow-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredPersons.map((person) => {
+            {filteredPersons.map((person, idx) => {
               const matches = getClientMatches(person, vehicles);
               return (
               <div
-                key={person.id}
+                key={`${person.id}-${idx}`}
                 className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => setSelectedPerson(person)}
               >
@@ -1041,11 +1029,11 @@ export function Persons() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-800">
-              {filteredPersons.map((person) => {
+              {filteredPersons.map((person, idx) => {
                 const stats = getPersonStats(person.id);
                 return (
                   <tr
-                    key={person.id}
+                    key={`${person.id}-${idx}`}
                     className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer"
                     onClick={() => setSelectedPerson(person)}
                   >

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Client, PipelineStage } from '../../types';
+import { deduplicateClients } from '../../lib/clientUtils';
 import { Search, Phone, MessageCircle, User, Car, Calendar, FileText, ChevronRight, Activity, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MobileClientDetail } from './MobileClientDetail';
@@ -55,8 +56,7 @@ export function MobilePersons() {
       const snap = await getDocs(q);
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
       
-      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setClients(list);
+      setClients(deduplicateClients(list));
       setSelectedClient(prev => prev ? (list.find(c => c.id === prev.id) || prev) : null);
     } catch (err) {
       console.error(err);
@@ -110,8 +110,8 @@ export function MobilePersons() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-4 pb-24 space-y-3">
-        {filteredClients.map(client => (
-          <div key={client.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+        {filteredClients.map((client, idx) => (
+          <div key={`${client.id}-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
             <div 
               className="p-4 cursor-pointer active:bg-slate-50 dark:active:bg-slate-700/50 transition-colors"
               onClick={() => setSelectedClient(client)}
@@ -175,7 +175,7 @@ export function MobilePersons() {
                   className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
                 >
                   <FileText className="w-4 h-4 mb-1" />
-                  <span className="text-[9px] font-medium">Historial</span>
+                  <span className="text-[9px] font-medium">Nota</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setSelectedClient(client); }}
