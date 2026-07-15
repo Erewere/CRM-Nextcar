@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useLocation } from "react-router";
 import { AnimatePresence } from "motion/react";
 import { onSnapshot } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
@@ -74,6 +75,7 @@ import { es } from "date-fns/locale";
 
 export function Tasks() {
   const { userData, connectGoogleServices, googleToken } = useAuth();
+    const location = useLocation();
   const [tasks, setTasks] = useState<{ task: Task; client: Client | null }[]>(
     [],
   );
@@ -153,6 +155,7 @@ export function Tasks() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [newTaskPrefill, setNewTaskPrefill] = useState<any>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const handleTaskClick = (task: Task) => {
@@ -281,13 +284,38 @@ export function Tasks() {
   const toggleTask = async (taskId: string, current: boolean) => {
     try {
       await updateDoc(doc(db, "tasks", taskId), { completed: !current });
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.task.id === taskId
-            ? { ...t, task: { ...t.task, completed: !current } }
-            : t,
-        ),
+      
+      const updatedTasks = tasks.map((t) =>
+        t.task.id === taskId
+          ? { ...t, task: { ...t.task, completed: !current } }
+          : t
       );
+      
+      setTasks(updatedTasks);
+
+      if (!current) {
+        const completedTaskInfo = tasks.find((t) => t.task.id === taskId);
+        if (completedTaskInfo) {
+          const dealId = completedTaskInfo.task.dealId;
+          const clientId = completedTaskInfo.task.clientId;
+          if (dealId || clientId) {
+             const hasPending = updatedTasks.some(t => 
+               !t.task.completed && 
+               t.task.id !== taskId && 
+               ((dealId && t.task.dealId === dealId) || (!dealId && clientId && t.task.clientId === clientId))
+             );
+             if (!hasPending) {
+                setNewTaskPrefill({
+                   clientId: clientId || "",
+                   clientName: completedTaskInfo.client?.name || "",
+                   dealId: dealId || "",
+                   dealTitle: completedTaskInfo.deal?.title || ""
+                });
+                setShowNewTaskModal(true);
+             }
+          }
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -431,8 +459,22 @@ export function Tasks() {
     calendarDays = [...prefixDays, ...calendarDays];
   }
 
+  useEffect(() => {
+    if (location.state?.filterStatus) {
+      setFilterStatus(location.state.filterStatus);
+    }
+    if (location.state?.filterDate) {
+      setFilterDate(location.state.filterDate);
+    }
+    if (location.state?.filterType) {
+      setFilterType(location.state.filterType);
+    }
+  }, [location.state]);
+
   // --- Drag & Drop for Calendar ---
   const [dragState, setDragState] = useState<{
+
+
     taskId: string;
     type: "move" | "resize";
     startY: number;
@@ -2491,12 +2533,13 @@ export function Tasks() {
           onClose={() => {
             setShowNewTaskModal(false);
             setEditingTask(null);
+            setNewTaskPrefill(null);
           }}
           clients={clients}
           tasks={tasks}
           deals={deals}
           currentUser={userData}
-          initialData={editingTask}
+          initialData={editingTask || newTaskPrefill}
             onSave={async (taskData) => {
             if (!taskData.title || !taskData.dueDate || !userData) {
               if (!taskData.title) alert("El título es requerido");

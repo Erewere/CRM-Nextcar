@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car } from 'lucide-react';
 import { Client } from '../../types';
 import { db } from '../../lib/firebase';
@@ -11,9 +11,10 @@ interface Props {
   client: Client;
   onClose: () => void;
   onUpdated: () => void;
+  scrollToHistory?: boolean;
 }
 
-export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
+export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory }: Props) {
   const { userData } = useAuth();
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [currentStatus, setCurrentStatus] = useState(client.status || 'new');
@@ -23,6 +24,16 @@ export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
+
+  const historyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollToHistory && historyRef.current) {
+      setTimeout(() => {
+        historyRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
+    }
+  }, [scrollToHistory, client]);
+
 
   useEffect(() => {
     const loadNotes = async () => {
@@ -264,6 +275,7 @@ export function MobileClientDetail({ client, onClose, onUpdated }: Props) {
         </div>
 
         {/* Historial (Notas) */}
+        <div ref={historyRef} />
         <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Historial</h3>
           {notes.length === 0 ? (

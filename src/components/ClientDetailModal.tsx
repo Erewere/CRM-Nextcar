@@ -38,6 +38,7 @@ import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
 import { DealWonModal } from "./DealWonModal";
 import { PaymentModal } from "./PaymentModal";
+import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 
 interface Props {
@@ -58,6 +59,8 @@ export function ClientDetailModal({
   const isDealContext = client.originalClientId !== undefined || isNew;
   const [showDealWonModal, setShowDealWonModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [newTaskPrefill, setNewTaskPrefill] = useState<any>(null);
   const [formData, setFormData] = useState<Partial<Client>>(
     isNew
       ? {
@@ -689,11 +692,25 @@ export function ClientDetailModal({
       await updateDoc(doc(db, "tasks", task.id as string), {
         completed: !task.completed,
       });
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === task.id ? { ...t, completed: !task.completed } : t,
-        ),
+      
+      const updatedTasks = tasks.map((t) =>
+        t.id === task.id ? { ...t, completed: !task.completed } : t,
       );
+      setTasks(updatedTasks);
+      
+      // If marked as complete, check if there are any pending tasks for this client/deal
+      if (!task.completed) {
+        const hasPending = updatedTasks.some(t => !t.completed && t.id !== task.id);
+        if (!hasPending) {
+           setNewTaskPrefill({
+              clientId: client.id || "",
+              clientName: formData.name || "",
+              dealId: formData.originalClientId ? client.id : "",
+              dealTitle: formData.dealTitle || ""
+           });
+           setShowNewTaskModal(true);
+        }
+      }
     } catch (err) {
       console.error(err);
     }
@@ -2007,7 +2024,62 @@ export function ClientDetailModal({
           </div>
         </div>
         )}
-      </div>
+            {/* New Activity Modal */}
+      {showNewTaskModal && (
+        <NewActivityModal
+          onClose={() => {
+            setShowNewTaskModal(false);
+            setNewTaskPrefill(null);
+          }}
+          clients={[{ id: client.id, ...formData } as any]}
+          deals={deals}
+          currentUser={userData}
+          initialData={newTaskPrefill}
+          onSave={async (taskData) => {
+            if (!taskData.title || !taskData.dueDate || !userData) {
+              if (!taskData.title) alert("El título es requerido");
+              return;
+            }
+            try {
+              const { doc, collection, setDoc } = await import("firebase/firestore");
+              const newRef = doc(collection(db, "tasks"));
+              const tempTask = {
+                agencyId: userData.agencyId || "",
+                sellerId: userData.id || "",
+                clientId: taskData.clientId || client.id || "",
+                dealId: taskData.dealId || "",
+                title: taskData.title,
+                type: taskData.type || "call",
+                notes: taskData.notes || "",
+                dueDate: taskData.dueDate,
+                startTime: taskData.startTime,
+                endTime: taskData.endTime,
+                completed: taskData.completed || false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+              
+              // Remove undefined fields
+              Object.keys(tempTask).forEach(
+                (k) =>
+                  tempTask[k as keyof typeof tempTask] === undefined &&
+                  delete tempTask[k as keyof typeof tempTask],
+              );
+              
+              await setDoc(newRef, tempTask);
+              
+              // Optimistically update tasks array
+              setTasks(prev => [{ id: newRef.id, ...tempTask } as Task, ...prev]);
+              
+              setShowNewTaskModal(false);
+              setNewTaskPrefill(null);
+            } catch (err) {
+              console.error("Error creating task:", err);
+            }
+          }}
+        />
+      )}
+</div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { Client, Vehicle, Task, User } from "../types";
 import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileHome } from "./mobile/MobileHome";
+import { MobileClientDetail } from "./mobile/MobileClientDetail";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   BarChart,
@@ -61,6 +62,13 @@ import { Link } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 
 
+
+const getWantedTitle = (c: Client) => {
+  if (c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model || (c.wantedVehicle.bodyType && c.wantedVehicle.bodyType !== 'Cualquiera'))) {
+    return [c.wantedVehicle.make, c.wantedVehicle.model, c.wantedVehicle.bodyType !== 'Cualquiera' ? c.wantedVehicle.bodyType : ''].filter(Boolean).join(" ");
+  }
+  return c.vehicle || c.dealTitle || "Auto no especificado";
+};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -479,6 +487,32 @@ export function Dashboard() {
     { name: 'Ventas Cerradas', value: wonContacts.length },
   ];
 
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileHome 
+          userName={userData?.name || userData?.email || "Asesor"}
+          agencyId={userData?.agencyId || ""}
+          clients={clients}
+          activeContacts={activeContacts}
+          tasks={tasks}
+          pipelineStages={pipelineStages}
+          onSelectClient={setSelectedClient}
+        />
+        {selectedClient && (
+          <div className="fixed inset-0 z-[100] bg-slate-900">
+             <MobileClientDetail
+                client={selectedClient}
+                onClose={() => setSelectedClient(null)}
+                onUpdated={() => setRefreshKey((prev) => prev + 1)}
+             />
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-8">
       {/* AI Advisor Panel */}
@@ -709,7 +743,7 @@ export function Dashboard() {
                 {buscanAutoClients.slice(0, 6).map(client => (
                   <div key={client.id} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
                     <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
-                      {client.vehicle || client.dealTitle || "Auto no especificado"}
+                      {getWantedTitle(client)}
                     </p>
                     <div className="flex items-center gap-1.5">
                       <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold">
@@ -799,7 +833,7 @@ export function Dashboard() {
                       {buscanAutoClients.slice(0, 6).map(client => (
                         <div key={client.id} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
                           <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
-                            {client.vehicle || client.dealTitle || "Auto no especificado"}
+                            {getWantedTitle(client)}
                           </p>
                           <div className="flex items-center gap-1.5">
                             <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold">

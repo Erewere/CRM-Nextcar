@@ -18,7 +18,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
   }
 
   vehicles.forEach(vehicle => {
-    if (vehicle.status !== 'available') return; 
+    if (vehicle.status && vehicle.status !== 'available') return; 
     if ((vehicle as any).pendingValidation) return;
     let score = 100;
 

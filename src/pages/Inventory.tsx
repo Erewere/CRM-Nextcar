@@ -19,6 +19,9 @@ export interface VehicleMatch {
 }
 
 export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleMatch[] => {
+  if (vehicle.status !== 'available' && vehicle.status !== undefined && vehicle.status !== '') return [];
+  if ((vehicle as any).pendingValidation) return [];
+  
   const matches: VehicleMatch[] = [];
 
   clients.forEach(c => {

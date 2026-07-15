@@ -339,7 +339,7 @@ export function NewActivityModal({
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-slate-700">
           <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
-            {initialData ? "Editar actividad" : "Programar actividad"}
+            {initialData?.id ? "Editar actividad" : "Programar actividad"}
           </h2>
           <button
             onClick={onClose}
