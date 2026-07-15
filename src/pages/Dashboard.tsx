@@ -13,6 +13,7 @@ import {
 import { db } from "../lib/firebase";
 import { Client, Vehicle, Task, User } from "../types";
 import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
+import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileHome } from "./mobile/MobileHome";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { MobileHome } from "./mobile/MobileHome";
@@ -117,6 +118,7 @@ export function Dashboard() {
   }, [filterSeller, filterStartDate, filterEndDate, filterCategory, activeDateFilter, filterTags]);
 
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>(
     [],
   );
@@ -835,7 +837,7 @@ export function Dashboard() {
           {activeContacts.filter(c => c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model)).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {activeContacts.filter(c => c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model)).map(client => (
-                <Link to="/persons" state={{ clientId: client.id }} key={client.id} className="block p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group">
+                <button onClick={() => setSelectedClient(client)} key={client.id} className="block text-left w-full p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group">
                   <div className="flex justify-between items-start mb-2">
                     <p className="font-bold text-indigo-700 dark:text-indigo-400">
                       {client.wantedVehicle?.make} {client.wantedVehicle?.model}
@@ -852,7 +854,7 @@ export function Dashboard() {
                   <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 border-t border-slate-200 dark:border-slate-700 pt-2">
                     Cliente: {client.name}
                   </p>
-                </Link>
+                </button>
               ))}
             </div>
           ) : (
@@ -879,10 +881,10 @@ export function Dashboard() {
             {activeContacts
               .filter((c) => c.status === selectedStage)
               .map((client) => (
-                <Link
-                  to="/kanban"
+                <button
+                  onClick={() => setSelectedClient(client)}
                   key={client.id}
-                  className="block p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group"
+                  className="block text-left w-full p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-300 hover:shadow-md transition-all bg-slate-50 dark:bg-slate-900 group"
                 >
                   <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">
                     {client.name}
@@ -898,10 +900,19 @@ export function Dashboard() {
                       Ver en Kanban
                     </span>
                   </div>
-                </Link>
+                </button>
               ))}
           </div>
         </div>
+      )}
+      {selectedClient && (
+        <ClientDetailModal
+          client={selectedClient}
+          onClose={() => setSelectedClient(null)}
+          onUpdated={() => {
+            // The snapshot listener handles the refresh
+          }}
+        />
       )}
     </div>
   );

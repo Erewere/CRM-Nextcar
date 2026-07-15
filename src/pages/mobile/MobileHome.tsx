@@ -21,6 +21,7 @@ import {
   User,
 } from "lucide-react";
 import clsx from "clsx";
+import { MobileClientDetail } from "./MobileClientDetail";
 
 const typeIcons: Record<string, any> = {
   call: Phone,
@@ -34,6 +35,7 @@ export function MobileHome() {
   const { userData } = useAuth();
   const [tasks, setTasks] = useState<{ task: Task; client?: Client }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   useEffect(() => {
     if (!userData || userData.role === "master") return;
@@ -155,9 +157,9 @@ export function MobileHome() {
                     : "border-slate-200 dark:border-slate-700 border-l-4 border-l-blue-500"
                 )}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3" onClick={() => client && setSelectedClient(client)}>
                   <button
-                    onClick={() => toggleTaskStatus(task)}
+                    onClick={(e) => { e.stopPropagation(); toggleTaskStatus(task); }}
                     className="mt-1 shrink-0 text-slate-400 hover:text-blue-500 transition-colors"
                   >
                     {isCompleted ? (
@@ -199,6 +201,15 @@ export function MobileHome() {
               </div>
             );
           })}
+        </div>
+      )}
+      {selectedClient && (
+        <div className="fixed inset-0 z-[100] bg-slate-900">
+          <MobileClientDetail
+            client={selectedClient}
+            onClose={() => setSelectedClient(null)}
+            onUpdated={() => { /* Fetch handled by listeners elsewhere or we could reload */ }}
+          />
         </div>
       )}
     </div>
