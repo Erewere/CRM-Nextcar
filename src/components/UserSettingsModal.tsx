@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import { X, Upload, Camera, LogOut } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { db, storage, logout } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { User } from "../types";
 import { useNavigate } from "react-router";
@@ -14,7 +14,7 @@ interface UserSettingsModalProps {
 }
 
 export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
-  const { userData, currentUser, logout } = useAuth();
+  const { userData, currentUser } = useAuth();
   const [name, setName] = useState(userData?.name || "");
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);

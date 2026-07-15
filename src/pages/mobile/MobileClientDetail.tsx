@@ -138,13 +138,42 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const handleStatusChange = async (newStatus: string) => {
     try {
       setCurrentStatus(newStatus);
-      const clientRef = doc(db, 'clients', client.id!);
-      await updateDoc(clientRef, {
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+      const isDeal = client.originalClientId && client.originalClientId !== client.id;
+      const actualClientId = client.originalClientId || client.id;
       
-      // Also update any deals if they exist (simplification for mobile)
+      if (isDeal) {
+        // Update the deal
+        const dealRef = doc(db, 'deals', client.id!);
+        await updateDoc(dealRef, {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+        
+        // Also update the client
+        const clientRef = doc(db, 'clients', actualClientId!);
+        await updateDoc(clientRef, {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        // Update the client directly
+        const clientRef = doc(db, 'clients', client.id!);
+        await updateDoc(clientRef, {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+        
+        // Also update any deals if they exist
+        const q = query(collection(db, 'deals'), where('clientId', '==', client.id!));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const dealDoc = snap.docs[0];
+          await updateDoc(doc(db, 'deals', dealDoc.id), {
+            status: newStatus,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
       
       onUpdated();
     } catch (err) {
