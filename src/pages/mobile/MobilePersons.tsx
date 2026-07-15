@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Client, PipelineStage } from '../../types';
 import { Search, Phone, MessageCircle, User, Car, Calendar, FileText, ChevronRight, Activity, X } from 'lucide-react';
+import { clsx } from 'clsx';
 import { MobileClientDetail } from './MobileClientDetail';
 import { NewActivityModal } from '../../components/NewActivityModal';
 
@@ -110,7 +111,7 @@ export function MobilePersons() {
 
       <div className="flex-1 overflow-y-auto px-2 py-4 pb-24 space-y-3">
         {filteredClients.map(client => (
-          <div key={client.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div key={client.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
             <div 
               className="p-4 cursor-pointer active:bg-slate-50 dark:active:bg-slate-700/50 transition-colors"
               onClick={() => setSelectedClient(client)}
@@ -134,6 +135,55 @@ export function MobilePersons() {
                   </div>
 
                 </div>
+              </div>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 px-2 py-2 flex items-center justify-between overflow-x-auto scrollbar-hide">
+              <div className="flex items-center gap-1 min-w-max">
+                <a 
+                  href={`tel:${client.phone || ''}`} 
+                  onClick={(e) => { e.stopPropagation(); if(!client.phone) e.preventDefault(); }}
+                  className={clsx("flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors", client.phone ? "active:bg-blue-100 dark:active:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "opacity-50 text-slate-400")}
+                >
+                  <Phone className="w-4 h-4 mb-1" />
+                  <span className="text-[9px] font-medium">Llamar</span>
+                </a>
+                <a 
+                  href={`https://wa.me/${(client.phone || '').replace(/[^0-9]/g, '')}`} 
+                  target="_blank" rel="noreferrer"
+                  onClick={(e) => { e.stopPropagation(); if(!client.phone) e.preventDefault(); }}
+                  className={clsx("flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors", client.phone ? "active:bg-green-100 dark:active:bg-green-900/40 text-green-600 dark:text-green-400" : "opacity-50 text-slate-400")}
+                >
+                  <MessageCircle className="w-4 h-4 mb-1" />
+                  <span className="text-[9px] font-medium">WhatsApp</span>
+                </a>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setTaskClient(client); }}
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-amber-100 dark:active:bg-amber-900/40 text-amber-600 dark:text-amber-400"
+                >
+                  <Calendar className="w-4 h-4 mb-1" />
+                  <span className="text-[9px] font-medium">Tarea</span>
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setStageClient(client); }}
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-purple-100 dark:active:bg-purple-900/40 text-purple-600 dark:text-purple-400"
+                >
+                  <Activity className="w-4 h-4 mb-1" />
+                  <span className="text-[9px] font-medium">Etapa</span>
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setHistoryClient(client); }}
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
+                >
+                  <FileText className="w-4 h-4 mb-1" />
+                  <span className="text-[9px] font-medium">Historial</span>
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedClient(client); }}
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
+                >
+                  <User className="w-4 h-4 mb-1" />
+                  <span className="text-[9px] font-medium">Ficha</span>
+                </button>
               </div>
             </div>
           </div>
