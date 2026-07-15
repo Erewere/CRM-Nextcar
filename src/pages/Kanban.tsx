@@ -479,6 +479,7 @@ export function Kanban() {
         };
 
         const isExistingDeal = deals.some(d => d.id === clientId);
+        const actualClientId = client.originalClientId || client.id;
         if (isExistingDeal) {
           await setDoc(doc(db, "deals", clientId), updates, { merge: true });
         } else {
@@ -487,7 +488,7 @@ export function Kanban() {
           await setDoc(dealRef, {
             ...updates,
             id: dealRef.id,
-            clientId: client.originalClientId || client.id,
+            clientId: actualClientId,
             agencyId: userData?.agencyId,
             sellerId: client.sellerId || userData?.id,
             createdAt: new Date().toISOString(),
@@ -495,6 +496,13 @@ export function Kanban() {
             value: client.dealValue ? Number(client.dealValue) : 0,
             vehicle: client.vehicle || null,
             vehicleId: client.vehicleId || null
+          });
+        }
+        // Also update the client's status so it stays in sync
+        if (actualClientId) {
+          await updateDoc(doc(db, "clients", actualClientId), {
+            status: overColumnId,
+            updatedAt: new Date().toISOString()
           });
         }
       } catch (e) {
@@ -519,6 +527,7 @@ export function Kanban() {
       };
 
       const isExistingDeal = deals.some(d => d.id === client.id);
+      const actualClientId = client.originalClientId || client.id;
       if (isExistingDeal) {
         await setDoc(doc(db, "deals", client.id), updates, { merge: true });
       } else {
@@ -526,14 +535,22 @@ export function Kanban() {
         await setDoc(dealRef, {
           ...updates,
           id: dealRef.id,
-          clientId: client.originalClientId || client.id,
+          clientId: actualClientId,
           agencyId: userData?.agencyId,
           sellerId: client.sellerId || userData?.id,
           createdAt: new Date().toISOString(),
           title: `Trato con ${client.name}`,
-            value: client.dealValue ? Number(client.dealValue) : 0,
-            vehicle: client.vehicle || null,
-            vehicleId: client.vehicleId || null
+          value: client.dealValue ? Number(client.dealValue) : 0,
+          vehicle: client.vehicle || null,
+          vehicleId: client.vehicleId || null
+        });
+      }
+      
+      if (actualClientId) {
+        await updateDoc(doc(db, "clients", actualClientId), {
+          status: "won",
+          soldAt: new Date().toISOString().split('T')[0],
+          updatedAt: new Date().toISOString()
         });
       }
 
