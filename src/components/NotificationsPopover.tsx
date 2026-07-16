@@ -35,7 +35,7 @@ export function NotificationsPopover() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedTasks = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() } as Task)
+        (doc) => ({ ...doc.data(), id: doc.id } as Task)
       );
       setTasks(fetchedTasks);
     });
@@ -184,7 +184,7 @@ export function NotificationsPopover() {
               <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {notifications.map((notif) => (
                   <button
-                    key={notif.id}
+                    key={`notif-${notif.id}`}
                     onClick={() => {
                       setIsOpen(false);
                       notif.onClick();

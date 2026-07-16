@@ -44,16 +44,16 @@ export function MasterDashboard() {
       const clientsSnap = await getDocs(collection(db, 'clients'));
       const tasksSnap = await getDocs(collection(db, 'tasks'));
       
-      const filesData = filesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClientFile));
-      const clientsData = clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-      const tasksData = tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+      const filesData = filesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClientFile));
+      const clientsData = clientsSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Client));
+      const tasksData = tasksSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
       
       setAllFiles(filesData);
       
-      const agenciesData = agenciesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Agency));
+      const agenciesData = agenciesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Agency));
       
       const userData = usersSnap.docs.map(doc => {
-        const u = { id: doc.id, ...doc.data() } as User;
+        const u = { ...doc.data(), id: doc.id } as User;
         const fCount = filesData.filter(f => f.userId === u.id).length;
         const cCount = clientsData.filter(c => c.sellerId === u.id).length;
         const tCount = tasksData.filter(t => t.sellerId === u.id).length;
@@ -249,7 +249,7 @@ export function MasterDashboard() {
           const isExpanded = expandedAgencies[agency.id] || false;
           
           return (
-            <div key={agency.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div key={`agency-${agency.id}`} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div 
                 className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors"
                 onClick={() => toggleAgency(agency.id)}
@@ -288,7 +288,7 @@ export function MasterDashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
                           {agency.users.map(u => (
-                            <tr key={u.id}>
+                            <tr key={`user-${u.id}`}>
                               <td className="py-3 pr-4">
                                 <div className="flex items-center gap-2">
                                   {u.isActive ? (
@@ -322,7 +322,7 @@ export function MasterDashboard() {
                                   >
                                     <option value="unassigned">-- Sin Agencia --</option>
                                     {agenciesStats.filter(a => a.id !== 'unassigned').map(a => (
-                                      <option value={a.id} key={a.id}>{a.name}</option>
+                                      <option value={a.id} key={`agency-${a.id}`}>{a.name}</option>
                                     ))}
                                   </select>
                                 </div>

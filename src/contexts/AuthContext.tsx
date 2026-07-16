@@ -104,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Refresh
     const newDoc = await getDoc(doc(db, 'users', currentUser.uid));
-    setUserData({ id: newDoc.id, ...newDoc.data() } as User);
+    setUserData({ ...newDoc.data(), id: newDoc.id } as User);
   };
 
   const connectGoogleServices = async () => {

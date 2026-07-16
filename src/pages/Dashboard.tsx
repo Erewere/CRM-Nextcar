@@ -212,24 +212,24 @@ export function Dashboard() {
           ]);
         
         setDeals(
-          dealsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+          dealsSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
         );
 
         const rawClients = clientsSnap.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() }) as Client,
+          (doc) => ({ ...doc.data(), id: doc.id }) as Client,
         );
         
         setClients(deduplicateClients(rawClients));
         setVehicles(
           vehiclesSnap.docs.map(
-            (doc) => ({ id: doc.id, ...doc.data() }) as Vehicle,
+            (doc) => ({ ...doc.data(), id: doc.id }) as Vehicle,
           ),
         );
         setTasks(
-          tasksSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Task),
+          tasksSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as Task),
         );
         setUsers(
-          usersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as User),
+          usersSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as User),
         );
         setAgencyTags(
           tagsSnap.docs.map((doc) => ({ id: doc.id, name: doc.data().name })),

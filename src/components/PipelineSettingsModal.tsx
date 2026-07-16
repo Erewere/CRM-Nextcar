@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -70,9 +71,16 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
   if (userData?.role !== 'admin') return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] relative z-10">
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+      <motion.div className="absolute inset-0" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+      <motion.div 
+        className="bg-white dark:bg-slate-800 md:rounded-xl rounded-t-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col h-[90dvh] md:max-h-[90vh] relative z-10"
+        initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
+        animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
+        exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
+        transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
+        style={{ transformOrigin: "bottom center" }}
+      >
         <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-900">
           <h2 className="font-bold text-lg text-slate-800 dark:text-slate-200">Configurar Etapas</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">✕</button>
@@ -119,7 +127,7 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
             {loading ? 'Guardando...' : 'Guardar'}
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

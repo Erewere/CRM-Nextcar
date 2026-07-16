@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
 import { X, Search, Check, Send, AlertCircle, Car } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -38,7 +39,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
         }
         
         const snap = await getDocs(q);
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
         setClients(deduplicateClients(list));
       } catch (err) {
         console.error(err);
@@ -105,8 +106,16 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col md:items-center md:justify-center p-0 md:p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-full md:h-auto md:max-h-[85vh] md:max-w-md md:rounded-2xl flex flex-col shadow-2xl relative animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col justify-end md:items-center md:justify-center p-0 md:p-4">
+      <motion.div className="absolute inset-0" onClick={onClose} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} />
+      <motion.div 
+        className="bg-white dark:bg-slate-900 w-full h-[90dvh] md:h-auto md:max-h-[85vh] md:max-w-md md:rounded-2xl rounded-t-3xl flex flex-col shadow-2xl relative z-10"
+        initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
+        animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
+        exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
+        transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
+        style={{ transformOrigin: "bottom center" }}
+      >
         
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">Compartir Vehículo</h2>
@@ -163,7 +172,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
                 <div className="space-y-1">
                   {filteredClients.map(c => (
                     <button
-                      key={c.id}
+                      key={`client-${c.id}`}
                       onClick={() => setSelectedClient(c)}
                       className={clsx(
                         "w-full flex items-center justify-between p-3 rounded-xl text-left transition-colors",
@@ -211,7 +220,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
             </div>
           </>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

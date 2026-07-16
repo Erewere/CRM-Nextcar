@@ -357,21 +357,21 @@ export function Persons() {
         setAgencyUsers(usersMap);
 
         const allClients = clientsDocs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Client,
+          (d) => ({ ...d.data(), id: d.id }) as Client,
         );
         setPersons(deduplicateClients(allClients));
 
         setDeals(
           dealsDocs
-            ? dealsDocs.map((d: any) => ({ id: d.id, ...d.data() }) as Deal)
+            ? dealsDocs.map((d: any) => ({ ...d.data(), id: d.id }) as Deal)
             : [],
         );
         setVehicles(
-          vehiclesDocs.map((d: any) => ({ id: d.id, ...d.data() }) as Vehicle)
+          vehiclesDocs.map((d: any) => ({ ...d.data(), id: d.id }) as Vehicle)
         );
         setTasks(
           tasksDocs
-            ? tasksDocs.map((d: any) => ({ id: d.id, ...d.data() }) as Task)
+            ? tasksDocs.map((d: any) => ({ ...d.data(), id: d.id }) as Task)
             : [],
         );
       } catch (err) {
@@ -973,7 +973,7 @@ export function Persons() {
                   .filter((c) => c.visible)
                   .map((col) => (
                     <th
-                      key={col.id}
+                      key={`col-${col.id}`}
                       className="relative border-r border-gray-200 dark:border-slate-700 truncate group cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
                       style={{ width: col.width }}
                       onClick={() => handleSort(col.id)}
@@ -1010,7 +1010,7 @@ export function Persons() {
                       </div>
                       {columns.map((col) => (
                         <label
-                          key={col.id}
+                          key={`col-${col.id}`}
                           className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:bg-slate-900 rounded cursor-pointer text-gray-700 dark:text-slate-300"
                         >
                           <input
@@ -1134,7 +1134,7 @@ export function Persons() {
                             "Sin asignar";
                         return (
                           <td
-                            key={col.id}
+                            key={`col-${col.id}`}
                             className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate"
                             style={{ width: col.width, maxWidth: col.width }}
                           >
@@ -1396,7 +1396,7 @@ export function Persons() {
                         <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto left-0">
                           {matches.map(match => (
                             <div 
-                              key={match.id}
+                              key={`match-${match.id}`}
                               className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center"
                               onClick={() => {
                                 const newP = [...phones];
@@ -1487,7 +1487,7 @@ export function Persons() {
                         <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto left-0">
                           {matches.map(match => (
                             <div 
-                              key={match.id}
+                              key={`match-${match.id}`}
                               className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center"
                               onClick={() => {
                                 const newE = [...emails];

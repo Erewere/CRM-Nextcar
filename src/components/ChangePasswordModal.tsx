@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';

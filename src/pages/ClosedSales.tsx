@@ -50,21 +50,21 @@ export function ClosedSales() {
     }
 
     const unsubClients = onSnapshot(clientsQ, (snap) => {
-      const rawClients = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      const rawClients = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
       setClients(deduplicateClients(rawClients));
     });
 
     const unsubVehicles = onSnapshot(vehiclesQ, (snap) => {
-      setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() } as Vehicle)));
+      setVehicles(snap.docs.map(d => ({ ...d.data(), id: d.id } as Vehicle)));
     });
 
     let dealsQ = userData?.role !== 'master' ? query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)) : query(collection(db, "deals"));
     const unsubDeals = onSnapshot(dealsQ, (snap) => {
-      setDeals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setDeals(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
 
     const unsubExpenses = onSnapshot(expensesQ, (snap) => {
-      setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as VehicleExpense)));
+      setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id } as VehicleExpense)));
       setLoading(false);
     });
 

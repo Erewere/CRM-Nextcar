@@ -378,12 +378,12 @@ export function Inventory() {
     });
 
     const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
-      const rawClients = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      const rawClients = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Client));
       setClients(deduplicateClients(rawClients));
     });
 
     const unsubscribeExpenses = onSnapshot(expensesQ, (snapshot) => {
-      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as VehicleExpense)));
+      setExpenses(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as VehicleExpense)));
     });
 
     return () => {
@@ -693,7 +693,7 @@ export function Inventory() {
                 <tr>
                   {columns.filter(c => c.visible).map(col => (
                     <th 
-                      key={col.id} 
+                      key={`col-${col.id}`} 
                       className="relative border-r border-gray-200 dark:border-slate-700 truncate group cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50" 
                       style={{ width: col.width }}
                       onClick={() => handleSort(col.id)}
@@ -723,7 +723,7 @@ export function Inventory() {
                         <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg p-2 z-50">
                         <div className="text-xs font-bold text-gray-500 dark:text-slate-400 mb-2 uppercase px-2">Columnas visibles</div>
                         {columns.map(col => (
-                          <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:bg-slate-900 rounded cursor-pointer text-gray-700 dark:text-slate-300">
+                          <label key={`col-${col.id}`} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:bg-slate-900 rounded cursor-pointer text-gray-700 dark:text-slate-300">
                             <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500" />
                             <span className="truncate">{col.label}</span>
                           </label>
@@ -796,7 +796,7 @@ export function Inventory() {
                       if (col.id === 'ownership') val = vehicle.ownership === 'consignacion' ? 'Consignación' : 'Propio';
                       
                       return (
-                        <td key={col.id} className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate" style={{ width: col.width, maxWidth: col.width }}>
+                        <td key={`col-${col.id}`} className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate" style={{ width: col.width, maxWidth: col.width }}>
                           {val}
                         </td>
                       );

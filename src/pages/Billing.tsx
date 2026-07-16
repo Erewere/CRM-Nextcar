@@ -38,7 +38,7 @@ export function Billing() {
         const agencyRef = doc(db, 'agencies', userData.agencyId);
         const agencySnap = await getDoc(agencyRef);
         if (agencySnap.exists()) {
-          setAgency({ id: agencySnap.id, ...agencySnap.data() } as Agency);
+          setAgency({ ...agencySnap.data(), id: agencySnap.id } as Agency);
         }
       } catch (err) {
         console.error("Error fetching data", err);

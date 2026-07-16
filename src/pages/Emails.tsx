@@ -235,7 +235,7 @@ export function Emails() {
                           }
                           return (
                             <div 
-                              key={msg.id} 
+                              key={`msg-${msg.id}`} 
                               onClick={() => setSelectedEmail(msg)}
                               className={clsx(
                                 "p-4 cursor-pointer hover:bg-gray-50 dark:bg-slate-900 transition-colors relative border-l-4",

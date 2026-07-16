@@ -97,7 +97,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       try {
         const q = query(collection(db, "notes"), where("clientId", "==", client.id));
         const s = await getDocs(q);
-        const n = s.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
+        const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
         n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotes(n);
       } catch (error) {
@@ -215,7 +215,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       // refresh notes
       const q = query(collection(db, "notes"), where("clientId", "==", client.id));
       const s = await getDocs(q);
-      const n = s.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
+      const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
       n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotes(n);
     } catch (err) {
@@ -289,7 +289,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
               const isPast = pipelineStages.findIndex(s => s.id === currentStatus) > idx;
               return (
                 <button
-                  key={stage.id}
+                  key={`stage-${stage.id}`}
                   onClick={() => handleStatusChange(stage.id)}
                   className={clsx(
                     "flex items-center shrink-0 snap-center px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
@@ -314,7 +314,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           <div className="grid grid-cols-2 gap-2 mb-4">
             {quickActions.map(action => (
               <button
-                key={action.id}
+                key={`action-${action.id}`}
                 onClick={() => setSelectedActionId(selectedActionId === action.id ? null : action.id)}
                 className={clsx(
                   "flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-colors border",
@@ -369,7 +369,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           ) : (
             <div className="space-y-4">
               {notes.map(note => (
-                <div key={note.id} className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700 pb-2 last:border-0 last:pb-0">
+                <div key={`note-${note.id}`} className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700 pb-2 last:border-0 last:pb-0">
                   <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-medium text-slate-500 dark:text-slate-400">

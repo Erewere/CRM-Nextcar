@@ -224,7 +224,7 @@ export function Tasks() {
       try {
         const snap = await getDocs(q);
         const taskList = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Task,
+          (d) => ({ ...d.data(), id: d.id }) as Task,
         );
 
         let cq = query(
@@ -249,12 +249,12 @@ export function Tasks() {
         }
 
         const cSnap = await getDocs(cq);
-        const list = cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+        const list = cSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
         setClients(deduplicateClients(list));
 
         try {
           const dSnap = await getDocs(dq);
-          setDeals(dSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Deal));
+          setDeals(dSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Deal));
         } catch (e) {
           // If deals collection doesn't exist yet, it's fine, it will just be empty
           setDeals([]);
@@ -746,7 +746,7 @@ export function Tasks() {
               })
               .map(({task, client}) => (
                 <div
-                  key={task.id}
+                  key={`task-${task.id}`}
                   onClick={() => handleTaskClick(task)}
                   className="flex gap-2 items-start p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer"
                 >
@@ -1119,13 +1119,6 @@ export function Tasks() {
 
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] relative">
-      {/* FAB for mobile */}
-      <button
-        onClick={() => setShowNewTaskModal(true)}
-        className="md:hidden fixed bottom-[80px] right-4 w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg z-50 hover:bg-blue-700 active:scale-95 transition-transform"
-      >
-        <span className="text-2xl font-light mb-0.5">+</span>
-      </button>
 
       {/* Header and filters */}
       <div className="p-2 md:p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
@@ -1716,7 +1709,7 @@ export function Tasks() {
               <tbody className="bg-white dark:bg-slate-800">
                 {sortedTasks.map(({ task, client }) => (
                   <tr
-                    key={task.id}
+                    key={`task-${task.id}`}
                     className={clsx(
                       "border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 flex-col md:table-row group",
                       selectedTaskIds.includes(task.id) &&
@@ -1867,7 +1860,7 @@ export function Tasks() {
               </div>
 
               {sortedTasks.map(({ task, client }) => (
-                <div key={task.id} className="flex items-start gap-4 p-4 border-b border-gray-100 dark:border-[#222]" onClick={() => handleTaskClick(task)}>
+                <div key={`task-${task.id}`} className="flex items-start gap-4 p-4 border-b border-gray-100 dark:border-[#222]" onClick={() => handleTaskClick(task)}>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2397,7 +2390,7 @@ export function Tasks() {
                     .filter((t) => !t.task.completed)
                     .map(({ task, client }) => (
                       <div
-                        key={task.id}
+                        key={`task-${task.id}`}
                         className="group flex gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/30 transition-all"
                         onClick={() => handleTaskClick(task)}
                       >

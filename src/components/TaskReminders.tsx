@@ -31,7 +31,7 @@ export function TaskReminders() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const taskList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+      const taskList = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
       setTasks(taskList);
     });
 

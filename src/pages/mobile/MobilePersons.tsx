@@ -54,7 +54,7 @@ export function MobilePersons() {
       }
 
       const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
       
       setClients(deduplicateClients(list));
       setSelectedClient(prev => prev ? (list.find(c => c.id === prev.id) || prev) : null);
@@ -231,7 +231,7 @@ export function MobilePersons() {
             <div className="p-2 max-h-[60vh] overflow-y-auto">
               {pipelineStages.map(stage => (
                 <button
-                  key={stage.id}
+                  key={`stage-${stage.id}`}
                   onClick={async () => {
                     try {
                       await updateDoc(doc(db, "clients", stageClient.id), { status: stage.id, updatedAt: new Date().toISOString() });

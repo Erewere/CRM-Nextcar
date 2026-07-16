@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import React, { useState, useEffect, useRef } from "react";
 import imageCompression from "browser-image-compression";
 import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
@@ -86,7 +87,7 @@ export function ClientDetailModal({
         where("agencyId", "==", userData.agencyId),
       );
       const s = await getDocs(q);
-      setAgencyUsers(s.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setAgencyUsers(s.docs.map((d) => ({ ...d.data(), id: d.id })));
     };
     loadUsers();
   }, [userData?.agencyId]);
@@ -216,7 +217,7 @@ export function ClientDetailModal({
       getDocs(q)
         .then((snap) => {
           setInventoryVehicles(
-            snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Vehicle),
+            snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Vehicle),
           );
         })
         .catch(console.error);
@@ -228,7 +229,7 @@ export function ClientDetailModal({
       getDocs(q)
         .then((snap) => {
           setInventoryVehicles(
-            snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Vehicle),
+            snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Vehicle),
           );
         })
         .catch(console.error);
@@ -251,7 +252,7 @@ export function ClientDetailModal({
         );
       }
       const s = await getDocs(q);
-      const t = s.docs.map((d) => ({ id: d.id, ...d.data() }) as Task);
+      const t = s.docs.map((d) => ({ ...d.data(), id: d.id }) as Task);
       t.sort(
         (a, b) =>
           new Date(b.createdAt as string).getTime() -
@@ -266,7 +267,7 @@ export function ClientDetailModal({
         where("clientId", "==", client.id),
       );
       const s = await getDocs(q);
-      const f = s.docs.map((d) => ({ id: d.id, ...d.data() }) as ClientFile);
+      const f = s.docs.map((d) => ({ ...d.data(), id: d.id }) as ClientFile);
       f.sort(
         (a, b) =>
           new Date(b.uploadedAt as string).getTime() -
@@ -281,7 +282,7 @@ export function ClientDetailModal({
         where("clientId", "==", client.id),
       );
       const s = await getDocs(q);
-      const n = s.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
+      const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
       n.sort(
         (a, b) =>
           new Date(b.createdAt as string).getTime() -
@@ -294,6 +295,7 @@ export function ClientDetailModal({
     loadNotes();
   }, [client.id, isNew]);
 
+  const [currentStep, setCurrentStep] = useState(1);
   const [existingPersons, setExistingPersons] = useState<Client[]>([]);
   const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
@@ -336,7 +338,7 @@ export function ClientDetailModal({
         try {
           const snap = await getDocs(q);
           setExistingPersons(
-            snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Client),
+            snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Client),
           );
         } catch (e) {
           console.error(e);
@@ -757,8 +759,23 @@ export function ClientDetailModal({
   const completedTasks = tasks.filter((t) => t.completed);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-2 sm:p-4">
-      <div className="bg-white dark:bg-slate-800 w-full max-w-6xl h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+      {/* Backdrop */}
+      <motion.div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      />
+      <motion.div
+        className="bg-white dark:bg-slate-800 w-full max-w-6xl md:rounded-xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden h-[95dvh] relative z-10"
+        initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
+        animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
+        exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
+        transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
+        style={{ transformOrigin: "bottom center" }}
+      >
         {/* TOP HEADER */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -825,7 +842,7 @@ export function ClientDetailModal({
                     <option value="" disabled>Contacto sin trato activo</option>
                   )}
                   {pipelineStages.map((stage) => (
-                    <option key={stage.id} value={stage.id}>
+                    <option key={`stage-${stage.id}`} value={stage.id}>
                       {stage.id === "lost" ? "Contacto" : stage.title}
                     </option>
                   ))}
@@ -917,7 +934,7 @@ export function ClientDetailModal({
                       {formData.saleDetails.payments && formData.saleDetails.payments.length > 0 ? (
                         <div className="space-y-2">
                           {formData.saleDetails.payments.map(payment => (
-                            <div key={payment.id} className="flex justify-between items-center text-xs">
+                            <div key={`payment-${payment.id}`} className="flex justify-between items-center text-xs">
                               <div>
                                 <span className="font-semibold text-slate-800 dark:text-slate-200">
                                   {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payment.amount)}
@@ -1023,6 +1040,8 @@ export function ClientDetailModal({
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Pasajeros</label>
                   <input
                     type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="5"
                     value={formData.wantedVehicle?.passengers || ""}
                     onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, passengers: e.target.value ? parseInt(e.target.value) : undefined } }))}
@@ -1033,6 +1052,8 @@ export function ClientDetailModal({
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Presupuesto Máximo</label>
                   <input
                     type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="$300,000"
                     value={formData.wantedVehicle?.priceMax || ""}
                     onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, priceMax: e.target.value ? parseInt(e.target.value) : undefined } }))}
@@ -1063,6 +1084,8 @@ export function ClientDetailModal({
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año Mínimo</label>
                   <input
                     type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="2015"
                     value={formData.wantedVehicle?.yearMin || ""}
                     onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, yearMin: e.target.value ? parseInt(e.target.value) : undefined } }))}
@@ -1073,6 +1096,8 @@ export function ClientDetailModal({
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año Máximo</label>
                   <input
                     type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="2024"
                     value={formData.wantedVehicle?.yearMax || ""}
                     onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, yearMax: e.target.value ? parseInt(e.target.value) : undefined } }))}
@@ -1169,7 +1194,7 @@ export function ClientDetailModal({
                 onSubmit={handleSave}
                 className="space-y-4"
               >
-                <div className="space-y-1">
+                <div className={`space-y-1 ${isNew && currentStep !== 2 ? "hidden md:block" : ""}`}>
                   <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Valor / Vehículo
                   </label>
@@ -1211,7 +1236,7 @@ export function ClientDetailModal({
                     </option>
                     <option value="Otro pendiente">Otro pendiente</option>
                     {inventoryVehicles.map((v) => (
-                      <option key={v.id} value={v.id}>
+                      <option key={`vehicle-${v.id}`} value={v.id}>
                         {v.year} {v.make} {v.model} - {v.vin}
                       </option>
                     ))}
@@ -1227,7 +1252,7 @@ export function ClientDetailModal({
                   </select>
                 </div>
 
-                <div className="pt-2 border-t border-gray-100 dark:border-slate-700 space-y-1">
+                <div className={`pt-2 border-t border-gray-100 dark:border-slate-700 space-y-1 ${isNew && currentStep !== 1 ? "hidden md:block" : ""}`}>
                   <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Persona
                   </label>
@@ -1258,9 +1283,9 @@ export function ClientDetailModal({
                                 ?.toLowerCase()
                                 .includes((formData.name || "").toLowerCase()),
                             )
-                            .map((p) => (
+                            .map((p, i) => (
                               <div
-                                key={p.id}
+                                key={`person-${p.id}-${i}`}
                                 className="px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                                 onClick={() => handleSelectPerson(p)}
                               >
@@ -1299,6 +1324,8 @@ export function ClientDetailModal({
                     <Phone className="w-4 h-4 text-gray-400" />
                     <input
                       name="phone"
+                      type="tel"
+                      inputMode="tel"
                       autoComplete="off"
                       placeholder="Teléfono"
                       value={formData.phone || ""}
@@ -1315,9 +1342,9 @@ export function ClientDetailModal({
                             .filter((p) =>
                               p.phone?.includes(formData.phone || ""),
                             )
-                            .map((p) => (
+                            .map((p, i) => (
                               <div
-                                key={p.id}
+                                key={`person-${p.id}-${i}`}
                                 className="px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                                 onClick={() => handleSelectPerson(p)}
                               >
@@ -1353,7 +1380,7 @@ export function ClientDetailModal({
                       {agencyUsers
                         .filter((u) => u.role !== "unassigned")
                         .map((u) => (
-                          <option key={u.id} value={u.id}>
+                          <option key={`user-${u.id}`} value={u.id}>
                             {(!u.name || u.name === 'Usuario Pendiente')
                               ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
                               : u.name}
@@ -1410,8 +1437,8 @@ export function ClientDetailModal({
                     <datalist id="existing-emails-list">
                       {existingPersons
                         .filter((p) => p.email)
-                        .map((p) => (
-                          <option key={p.id} value={p.email}>
+                        .map((p, i) => (
+                          <option key={`person-${p.id}-${i}`} value={p.email}>
                             {p.name}
                           </option>
                         ))}
@@ -1640,6 +1667,37 @@ export function ClientDetailModal({
                     Fuente: {formData.origin}
                   </span>
                 </div>
+              
+                {isNew && (
+                  <div className="md:hidden flex flex-col gap-2 pt-4">
+                    {currentStep === 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(2)}
+                        className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md active:scale-95 transition-all text-center"
+                      >
+                        Continuar
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentStep(1)}
+                          className="w-1/3 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg active:scale-95 transition-all text-center"
+                        >
+                          Atrás
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-lg shadow-md active:scale-95 transition-all text-center"
+                        >
+                          Guardar Prospecto
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
               </form>
             </div>
           </div>
@@ -1647,7 +1705,7 @@ export function ClientDetailModal({
           {/* RIGHT SIDEBAR (INTERACTIONS & TIMELINE) */}
           <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-slate-900 md:overflow-hidden">
             {!isNew ? (
-              <div className="flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6">
+              <div className={`flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 ${isNew ? "hidden md:block" : ""}`}>
                 {/* INTERACTION WIDGET */}
                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
                   <div className="flex border-b border-gray-200 dark:border-slate-700">
@@ -1774,7 +1832,7 @@ export function ClientDetailModal({
         ) : (
           <div className="flex flex-col gap-2">
             {deals.map(deal => (
-              <div key={deal.id} className="p-3 border border-slate-200 dark:border-slate-700 rounded shadow-sm bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div key={`deal-${deal.id}`} className="p-3 border border-slate-200 dark:border-slate-700 rounded shadow-sm bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
                 <div>
                   <h4 className="font-semibold text-slate-800 dark:text-slate-200">{deal.title}</h4>
                   <p className="text-xs text-slate-500">Estado: {deal.status || deal.stageId || 'Open'}</p>
@@ -1824,7 +1882,7 @@ export function ClientDetailModal({
                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
                       {pendingTasks.map((t, idx) => (
                         <div
-                          key={t.id}
+                          key={`task-${t.id}`}
                           className={clsx(
                             "flex items-center justify-between p-3",
                             idx !== pendingTasks.length - 1 &&
@@ -2006,7 +2064,7 @@ export function ClientDetailModal({
             )}
 
             {/* BOTTOM ACTIONS (mobile: form save, desktop: right aligned save) */}
-            <div className="p-4 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3 shrink-0">
+            <div className={`p-4 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3 shrink-0 ${isNew ? "hidden md:flex" : ""}`}>
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
@@ -2024,6 +2082,7 @@ export function ClientDetailModal({
           </div>
         </div>
         )}
+      </motion.div>
             {/* New Activity Modal */}
       {showNewTaskModal && (
         <NewActivityModal
@@ -2079,7 +2138,6 @@ export function ClientDetailModal({
           }}
         />
       )}
-</div>
     </div>
   );
 }

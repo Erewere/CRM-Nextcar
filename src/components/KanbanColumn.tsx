@@ -183,7 +183,7 @@ export function KanbanColumn({
           {clients.map((client) => {
             return (
               <SortableClientCard
-                key={client.id}
+                key={`client-${client.id}`}
                 client={client}
                 onClick={() => onClientClick(client)}
                 tasks={tasks.filter((t) => t.clientId === client.id)}

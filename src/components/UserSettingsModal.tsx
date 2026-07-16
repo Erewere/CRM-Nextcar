@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import React, { useState, useRef } from "react";
 import { X, Upload, Camera, LogOut } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
@@ -94,9 +95,16 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 relative z-10">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4">
+      <motion.div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} />
+      <motion.div 
+        className="bg-white dark:bg-slate-900 md:rounded-xl rounded-t-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 relative z-10"
+        initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
+        animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
+        exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
+        transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
+        style={{ transformOrigin: "bottom center" }}
+      >
         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">
             Configuración de Usuario
@@ -187,7 +195,7 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

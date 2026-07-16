@@ -32,7 +32,7 @@ export function MobileTasks() {
         where("sellerId", "==", userData.id),
       );
       const snap = await getDocs(q);
-      const taskList = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Task);
+      const taskList = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Task);
       
       const clientIds = [...new Set(taskList.map(t => t.clientId).filter(Boolean))];
       const clientsMap = new Map<string, Client>();
@@ -50,7 +50,7 @@ export function MobileTasks() {
           );
           const cSnap = await getDocs(cq);
           cSnap.forEach(d => {
-            clientsMap.set(d.id, { id: d.id, ...d.data() } as Client);
+            clientsMap.set(d.id, { ...d.data(), id: d.id } as Client);
           });
         }
       }

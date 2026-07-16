@@ -12,7 +12,7 @@ export function VehiclePrint() {
     if (!id) return;
     getDoc(doc(db, 'vehicles', id)).then(snap => {
       if (snap.exists()) {
-        setVehicle({ id: snap.id, ...snap.data() } as Vehicle);
+        setVehicle({ ...snap.data(), id: snap.id } as Vehicle);
         setTimeout(() => {
           window.print();
         }, 500);

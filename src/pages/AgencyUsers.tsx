@@ -110,12 +110,12 @@ export function AgencyUsers() {
           const usersSnap = await getDocs(collection(db, 'users'));
           const agenciesSnap = await getDocs(collection(db, 'agencies'));
           
-          setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          setAgencies(agenciesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setUsers(usersSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+          setAgencies(agenciesSnap.docs.map(d => ({ ...d.data(), id: d.id })));
         } else if (userData.role === 'admin') {
           // Admin gets users in their agency
           const snap = await getDocs(query(collection(db, 'users'), where('agencyId', '==', userData.agencyId)));
-          setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setUsers(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         }
 
         // Load inactivity alerts data
@@ -138,9 +138,9 @@ export function AgencyUsers() {
             getDocs(clientsQ),
             getDocs(tasksQ)
           ]);
-          const rawClients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+          const rawClients = clientsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
           setClients(deduplicateClients(rawClients));
-          setTasks(tasksSnap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+          setTasks(tasksSnap.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
         }
       } catch (e) {
         console.error("Error fetching data:", e);
@@ -416,7 +416,7 @@ export function AgencyUsers() {
           </div>
           <ul className="divide-y divide-slate-100 dark:divide-slate-700/50 max-h-[400px] overflow-y-auto">
             {agencies.map(a => (
-              <li key={a.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
+              <li key={`agency-${a.id}`} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
                 <div className="flex-1">
                   <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                     {a.name}
@@ -466,7 +466,7 @@ export function AgencyUsers() {
               >
                 <option value="">Selecciona una agencia...</option>
                 {agencies.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={`agency-${a.id}`} value={a.id}>{a.name}</option>
                 ))}
               </select>
             </div>
@@ -576,7 +576,7 @@ export function AgencyUsers() {
               ) : (
                 inactiveAlerts.map(({ task, client }) => (
                   <div 
-                    key={task.id} 
+                    key={`task-${task.id}`} 
                     className="p-3 rounded-lg bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 cursor-pointer hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-colors"
                     onClick={() => {
                       if (client) {
@@ -682,7 +682,7 @@ export function AgencyUsers() {
           <div className="flex flex-wrap gap-2 pt-2">
             {agencyTags.map(tag => (
               <span
-                key={tag.id}
+                key={`tag-${tag.id}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/10"
               >
                 {tag.name}
@@ -707,7 +707,7 @@ export function AgencyUsers() {
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <ul className="divide-y divide-slate-100">
           {users.map(u => (
-            <li key={u.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
+            <li key={`user-${u.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <div className="font-bold text-slate-800 dark:text-slate-200">
@@ -737,7 +737,7 @@ export function AgencyUsers() {
                     >
                       <option value="unassigned">-- Sin Asignar --</option>
                       {agencies.map(a => (
-                        <option value={a.id} key={a.id}>{a.name}</option>
+                        <option value={a.id} key={`agency-${a.id}`}>{a.name}</option>
                       ))}
                     </select>
                   </div>

@@ -23,7 +23,7 @@ export function MobileInventory() {
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedVehicles = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Vehicle));
+      const loadedVehicles = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Vehicle));
       setVehicles(loadedVehicles);
       setLoading(false);
     });

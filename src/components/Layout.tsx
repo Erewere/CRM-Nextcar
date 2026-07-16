@@ -31,6 +31,8 @@ import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
 import { useIsMobile } from "../hooks/useIsMobile";
 
+import { MobileFab } from "./MobileFab";
+
 export function Layout() {
   const { userData } = useAuth();
   const navigate = useNavigate();
@@ -371,6 +373,9 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      
+      {/* Global Mobile FAB */}
+      {isMobile && <MobileFab />}
       
       {/* Mobile Bottom Navigation */}
       {isMobile && (

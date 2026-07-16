@@ -63,7 +63,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   useEffect(() => {
     if (userData?.role === 'master') {
       getDocs(collection(db, 'agencies')).then(snap => {
-        setAgencies(snap.docs.map(d => ({ id: d.id, ...d.data() } as Agency)));
+        setAgencies(snap.docs.map(d => ({ ...d.data(), id: d.id } as Agency)));
       });
     }
   }, [userData?.role]);
@@ -76,7 +76,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         where('sellerId', '==', userData.id)
       );
       getDocs(q).then(snap => {
-        const rawClients = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+        const rawClients = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
         setClients(deduplicateClients(rawClients));
       });
     }
@@ -86,7 +86,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
     if (isNew || !vehicle.id) return;
     const q = query(collection(db, 'vehicleExpenses'), where('vehicleId', '==', vehicle.id));
     const unsub = onSnapshot(q, snap => {
-      setExpenses(snap.docs.map(d => ({id: d.id, ...d.data()}) as VehicleExpense));
+      setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }) as VehicleExpense));
     });
     return () => unsub();
   }, [vehicle.id, isNew]);
@@ -349,7 +349,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     >
                       <option value="" disabled>Selecciona una agencia...</option>
                       {agencies.map(a => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
+                        <option key={`agency-${a.id}`} value={a.id}>{a.name}</option>
                       ))}
                     </select>
                   </div>
@@ -391,7 +391,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
-                        type="number" required
+                        type="number" inputMode="numeric" pattern="[0-9]*" required
                         value={formData.price || ''}
                         onChange={e => setFormData({...formData, price: Number(e.target.value)})}
                         readOnly={userData?.role === 'seller' && !isNew}
@@ -410,7 +410,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                       >
                         <option value="" disabled>Selecciona un cliente...</option>
                         {clients.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
+                          <option key={`client-${c.id}`} value={c.id}>{c.name}</option>
                         ))}
                       </select>
                     </div>
@@ -426,7 +426,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
-                        type="number"
+                        type="number" inputMode="numeric" pattern="[0-9]*"
                         value={formData.purchasePrice || ''}
                         onChange={e => setFormData({...formData, purchasePrice: Number(e.target.value)})}
                         className="w-full pl-9 pr-3 py-2 border rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300" 
@@ -452,7 +452,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año</label>
-                    <input type="number" required value={formData.year} onChange={e=>setFormData({...formData, year: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" required value={formData.year} onChange={e=>setFormData({...formData, year: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Color</label>
@@ -492,18 +492,18 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kilometraje (Km)</label>
-                    <input type="number" required value={formData.km} onChange={e=>setFormData({...formData, km: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" required value={formData.km} onChange={e=>setFormData({...formData, km: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cilindros</label>
-                    <input type="number" value={formData.cylinders} onChange={e=>setFormData({...formData, cylinders: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" value={formData.cylinders} onChange={e=>setFormData({...formData, cylinders: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Motor (Litros)</label>
-                    <input type="number" step="0.1" value={formData.liters} onChange={e=>setFormData({...formData, liters: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" step="0.1" value={formData.liters} onChange={e=>setFormData({...formData, liters: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                 </div>
 
@@ -514,7 +514,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Pasajeros</label>
-                    <input type="number" value={formData.passengers || ''} onChange={e=>setFormData({...formData, passengers: parseInt(e.target.value) || undefined})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. 5" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" value={formData.passengers || ''} onChange={e=>setFormData({...formData, passengers: parseInt(e.target.value) || undefined})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. 5" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Equipamiento</label>
@@ -575,7 +575,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 <div className="relative w-32">
                   <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
-                    type="number" 
+                    type="number" inputMode="numeric" pattern="[0-9]*" 
                     placeholder="Monto" 
                     value={expAmount} 
                     onChange={e=>setExpAmount(e.target.value)} 
@@ -613,7 +613,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   </thead>
                   <tbody>
                     {expenses.map(exp => (
-                      <tr key={exp.id} className={`border-b last:border-0 hover:bg-slate-50 dark:bg-slate-900/50 ${editingExpenseId === exp.id ? 'bg-blue-50/50' : ''}`}>
+                      <tr key={`expense-${exp.id}`} className={`border-b last:border-0 hover:bg-slate-50 dark:bg-slate-900/50 ${editingExpenseId === exp.id ? 'bg-blue-50/50' : ''}`}>
                         <td className="px-4 py-3 whitespace-nowrap">{new Date(exp.date).toLocaleDateString()}</td>
                         <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{exp.description}</td>
                         <td className="px-4 py-3 text-red-600 font-medium">${exp.amount.toLocaleString()}</td>

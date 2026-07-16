@@ -471,7 +471,7 @@ export function NewActivityModal({
                   />
                   <datalist id="deal-options">
                     {deals.map((d) => (
-                      <option key={d.id} value={d.title} />
+                      <option key={`deal-${d.id}`} value={d.title} />
                     ))}
                   </datalist>
                 </div>
@@ -501,7 +501,7 @@ export function NewActivityModal({
                           )
                           .map((p) => (
                             <div
-                              key={p.id}
+                              key={`client-${p.id}`}
                               className="px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                               onClick={() => handleSelectClient(p)}
                             >
@@ -532,7 +532,7 @@ export function NewActivityModal({
                       className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-2 pl-9 pr-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     >
                       {pipelineStages.map((stage) => (
-                        <option key={stage.id} value={stage.id}>
+                        <option key={`stage-${stage.id}`} value={stage.id}>
                           Etapa inicial: {stage.title}
                         </option>
                       ))}

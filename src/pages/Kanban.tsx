@@ -66,7 +66,7 @@ function TerminalDropBar({
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex gap-2 w-[calc(100%-2rem)] max-w-lg">
       <div className="bg-slate-800 backdrop-blur-md shadow-2xl rounded-2xl flex items-center justify-center p-2 border border-slate-700 w-full overflow-x-auto gap-2">
         {columns.map((col) => (
-          <TerminalDropZone key={col.id} column={col} />
+          <TerminalDropZone key={`col-${col.id}`} column={col} />
         ))}
       </div>
     </div>
@@ -147,7 +147,7 @@ function ArchivedClientsModal({
             );
             return (
               <div
-                key={col.id}
+                key={`col-${col.id}`}
                 className="flex-1 flex flex-col min-w-[320px] max-w-[400px]"
               >
                 <h3 className="font-bold text-slate-700 dark:text-slate-300 flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm mb-4 border border-slate-200 dark:border-slate-700">
@@ -238,7 +238,7 @@ export function Kanban() {
         where("agencyId", "==", userData.agencyId),
       );
       unsubscribeUsers = onSnapshot(uq, (snapshot) => {
-        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
         setUsers(data);
       });
     }
@@ -256,7 +256,7 @@ export function Kanban() {
       q,
       (snapshot) => {
         let data = snapshot.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Client,
+          (d) => ({ ...d.data(), id: d.id }) as Client,
         );
         
         data = deduplicateClients(data);
@@ -275,7 +275,7 @@ export function Kanban() {
     const unsubscribeDeals = onSnapshot(
       query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)),
       (snapshot) => {
-        let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Deal);
+        let data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Deal);
         if (userData.role === "seller") {
           data = data.filter((d) => d.sellerId === userData.id);
         }
@@ -624,7 +624,7 @@ export function Kanban() {
                 >
                   <option value="all">Todos los vendedores</option>
                   {users.map((u) => (
-                    <option key={u.id} value={u.id}>
+                    <option key={`user-${u.id}`} value={u.id}>
                       {(!u.name || u.name === 'Usuario Pendiente')
                         ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
                         : u.name}
