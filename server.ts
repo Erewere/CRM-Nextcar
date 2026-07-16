@@ -527,6 +527,28 @@ async function startServer() {
     await addDoc(collection(adminDb, "clients"), newClient);
   }
 
+    app.get("/api/proxy-image", async (req, res) => {
+    try {
+      const url = req.query.url;
+      if (!url || typeof url !== 'string') {
+        return res.status(400).send("Missing url");
+      }
+      const fetchRes = await fetch(url);
+      if (!fetchRes.ok) {
+        return res.status(fetchRes.status).send("Error fetching image");
+      }
+      const buffer = await fetchRes.arrayBuffer();
+      res.set('Content-Type', fetchRes.headers.get('content-type') || 'image/jpeg');
+      // Set CORS headers just in case
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Cache-Control', 'public, max-age=31536000');
+      res.send(Buffer.from(buffer));
+    } catch (err) {
+      console.error("Proxy error:", err);
+      res.status(500).send("Error fetching image");
+    }
+  });
+
   app.post("/api/ai-advisor", express.json(), async (req, res) => {
     try {
       const authHeader = req.headers.authorization;

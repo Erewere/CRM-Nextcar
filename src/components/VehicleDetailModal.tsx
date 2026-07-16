@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import React, { useState, useEffect } from 'react';
 import imageCompression from 'browser-image-compression';
@@ -23,47 +23,6 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const pdfRef = React.useRef<HTMLDivElement>(null);
 
-  const handleSharePDF = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!pdfRef.current || isGeneratingPDF || !vehicle) return;
-    setIsGeneratingPDF(true);
-
-    try {
-      const canvas = await html2canvas(pdfRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
-      
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      });
-      
-      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
-      const pdfBlob = pdf.output('blob');
-      
-      const file = new File([pdfBlob], `${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`, { type: 'application/pdf' });
-      
-      if (navigator.share) {
-        await navigator.share({
-          title: `Ficha Técnica - ${vehicle.make || ''} ${vehicle.model || ''}`,
-          text: `Revisa este increíble ${vehicle.make || ''} ${vehicle.model || ''} ${vehicle.year || ''}!`,
-          files: [file]
-        });
-      } else {
-        pdf.save(`${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`);
-      }
-    } catch (error) {
-      console.error('Error sharing PDF:', error);
-      alert('Hubo un error al generar el archivo PDF. Por favor intenta de nuevo.');
-    } finally {
-      setIsGeneratingPDF(false);
-    }
-  };
   const [activeTab, setActiveTab] = useState<'info' | 'expenses'>('info');
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -104,9 +63,119 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
+
+  const getFinancingInfo = (year: number, price: number) => {
+    const plans: Record<number, { maxTerm: number, minDownPayment: number, minRate: string, maxRate: string }> = {
+      2014: { maxTerm: 12, minDownPayment: 0.5, minRate: "30.00%", maxRate: "30.00%" },
+      2015: { maxTerm: 18, minDownPayment: 0.5, minRate: "30.00%", maxRate: "30.00%" },
+      2016: { maxTerm: 60, minDownPayment: 0.2, minRate: "30.00%", maxRate: "30.00%" },
+      2017: { maxTerm: 60, minDownPayment: 0.2, minRate: "14.99%", maxRate: "15.99%" },
+      2018: { maxTerm: 60, minDownPayment: 0.2, minRate: "14.99%", maxRate: "15.99%" },
+      2019: { maxTerm: 60, minDownPayment: 0.2, minRate: "13.99%", maxRate: "14.99%" },
+      2020: { maxTerm: 60, minDownPayment: 0.2, minRate: "13.99%", maxRate: "15.99%" },
+      2021: { maxTerm: 60, minDownPayment: 0.2, minRate: "13.99%", maxRate: "14.99%" },
+      2022: { maxTerm: 72, minDownPayment: 0.2, minRate: "13.99%", maxRate: "15.24%" },
+      2023: { maxTerm: 84, minDownPayment: 0.2, minRate: "13.99%", maxRate: "15.24%" },
+      2024: { maxTerm: 96, minDownPayment: 0.2, minRate: "13.99%", maxRate: "15.74%" },
+      2025: { maxTerm: 120, minDownPayment: 0.2, minRate: "13.99%", maxRate: "15.99%" },
+      2026: { maxTerm: 120, minDownPayment: 0.2, minRate: "13.99%", maxRate: "16.24%" },
+    };
+    
+    if (year < 2014) return null;
+    let planYear = year;
+    if (year > 2026) planYear = 2026;
+    
+    const plan = plans[planYear];
+    if (!plan) return null;
+    
+    return {
+      downPaymentPct: plan.minDownPayment * 100,
+      downPaymentAmount: price * plan.minDownPayment,
+      maxTerm: plan.maxTerm,
+      minRate: plan.minRate,
+      maxRate: plan.maxRate
+    };
+  };
+
+  const handleSharePDF = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!pdfRef.current || isGeneratingPDF || !vehicle) return;
+    setIsGeneratingPDF(true);
+
+    try {
+      // Fetch image as dataURL to prevent CORS issues
+      const imageSrc = vehicle?.photoUrls?.[0] || vehicle?.photoUrl || formData.photoUrls?.[0] || formData.photoUrl;
+      const originalImgNode = pdfRef.current.querySelector('img');
+      let originalSrc = '';
+      
+      if (imageSrc && originalImgNode) {
+        try {
+          originalSrc = originalImgNode.src;
+          // Use our local proxy to avoid CORS issues
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageSrc)}`;
+          originalImgNode.src = proxyUrl;
+          // Wait for the image to load from the proxy
+          await new Promise((resolve, reject) => {
+             const img = new Image();
+             img.onload = resolve;
+             img.onerror = reject;
+             img.src = proxyUrl;
+          });
+        } catch (err) {
+          console.warn("Failed to load proxied image for PDF", err);
+          originalImgNode.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        }
+      }
+
+      const imgData = await toJpeg(pdfRef.current, { 
+        quality: 0.9,
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        cacheBust: true
+      });
+
+      if (originalImgNode && originalSrc) {
+        // Restore original src
+        originalImgNode.src = originalSrc;
+      }
+
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'px',
+        format: [1080, 1920]
+      });
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, 1080, 1920);
+      const pdfBlob = pdf.output('blob');
+      
+      const file = new File([pdfBlob], `${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`, { type: 'application/pdf' });
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: `Ficha Técnica - ${vehicle.make || ''} ${vehicle.model || ''}`,
+          text: `Revisa este increíble ${vehicle.make || ''} ${vehicle.model || ''} ${vehicle.year || ''}!`,
+          files: [file]
+        });
+      } else {
+        pdf.save(`${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`);
+      }
+    } catch (error) {
+      console.error('Error sharing PDF:', error);
+      alert('Error PDF: ' + (error.message || error));
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   const [expDate, setExpDate] = useState(getLocalDateString());
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+
+  useEffect(() => {
+    if (!isNew && vehicle) {
+      setFormData({ ...vehicle });
+    }
+  }, [vehicle, isNew]);
 
   useEffect(() => {
     if (userData?.role === 'master') {
@@ -743,10 +812,10 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             </div>
 
             {/* Large Vehicle Image */}
-            <div className="w-[900px] h-[700px] rounded-[40px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] relative flex items-center justify-center mb-10 z-10" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
-              {(formData.photoUrls?.[0] || formData.photoUrl) ? (
+            <div className="w-[900px] h-[600px] rounded-[40px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] relative flex items-center justify-center mb-10 z-10" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
+              {(vehicle?.photoUrls?.[0] || vehicle?.photoUrl || formData.photoUrls?.[0] || formData.photoUrl) ? (
                 <img 
-                  src={formData.photoUrls?.[0] || formData.photoUrl} 
+                  src={vehicle?.photoUrls?.[0] || vehicle?.photoUrl || formData.photoUrls?.[0] || formData.photoUrl} 
                   alt={`${vehicle.make} ${vehicle.model}`}
                   className="w-full h-full object-cover"
                   crossOrigin="anonymous"
@@ -791,11 +860,33 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               </div>
             </div>
 
-            {/* Price Tag */}
+            {/* Price Tag & Financing */}
             {vehicle.price > 0 && (
-              <div className="w-[900px] rounded-full py-8 px-12 flex items-center justify-between shadow-2xl mb-8 z-10" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
-                <span className="text-4xl font-bold uppercase tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
-                <span className="text-[80px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
+              <div className="w-[900px] flex flex-col gap-6 z-10 mb-8">
+                <div className="w-full rounded-full py-8 px-12 flex items-center justify-between shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
+                  <span className="text-4xl font-bold uppercase tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
+                  <span className="text-[80px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
+                </div>
+                
+                {(() => {
+                  const financing = getFinancingInfo(vehicle.year || new Date().getFullYear(), vehicle.price);
+                  if (!financing) return null;
+                  return (
+                    <div className="w-full rounded-[40px] p-8 border grid grid-cols-2 gap-8 shadow-2xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+                      <div className="flex flex-col border-r-2" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+                        <span className="text-2xl font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Enganche Min ({financing.downPaymentPct}%)</span>
+                        <span className="text-5xl font-black" style={{ color: '#ffffff' }}>${Number(financing.downPaymentAmount).toLocaleString()}</span>
+                      </div>
+                      <div className="flex flex-col pl-4">
+                        <span className="text-2xl font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Plazo Máximo</span>
+                        <span className="text-5xl font-black" style={{ color: '#ffffff' }}>{financing.maxTerm} Meses</span>
+                        <span className="text-lg font-medium mt-2" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                          Tasa: {financing.minRate} - {financing.maxRate}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             
