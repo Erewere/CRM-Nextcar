@@ -126,7 +126,12 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
           });
           
           originalImgNode.removeAttribute('crossOrigin');
-          originalImgNode.src = base64Data;
+          
+          await new Promise((resolve) => {
+             originalImgNode.onload = resolve;
+             originalImgNode.onerror = resolve;
+             originalImgNode.src = base64Data;
+          });
           
           // Wait briefly for DOM to update
           await new Promise(r => setTimeout(r, 100));
@@ -141,12 +146,11 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         backgroundColor: '#ffffff',
         pixelRatio: 2,
         cacheBust: true,
-        useCORS: true,
       });
 
       if (originalImgNode && originalSrc) {
         // Restore original src
-        originalImgNode.setAttribute('crossOrigin', 'anonymous');
+        
         originalImgNode.src = originalSrc;
       }
 
@@ -847,7 +851,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                       src={formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl} 
                       alt={`${vehicle.make} ${vehicle.model}`}
                       className="w-full h-full object-cover"
-                      crossOrigin="anonymous"
+                      
                     />
                   ) : (
                     <div className="text-3xl font-medium flex flex-col items-center" style={{ color: '#64748b' }}>

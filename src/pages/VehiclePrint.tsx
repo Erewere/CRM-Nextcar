@@ -67,7 +67,7 @@ export function VehiclePrint() {
               className="max-h-[300px] print:max-h-[220px] w-auto object-cover rounded-2xl shadow-xl border-4 border-slate-200"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgLoaded(true)}
-              crossOrigin="anonymous"
+              
             />
           </div>
         )}
