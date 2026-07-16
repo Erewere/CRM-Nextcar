@@ -26,11 +26,18 @@ export function MobileTasks() {
     if (!userData || userData.role === "master") return;
     setLoading(true);
     try {
-      const q = query(
+      let q = query(
         collection(db, "tasks"),
         where("agencyId", "==", userData.agencyId),
-        where("sellerId", "==", userData.id),
       );
+      
+      if (userData.role === 'seller' || (userData.role === 'admin' && userData.adminMobileViewAllContacts === false)) {
+        q = query(
+          collection(db, "tasks"),
+          where("agencyId", "==", userData.agencyId),
+          where("sellerId", "==", userData.id)
+        );
+      }
       const snap = await getDocs(q);
       const taskList = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Task);
       

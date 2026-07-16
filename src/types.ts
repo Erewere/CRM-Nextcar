@@ -6,6 +6,7 @@ export interface User {
   name: string;
   createdAt: string | Date;
   photoURL?: string;
+  adminMobileViewAllContacts?: boolean;
 }
 
 export interface PipelineStage {

@@ -77,6 +77,29 @@ export function NewActivityModal({
   const [clientId, setClientId] = useState(initialData?.clientId || "");
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
   const { userData } = useAuth(); // We need userData
+
+  const handleSaveClick = () => {
+    const existingDeal = deals.find(
+      (d) => String(d.title || "").toLowerCase() === dealTitle.toLowerCase()
+    );
+    onSave({
+      title,
+      type,
+      dueDate: date,
+      startTime,
+      endTime,
+      clientId,
+      clientName,
+      clientStatus,
+      dealId: existingDeal?.id || "",
+      dealTitle,
+      organization,
+      notes,
+      completed,
+      syncToCalendar,
+    });
+  };
+
   useEffect(() => {
     if (!userData || userData.role === "master") return;
     
@@ -329,7 +352,7 @@ export function NewActivityModal({
       />
       {/* Modal Content */}
       <motion.div 
-        className="bg-white dark:bg-slate-800 md:rounded-lg rounded-t-3xl shadow-2xl w-full max-w-5xl h-[90dvh] md:h-[85vh] flex flex-col overflow-hidden relative z-10"
+        className="bg-white dark:bg-slate-800 md:rounded-lg shadow-2xl w-full max-w-5xl h-[100dvh] md:h-[85vh] flex flex-col overflow-hidden relative z-10"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
@@ -337,13 +360,28 @@ export function NewActivityModal({
         style={{ transformOrigin: "bottom center" }}
       >
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
-            {initialData?.id ? "Editar actividad" : "Programar actividad"}
-          </h2>
+        <div className="flex justify-between items-center px-4 md:px-6 py-4 border-b border-gray-200 dark:border-slate-700">
           <button
             onClick={onClose}
-            className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300"
+            className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300 md:hidden"
+          >
+            Cancelar
+          </button>
+          
+          <h2 className="text-lg md:text-xl font-bold text-gray-800 dark:text-slate-200 text-center flex-1">
+            {initialData?.id ? "Editar" : "Programar"}
+          </h2>
+          
+          <button
+            onClick={handleSaveClick}
+            className="text-blue-600 dark:text-blue-400 font-semibold md:hidden"
+          >
+            Guardar
+          </button>
+
+          <button
+            onClick={onClose}
+            className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300 hidden md:block"
           >
             <X className="w-5 h-5" />
           </button>
@@ -554,7 +592,7 @@ export function NewActivityModal({
           </div>
 
           {/* Right Column - Calendar Preview */}
-          <div className="w-full md:w-1/3 bg-white dark:bg-slate-800 border-t md:border-t-0 md:border-l border-gray-200 dark:border-slate-700 flex flex-col min-h-[400px]">
+          <div className="hidden md:flex w-full md:w-1/3 bg-white dark:bg-slate-800 border-t md:border-t-0 md:border-l border-gray-200 dark:border-slate-700 flex-col min-h-[400px]">
             <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 shadow-sm z-10">
               <span className="font-bold text-gray-800 dark:text-slate-200 text-sm">
                 {format(previewDate, "EEEE, MMMM do", { locale: es })}
@@ -724,7 +762,7 @@ export function NewActivityModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 md:px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-stretch md:items-center bg-gray-50 dark:bg-slate-900 gap-4 mt-auto">
+        <div className="px-4 md:px-6 py-4 pb-safe md:pb-4 border-t border-gray-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-stretch md:items-center bg-gray-50 dark:bg-slate-900 gap-4 mt-auto shrink-0">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 md:gap-4">
             <button className="hidden md:block p-2 border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400">
               <Settings className="w-5 h-5" />
@@ -751,7 +789,7 @@ export function NewActivityModal({
               />
               Marcar como completa
             </label>
-            <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+            <div className="hidden md:flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
               <button
                 onClick={onClose}
                 className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 border border-gray-300 rounded font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-sm text-center"
@@ -759,29 +797,7 @@ export function NewActivityModal({
                 Cancelar
               </button>
               <button
-              onClick={() => {
-                const existingDeal = deals.find(
-                  (d) =>
-                    String(d.title || "").toLowerCase() ===
-                    dealTitle.toLowerCase(),
-                );
-                onSave({
-                  title,
-                  type,
-                  dueDate: date,
-                  startTime,
-                  endTime,
-                  clientId,
-                  clientName,
-                  clientStatus,
-                  dealId: existingDeal?.id || "",
-                  dealTitle,
-                  organization,
-                  notes,
-                  completed,
-                  syncToCalendar,
-                });
-              }}
+              onClick={handleSaveClick}
               className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 bg-[#2E914F] hover:bg-[#257A41] text-white rounded font-bold text-sm text-center"
             >
               Guardar

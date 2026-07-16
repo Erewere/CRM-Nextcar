@@ -28,7 +28,7 @@ export function MobileFab() {
       collection(db, 'clients'),
       where('agencyId', '==', userData.agencyId)
     );
-    if (userData.role === 'seller') {
+    if (userData.role === 'seller' || (userData.role === 'admin' && userData.adminMobileViewAllContacts === false)) {
       q = query(
         collection(db, 'clients'),
         where('agencyId', '==', userData.agencyId),
@@ -40,7 +40,7 @@ export function MobileFab() {
       collection(db, 'deals'),
       where('agencyId', '==', userData.agencyId)
     );
-    if (userData.role === 'seller') {
+    if (userData.role === 'seller' || (userData.role === 'admin' && userData.adminMobileViewAllContacts === false)) {
       dq = query(
         collection(db, 'deals'),
         where('agencyId', '==', userData.agencyId),

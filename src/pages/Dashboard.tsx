@@ -183,7 +183,7 @@ export function Dashboard() {
         let usersQ = query(collection(db, "users"), agencyQuery);
         let tagsQ = query(collection(db, "agency_tags"), agencyQuery);
 
-        if (userData.role === "seller") {
+        if (userData.role === "seller" || (isMobile && userData.role === "admin" && userData.adminMobileViewAllContacts === false)) {
           clientsQ = query(
             collection(db, "clients"),
             agencyQuery,
