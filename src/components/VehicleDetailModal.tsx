@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import React, { useState, useEffect } from 'react';
@@ -141,13 +141,12 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         }
       }
 
-      const canvas = await html2canvas(pdfRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
+      const imgData = await toJpeg(pdfRef.current, { 
+        quality: 0.9,
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        cacheBust: true,
       });
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
 
       if (originalImgNode && originalSrc) {
         // Restore original src
