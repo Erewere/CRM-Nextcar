@@ -37,6 +37,7 @@ export interface Vehicle {
   price: number;
   purchasePrice: number;
   vin: string;
+  websiteUrl?: string;
   status: string;
   createdAt: string;
   updatedAt: string;

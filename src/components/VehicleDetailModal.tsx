@@ -1,5 +1,6 @@
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { QRCodeSVG } from 'qrcode.react';
 import React, { useState, useEffect } from 'react';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,7 +33,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       agencyId: userData?.agencyId === 'unassigned' ? '' : userData?.agencyId, 
       make: '', model: '', year: new Date().getFullYear(), color: '',
       transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
-      price: 0, purchasePrice: 0, vin: '',
+      price: 0, purchasePrice: 0, vin: '', websiteUrl: '',
       km: 0, 
       ownership: 'propio',
       receivedAt: (() => {
@@ -45,7 +46,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       agencyId: '', 
       make: '', model: '', year: new Date().getFullYear(), color: '',
       transmission: 'Automática', bodyType: 'Sedán', photoUrl: '',
-      price: 0, purchasePrice: 0, vin: '',
+      price: 0, purchasePrice: 0, vin: '', websiteUrl: '',
       km: 0, ownership: 'propio', receivedAt: '', cylinders: 4, liters: 0, equipment: '', passengers: 5,
       ...vehicle
     }
@@ -104,7 +105,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
     try {
       // Fetch image as dataURL to prevent CORS issues
-      const imageSrc = vehicle?.photoUrls?.[0] || vehicle?.photoUrl || formData.photoUrls?.[0] || formData.photoUrl;
+      const imageSrc = formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl;
       const originalImgNode = pdfRef.current.querySelector('img');
       let originalSrc = '';
       
@@ -142,22 +143,30 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'px',
-        format: [1080, 1920]
+        format: [800, 1131]
       });
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, 1080, 1920);
+      pdf.addImage(imgData, 'JPEG', 0, 0, 800, 1131);
       const pdfBlob = pdf.output('blob');
       
       const file = new File([pdfBlob], `${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`, { type: 'application/pdf' });
       
-      if (navigator.share) {
-        await navigator.share({
-          title: `Ficha Técnica - ${vehicle.make || ''} ${vehicle.model || ''}`,
-          text: `Revisa este increíble ${vehicle.make || ''} ${vehicle.model || ''} ${vehicle.year || ''}!`,
-          files: [file]
-        });
+      // Check if navigator.share is available and supports files
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Ficha Técnica - ${vehicle.make || ''} ${vehicle.model || ''}`,
+            text: `Revisa este increíble ${vehicle.make || ''} ${vehicle.model || ''} ${vehicle.year || ''}!`,
+            files: [file]
+          });
+        } catch (shareErr) {
+          // If share fails (e.g. user canceled), just fallback to open/save
+          const pdfUrl = URL.createObjectURL(pdfBlob);
+          window.open(pdfUrl, '_blank');
+        }
       } else {
-        pdf.save(`${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`);
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        window.open(pdfUrl, '_blank');
       }
     } catch (error) {
       console.error('Error sharing PDF:', error);
@@ -395,30 +404,19 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {!isNew && isMobile && (
+            {!isNew && (
               <button 
                 onClick={handleSharePDF}
                 disabled={isGeneratingPDF}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors mr-2 shadow-sm"
-                title="Compartir Ficha en PDF"
+                title="Generar Ficha en PDF"
               >
                 <Share2 className="w-4 h-4" />
-                <span className="hidden sm:inline">{isGeneratingPDF ? 'Generando...' : 'Compartir PDF'}</span>
+                <span className="hidden sm:inline">{isGeneratingPDF ? 'Generando...' : 'Ficha PDF'}</span>
                 <span className="sm:hidden">{isGeneratingPDF ? '...' : 'PDF'}</span>
               </button>
             )}
-            {!isNew && !isMobile && (
-              <a 
-                href={`/print/vehicle/${vehicle.id}`} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors mr-2"
-                title="Imprimir Ficha Técnica"
-              >
-                <Printer className="w-4 h-4" />
-                <span className="hidden sm:inline">Imprimir Ficha</span>
-              </a>
-            )}
+
             <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">
               <X className="w-5 h-5" />
             </button>
@@ -570,36 +568,36 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Marca</label>
-                    <input type="text" required value={formData.make} onChange={e=>setFormData({...formData, make: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="text" required value={formData.make || ''} onChange={e=>setFormData({...formData, make: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Modelo</label>
-                    <input type="text" required value={formData.model} onChange={e=>setFormData({...formData, model: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="text" required value={formData.model || ''} onChange={e=>setFormData({...formData, model: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Año</label>
-                    <input type="number" inputMode="numeric" pattern="[0-9]*" required value={formData.year} onChange={e=>setFormData({...formData, year: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" required value={formData.year || ''} onChange={e=>setFormData({...formData, year: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Color</label>
-                    <input type="text" required value={formData.color} onChange={e=>setFormData({...formData, color: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="text" required value={formData.color || ''} onChange={e=>setFormData({...formData, color: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Transmisión</label>
-                    <select value={formData.transmission} onChange={e=>setFormData({...formData, transmission: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
+                    <select value={formData.transmission || ''} onChange={e=>setFormData({...formData, transmission: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                       <option>Automática</option>
                       <option>Manual</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Carrocería</label>
-                    <select value={formData.bodyType} onChange={e=>setFormData({...formData, bodyType: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
+                    <select value={formData.bodyType || ''} onChange={e=>setFormData({...formData, bodyType: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                       <option>Sedán</option>
                       <option>SUV</option>
                       <option>Hatchback</option>
@@ -617,22 +615,27 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">VIN Number</label>
-                    <input type="text" value={formData.vin} onChange={e=>setFormData({...formData, vin: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono text-sm uppercase" maxLength={17} />
+                    <input type="text" value={formData.vin || ''} onChange={e=>setFormData({...formData, vin: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono text-sm uppercase" maxLength={17} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kilometraje (Km)</label>
-                    <input type="number" inputMode="numeric" pattern="[0-9]*" required value={formData.km} onChange={e=>setFormData({...formData, km: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" required value={formData.km || ''} onChange={e=>setFormData({...formData, km: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Link de Página Web (Opcional)</label>
+                  <input type="url" placeholder="https://..." value={formData.websiteUrl || ''} onChange={e=>setFormData({...formData, websiteUrl: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cilindros</label>
-                    <input type="number" inputMode="numeric" pattern="[0-9]*" value={formData.cylinders} onChange={e=>setFormData({...formData, cylinders: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" value={formData.cylinders || ''} onChange={e=>setFormData({...formData, cylinders: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Motor (Litros)</label>
-                    <input type="number" inputMode="numeric" pattern="[0-9]*" step="0.1" value={formData.liters} onChange={e=>setFormData({...formData, liters: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    <input type="number" inputMode="numeric" pattern="[0-9]*" step="0.1" value={formData.liters || ''} onChange={e=>setFormData({...formData, liters: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                   </div>
                 </div>
 
@@ -791,10 +794,10 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
         {/* Hidden PDF View */}
         <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none">
-          <div ref={pdfRef} className="w-[1080px] h-[1920px] flex flex-col items-center justify-between p-12 font-sans relative" style={{ background: 'linear-gradient(to bottom right, #0f172a, #1e293b)', color: '#ffffff' }}>
+          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col items-center justify-between p-8 font-sans relative" style={{ background: 'linear-gradient(to bottom right, #0f172a, #1e293b)', color: '#ffffff' }}>
             
             {/* Header section with brand/agency name if available */}
-            <div className="w-full flex justify-between items-center mb-8 z-10">
+            <div className="w-full flex justify-between items-center mb-4 z-10">
                <div className="text-3xl font-black tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>FICHA TÉCNICA</div>
                <div className="text-3xl font-bold px-6 py-2 rounded-full" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#60a5fa' }}>
                  {userData?.role === 'master' ? 'AUTO DEALER' : 'NUESTRO INVENTARIO'}
@@ -802,20 +805,20 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             </div>
 
             {/* Vehicle Title & Info */}
-            <div className="w-full text-center mt-4 mb-10 z-10">
-              <h1 className="text-[100px] font-black uppercase leading-none tracking-tight mb-2" style={{ color: '#ffffff', textShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+            <div className="w-full text-center mt-4 mb-4 z-10">
+              <h1 className="text-[70px] font-black uppercase leading-none tracking-tight mb-2" style={{ color: '#ffffff', textShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                 {vehicle.make}
               </h1>
-              <h2 className="text-[60px] font-bold tracking-wide" style={{ color: '#60a5fa' }}>
+              <h2 className="text-[45px] font-bold tracking-wide" style={{ color: '#60a5fa' }}>
                 {vehicle.model} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{vehicle.year}</span>
               </h2>
             </div>
 
             {/* Large Vehicle Image */}
-            <div className="w-[900px] h-[600px] rounded-[40px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] relative flex items-center justify-center mb-10 z-10" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
-              {(vehicle?.photoUrls?.[0] || vehicle?.photoUrl || formData.photoUrls?.[0] || formData.photoUrl) ? (
+            <div className="w-[700px] h-[450px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] relative flex items-center justify-center mb-4 z-10" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
+              {(formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl) ? (
                 <img 
-                  src={vehicle?.photoUrls?.[0] || vehicle?.photoUrl || formData.photoUrls?.[0] || formData.photoUrl} 
+                  src={formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl} 
                   alt={`${vehicle.make} ${vehicle.model}`}
                   className="w-full h-full object-cover"
                   crossOrigin="anonymous"
@@ -827,59 +830,59 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               )}
               {vehicle.status === 'sold' && (
                 <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(220, 38, 38, 0.8)' }}>
-                  <span className="font-black text-8xl rotate-[-15deg] uppercase tracking-widest border-8 p-6 rounded-3xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>VENDIDO</span>
+                  <span className="font-black text-6xl rotate-[-15deg] uppercase tracking-widest border-8 p-6 rounded-3xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>VENDIDO</span>
                 </div>
               )}
             </div>
 
             {/* Vehicle Specifications Grid */}
-            <div className="w-[900px] backdrop-blur-md rounded-[40px] p-10 border grid grid-cols-2 gap-x-12 gap-y-8 mb-10 z-10" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+            <div className="w-[700px] backdrop-blur-md rounded-[30px] p-6 border grid grid-cols-2 gap-x-8 gap-y-4 mb-4 z-10" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-2xl font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Kilometraje</span>
-                <span className="text-4xl font-black" style={{ color: '#ffffff' }}>{Number(vehicle.km || 0).toLocaleString()} km</span>
+                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Kilometraje</span>
+                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{Number(vehicle.km || 0).toLocaleString()} km</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-2xl font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Transmisión</span>
-                <span className="text-4xl font-black" style={{ color: '#ffffff' }}>{vehicle.transmission}</span>
+                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Transmisión</span>
+                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.transmission}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-2xl font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Color</span>
-                <span className="text-4xl font-black" style={{ color: '#ffffff' }}>{vehicle.color}</span>
+                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Color</span>
+                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.color}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-2xl font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Carrocería</span>
-                <span className="text-4xl font-black" style={{ color: '#ffffff' }}>{vehicle.bodyType}</span>
+                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Carrocería</span>
+                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.bodyType}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-2xl font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Motor</span>
-                <span className="text-4xl font-black" style={{ color: '#ffffff' }}>{vehicle.cylinders ? `${vehicle.cylinders} Cil` : '-'} {vehicle.liters ? `/ ${vehicle.liters} L` : ''}</span>
+                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Motor</span>
+                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.cylinders ? `${vehicle.cylinders} Cil` : '-'} {vehicle.liters ? `/ ${vehicle.liters} L` : ''}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-2xl font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Pasajeros</span>
-                <span className="text-4xl font-black" style={{ color: '#ffffff' }}>{vehicle.passengers || '-'}</span>
+                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Pasajeros</span>
+                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.passengers || '-'}</span>
               </div>
             </div>
 
             {/* Price Tag & Financing */}
             {vehicle.price > 0 && (
-              <div className="w-[900px] flex flex-col gap-6 z-10 mb-8">
-                <div className="w-full rounded-full py-8 px-12 flex items-center justify-between shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
-                  <span className="text-4xl font-bold uppercase tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
-                  <span className="text-[80px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
+              <div className="w-[700px] flex flex-col gap-4 z-10 mb-4">
+                <div className="w-full rounded-full py-4 px-8 flex items-center justify-between shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
+                  <span className="text-2xl font-bold uppercase tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
+                  <span className="text-[50px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
                 </div>
                 
                 {(() => {
                   const financing = getFinancingInfo(vehicle.year || new Date().getFullYear(), vehicle.price);
                   if (!financing) return null;
                   return (
-                    <div className="w-full rounded-[40px] p-8 border grid grid-cols-2 gap-8 shadow-2xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+                    <div className="w-full rounded-[30px] p-6 border grid grid-cols-2 gap-6 shadow-2xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                       <div className="flex flex-col border-r-2" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                        <span className="text-2xl font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Enganche Min ({financing.downPaymentPct}%)</span>
-                        <span className="text-5xl font-black" style={{ color: '#ffffff' }}>${Number(financing.downPaymentAmount).toLocaleString()}</span>
+                        <span className="text-lg font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Enganche Min ({financing.downPaymentPct}%)</span>
+                        <span className="text-3xl font-black" style={{ color: '#ffffff' }}>${Number(financing.downPaymentAmount).toLocaleString()}</span>
                       </div>
                       <div className="flex flex-col pl-4">
-                        <span className="text-2xl font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Plazo Máximo</span>
-                        <span className="text-5xl font-black" style={{ color: '#ffffff' }}>{financing.maxTerm} Meses</span>
+                        <span className="text-lg font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Plazo Máximo</span>
+                        <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{financing.maxTerm} Meses</span>
                         <span className="text-lg font-medium mt-2" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                           Tasa: {financing.minRate} - {financing.maxRate}
                         </span>
@@ -890,9 +893,17 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               </div>
             )}
             
-            {/* Footer / Contact info */}
-            <div className="w-full text-center mt-auto pb-4 z-10">
-               <p className="text-2xl font-medium" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Contáctanos para más información o agenda tu prueba de manejo hoy mismo.</p>
+            {/* Footer / Contact info & QR */}
+            <div className="w-full mt-auto flex items-end justify-between z-10">
+               <div className="flex-1 pr-6 pb-2">
+                 <p className="text-xl font-medium" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Contáctanos para más información o agenda tu prueba de manejo hoy mismo.</p>
+               </div>
+               {((formData.websiteUrl || vehicle.websiteUrl)) && (
+                 <div className="flex flex-col items-center bg-white p-3 rounded-2xl shrink-0">
+                   <QRCodeSVG value={formData.websiteUrl || vehicle.websiteUrl || ""} size={100} level="M" />
+                   <span className="text-xs font-bold text-slate-800 mt-2 tracking-wider">VER ONLINE</span>
+                 </div>
+               )}
             </div>
             
             {/* Decorative elements */}
