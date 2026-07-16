@@ -435,17 +435,41 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Fotos del Vehículo</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
-                    {/* Render existing photos */}
-                    {(formData.photoUrls || (formData.photoUrl ? [formData.photoUrl] : [])).map((url, idx) => (
-                      <div key={idx} className="aspect-square relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
-                        <img src={url} alt={`Vehicle ${idx + 1}`} className="w-full h-full object-cover" />
+                  
+                  {/* Primary Photo */}
+                  {(() => {
+                    const allPhotos = formData.photoUrls || (formData.photoUrl ? [formData.photoUrl] : []);
+                    if (allPhotos.length > 0) {
+                      return (
+                        <div className="relative w-full h-56 md:h-64 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 mb-3 group">
+                          <img src={allPhotos[0]} alt="Principal" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(0)}
+                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                          <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-md">
+                            FOTO PRINCIPAL
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
+                    {/* Render additional photos */}
+                    {(formData.photoUrls || (formData.photoUrl ? [formData.photoUrl] : [])).slice(1).map((url, idx) => (
+                      <div key={idx + 1} className="aspect-square relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
+                        <img src={url} alt={`Vehicle ${idx + 2}`} className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => removePhoto(idx)}
-                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => removePhoto(idx + 1)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
@@ -793,95 +817,100 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         )}
 
         {/* Hidden PDF View */}
-        <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none">
-          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col items-center justify-between p-8 font-sans relative" style={{ background: 'linear-gradient(to bottom right, #0f172a, #1e293b)', color: '#ffffff' }}>
+        <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none w-[800px] max-w-none">
+          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col p-8 font-sans relative overflow-hidden" style={{ background: 'linear-gradient(to bottom right, #0f172a, #1e293b)', color: '#ffffff' }}>
             
             {/* Header section with brand/agency name if available */}
-            <div className="w-full flex justify-between items-center mb-4 z-10">
+            <div className="w-full flex justify-between items-center mb-6 z-10">
                <div className="text-3xl font-black tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>FICHA TÉCNICA</div>
                <div className="text-3xl font-bold px-6 py-2 rounded-full" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#60a5fa' }}>
                  {userData?.role === 'master' ? 'AUTO DEALER' : 'NUESTRO INVENTARIO'}
                </div>
             </div>
 
-            {/* Vehicle Title & Info */}
-            <div className="w-full text-center mt-4 mb-4 z-10">
-              <h1 className="text-[70px] font-black uppercase leading-none tracking-tight mb-2" style={{ color: '#ffffff', textShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-                {vehicle.make}
-              </h1>
-              <h2 className="text-[45px] font-bold tracking-wide" style={{ color: '#60a5fa' }}>
-                {vehicle.model} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{vehicle.year}</span>
-              </h2>
-            </div>
+            {/* Top row: Image on left, Title & Price on right */}
+            <div className="flex w-full gap-6 mb-8 z-10">
+               {/* Left: Image */}
+               <div className="w-[420px] h-[320px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[6px] relative flex items-center justify-center shrink-0" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
+                  {(formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl) ? (
+                    <img 
+                      src={formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl} 
+                      alt={`${vehicle.make} ${vehicle.model}`}
+                      className="w-full h-full object-cover"
+                      crossOrigin="anonymous"
+                    />
+                  ) : (
+                    <div className="text-3xl font-medium flex flex-col items-center" style={{ color: '#64748b' }}>
+                      <span>Sin Imagen</span>
+                    </div>
+                  )}
+                  {vehicle.status === 'sold' && (
+                    <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(220, 38, 38, 0.8)' }}>
+                      <span className="font-black text-5xl rotate-[-15deg] uppercase tracking-widest border-4 p-4 rounded-3xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>VENDIDO</span>
+                    </div>
+                  )}
+               </div>
 
-            {/* Large Vehicle Image */}
-            <div className="w-[700px] h-[450px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] relative flex items-center justify-center mb-4 z-10" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
-              {(formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl) ? (
-                <img 
-                  src={formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl} 
-                  alt={`${vehicle.make} ${vehicle.model}`}
-                  className="w-full h-full object-cover"
-                  crossOrigin="anonymous"
-                />
-              ) : (
-                <div className="text-4xl font-medium flex flex-col items-center" style={{ color: '#64748b' }}>
-                  <span>Sin Imagen</span>
-                </div>
-              )}
-              {vehicle.status === 'sold' && (
-                <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(220, 38, 38, 0.8)' }}>
-                  <span className="font-black text-6xl rotate-[-15deg] uppercase tracking-widest border-8 p-6 rounded-3xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>VENDIDO</span>
-                </div>
-              )}
+               {/* Right: Title & Price */}
+               <div className="flex-1 flex flex-col justify-center">
+                  <h1 className="text-[50px] font-black uppercase leading-none tracking-tight mb-2" style={{ color: '#ffffff', textShadow: '0 5px 15px rgba(0,0,0,0.5)' }}>
+                    {vehicle.make}
+                  </h1>
+                  <h2 className="text-[35px] font-bold tracking-wide mb-6" style={{ color: '#60a5fa' }}>
+                    {vehicle.model} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{vehicle.year}</span>
+                  </h2>
+                  
+                  {vehicle.price > 0 && (
+                    <div className="w-full rounded-[24px] py-4 px-6 flex flex-col justify-center shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
+                      <span className="text-lg font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
+                      <span className="text-[40px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
+                    </div>
+                  )}
+               </div>
             </div>
 
             {/* Vehicle Specifications Grid */}
-            <div className="w-[700px] backdrop-blur-md rounded-[30px] p-6 border grid grid-cols-2 gap-x-8 gap-y-4 mb-4 z-10" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+            <div className="w-full backdrop-blur-md rounded-[30px] p-6 border grid grid-cols-3 gap-x-8 gap-y-6 mb-8 z-10" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Kilometraje</span>
-                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{Number(vehicle.km || 0).toLocaleString()} km</span>
+                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Kilometraje</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{Number(vehicle.km || 0).toLocaleString()} km</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Transmisión</span>
-                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.transmission}</span>
+                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Transmisión</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.transmission}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Color</span>
-                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.color}</span>
+                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Color</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.color}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Carrocería</span>
-                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.bodyType}</span>
+                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Carrocería</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.bodyType}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Motor</span>
-                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.cylinders ? `${vehicle.cylinders} Cil` : '-'} {vehicle.liters ? `/ ${vehicle.liters} L` : ''}</span>
+                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Motor</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.cylinders ? `${vehicle.cylinders} Cil` : '-'} {vehicle.liters ? `/ ${vehicle.liters} L` : ''}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-lg font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Pasajeros</span>
-                <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{vehicle.passengers || '-'}</span>
+                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Pasajeros</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.passengers || '-'}</span>
               </div>
             </div>
 
-            {/* Price Tag & Financing */}
+            {/* Financing Info (If applicable) */}
             {vehicle.price > 0 && (
-              <div className="w-[700px] flex flex-col gap-4 z-10 mb-4">
-                <div className="w-full rounded-full py-4 px-8 flex items-center justify-between shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
-                  <span className="text-2xl font-bold uppercase tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
-                  <span className="text-[50px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
-                </div>
-                
+              <div className="w-full z-10 mb-8">
                 {(() => {
                   const financing = getFinancingInfo(vehicle.year || new Date().getFullYear(), vehicle.price);
                   if (!financing) return null;
                   return (
                     <div className="w-full rounded-[30px] p-6 border grid grid-cols-2 gap-6 shadow-2xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                       <div className="flex flex-col border-r-2" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                        <span className="text-lg font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Enganche Min ({financing.downPaymentPct}%)</span>
+                        <span className="text-base font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Enganche Min ({financing.downPaymentPct}%)</span>
                         <span className="text-3xl font-black" style={{ color: '#ffffff' }}>${Number(financing.downPaymentAmount).toLocaleString()}</span>
                       </div>
                       <div className="flex flex-col pl-4">
-                        <span className="text-lg font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Plazo Máximo</span>
+                        <span className="text-base font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Plazo Máximo</span>
                         <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{financing.maxTerm} Meses</span>
                         <span className="text-lg font-medium mt-2" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                           Tasa: {financing.minRate} - {financing.maxRate}
@@ -892,16 +921,16 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                 })()}
               </div>
             )}
-            
+
             {/* Footer / Contact info & QR */}
             <div className="w-full mt-auto flex items-end justify-between z-10">
                <div className="flex-1 pr-6 pb-2">
-                 <p className="text-xl font-medium" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Contáctanos para más información o agenda tu prueba de manejo hoy mismo.</p>
+                 <p className="text-xl font-medium leading-relaxed" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Contáctanos para más información o agenda tu prueba de manejo hoy mismo.</p>
                </div>
                {((formData.websiteUrl || vehicle.websiteUrl)) && (
                  <div className="flex flex-col items-center bg-white p-3 rounded-2xl shrink-0">
-                   <QRCodeSVG value={formData.websiteUrl || vehicle.websiteUrl || ""} size={100} level="M" />
-                   <span className="text-xs font-bold text-slate-800 mt-2 tracking-wider">VER ONLINE</span>
+                   <QRCodeSVG value={formData.websiteUrl || vehicle.websiteUrl || ""} size={120} level="M" />
+                   <span className="text-sm font-bold text-slate-800 mt-2 tracking-wider">VER ONLINE</span>
                  </div>
                )}
             </div>
