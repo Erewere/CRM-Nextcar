@@ -8,17 +8,30 @@ export function VehiclePrint() {
   const { id } = useParams();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
 
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [printTriggered, setPrintTriggered] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     getDoc(doc(db, 'vehicles', id)).then(snap => {
       if (snap.exists()) {
-        setVehicle({ ...snap.data(), id: snap.id } as Vehicle);
-        setTimeout(() => {
-          window.print();
-        }, 500);
+        const v = { ...snap.data(), id: snap.id } as Vehicle;
+        setVehicle(v);
+        if (!v.photoUrls?.[0] && !v.photoUrl) {
+           setImgLoaded(true);
+        }
       }
     });
   }, [id]);
+
+  useEffect(() => {
+    if (vehicle && imgLoaded && !printTriggered) {
+      setPrintTriggered(true);
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  }, [vehicle, imgLoaded, printTriggered]);
 
   if (!vehicle) return <div className="p-10 text-center font-bold text-xl">Cargando datos del vehículo...</div>;
 
@@ -52,6 +65,9 @@ export function VehiclePrint() {
               src={vehicle.photoUrls?.[0] || vehicle.photoUrl} 
               alt={`${vehicle.make} ${vehicle.model}`} 
               className="max-h-[300px] print:max-h-[220px] w-auto object-cover rounded-2xl shadow-xl border-4 border-slate-200"
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgLoaded(true)}
+              crossOrigin="anonymous"
             />
           </div>
         )}

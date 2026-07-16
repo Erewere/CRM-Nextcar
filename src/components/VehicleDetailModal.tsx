@@ -112,16 +112,24 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       if (imageSrc && originalImgNode) {
         try {
           originalSrc = originalImgNode.src;
-          // Use our local proxy to avoid CORS issues
+          // Fetch through proxy as a blob, then convert to base64
+          // to completely avoid canvas CORS tainting inside html-to-image
           const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageSrc)}`;
-          originalImgNode.src = proxyUrl;
-          // Wait for the image to load from the proxy
-          await new Promise((resolve, reject) => {
-             const img = new Image();
-             img.onload = resolve;
-             img.onerror = reject;
-             img.src = proxyUrl;
+          const res = await fetch(proxyUrl);
+          const blob = await res.blob();
+          
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
           });
+          
+          originalImgNode.removeAttribute('crossOrigin');
+          originalImgNode.src = base64Data;
+          
+          // Wait briefly for DOM to update
+          await new Promise(r => setTimeout(r, 100));
         } catch (err) {
           console.warn("Failed to load proxied image for PDF", err);
           originalImgNode.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -132,11 +140,13 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         quality: 0.9,
         backgroundColor: '#ffffff',
         pixelRatio: 2,
-        cacheBust: true
+        cacheBust: true,
+        useCORS: true,
       });
 
       if (originalImgNode && originalSrc) {
         // Restore original src
+        originalImgNode.setAttribute('crossOrigin', 'anonymous');
         originalImgNode.src = originalSrc;
       }
 
