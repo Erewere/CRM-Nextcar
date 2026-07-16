@@ -46,10 +46,10 @@ export function VehiclePrint() {
         </div>
 
         {/* Photo */}
-        {vehicle.photoUrl && (
+        {(vehicle.photoUrls?.[0] || vehicle.photoUrl) && (
           <div className="mb-6 print:mb-4 w-full flex justify-center">
             <img 
-              src={vehicle.photoUrl} 
+              src={vehicle.photoUrls?.[0] || vehicle.photoUrl} 
               alt={`${vehicle.make} ${vehicle.model}`} 
               className="max-h-[300px] print:max-h-[220px] w-auto object-cover rounded-2xl shadow-xl border-4 border-slate-200"
             />

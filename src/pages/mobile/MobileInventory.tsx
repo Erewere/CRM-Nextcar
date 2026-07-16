@@ -80,9 +80,9 @@ export function MobileInventory() {
         {filteredVehicles.map((vehicle, idx) => (
           <div key={`${vehicle.id}-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
             <div className="h-48 bg-slate-100 dark:bg-slate-900 relative">
-              {vehicle.photos && vehicle.photos.length > 0 ? (
+              {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
                 <img 
-                  src={vehicle.photos[0]} 
+                  src={vehicle.photoUrls?.[0] || vehicle.photoUrl || ''} 
                   alt={`${vehicle.make} ${vehicle.model}`}
                   className="w-full h-full object-cover"
                 />
