@@ -57,6 +57,7 @@ export interface Agency {
   id: string;
   name: string;
   phoneWhatsApp?: string;
+  facebookPageId?: string;
   pipelineStages?: PipelineStage[];
   businessHours?: { start: string; end: string };
   createdAt: string | Date;

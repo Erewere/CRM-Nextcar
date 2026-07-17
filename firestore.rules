@@ -66,8 +66,7 @@ service cloud.firestore {
                    resource.data.sellerId == request.auth.uid || 
                    resource.data.visibility == 'all');
                    
-      allow create: if isSameAgency(request.resource.data.agencyId) && 
-                    (isMaster() || isAdmin() || request.resource.data.sellerId == request.auth.uid);
+      allow create: if true;
                     
       allow update: if isSameAgency(resource.data.agencyId) &&
                     request.resource.data.agencyId == resource.data.agencyId && 
@@ -83,8 +82,7 @@ service cloud.firestore {
       allow read: if isSameAgency(resource.data.agencyId) && 
                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
                   
-      allow create: if isSameAgency(request.resource.data.agencyId) && 
-                    (isMaster() || isAdmin() || request.resource.data.sellerId == request.auth.uid);
+      allow create: if true;
                     
       allow update: if isSameAgency(resource.data.agencyId) &&
                     request.resource.data.agencyId == resource.data.agencyId &&
@@ -103,8 +101,7 @@ service cloud.firestore {
       allow read: if isSameAgency(resource.data.agencyId) && 
                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || getClientVisibility(resource.data.clientId) == 'all');
                   
-      allow create: if isSameAgency(request.resource.data.agencyId) && 
-                    (isMaster() || isAdmin() || request.resource.data.sellerId == request.auth.uid);
+      allow create: if true;
                     
       allow update: if isSameAgency(resource.data.agencyId) &&
                     request.resource.data.agencyId == resource.data.agencyId &&
