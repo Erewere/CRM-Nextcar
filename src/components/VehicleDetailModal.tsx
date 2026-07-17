@@ -23,6 +23,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   const isMobile = useIsMobile();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const pdfRef = React.useRef<HTMLDivElement>(null);
+  const [isGeneratingPartnersReport, setIsGeneratingPartnersReport] = useState(false);
+  const partnerDocRef = React.useRef<HTMLDivElement>(null);
 
   const getPdfImageSrc = () => {
     const rawSrc = (formData.photoUrls && formData.photoUrls.length > 0)
@@ -140,6 +142,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         quality: 0.9,
         pixelRatio: 2,
         cacheBust: true,
+        skipFonts: true,
+        imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
       });
 
       const pdf = new jsPDF({
@@ -170,11 +174,80 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         const pdfUrl = URL.createObjectURL(pdfBlob);
         window.open(pdfUrl, '_blank');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sharing PDF:', error);
-      alert('Error PDF: ' + (error.message || error));
+      const errorMsg = error instanceof Error ? error.message : (typeof error === 'object' ? 'Detalles de error no disponibles' : String(error));
+      alert('Error PDF: ' + errorMsg);
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleSharePartnersReport = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!partnerDocRef.current || isGeneratingPartnersReport) return;
+    setIsGeneratingPartnersReport(true);
+
+    try {
+      const rawSrc = (formData.photoUrls && formData.photoUrls.length > 0)
+        ? formData.photoUrls[0]
+        : (formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl);
+      if (rawSrc) {
+        // Preload image
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
+            img.src = rawSrc;
+          } else {
+            img.src = `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
+          }
+        });
+        await new Promise(r => setTimeout(r, 250));
+      }
+
+      const imgData = await toJpeg(partnerDocRef.current, { 
+        quality: 0.9,
+        pixelRatio: 2,
+        cacheBust: true,
+        skipFonts: true,
+        imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+      });
+
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'px',
+        format: [800, 1131]
+      });
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, 800, 1131);
+      const pdfBlob = pdf.output('blob');
+      
+      const file = new File([pdfBlob], `Reporte_Socios_${formData.make || 'Vehiculo'}_${formData.model || ''}.pdf`, { type: 'application/pdf' });
+      
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Reporte de Socios - ${formData.make || ''} ${formData.model || ''}`,
+            text: `Reporte financiero confidencial del ${formData.make || ''} ${formData.model || ''} ${formData.year || ''}.`,
+            files: [file]
+          });
+        } catch (shareErr) {
+          const pdfUrl = URL.createObjectURL(pdfBlob);
+          window.open(pdfUrl, '_blank');
+        }
+      } else {
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        window.open(pdfUrl, '_blank');
+      }
+    } catch (error: any) {
+      console.error('Error sharing Partners PDF:', error);
+      const errorMsg = error instanceof Error ? error.message : (typeof error === 'object' ? 'Detalles de error no disponibles' : String(error));
+      alert('Error PDF: ' + errorMsg);
+    } finally {
+      setIsGeneratingPartnersReport(false);
     }
   };
 
@@ -411,14 +484,24 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
           <div className="flex items-center gap-2">
             {!isNew && (
               <button 
-                onClick={handleSharePDF}
-                disabled={isGeneratingPDF}
+                onClick={activeTab === 'expenses' ? handleSharePartnersReport : handleSharePDF}
+                disabled={activeTab === 'expenses' ? isGeneratingPartnersReport : isGeneratingPDF}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors mr-2 shadow-sm"
-                title="Generar Ficha en PDF"
+                title={activeTab === 'expenses' ? "Generar Reporte de Socios en PDF" : "Generar Ficha en PDF"}
               >
                 <Share2 className="w-4 h-4" />
-                <span className="hidden sm:inline">{isGeneratingPDF ? 'Generando...' : 'Ficha PDF'}</span>
-                <span className="sm:hidden">{isGeneratingPDF ? '...' : 'PDF'}</span>
+                <span className="hidden sm:inline">
+                  {activeTab === 'expenses' 
+                    ? (isGeneratingPartnersReport ? 'Generando...' : 'Reporte Socios') 
+                    : (isGeneratingPDF ? 'Generando...' : 'Ficha PDF')
+                  }
+                </span>
+                <span className="sm:hidden">
+                  {activeTab === 'expenses' 
+                    ? (isGeneratingPartnersReport ? '...' : 'Socios') 
+                    : (isGeneratingPDF ? '...' : 'PDF')
+                  }
+                </span>
               </button>
             )}
 
@@ -717,94 +800,268 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
           )}
 
           {activeTab === 'expenses' && !isNew && userData?.role !== 'seller' && (
-            <div className="h-full flex flex-col">
-              <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border items-center">
-                <input 
-                  type="date" 
-                  value={expDate} 
-                  onChange={e=>setExpDate(e.target.value)} 
-                  className="px-3 py-2 border rounded-lg text-sm" 
-                />
-                <input 
-                  type="text" 
-                  placeholder="Descripción del gasto..." 
-                  value={expDesc} 
-                  onChange={e=>setExpDesc(e.target.value)} 
-                  className="flex-1 px-3 py-2 border rounded-lg text-sm min-w-[200px]" 
-                />
-                <div className="relative w-32">
-                  <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input 
-                    type="number" inputMode="numeric" pattern="[0-9]*" 
-                    placeholder="Monto" 
-                    value={expAmount} 
-                    onChange={e=>setExpAmount(e.target.value)} 
-                    className="w-full pl-8 pr-3 py-2 border rounded-lg text-sm" 
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleAddOrEditExpense}
-                    disabled={!expDesc || !expAmount}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
-                  >
-                    {editingExpenseId ? 'Guardar Cambios' : 'Agregar Gasto'}
-                  </button>
-                  {editingExpenseId && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Register Gasto and Table of Gastos */}
+              <div className="lg:col-span-5 flex flex-col gap-4 h-full overflow-y-auto pr-1">
+                <div className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider">Añadir / Editar Gasto</h4>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Fecha</span>
+                      <input 
+                        type="date" 
+                        value={expDate} 
+                        onChange={e=>setExpDate(e.target.value)} 
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Descripción</span>
+                      <input 
+                        type="text" 
+                        placeholder="Descripción del gasto..." 
+                        value={expDesc} 
+                        onChange={e=>setExpDesc(e.target.value)} 
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Monto</span>
+                      <div className="relative">
+                        <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                          type="number" inputMode="numeric" pattern="[0-9]*" 
+                          placeholder="Monto" 
+                          value={expAmount} 
+                          onChange={e=>setExpAmount(e.target.value)} 
+                          className="w-full pl-8 pr-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-2">
                     <button 
-                      onClick={cancelEdit}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
+                      onClick={handleAddOrEditExpense}
+                      disabled={!expDesc || !expAmount}
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap"
                     >
-                      Cancelar
+                      {editingExpenseId ? 'Guardar Cambios' : 'Agregar Gasto'}
                     </button>
-                  )}
+                    {editingExpenseId && (
+                      <button 
+                        onClick={cancelEdit}
+                        className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg font-medium text-sm whitespace-nowrap"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800 flex-1 min-h-[200px]">
+                  <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-700 dark:text-slate-300 flex justify-between items-center">
+                    <span>LISTA DE GASTOS</span>
+                    <span className="bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                      {expenses.length} ítems
+                    </span>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 uppercase">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Fecha</th>
+                          <th className="px-3 py-2 font-semibold">Descripción</th>
+                          <th className="px-3 py-2 font-semibold">Monto</th>
+                          <th className="px-3 py-2 font-semibold text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses.map(exp => (
+                          <tr key={`expense-${exp.id}`} className={`border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 ${editingExpenseId === exp.id ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''}`}>
+                            <td className="px-3 py-2 whitespace-nowrap text-[11px] text-slate-500 dark:text-slate-400">{new Date(exp.date).toLocaleDateString()}</td>
+                            <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 text-[11px] truncate max-w-[120px]" title={exp.description}>{exp.description}</td>
+                            <td className="px-3 py-2 text-red-600 font-bold text-[11px]">${exp.amount.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">
+                              <button type="button" onClick={() => handleEditClick(exp)} className="text-slate-400 hover:text-blue-600 p-1 mr-1">
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" onClick={() => handleDeleteExpense(exp.id)} className="text-slate-400 hover:text-red-600 p-1">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {expenses.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                              No hay gastos registrados para este vehículo.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      {expenses.length > 0 && (
+                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-bold border-t border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <td colSpan={2} className="px-3 py-2 text-right text-xs">Total Gastos:</td>
+                            <td className="px-3 py-2 text-red-600 text-xs">${totalExpenses.toLocaleString()}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-auto border rounded-xl">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border-b uppercase">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Fecha</th>
-                      <th className="px-4 py-3 font-semibold">Descripción</th>
-                      <th className="px-4 py-3 font-semibold">Monto</th>
-                      <th className="px-4 py-3 font-semibold text-right">Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenses.map(exp => (
-                      <tr key={`expense-${exp.id}`} className={`border-b last:border-0 hover:bg-slate-50 dark:bg-slate-900/50 ${editingExpenseId === exp.id ? 'bg-blue-50/50' : ''}`}>
-                        <td className="px-4 py-3 whitespace-nowrap">{new Date(exp.date).toLocaleDateString()}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{exp.description}</td>
-                        <td className="px-4 py-3 text-red-600 font-medium">${exp.amount.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button type="button" onClick={() => handleEditClick(exp)} className="text-slate-400 hover:text-blue-600 p-1 mr-2">
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button type="button" onClick={() => handleDeleteExpense(exp.id)} className="text-slate-400 hover:text-red-600 p-1">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {expenses.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
-                          No hay gastos registrados para este vehículo.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  {expenses.length > 0 && (
-                    <tfoot className="bg-slate-50 dark:bg-slate-900 font-bold border-t">
-                      <tr>
-                        <td colSpan={2} className="px-4 py-3 text-right">Total Gastos:</td>
-                        <td className="px-4 py-3 text-red-600">${totalExpenses.toLocaleString()}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
+              {/* Right Column: Partners Document Preview */}
+              <div className="lg:col-span-7 flex flex-col h-full">
+                <div className="flex justify-between items-center mb-2 px-1">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Documento para Socios (Vista Previa)</span>
+                  <button 
+                    onClick={handleSharePartnersReport}
+                    disabled={isGeneratingPartnersReport}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    <Share2 className="w-3 h-3" />
+                    <span>{isGeneratingPartnersReport ? 'Generando...' : 'Compartir Documento'}</span>
+                  </button>
+                </div>
+
+                {/* Main Paper Preview Box */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg bg-white text-slate-800 p-5 flex flex-col font-sans relative overflow-hidden" style={{ minHeight: '480px' }}>
+                  {/* Decorative corporate top border line */}
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600"></div>
+
+                  {/* Document Header */}
+                  <div className="flex justify-between items-start mb-3 mt-1">
+                    <div>
+                      <h3 className="text-md font-black tracking-tight text-slate-900 uppercase">CRM NEXTCAR</h3>
+                      <p className="text-[9px] text-slate-500 tracking-wider font-bold uppercase">
+                        {agencies.find(a => a.id === formData.agencyId)?.name || 'REPORTE FINANCIERO DE SOCIOS'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-block bg-slate-100 text-slate-700 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-0.5">
+                        Uso Interno / Confidencial
+                      </span>
+                      <p className="text-[9px] text-slate-500">Fecha: {new Date().toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 my-1.5"></div>
+
+                  {/* Vehicle Section */}
+                  <div className="mb-3">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Datos Generales del Vehículo</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 bg-slate-50 rounded-lg p-2.5 text-[11px] border border-slate-100">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase">Vehículo</span>
+                        <span className="font-bold text-slate-800">{formData.make} {formData.model}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase">Año / Color</span>
+                        <span className="font-semibold text-slate-700">{formData.year} | {formData.color}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase">Kilometraje</span>
+                        <span className="font-semibold text-slate-700">{Number(formData.km || 0).toLocaleString()} km</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase">VIN / Serie</span>
+                        <span className="font-mono text-slate-700 text-[9px] uppercase">{formData.vin || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Balance Section */}
+                  <div className="mb-3">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Resumen Financiero del Vehículo</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="p-2.5 rounded-lg border border-slate-100 bg-white">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block mb-0.5">Costo de Adquisición (Toma)</span>
+                        <span className="text-sm font-extrabold text-slate-900">${Number(formData.purchasePrice || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="p-2.5 rounded-lg border border-slate-100 bg-white">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block mb-0.5">Precio de Venta</span>
+                        <span className="text-sm font-extrabold text-slate-900">${Number(formData.price || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="p-2.5 rounded-lg border border-slate-100 bg-white">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block mb-0.5">Gastos de Preparación</span>
+                        <span className="text-sm font-extrabold text-red-600">${Number(totalExpenses).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Big Profit Box */}
+                    <div className="mt-2.5 p-3 rounded-lg border flex justify-between items-center bg-gradient-to-r from-slate-50 to-slate-100" style={{ borderColor: '#e2e8f0' }}>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block">Utilidad Total Generada</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Fórmula: Venta - Adquisición - Gastos</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black px-3 py-1 rounded-md inline-block shadow-sm text-white ${utility >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
+                          ${Number(utility).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mini Ledger of Expenses inside Document */}
+                  <div className="mb-4 flex-1">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Detalle de Egresos / Gastos</span>
+                    <div className="border border-slate-100 rounded-lg overflow-hidden text-[11px] max-h-[140px] overflow-y-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 font-bold uppercase text-[8px]">
+                            <th className="px-3 py-1">Fecha</th>
+                            <th className="px-3 py-1">Concepto / Descripción del Gasto</th>
+                            <th className="px-3 py-1 text-right">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {expenses.map((exp, idx) => (
+                            <tr key={`doc-exp-${exp.id}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <td className="px-3 py-1 text-slate-500">{new Date(exp.date).toLocaleDateString()}</td>
+                              <td className="px-3 py-1 font-semibold text-slate-700">{exp.description}</td>
+                              <td className="px-3 py-1 text-right text-red-600 font-bold">${exp.amount.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                          {expenses.length === 0 && (
+                            <tr>
+                              <td colSpan={3} className="px-3 py-3 text-center text-slate-400">
+                                Sin gastos adicionales registrados para este vehículo.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                        {expenses.length > 0 && (
+                          <tfoot>
+                            <tr className="bg-slate-100/80 text-slate-700 font-bold border-t border-slate-100">
+                              <td colSpan={2} className="px-3 py-1 text-right uppercase text-[8px]">Suma de Egresos:</td>
+                              <td className="px-3 py-1 text-right text-red-600">${totalExpenses.toLocaleString()}</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Signatures/Corporate Footer */}
+                  <div className="border-t border-slate-100 pt-3 mt-auto">
+                    <p className="text-[8px] text-slate-400 text-center italic mb-3">
+                      "Este reporte contiene información financiera confidencial para toma de decisiones directivas de los socios."
+                    </p>
+                    <div className="flex justify-around items-center pt-1 text-[9px] text-slate-500">
+                      <div className="flex flex-col items-center">
+                        <div className="w-28 border-b border-slate-200 mb-0.5"></div>
+                        <span>Firma Socio Administrador</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="w-28 border-b border-slate-200 mb-0.5"></div>
+                        <span>Socio Directivo / Auditor</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -836,7 +1093,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             <div className="flex w-full gap-6 mb-8 z-10">
                {/* Left: Image */}
                <div className="w-[420px] h-[320px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[6px] relative flex items-center justify-center shrink-0" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
-                  {allPhotos.length > 0 ? (
+                  {allPhotos.length > 0 && getPdfImageSrc() ? (
                     <img 
                       src={getPdfImageSrc()} 
                       alt={`${formData.make || ''} ${formData.model || ''}`}
@@ -942,6 +1199,145 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             {/* Decorative elements */}
             <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] rounded-full blur-[100px] pointer-events-none" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}></div>
             <div className="absolute bottom-[-200px] left-[-200px] w-[800px] h-[800px] rounded-full blur-[120px] pointer-events-none" style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)' }}></div>
+          </div>
+        </div>
+
+        {/* Hidden Partners PDF View */}
+        <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none w-[800px] max-w-none">
+          <div ref={partnerDocRef} className="w-[800px] h-[1131px] flex flex-col p-12 font-sans relative bg-white text-slate-800" style={{ backgroundColor: '#ffffff' }}>
+            {/* Decorative top strip */}
+            <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600"></div>
+            
+            {/* Logo and report header */}
+            <div className="flex justify-between items-start mb-8 mt-4">
+              <div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none uppercase">CRM NEXTCAR</h1>
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-2">
+                  {agencies.find(a => a.id === formData.agencyId)?.name || 'REPORTE FINANCIERO DE SOCIOS'}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="inline-block bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded uppercase tracking-wider mb-1.5">
+                  Uso Interno / Confidencial
+                </span>
+                <p className="text-xs text-slate-500">Fecha de Emisión: {new Date().toLocaleDateString()}</p>
+                <p className="text-xs text-slate-500">ID Vehículo: {vehicle.id?.substring(0, 8) || 'N/A'}</p>
+              </div>
+            </div>
+
+            <div className="border-t-2 border-slate-100 my-4"></div>
+
+            {/* Section 1: Vehicle details */}
+            <div className="mb-6">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-3">1. Datos de Identificación del Vehículo</span>
+              <div className="grid grid-cols-4 gap-6 bg-slate-50 rounded-xl p-5 text-sm border border-slate-100">
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase mb-1">Vehículo</span>
+                  <span className="font-extrabold text-slate-900 text-base">{formData.make} {formData.model}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase mb-1">Año / Color</span>
+                  <span className="font-bold text-slate-700 text-base">{formData.year} | {formData.color}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase mb-1">Kilometraje</span>
+                  <span className="font-bold text-slate-700 text-base">{Number(formData.km || 0).toLocaleString()} km</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase mb-1">VIN / Serie</span>
+                  <span className="font-mono text-slate-700 text-sm uppercase tracking-wide">{formData.vin || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Financial breakdown */}
+            <div className="mb-6">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-3">2. Análisis de Costo, Venta y Rendimiento</span>
+              <div className="grid grid-cols-3 gap-6 mb-4">
+                <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Costo de Adquisición (Toma)</span>
+                  <span className="text-2xl font-black text-slate-900">${Number(formData.purchasePrice || 0).toLocaleString()}</span>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Precio de Venta</span>
+                  <span className="text-2xl font-black text-slate-900">${Number(formData.price || 0).toLocaleString()}</span>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Gastos de Preparación</span>
+                  <span className="text-2xl font-black text-red-600">${Number(totalExpenses).toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Outstanding profit summary bar */}
+              <div className="p-5 rounded-xl border-2 flex justify-between items-center bg-slate-50" style={{ borderColor: '#cbd5e1' }}>
+                <div>
+                  <span className="text-sm font-black text-slate-700 uppercase block">Utilidad Bruta para Socios</span>
+                  <span className="text-xs text-slate-500 font-medium">Método de cálculo: Precio de Venta - Costo de Adquisición - Egresos</span>
+                </div>
+                <div className="text-right">
+                  <span className={`text-2xl font-black px-6 py-2.5 rounded-xl inline-block shadow-md text-white ${utility >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
+                    ${Number(utility).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Registered expenses ledger */}
+            <div className="mb-8 flex-1">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-3">3. Detalle de Gastos de Acondicionamiento (Egresos)</span>
+              <div className="border border-slate-200 rounded-xl overflow-hidden text-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 font-black uppercase text-xs">
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Concepto / Descripción del Gasto</th>
+                      <th className="px-4 py-3 text-right">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {expenses.map((exp, idx) => (
+                      <tr key={`pdf-exp-${exp.id}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="px-4 py-3 text-slate-500 text-xs">{new Date(exp.date).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 font-bold text-slate-700">{exp.description}</td>
+                        <td className="px-4 py-3 text-right text-red-600 font-extrabold">${exp.amount.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    {expenses.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-400 italic">
+                          No se registraron egresos o gastos de acondicionamiento para este vehículo.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  {expenses.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-100 text-slate-800 font-extrabold border-t-2 border-slate-200 text-sm">
+                        <td colSpan={2} className="px-4 py-3 text-right uppercase tracking-wider">Total de Egresos Registrados:</td>
+                        <td className="px-4 py-3 text-right text-red-600">${totalExpenses.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
+
+            {/* Corporate stamp & sign block at the very bottom */}
+            <div className="border-t border-slate-200 pt-6 mt-auto">
+              <p className="text-xs text-slate-400 text-center italic mb-8">
+                "Este reporte financiero contiene información confidencial protegida por convenios de socios. Su divulgación no autorizada está estrictamente prohibida por las políticas internas de la organización."
+              </p>
+              <div className="flex justify-around items-center pt-4 text-xs text-slate-600 font-bold">
+                <div className="flex flex-col items-center">
+                  <div className="w-48 border-b-2 border-slate-300 mb-2"></div>
+                  <span>Firma de Socio Administrador</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="w-48 border-b-2 border-slate-300 mb-2"></div>
+                  <span>Socio Directivo / Auditor</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
