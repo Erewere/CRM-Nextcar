@@ -22,12 +22,12 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   const isNew = !vehicle.id;
   const isMobile = useIsMobile();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [pdfImageBase64, setPdfImageBase64] = useState<string>('');
   const pdfRef = React.useRef<HTMLDivElement>(null);
 
   const getPdfImageSrc = () => {
-    if (pdfImageBase64) return pdfImageBase64;
-    const rawSrc = formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl;
+    const rawSrc = (formData.photoUrls && formData.photoUrls.length > 0)
+      ? formData.photoUrls[0]
+      : (formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl);
     if (!rawSrc) return '';
     if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) return rawSrc;
     return `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
@@ -60,6 +60,9 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       ...vehicle
     }
   );
+  const allPhotos = (formData.photoUrls && formData.photoUrls.length > 0)
+    ? formData.photoUrls
+    : (formData.photoUrl ? [formData.photoUrl] : []);
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -109,37 +112,32 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
   const handleSharePDF = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!pdfRef.current || isGeneratingPDF || !vehicle) return;
+    if (!pdfRef.current || isGeneratingPDF) return;
     setIsGeneratingPDF(true);
 
     try {
-      const rawSrc = formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl;
+      const rawSrc = (formData.photoUrls && formData.photoUrls.length > 0)
+        ? formData.photoUrls[0]
+        : (formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl);
       if (rawSrc) {
-        try {
+        // Preload image to browser cache to ensure it renders instantly in html-to-image
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
           if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
-            setPdfImageBase64(rawSrc);
+            img.src = rawSrc;
           } else {
-            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
-            const res = await fetch(proxyUrl);
-            const blob = await res.blob();
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-            setPdfImageBase64(base64);
+            img.src = `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
           }
-          // Wait briefly for state transitions & browser image rendering
-          await new Promise(r => setTimeout(r, 600));
-        } catch (imgErr) {
-          console.error("Error preloading PDF image, falling back to original url:", imgErr);
-        }
+        });
+        // Short delay to let browser finish layout/decoding
+        await new Promise(r => setTimeout(r, 250));
       }
 
       const imgData = await toJpeg(pdfRef.current, { 
         quality: 0.9,
-        backgroundColor: '#ffffff',
         pixelRatio: 2,
         cacheBust: true,
       });
@@ -153,14 +151,14 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       pdf.addImage(imgData, 'JPEG', 0, 0, 800, 1131);
       const pdfBlob = pdf.output('blob');
       
-      const file = new File([pdfBlob], `${vehicle.make || 'Vehiculo'}_${vehicle.model || ''}.pdf`, { type: 'application/pdf' });
+      const file = new File([pdfBlob], `${formData.make || 'Vehiculo'}_${formData.model || ''}.pdf`, { type: 'application/pdf' });
       
       // Check if navigator.share is available and supports files
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
-            title: `Ficha Técnica - ${vehicle.make || ''} ${vehicle.model || ''}`,
-            text: `Revisa este increíble ${vehicle.make || ''} ${vehicle.model || ''} ${vehicle.year || ''}!`,
+            title: `Ficha Técnica - ${formData.make || ''} ${formData.model || ''}`,
+            text: `Revisa este increíble ${formData.make || ''} ${formData.model || ''} ${formData.year || ''}!`,
             files: [file]
           });
         } catch (shareErr) {
@@ -176,7 +174,6 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       console.error('Error sharing PDF:', error);
       alert('Error PDF: ' + (error.message || error));
     } finally {
-      setPdfImageBase64('');
       setIsGeneratingPDF(false);
     }
   };
@@ -322,7 +319,10 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
   const removePhoto = (index: number) => {
     setFormData(prev => {
-      const newUrls = [...(prev.photoUrls || [])];
+      const currentUrls = (prev.photoUrls && prev.photoUrls.length > 0)
+        ? [...prev.photoUrls]
+        : (prev.photoUrl ? [prev.photoUrl] : []);
+      const newUrls = [...currentUrls];
       newUrls.splice(index, 1);
       return {
         ...prev,
@@ -443,7 +443,6 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   
                   {/* Primary Photo */}
                   {(() => {
-                    const allPhotos = formData.photoUrls || (formData.photoUrl ? [formData.photoUrl] : []);
                     if (allPhotos.length > 0) {
                       return (
                         <div className="relative w-full h-56 md:h-64 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 mb-3 group">
@@ -466,7 +465,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
 
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
                     {/* Render additional photos */}
-                    {(formData.photoUrls || (formData.photoUrl ? [formData.photoUrl] : [])).slice(1).map((url, idx) => (
+                    {allPhotos.slice(1).map((url, idx) => (
                       <div key={idx + 1} className="aspect-square relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
                         <img src={url} alt={`Vehicle ${idx + 2}`} className="w-full h-full object-cover" />
                         <button
@@ -837,19 +836,19 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             <div className="flex w-full gap-6 mb-8 z-10">
                {/* Left: Image */}
                <div className="w-[420px] h-[320px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[6px] relative flex items-center justify-center shrink-0" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
-                  {(formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl) ? (
+                  {allPhotos.length > 0 ? (
                     <img 
                       src={getPdfImageSrc()} 
-                      alt={`${vehicle.make} ${vehicle.model}`}
+                      alt={`${formData.make || ''} ${formData.model || ''}`}
                       className="w-full h-full object-cover"
-                      
-                    crossOrigin="anonymous" />
+                      crossOrigin={getPdfImageSrc().startsWith('data:') ? undefined : "anonymous"}
+                    />
                   ) : (
                     <div className="text-3xl font-medium flex flex-col items-center" style={{ color: '#64748b' }}>
                       <span>Sin Imagen</span>
                     </div>
                   )}
-                  {vehicle.status === 'sold' && (
+                  {formData.status === 'sold' && (
                     <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(220, 38, 38, 0.8)' }}>
                       <span className="font-black text-5xl rotate-[-15deg] uppercase tracking-widest border-4 p-4 rounded-3xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>VENDIDO</span>
                     </div>
@@ -859,16 +858,16 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                {/* Right: Title & Price */}
                <div className="flex-1 flex flex-col justify-center">
                   <h1 className="text-[50px] font-black uppercase leading-none tracking-tight mb-2" style={{ color: '#ffffff', textShadow: '0 5px 15px rgba(0,0,0,0.5)' }}>
-                    {vehicle.make}
+                    {formData.make || 'Vehículo'}
                   </h1>
                   <h2 className="text-[35px] font-bold tracking-wide mb-6" style={{ color: '#60a5fa' }}>
-                    {vehicle.model} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{vehicle.year}</span>
+                    {formData.model || ''} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{formData.year || ''}</span>
                   </h2>
                   
-                  {vehicle.price > 0 && (
+                  {formData.price && formData.price > 0 && (
                     <div className="w-full rounded-[24px] py-4 px-6 flex flex-col justify-center shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
                       <span className="text-lg font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
-                      <span className="text-[40px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(vehicle.price).toLocaleString()}</span>
+                      <span className="text-[40px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(formData.price).toLocaleString()}</span>
                     </div>
                   )}
                </div>
@@ -878,35 +877,35 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             <div className="w-full backdrop-blur-md rounded-[30px] p-6 border grid grid-cols-3 gap-x-8 gap-y-6 mb-8 z-10" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                 <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Kilometraje</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{Number(vehicle.km || 0).toLocaleString()} km</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{Number(formData.km || 0).toLocaleString()} km</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                 <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Transmisión</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.transmission}</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.transmission || ''}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                 <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Color</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.color}</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.color || ''}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                 <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Carrocería</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.bodyType}</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.bodyType || ''}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                 <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Motor</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.cylinders ? `${vehicle.cylinders} Cil` : '-'} {vehicle.liters ? `/ ${vehicle.liters} L` : ''}</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.cylinders ? `${formData.cylinders} Cil` : '-'} {formData.liters ? `/ ${formData.liters} L` : ''}</span>
               </div>
               <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                 <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Pasajeros</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{vehicle.passengers || '-'}</span>
+                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.passengers || '-'}</span>
               </div>
             </div>
 
             {/* Financing Info (If applicable) */}
-            {vehicle.price > 0 && (
+            {formData.price && formData.price > 0 && (
               <div className="w-full z-10 mb-8">
                 {(() => {
-                  const financing = getFinancingInfo(vehicle.year || new Date().getFullYear(), vehicle.price);
+                  const financing = getFinancingInfo(formData.year || new Date().getFullYear(), formData.price || 0);
                   if (!financing) return null;
                   return (
                     <div className="w-full rounded-[30px] p-6 border grid grid-cols-2 gap-6 shadow-2xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
@@ -932,9 +931,9 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                <div className="flex-1 pr-6 pb-2">
                  <p className="text-xl font-medium leading-relaxed" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Contáctanos para más información o agenda tu prueba de manejo hoy mismo.</p>
                </div>
-               {((formData.websiteUrl || vehicle.websiteUrl)) && (
+               {formData.websiteUrl && (
                  <div className="flex flex-col items-center bg-white p-3 rounded-2xl shrink-0">
-                   <QRCodeSVG value={formData.websiteUrl || vehicle.websiteUrl || ""} size={120} level="M" />
+                   <QRCodeSVG value={formData.websiteUrl || ""} size={120} level="M" />
                    <span className="text-sm font-bold text-slate-800 mt-2 tracking-wider">VER ONLINE</span>
                  </div>
                )}

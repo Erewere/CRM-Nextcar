@@ -170,8 +170,8 @@ export function ClosedSales() {
                               onClick={() => setSelectedVehicle(vehicle)}
                               className="font-semibold text-blue-600 dark:text-blue-400 hover:underline text-left flex items-center gap-2"
                             >
-                              {vehicle.photoUrl ? (
-                                <img src={vehicle.photoUrl} alt="Vehicle" className="w-8 h-8 rounded object-cover" />
+                              {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
+                                <img src={vehicle.photoUrls?.[0] || vehicle.photoUrl} alt="Vehicle" className="w-8 h-8 rounded object-cover" />
                               ) : (
                                 <div className="w-8 h-8 rounded bg-slate-200 dark:bg-slate-700" />
                               )}
