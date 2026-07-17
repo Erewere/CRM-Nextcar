@@ -593,8 +593,8 @@ export function Inventory() {
                   </div>
                 )}
                 <div className="h-48 bg-slate-100 dark:bg-slate-700 relative">
-                  {vehicle.photoUrl ? (
-                    <img src={vehicle.photoUrl} alt={`${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
+                  {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
+                    <img src={vehicle.photoUrls?.[0] || vehicle.photoUrl} alt={`${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-300">
                       <CarIcon className="w-16 h-16" />

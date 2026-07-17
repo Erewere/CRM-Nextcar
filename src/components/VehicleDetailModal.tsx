@@ -22,7 +22,16 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
   const isNew = !vehicle.id;
   const isMobile = useIsMobile();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [pdfImageBase64, setPdfImageBase64] = useState<string>('');
   const pdfRef = React.useRef<HTMLDivElement>(null);
+
+  const getPdfImageSrc = () => {
+    if (pdfImageBase64) return pdfImageBase64;
+    const rawSrc = formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl;
+    if (!rawSrc) return '';
+    if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) return rawSrc;
+    return `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
+  };
 
   const [activeTab, setActiveTab] = useState<'info' | 'expenses'>('info');
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -104,40 +113,27 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
     setIsGeneratingPDF(true);
 
     try {
-      // Fetch image as dataURL to prevent CORS issues
-      const imageSrc = formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl;
-      const originalImgNode = pdfRef.current.querySelector('img');
-      let originalSrc = '';
-      
-      if (imageSrc && originalImgNode) {
+      const rawSrc = formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl;
+      if (rawSrc) {
         try {
-          originalSrc = originalImgNode.src;
-          // Fetch through proxy as a blob, then convert to base64
-          // to completely avoid canvas CORS tainting inside html-to-image
-          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageSrc)}`;
-          const res = await fetch(proxyUrl);
-          const blob = await res.blob();
-          
-          const base64Data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-          
-          originalImgNode.removeAttribute('crossOrigin');
-          
-          await new Promise((resolve) => {
-             originalImgNode.onload = resolve;
-             originalImgNode.onerror = resolve;
-             originalImgNode.src = base64Data;
-          });
-          
-          // Wait briefly for DOM to update
-          await new Promise(r => setTimeout(r, 100));
-        } catch (err) {
-          console.warn("Failed to load proxied image for PDF", err);
-          originalImgNode.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+          if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
+            setPdfImageBase64(rawSrc);
+          } else {
+            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
+            const res = await fetch(proxyUrl);
+            const blob = await res.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            setPdfImageBase64(base64);
+          }
+          // Wait briefly for state transitions & browser image rendering
+          await new Promise(r => setTimeout(r, 600));
+        } catch (imgErr) {
+          console.error("Error preloading PDF image, falling back to original url:", imgErr);
         }
       }
 
@@ -147,12 +143,6 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         pixelRatio: 2,
         cacheBust: true,
       });
-
-      if (originalImgNode && originalSrc) {
-        // Restore original src
-        
-        originalImgNode.src = originalSrc;
-      }
 
       const pdf = new jsPDF({
         orientation: 'p',
@@ -186,6 +176,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
       console.error('Error sharing PDF:', error);
       alert('Error PDF: ' + (error.message || error));
     } finally {
+      setPdfImageBase64('');
       setIsGeneratingPDF(false);
     }
   };
@@ -848,11 +839,11 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                <div className="w-[420px] h-[320px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[6px] relative flex items-center justify-center shrink-0" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
                   {(formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl) ? (
                     <img 
-                      src={formData.photoUrls?.[0] || formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl} 
+                      src={getPdfImageSrc()} 
                       alt={`${vehicle.make} ${vehicle.model}`}
                       className="w-full h-full object-cover"
                       
-                    />
+                    crossOrigin="anonymous" />
                   ) : (
                     <div className="text-3xl font-medium flex flex-col items-center" style={{ color: '#64748b' }}>
                       <span>Sin Imagen</span>
