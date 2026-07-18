@@ -270,11 +270,35 @@ export function MobileInventory() {
                         {vehicle.version || vehicle.bodyType || 'Sin versión'}
                       </div>
                     </div>
+
+                    {/* Datos principales badges */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {vehicle.transmission && (
+                        <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full capitalize">
+                          {vehicle.transmission}
+                        </span>
+                      )}
+                      {vehicle.color && (
+                        <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full capitalize">
+                          {vehicle.color}
+                        </span>
+                      )}
+                      {vehicle.bodyType && (
+                        <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full capitalize">
+                          {vehicle.bodyType}
+                        </span>
+                      )}
+                      {vehicle.cylinders && (
+                        <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full">
+                          {vehicle.cylinders} cil
+                        </span>
+                      )}
+                    </div>
                     
                     <div className="flex items-center justify-between mt-1">
                       <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                         <SlidersHorizontal className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm font-medium">{vehicle.mileage?.toLocaleString()} km</span>
+                        <span className="text-sm font-medium">{(vehicle.km ?? 0).toLocaleString()} km</span>
                       </div>
                       <div className="text-lg font-bold text-green-600 dark:text-green-400 flex items-center">
                         <DollarSign className="w-5 h-5 -mr-1" />
@@ -413,12 +437,22 @@ export function MobileInventory() {
                                 <CarIcon className="w-6 h-6 text-slate-400" />
                               )}
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 truncate">
                                 {match.vehicle.make} {match.vehicle.model}
                               </h4>
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-                                {match.vehicle.year} • ${match.vehicle.price?.toLocaleString()}
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                                <span>{match.vehicle.year}</span>
+                                <span className="text-slate-300 dark:text-slate-700">•</span>
+                                <span>{(match.vehicle.km ?? 0).toLocaleString()} km</span>
+                                {match.vehicle.transmission && (
+                                  <>
+                                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                                    <span className="capitalize">{match.vehicle.transmission}</span>
+                                  </>
+                                )}
+                                <span className="text-slate-300 dark:text-slate-700">•</span>
+                                <span className="font-extrabold text-green-600 dark:text-green-400">${match.vehicle.price?.toLocaleString()}</span>
                               </p>
                             </div>
                           </div>
@@ -491,8 +525,7 @@ export function MobileInventory() {
                                 {agencyName}
                               </div>
                             </div>
-                            
-                            <div className="p-4 flex flex-col gap-3">
+                                            <div className="p-4 flex flex-col gap-3">
                               <div>
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
                                   {vehicle.make} {vehicle.model}
@@ -501,11 +534,35 @@ export function MobileInventory() {
                                   {vehicle.version || vehicle.bodyType || 'Sin versión'}
                                 </div>
                               </div>
+
+                              {/* Datos principales badges */}
+                              <div className="flex flex-wrap gap-1.5">
+                                {vehicle.transmission && (
+                                  <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full capitalize">
+                                    {vehicle.transmission}
+                                  </span>
+                                )}
+                                {vehicle.color && (
+                                  <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full capitalize">
+                                    {vehicle.color}
+                                  </span>
+                                )}
+                                {vehicle.bodyType && (
+                                  <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full capitalize">
+                                    {vehicle.bodyType}
+                                  </span>
+                                )}
+                                {vehicle.cylinders && (
+                                  <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full">
+                                    {vehicle.cylinders} cil
+                                  </span>
+                                )}
+                              </div>
                               
                               <div className="flex items-center justify-between mt-1">
                                 <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                                   <SlidersHorizontal className="w-4 h-4 text-slate-400" />
-                                  <span className="text-sm font-medium">{vehicle.mileage?.toLocaleString()} km</span>
+                                  <span className="text-sm font-medium">{(vehicle.km ?? 0).toLocaleString()} km</span>
                                 </div>
                                 <div className="text-lg font-bold text-green-600 dark:text-green-400 flex items-center">
                                   <DollarSign className="w-5 h-5 -mr-1" />

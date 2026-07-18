@@ -833,10 +833,12 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha de Recepción</label>
-                    <input type="date" value={typeof formData.receivedAt === 'string' ? formData.receivedAt.split('T')[0] : ''} onChange={e=>setFormData({...formData, receivedAt: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
-                  </div>
+                  {isOwnVehicle && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha de Recepción</label>
+                      <input type="date" value={typeof formData.receivedAt === 'string' ? formData.receivedAt.split('T')[0] : ''} onChange={e=>setFormData({...formData, receivedAt: e.target.value})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Pasajeros</label>
                     <input type="number" inputMode="numeric" pattern="[0-9]*" value={formData.passengers || ''} onChange={e=>setFormData({...formData, passengers: parseInt(e.target.value) || undefined})} className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" placeholder="Ej. 5" />
