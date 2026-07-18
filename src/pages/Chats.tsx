@@ -368,7 +368,7 @@ export function Chats() {
                     )}
                   >
                     <div className={clsx(
-                      "px-4 py-2.5 rounded-2xl shadow-sm text-sm whitespace-pre-line leading-relaxed",
+                      "px-4 py-2.5 rounded-2xl shadow-sm text-sm whitespace-pre-line leading-relaxed break-words [word-break:break-word]",
                       isMe 
                         ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tr-none" 
                         : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none"

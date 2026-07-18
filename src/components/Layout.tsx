@@ -233,15 +233,15 @@ export function Layout() {
 
   return (
     <div className={clsx(
-      "bg-gray-50 dark:bg-slate-900 flex",
-      isMobile ? "h-[100dvh] flex-col overflow-hidden w-full" : "min-h-[100dvh] md:flex-row"
+      "bg-gray-50 dark:bg-slate-900 flex w-full h-screen overflow-hidden",
+      isMobile ? "flex-col" : "flex-row"
     )}>
       <TaskReminders />
       <SharedMatchNotifications />
       {/* Sidebar */}
       <aside
         className={clsx(
-          "hidden md:flex inset-y-0 left-0 z-50 bg-slate-900 text-slate-300 flex-col items-stretch shrink-0 transition-[width,transform] duration-300 relative",
+          "hidden md:flex sticky top-0 h-screen z-50 bg-slate-900 text-slate-300 flex-col items-stretch shrink-0 transition-[width,transform] duration-300",
           isSidebarCollapsed ? "w-20" : "w-64",
         )}
       >
@@ -459,7 +459,7 @@ export function Layout() {
           "flex-1 relative transition-colors",
           isMobile 
             ? ((location.pathname === '/chats' || location.pathname === '/inventory') ? "h-full overflow-hidden" : "overflow-auto p-4") 
-            : "overflow-auto p-4 md:p-6"
+            : (location.pathname === '/chats' ? "h-full overflow-hidden p-4 md:p-6" : "overflow-auto p-4 md:p-6")
         )}>
           <Outlet />
         </div>

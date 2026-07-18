@@ -6,6 +6,9 @@ import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDo
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import { checkIsWon, checkIsLost } from '../../lib/clientUtils';
+import { DealWonModal } from '../../components/DealWonModal';
+import { LostReasonModal } from '../../components/LostReasonModal';
 
 interface Props {
   client: Client;
@@ -18,6 +21,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const { userData } = useAuth();
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [currentStatus, setCurrentStatus] = useState(client.status || 'new');
+  const [showDealWonModal, setShowDealWonModal] = useState(false);
+  const [showLostReasonModal, setShowLostReasonModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   
   // Quick note state
   const [quickNote, setQuickNote] = useState('');
@@ -95,7 +101,11 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   useEffect(() => {
     const loadNotes = async () => {
       try {
-        const q = query(collection(db, "notes"), where("clientId", "==", client.id));
+        const q = query(
+          collection(db, "notes"),
+          where("agencyId", "==", client.agencyId),
+          where("clientId", "==", client.id)
+        );
         const s = await getDocs(q);
         const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
         n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -136,6 +146,17 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   }, [userData]);
 
   const handleStatusChange = async (newStatus: string) => {
+    if (checkIsWon(newStatus, pipelineStages)) {
+      setPendingStatus(newStatus);
+      setShowDealWonModal(true);
+      return;
+    }
+    if (checkIsLost(newStatus, pipelineStages)) {
+      setPendingStatus(newStatus);
+      setShowLostReasonModal(true);
+      return;
+    }
+
     try {
       setCurrentStatus(newStatus);
       const isDeal = client.originalClientId && client.originalClientId !== client.id;
@@ -183,6 +204,111 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     }
   };
 
+  const handleLostConfirm = async (reason: string, details: string) => {
+    setShowLostReasonModal(false);
+    const targetStatus = pendingStatus || "lost";
+    const fullReason = reason === "Otro" ? details : `${reason}${details ? ` - ${details}` : ""}`;
+    
+    try {
+      setCurrentStatus(targetStatus);
+      const isDeal = client.originalClientId && client.originalClientId !== client.id;
+      const actualClientId = client.originalClientId || client.id;
+      
+      if (isDeal) {
+        const dealRef = doc(db, 'deals', client.id!);
+        await updateDoc(dealRef, {
+          status: targetStatus,
+          lostReason: fullReason,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const clientRef = doc(db, 'clients', actualClientId!);
+        await updateDoc(clientRef, {
+          status: targetStatus,
+          lostReason: fullReason,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        const clientRef = doc(db, 'clients', client.id!);
+        await updateDoc(clientRef, {
+          status: targetStatus,
+          lostReason: fullReason,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const q = query(collection(db, 'deals'), where('clientId', '==', client.id!));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const dealDoc = snap.docs[0];
+          await updateDoc(doc(db, 'deals', dealDoc.id), {
+            status: targetStatus,
+            lostReason: fullReason,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+      onUpdated();
+    } catch (err) {
+      console.error("Error saving lost reason:", err);
+      setCurrentStatus(client.status || 'new');
+    }
+    setPendingStatus(null);
+  };
+
+  const handleDealWonConfirm = async (saleDetails: any) => {
+    setShowDealWonModal(false);
+    const targetStatus = pendingStatus || "won";
+    
+    try {
+      setCurrentStatus(targetStatus);
+      const isDeal = client.originalClientId && client.originalClientId !== client.id;
+      const actualClientId = client.originalClientId || client.id;
+      
+      if (isDeal) {
+        const dealRef = doc(db, 'deals', client.id!);
+        await updateDoc(dealRef, {
+          status: targetStatus,
+          soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const clientRef = doc(db, 'clients', actualClientId!);
+        await updateDoc(clientRef, {
+          status: targetStatus,
+          soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        const clientRef = doc(db, 'clients', client.id!);
+        await updateDoc(clientRef, {
+          status: targetStatus,
+          soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const q = query(collection(db, 'deals'), where('clientId', '==', client.id!));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const dealDoc = snap.docs[0];
+          await updateDoc(doc(db, 'deals', dealDoc.id), {
+            status: targetStatus,
+            soldAt: new Date().toISOString().split('T')[0],
+            saleDetails,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+      onUpdated();
+    } catch (err) {
+      console.error("Error updating status:", err);
+      setCurrentStatus(client.status || 'new');
+    }
+    setPendingStatus(null);
+  };
+
   const handleAddQuickNote = async (type: string, prefixText?: string) => {
     if (isSubmittingNote) return;
     setIsSubmittingNote(true);
@@ -213,7 +339,11 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       onUpdated();
       
       // refresh notes
-      const q = query(collection(db, "notes"), where("clientId", "==", client.id));
+      const q = query(
+        collection(db, "notes"),
+        where("agencyId", "==", client.agencyId),
+        where("clientId", "==", client.id)
+      );
       const s = await getDocs(q);
       const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
       n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -379,13 +509,29 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                       {format(new Date(note.createdAt), "dd MMM, HH:mm")}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-800 dark:text-slate-200">{note.content}</p>
+                  <p className="text-sm text-slate-800 dark:text-slate-200 break-words [word-break:break-word]">{note.content}</p>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+      
+      {showDealWonModal && (
+        <DealWonModal
+          client={client}
+          onConfirm={handleDealWonConfirm}
+          onCancel={() => setShowDealWonModal(false)}
+        />
+      )}
+
+      {showLostReasonModal && (
+        <LostReasonModal
+          isOpen={showLostReasonModal}
+          onClose={() => setShowLostReasonModal(false)}
+          onConfirm={handleLostConfirm}
+        />
+      )}
     </div>
   );
 }

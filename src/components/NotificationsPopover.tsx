@@ -38,6 +38,8 @@ export function NotificationsPopover() {
         (doc) => ({ ...doc.data(), id: doc.id } as Task)
       );
       setTasks(fetchedTasks);
+    }, (error) => {
+      console.error("Error listening to notification tasks:", error);
     });
 
     return () => unsubscribe();

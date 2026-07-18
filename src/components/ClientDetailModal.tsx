@@ -42,6 +42,7 @@ import { LostReasonModal } from "./LostReasonModal";
 import { PaymentModal } from "./PaymentModal";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
+import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 
 interface Props {
   client: Client | Partial<Client>;
@@ -67,6 +68,7 @@ export function ClientDetailModal({
   const isDealContext = client.originalClientId !== undefined || isNew;
   const [showDealWonModal, setShowDealWonModal] = useState(false);
   const [showLostReasonModal, setShowLostReasonModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [newTaskPrefill, setNewTaskPrefill] = useState<any>(null);
@@ -289,6 +291,7 @@ export function ClientDetailModal({
     const loadNotes = async () => {
       const q = query(
         collection(db, "notes"),
+        where("agencyId", "==", client.agencyId),
         where("clientId", "==", client.id),
       );
       const s = await getDocs(q);
@@ -392,11 +395,13 @@ export function ClientDetailModal({
       alert("Como administrador, no tienes permisos para modificar el embudo de otro vendedor.");
       return;
     }
-    if (newStatus === "won") {
+    if (checkIsWon(newStatus, pipelineStages)) {
+      setPendingStatus(newStatus);
       setShowDealWonModal(true);
       return;
     }
-    if (newStatus === "lost") {
+    if (checkIsLost(newStatus, pipelineStages)) {
+      setPendingStatus(newStatus);
       setShowLostReasonModal(true);
       return;
     }
@@ -412,51 +417,88 @@ export function ClientDetailModal({
           status: newStatus,
           updatedAt: new Date().toISOString(),
         };
-        if (client.originalClientId && client.originalClientId !== client.id) {
-          await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
-        } else {
-          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updates, { merge: true });
+        const finalClientId = client.originalClientId || client.id;
+        let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
+
+        if (!finalDealId) {
+          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            finalDealId = snap.docs[0].id;
+          }
         }
+
+        if (finalDealId) {
+          await setDoc(doc(db, "deals", finalDealId), updates, { merge: true });
+        }
+
+        await setDoc(doc(db, "clients", finalClientId), {
+          status: newStatus,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        onUpdated?.();
       } catch (err) {
         console.error("Error updating status:", err);
       }
     }
   };
 
-  const handleLostConfirm = async (reason: string) => {
+  const handleLostConfirm = async (reason: string, details: string) => {
     setShowLostReasonModal(false);
+    const targetStatus = pendingStatus || "lost";
+    const fullReason = reason === "Otro" ? details : `${reason}${details ? ` - ${details}` : ""}`;
     
     setFormData((prev) => ({
       ...prev,
-      status: "lost",
-      lostReason: reason,
+      status: targetStatus,
+      lostReason: fullReason,
     }));
 
     if (!isNew && client.id) {
       try {
         const updates: any = {
-          status: "lost",
-          lostReason: reason,
+          status: targetStatus,
+          lostReason: fullReason,
           updatedAt: new Date().toISOString(),
         };
-        if (client.originalClientId && client.originalClientId !== client.id) {
-          await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
-        } else {
-          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updates, { merge: true });
+
+        const finalClientId = client.originalClientId || client.id;
+        let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
+
+        if (!finalDealId) {
+          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            finalDealId = snap.docs[0].id;
+          }
         }
+
+        if (finalDealId) {
+          await setDoc(doc(db, "deals", finalDealId), updates, { merge: true });
+        }
+
+        await setDoc(doc(db, "clients", finalClientId), {
+          status: targetStatus,
+          lostReason: fullReason,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
         onUpdated?.();
       } catch (err) {
         console.error("Error saving lost reason:", err);
       }
     }
+    setPendingStatus(null);
   };
 
   const handleDealWonConfirm = async (saleDetails: any) => {
     setShowDealWonModal(false);
+    const targetStatus = pendingStatus || "won";
     
     setFormData((prev) => {
       const updates: Partial<Client> = { 
-        status: "won",
+        status: targetStatus,
         soldAt: new Date().toISOString().split('T')[0],
         saleDetails 
       };
@@ -466,16 +508,33 @@ export function ClientDetailModal({
     if (!isNew && client.id) {
       try {
         const updates: any = {
-          status: "won",
+          status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
           saleDetails,
           updatedAt: new Date().toISOString(),
         };
-        if (client.originalClientId && client.originalClientId !== client.id) {
-          await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
-        } else {
-          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updates, { merge: true });
+
+        const finalClientId = client.originalClientId || client.id;
+        let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
+
+        if (!finalDealId) {
+          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            finalDealId = snap.docs[0].id;
+          }
         }
+
+        if (finalDealId) {
+          await setDoc(doc(db, "deals", finalDealId), updates, { merge: true });
+        }
+
+        await setDoc(doc(db, "clients", finalClientId), {
+          status: targetStatus,
+          soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
         
         if (formData.vehicleId) {
           await updateDoc(doc(db, "vehicles", formData.vehicleId), {
@@ -491,10 +550,12 @@ export function ClientDetailModal({
         }
         
         await createPaymentTasks(db, {...client, ...formData}, saleDetails, userData);
+        onUpdated?.();
       } catch (err) {
         console.error("Error updating status:", err);
       }
     }
+    setPendingStatus(null);
   };
   
   const handlePaymentConfirm = async (payment: any) => {
@@ -613,28 +674,52 @@ export function ClientDetailModal({
           updatedAt: new Date().toISOString(),
         };
 
-        if (client.originalClientId && client.originalClientId !== client.id) {
-          const dealDataToUpdate: any = {};
-          if ('dealTitle' in dataToUpdate) {
-            dealDataToUpdate.title = dataToUpdate.dealTitle;
-            delete dataToUpdate.dealTitle;
+        const finalClientId = client.originalClientId || client.id;
+        let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
+
+        if (!finalDealId) {
+          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            finalDealId = snap.docs[0].id;
           }
-          if ('dealValue' in dataToUpdate) {
-            dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
-            delete dataToUpdate.dealValue;
-          }
-          if ('vehicleId' in dataToUpdate) {
-            dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
-            delete dataToUpdate.vehicleId;
-          }
-          if ('vehicle' in dataToUpdate) {
-            dealDataToUpdate.vehicle = dataToUpdate.vehicle;
-            delete dataToUpdate.vehicle;
-          }
-          if (Object.keys(dealDataToUpdate).length > 0) {
-            dealDataToUpdate.updatedAt = new Date().toISOString();
-            await setDoc(doc(db, "deals", client.id as string), dealDataToUpdate, { merge: true });
-          }
+        }
+
+        const dealDataToUpdate: any = {};
+        if ('dealTitle' in dataToUpdate) {
+          dealDataToUpdate.title = dataToUpdate.dealTitle;
+          delete dataToUpdate.dealTitle;
+        }
+        if ('dealValue' in dataToUpdate) {
+          dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
+          delete dataToUpdate.dealValue;
+        }
+        if ('vehicleId' in dataToUpdate) {
+          dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
+          delete dataToUpdate.vehicleId;
+        }
+        if ('vehicle' in dataToUpdate) {
+          dealDataToUpdate.vehicle = dataToUpdate.vehicle;
+          delete dataToUpdate.vehicle;
+        }
+        if ('status' in dataToUpdate) {
+          dealDataToUpdate.status = dataToUpdate.status;
+        }
+        if ('lostReason' in dataToUpdate) {
+          dealDataToUpdate.lostReason = dataToUpdate.lostReason;
+        }
+        if ('lostAt' in dataToUpdate) {
+          dealDataToUpdate.lostAt = dataToUpdate.lostAt;
+        }
+        if ('soldAt' in dataToUpdate) {
+          dealDataToUpdate.soldAt = dataToUpdate.soldAt;
+        }
+        if ('saleDetails' in dataToUpdate) {
+          dealDataToUpdate.saleDetails = dataToUpdate.saleDetails;
+        }
+        if (finalDealId && Object.keys(dealDataToUpdate).length > 0) {
+          dealDataToUpdate.updatedAt = new Date().toISOString();
+          await setDoc(doc(db, "deals", finalDealId), dealDataToUpdate, { merge: true });
         }
 
         Object.keys(dataToUpdate).forEach(
@@ -642,7 +727,7 @@ export function ClientDetailModal({
             dataToUpdate[k as keyof typeof dataToUpdate] === undefined &&
             delete dataToUpdate[k as keyof typeof dataToUpdate],
         );
-        await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), dataToUpdate, { merge: true });
+        await setDoc(doc(db, "clients", finalClientId as string), dataToUpdate, { merge: true });
       }
       onUpdated?.();
       onClose();
@@ -904,16 +989,18 @@ export function ClientDetailModal({
                   value={formData.status || ""}
                   onChange={(e) => {
                     const newStatus = e.target.value;
-                    setFormData((prev) => {
-                      const updates: any = {
+                    if (checkIsLost(newStatus, pipelineStages)) {
+                      handleStatusChange(newStatus);
+                    } else if (checkIsWon(newStatus, pipelineStages)) {
+                      handleStatusChange(newStatus);
+                    } else {
+                      setFormData((prev) => ({
+                        ...prev,
                         status: newStatus,
                         dealTitle: prev.dealTitle || (prev.name ? `${prev.name} deal` : "Nuevo Trato"),
-                      };
-                      if (newStatus === "won" && !prev.soldAt) {
-                        updates.soldAt = new Date().toISOString().split('T')[0];
-                      }
-                      return { ...prev, ...updates };
-                    });
+                      }));
+                      handleStatusChange(newStatus);
+                    }
                   }}
                   className="mt-1 block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 >
@@ -1049,8 +1136,8 @@ export function ClientDetailModal({
           <div className="flex items-center gap-3">
             {!isNew &&
               formData.dealTitle &&
-              formData.status !== "won" &&
-              formData.status !== "lost" && (
+              !checkIsWon(formData.status, pipelineStages) &&
+              !checkIsLost(formData.status, pipelineStages) && (
                 <>
                   <button
                     type="button"
@@ -1069,7 +1156,7 @@ export function ClientDetailModal({
                 </>
               )}
             {!isNew &&
-              (formData.status === "won") && (
+              checkIsWon(formData.status, pipelineStages) && (
                 <button
                   type="button"
                   onClick={() => handleStatusChange("new")}
@@ -2096,7 +2183,7 @@ export function ClientDetailModal({
                                 : ""}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">
+                          <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap break-words [word-break:break-word]">
                             {n.content}
                           </p>
                         </div>

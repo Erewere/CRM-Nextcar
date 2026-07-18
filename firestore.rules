@@ -33,7 +33,7 @@ service cloud.firestore {
     
     // AGENCIES
     match /agencies/{agencyId} {
-      allow read: if isMaster() || (isAuthenticated() && (getUserAgencyId() == agencyId || resource.data.shareInventory == true));
+      allow read: if isAuthenticated();
       allow write: if isMaster() || (isAdmin() && getUserAgencyId() == agencyId);
     }
     
@@ -168,13 +168,13 @@ service cloud.firestore {
     // AGENCY CHATS
     match /agencyChats/{chatId} {
       allow read, write: if isAuthenticated() && 
-                          (getUserAgencyId() in resource.data.agencyIds);
+                          (getUserAgencyId() in resource.data.participants);
       allow create: if isAuthenticated() && 
-                    (getUserAgencyId() in request.resource.data.agencyIds);
+                    (getUserAgencyId() in request.resource.data.participants);
       
       match /messages/{messageId} {
         allow read, write: if isAuthenticated() && 
-                            (getUserAgencyId() in get(/databases/$(database)/documents/agencyChats/$(chatId)).data.agencyIds);
+                            (getUserAgencyId() in get(/databases/$(database)/documents/agencyChats/$(chatId)).data.participants);
       }
     }
 

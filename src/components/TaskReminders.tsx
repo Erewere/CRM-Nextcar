@@ -26,6 +26,7 @@ export function TaskReminders() {
 
     const q = query(
       collection(db, 'tasks'),
+      where('agencyId', '==', userData.agencyId),
       where('sellerId', '==', userData.id),
       where('completed', '==', false)
     );
@@ -33,6 +34,8 @@ export function TaskReminders() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const taskList = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task));
       setTasks(taskList);
+    }, (error) => {
+      console.error("Error listening to task reminders:", error);
     });
 
     return () => unsubscribe();
