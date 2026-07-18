@@ -5,6 +5,7 @@ import { Client, Task } from '../types';
 import { MessageCircle, Phone, ChevronRight, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
+import { getVehicleOfInterestText } from '../lib/clientUtils';
 
 interface Props {
   client: Client;
@@ -104,7 +105,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
           ) : null}
         </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-3 font-medium">
-          {client.vehicle && client.vehicle !== 'Otro pendiente' ? client.vehicle : 'Sin vehículo de interés'}
+          {getVehicleOfInterestText(client)}
         </p>
         
         <div className="flex items-center justify-between">

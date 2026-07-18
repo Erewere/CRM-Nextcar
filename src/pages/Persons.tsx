@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task, Vehicle } from "../types";
-import { deduplicateClients } from "../lib/clientUtils";
+import { deduplicateClients, getVehicleOfInterestText } from "../lib/clientUtils";
 import {
   Users,
   Search,
@@ -917,12 +917,10 @@ export function Persons() {
                         <span className="truncate">{person.phone}</span>
                       </div>
                     )}
-                    {(person.vehicle || person.dealTitle) && (
-                      <div className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 mt-1.5">
-                        <Car className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate font-semibold text-[11px] uppercase tracking-wider">{person.vehicle || person.dealTitle}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 mt-1.5">
+                      <Car className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate font-semibold text-[11px] uppercase tracking-wider">{getVehicleOfInterestText(person)}</span>
+                    </div>
                     {matches.length > 0 && (
                       <div className="mt-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold border border-green-200 dark:border-green-800/50 uppercase tracking-wider">
@@ -1092,7 +1090,7 @@ export function Persons() {
                           const matches = getClientMatches(person, vehicles);
                           val = (
                             <div className="flex flex-col gap-1 items-start justify-center min-h-[32px]">
-                              <span className="truncate">{person.vehicle || person.dealTitle || "-"}</span>
+                              <span className="truncate">{getVehicleOfInterestText(person)}</span>
                               {matches.length > 0 && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold border border-green-200 dark:border-green-800/50 uppercase tracking-wider">
                                   {matches.length} {matches.length === 1 ? 'Match' : 'Matches'}
