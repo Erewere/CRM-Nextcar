@@ -108,6 +108,7 @@ export function Dashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -213,7 +214,7 @@ export function Dashboard() {
           );
         }
 
-        const [clientsSnap, dealsSnap, vehiclesSnap, tasksSnap, usersSnap, tagsSnap] =
+        const [clientsSnap, dealsSnap, vehiclesSnap, tasksSnap, usersSnap, tagsSnap, notesSnap] =
           await Promise.all([
             getDocs(clientsQ),
             getDocs(dealsQ),
@@ -221,6 +222,7 @@ export function Dashboard() {
             getDocs(tasksQ),
             getDocs(usersQ),
             getDocs(tagsQ),
+            getDocs(query(collection(db, "notes"), agencyQuery)).catch(() => ({ docs: [] } as any)),
           ]);
         
         setDeals(
@@ -244,6 +246,9 @@ export function Dashboard() {
         );
         setUsers(
           usersSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as User),
+        );
+        setNotes(
+          notesSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as any)
         );
         setAgencyTags(
           tagsSnap.docs.map((doc) => ({ id: doc.id, name: doc.data().name })),
@@ -375,7 +380,8 @@ export function Dashboard() {
   const clientsWithScores = useMemo(() => {
     return activeContacts.map(client => {
       const clientTasks = tasks.filter(t => t.clientId === client.id);
-      const scoreInfo = LeadScoringEngine.calculateScore(client, clientTasks);
+      const clientNotes = notes.filter(n => n.clientId === client.id);
+      const scoreInfo = LeadScoringEngine.calculateScore(client, clientTasks, pipelineStages, clientNotes);
       return {
         ...client,
         leadScore: scoreInfo.score,
@@ -383,7 +389,7 @@ export function Dashboard() {
         scoreDetails: scoreInfo
       };
     }).sort((a, b) => b.leadScore - a.leadScore);
-  }, [activeContacts, tasks]);
+  }, [activeContacts, tasks, pipelineStages, notes]);
 
   const sellerPerformance = useMemo(() => {
     if (userData?.role !== "admin") return [];
