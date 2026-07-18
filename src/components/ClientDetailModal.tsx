@@ -33,11 +33,12 @@ import {
   Building2,
   Eye,
   Users,
-  Edit2, Target, Calculator,
+  Edit2, Target, Calculator, Lock,
 } from "lucide-react";
 import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
 import { DealWonModal } from "./DealWonModal";
+import { LostReasonModal } from "./LostReasonModal";
 import { PaymentModal } from "./PaymentModal";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
@@ -57,8 +58,15 @@ export function ClientDetailModal({
 }: Props) {
   const { userData } = useAuth();
   const isNew = !client.id;
+  const canModify = isNew ||
+    (client.creatorId === userData?.id) ||
+    (client.createdByAdmin === true) ||
+    (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId));
+  const isAdminReadOnly = userData?.role === "admin" && !canModify;
+
   const isDealContext = client.originalClientId !== undefined || isNew;
   const [showDealWonModal, setShowDealWonModal] = useState(false);
+  const [showLostReasonModal, setShowLostReasonModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [newTaskPrefill, setNewTaskPrefill] = useState<any>(null);
@@ -69,6 +77,8 @@ export function ClientDetailModal({
           origin: "manual",
           agencyId: userData?.agencyId,
           sellerId: userData?.id,
+          creatorId: userData?.id,
+          createdByAdmin: userData?.role === "admin" ? true : false,
           tags: [],
         }
       : { tags: [], ...client },
@@ -378,8 +388,16 @@ export function ClientDetailModal({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (isAdminReadOnly) {
+      alert("Como administrador, no tienes permisos para modificar el embudo de otro vendedor.");
+      return;
+    }
     if (newStatus === "won") {
       setShowDealWonModal(true);
+      return;
+    }
+    if (newStatus === "lost") {
+      setShowLostReasonModal(true);
       return;
     }
 
@@ -401,6 +419,34 @@ export function ClientDetailModal({
         }
       } catch (err) {
         console.error("Error updating status:", err);
+      }
+    }
+  };
+
+  const handleLostConfirm = async (reason: string) => {
+    setShowLostReasonModal(false);
+    
+    setFormData((prev) => ({
+      ...prev,
+      status: "lost",
+      lostReason: reason,
+    }));
+
+    if (!isNew && client.id) {
+      try {
+        const updates: any = {
+          status: "lost",
+          lostReason: reason,
+          updatedAt: new Date().toISOString(),
+        };
+        if (client.originalClientId && client.originalClientId !== client.id) {
+          await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
+        } else {
+          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updates, { merge: true });
+        }
+        onUpdated?.();
+      } catch (err) {
+        console.error("Error saving lost reason:", err);
       }
     }
   };
@@ -524,6 +570,27 @@ export function ClientDetailModal({
       }
     } else {
       // If using single field, we don't clear the parts, just in case they have them, but the main `address` is what matters.
+    }
+
+    if (isAdminReadOnly) {
+      try {
+        const actualClientId = client.originalClientId || client.id;
+        const updates = {
+          sellerId: finalFormData.sellerId || "",
+          updatedAt: new Date().toISOString()
+        };
+        if (client.originalClientId && client.originalClientId !== client.id) {
+          await setDoc(doc(db, "deals", client.id as string), { sellerId: updates.sellerId, updatedAt: updates.updatedAt }, { merge: true });
+        }
+        await updateDoc(doc(db, "clients", actualClientId as string), updates);
+        onUpdated?.();
+        onClose();
+        return;
+      } catch (err: any) {
+        console.error(err);
+        alert("Error reasignando asesor: " + err.message);
+        return;
+      }
     }
 
     try {
@@ -675,6 +742,10 @@ export function ClientDetailModal({
   };
 
   const handleAddNote = async () => {
+    if (isAdminReadOnly) {
+      alert("Como administrador, no tienes permisos para modificar el embudo de otro vendedor.");
+      return;
+    }
     if (!newNoteContent || isNew) return;
     const newRef = doc(collection(db, "notes"));
     const n = {
@@ -690,6 +761,10 @@ export function ClientDetailModal({
   };
 
   const toggleTaskCompletion = async (task: Task) => {
+    if (isAdminReadOnly) {
+      alert("Como administrador, no tienes permisos para modificar el embudo de otro vendedor.");
+      return;
+    }
     try {
       await updateDoc(doc(db, "tasks", task.id as string), {
         completed: !task.completed,
@@ -719,6 +794,10 @@ export function ClientDetailModal({
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isAdminReadOnly) {
+      alert("Como administrador, no tienes permisos para modificar el embudo de otro vendedor.");
+      return;
+    }
     if (!e.target.files || e.target.files.length === 0 || isNew) return;
     if (!userData?.agencyId || userData.agencyId === "unassigned") {
       alert("Debes pertenecer a una agencia para subir archivos.");
@@ -1008,6 +1087,13 @@ export function ClientDetailModal({
             </button>
           </div>
         </div>
+
+        {isAdminReadOnly && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/30 px-6 py-2.5 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-semibold shrink-0">
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>Este contacto pertenece a otro asesor. Como administrador, estás en modo de <strong>Solo Lectura</strong> para este contacto. Solo puedes visualizar la información y reasignarlo a otro asesor si lo consideras necesario.</span>
+          </div>
+        )}
 
         {showWantedVehicleMenu ? (
           <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900 flex flex-col items-center">
@@ -1745,7 +1831,15 @@ export function ClientDetailModal({
                   </div>
 
                   <div className="p-4 bg-white dark:bg-slate-800">
-                    {activeTab === "activity" && (
+                    {isAdminReadOnly ? (
+                      <div className="text-center py-6 text-slate-500 dark:text-slate-400">
+                        <Lock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Sección en Modo Lectura</p>
+                        <p className="text-xs mt-1">Como administrador, no puedes agregar notas, actividades, archivos ni nuevos tratos a este contacto porque pertenece a otro asesor.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {activeTab === "activity" && (
                       <div>
                         <input
                           type="text"
@@ -1868,6 +1962,8 @@ export function ClientDetailModal({
                           Imágenes o documentos PDF
                         </p>
                       </div>
+                    )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -2136,6 +2232,22 @@ export function ClientDetailModal({
               console.error("Error creating task:", err);
             }
           }}
+        />
+      )}
+
+      {showDealWonModal && (
+        <DealWonModal
+          client={client as Client}
+          onConfirm={handleDealWonConfirm}
+          onCancel={() => setShowDealWonModal(false)}
+        />
+      )}
+
+      {showLostReasonModal && (
+        <LostReasonModal
+          isOpen={showLostReasonModal}
+          onClose={() => setShowLostReasonModal(false)}
+          onConfirm={handleLostConfirm}
         />
       )}
     </div>

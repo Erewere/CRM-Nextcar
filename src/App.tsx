@@ -12,6 +12,7 @@ import { Inventory } from './pages/Inventory';
 import { Emails } from './pages/Emails';
 import { VehiclePrint } from './pages/VehiclePrint';
 import { Billing } from './pages/Billing';
+import { Chats } from './pages/Chats';
 
 import { Integrations } from './pages/Integrations';
 import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />
             <Route path="emails" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Emails /></ProtectedRoute>} />
+            <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><Chats /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute requireRole={['master', 'admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />

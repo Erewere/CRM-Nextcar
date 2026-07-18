@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { Navigate, useLocation } from 'react-router';
+import { NextcarLogo } from '../components/NextcarLogo';
 
 export function Login() {
   const { currentUser, loading, connectGoogleServices } = useAuth();
@@ -45,8 +46,8 @@ export function Login() {
     <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4 relative overflow-hidden font-sans">
       <div className="z-10 w-full max-w-sm bg-white dark:bg-slate-800 p-10 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 flex flex-col items-center">
         <div className="flex items-center gap-3 mb-8 border-b border-slate-100 dark:border-slate-700 pb-6 w-full justify-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-white shadow-lg shadow-blue-900/20">
-            NX
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 border border-slate-800/80 shadow-lg p-1.5">
+            <NextcarLogo variant="icon" />
           </div>
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Nextcar <span className="text-blue-600">CRM</span></span>
         </div>

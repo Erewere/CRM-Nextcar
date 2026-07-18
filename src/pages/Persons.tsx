@@ -224,8 +224,9 @@ export function Persons() {
 
   const confirmDelete = async () => {
     try {
+      const { updateDoc } = await import("firebase/firestore");
       await Promise.all(
-        selectedClients.map((id) => deleteDoc(doc(db, "clients", id)))
+        selectedClients.map((id) => updateDoc(doc(db, "clients", id), { isDeleted: true, updatedAt: new Date().toISOString() }))
       );
       setPersons((prev) =>
         prev.filter((p) => !selectedClients.includes(p.id)),
@@ -358,12 +359,12 @@ export function Persons() {
 
         const allClients = clientsDocs.map(
           (d) => ({ ...d.data(), id: d.id }) as Client,
-        );
+        ).filter((c) => !c.isDeleted);
         setPersons(deduplicateClients(allClients));
 
         setDeals(
           dealsDocs
-            ? dealsDocs.map((d: any) => ({ ...d.data(), id: d.id }) as Deal)
+            ? dealsDocs.map((d: any) => ({ ...d.data(), id: d.id }) as Deal).filter((d) => !d.isDeleted)
             : [],
         );
         setVehicles(

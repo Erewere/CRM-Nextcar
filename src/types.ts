@@ -68,6 +68,9 @@ export interface Deal {
   agencyId: string;
   clientId: string;
   sellerId?: string;
+  creatorId?: string;
+  createdByAdmin?: boolean;
+  isDeleted?: boolean;
   title: string;
   value?: number;
   status: string; // The pipeline stage ID or 'won' / 'lost'
@@ -107,6 +110,9 @@ export interface Client {
   originalClientId?: string;
   agencyId: string;
   sellerId: string;
+  creatorId?: string;
+  createdByAdmin?: boolean;
+  isDeleted?: boolean;
   visibility?: "private" | "all";
   name: string;
   dealTitle?: string;

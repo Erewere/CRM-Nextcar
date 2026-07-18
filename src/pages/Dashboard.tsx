@@ -221,12 +221,14 @@ export function Dashboard() {
           ]);
         
         setDeals(
-          dealsSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
+          dealsSnap.docs
+            .map((doc) => ({ ...doc.data(), id: doc.id }) as any)
+            .filter((d: any) => !d.isDeleted)
         );
 
-        const rawClients = clientsSnap.docs.map(
-          (doc) => ({ ...doc.data(), id: doc.id }) as Client,
-        );
+        const rawClients = clientsSnap.docs
+          .map((doc) => ({ ...doc.data(), id: doc.id }) as Client)
+          .filter((c) => !c.isDeleted);
         
         setClients(deduplicateClients(rawClients));
         setVehicles(

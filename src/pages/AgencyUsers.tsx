@@ -32,6 +32,8 @@ export function AgencyUsers() {
   const [savingHours, setSavingHours] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [shareInventory, setShareInventory] = useState(false);
+  const [savingSharing, setSavingSharing] = useState(false);
   
   useEffect(() => {
     if (!userData) return;
@@ -129,6 +131,9 @@ export function AgencyUsers() {
             if (agencyData.businessHours) {
               setBusinessStart(agencyData.businessHours.start || '08:00');
               setBusinessEnd(agencyData.businessHours.end || '21:00');
+            }
+            if (agencyData.shareInventory !== undefined) {
+              setShareInventory(!!agencyData.shareInventory);
             }
           }
           const clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
@@ -370,6 +375,23 @@ export function AgencyUsers() {
       alert('Error guardando configuración.');
     } finally {
       setSavingInactivity(false);
+    }
+  };
+
+  const handleToggleShareInventory = async () => {
+    if (!userData?.agencyId) return;
+    setSavingSharing(true);
+    try {
+      const newVal = !shareInventory;
+      await updateDoc(doc(db, 'agencies', userData.agencyId), {
+        shareInventory: newVal
+      });
+      setShareInventory(newVal);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar la configuración de inventario compartido.');
+    } finally {
+      setSavingSharing(false);
     }
   };
 
@@ -639,6 +661,45 @@ export function AgencyUsers() {
                 className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
               >
                 {savingHours ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compartir Inventario */}
+      {userData?.role === 'admin' && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Building className="w-5 h-5 text-indigo-500" />
+              Colaboración Inter-Agencia (Inventario Compartido)
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Al activar esta opción, permites que los administradores de otras agencias (que también compartan su inventario) vean tus autos disponibles. De igual manera, tú podrás consultar los autos disponibles de ellos para ofrecerlos a tus clientes.
+            </p>
+          </div>
+          
+          <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Compartir mi Inventario</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Se compartirán únicamente los datos básicos: Fotos, Precio, Kilometraje, Color, Transmisión, Carrocería, Enlace web, Cilindros, Litros, Pasajeros y Equipamiento. <span className="font-bold text-red-500">Los datos sensibles como utilidades, costo de compra y gastos internos NUNCA se compartirán.</span>
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={handleToggleShareInventory}
+                disabled={savingSharing}
+                type="button"
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors shadow-sm ${
+                  shareInventory
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 text-slate-700'
+                }`}
+              >
+                {shareInventory ? '✓ Compartiendo Activado' : 'Compartiendo Desactivado'}
               </button>
             </div>
           </div>

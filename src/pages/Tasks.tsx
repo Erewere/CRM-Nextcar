@@ -249,12 +249,12 @@ export function Tasks() {
         }
 
         const cSnap = await getDocs(cq);
-        const list = cSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+        const list = cSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter((c) => !c.isDeleted);
         setClients(deduplicateClients(list));
 
         try {
           const dSnap = await getDocs(dq);
-          setDeals(dSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Deal));
+          setDeals(dSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Deal).filter((d) => !d.isDeleted));
         } catch (e) {
           // If deals collection doesn't exist yet, it's fine, it will just be empty
           setDeals([]);

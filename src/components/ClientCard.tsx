@@ -2,7 +2,8 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Client, Task } from '../types';
-import { MessageCircle, Phone, ChevronRight, AlertTriangle } from 'lucide-react';
+import { MessageCircle, Phone, ChevronRight, AlertTriangle, Lock } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
 
 interface Props {
@@ -10,9 +11,10 @@ interface Props {
   tasks?: import('../types').Task[];
   onClick?: () => void;
   key?: React.Key;
+  disabled?: boolean;
 }
 
-export function ClientCard({ client, tasks = [], onClick }: Props) {
+export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
   const getTaskStatusInfo = () => {
     const pendingTasks = tasks.filter(t => !t.completed);
     if (pendingTasks.length === 0) {
@@ -78,7 +80,8 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
     <div 
       onClick={onClick}
       className={clsx(
-        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl cursor-grab active:cursor-grabbing text-left relative overflow-hidden",
+        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl text-left relative overflow-hidden",
+        disabled ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
         client.origin === 'whatsapp' && "border-l-4 border-l-green-400"
       )}
     >
@@ -88,8 +91,11 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
       
       <div className="p-3 pb-2.5">
         <div className="flex justify-between items-start gap-2 mb-0.5">
-          <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
             {client.dealTitle || (client.name ? `${client.name} deal` : 'Deal')}
+            {disabled && (
+              <Lock className="w-3 h-3 text-slate-400 shrink-0" title="Solo lectura (Asignado a otro vendedor)" />
+            )}
           </h4>
           {client.dealValue ? (
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-800/50">
@@ -138,7 +144,18 @@ export function ClientCard({ client, tasks = [], onClick }: Props) {
 }
 
 export function SortableClientCard({ client, tasks, onClick }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id });
+  const { userData } = useAuth();
+  
+  const canModify = !client.id ||
+    (client.creatorId === userData?.id) ||
+    (client.createdByAdmin === true) ||
+    (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId));
+  const isDragDisabled = userData?.role === "admin" && !canModify;
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: client.id,
+    disabled: isDragDisabled
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -154,15 +171,15 @@ export function SortableClientCard({ client, tasks, onClick }: Props) {
         className="rounded-xl border-2 border-dashed border-blue-400 opacity-60 transition-all duration-300"
       >
         <div className="w-full pointer-events-none">
-          <ClientCard client={client} tasks={tasks} />
+          <ClientCard client={client} tasks={tasks} disabled={isDragDisabled} />
         </div>
       </div>
     );
   }
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <ClientCard client={client} tasks={tasks} onClick={onClick} />
+    <div ref={setNodeRef} style={style} {...(isDragDisabled ? {} : attributes)} {...(isDragDisabled ? {} : listeners)}>
+      <ClientCard client={client} tasks={tasks} onClick={onClick} disabled={isDragDisabled} />
     </div>
   );
 }

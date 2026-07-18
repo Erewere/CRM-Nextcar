@@ -2,6 +2,7 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
@@ -10,7 +11,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients } from '../lib/clientUtils';
-import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2 } from 'lucide-react';
+import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare } from 'lucide-react';
 
 interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
@@ -19,6 +20,7 @@ interface Props {
 
 export function VehicleDetailModal({ vehicle, onClose }: Props) {
   const { userData } = useAuth();
+  const navigate = useNavigate();
   const isNew = !vehicle.id;
   const isMobile = useIsMobile();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -418,7 +420,8 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         description: expDesc,
         amount: Number(expAmount),
         date: expDate,
-        addedBy: userData?.id
+        addedBy: userData?.id,
+        agencyId: vehicle.agencyId || userData?.agencyId || 'unassigned'
       }, { merge: true });
       
       setExpDesc('');
@@ -455,7 +458,50 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
     }
   };
 
-  const isAdmin = userData?.role === 'admin' || userData?.role === 'master';
+  const isMaster = userData?.role === 'master';
+  const isOwnVehicle = isNew || formData.agencyId === userData?.agencyId;
+  const isReadOnly = !isOwnVehicle && !isMaster;
+  const isAdmin = userData?.role === 'admin' || isMaster;
+
+  const handleStartChat = async () => {
+    if (!userData?.agencyId || !formData.agencyId) return;
+    try {
+      setLoading(true);
+      const chatRoomId = [userData.agencyId, formData.agencyId].sort().join('_');
+      
+      const chatRef = doc(db, 'agencyChats', chatRoomId);
+      await setDoc(chatRef, {
+        id: chatRoomId,
+        participants: [userData.agencyId, formData.agencyId],
+        lastMessage: `Interés en: ${formData.year} ${formData.make} ${formData.model}`,
+        lastMessageAt: new Date().toISOString(),
+        unreadBy: {
+          [formData.agencyId]: true,
+          [userData.agencyId]: false
+        }
+      }, { merge: true });
+
+      const messagesRef = collection(db, 'agencyChats', chatRoomId, 'messages');
+      const newMessageDoc = doc(messagesRef);
+      await setDoc(newMessageDoc, {
+        id: newMessageDoc.id,
+        senderId: userData.uid || userData.email || 'system',
+        senderAgencyId: userData.agencyId,
+        text: `¡Hola! Estamos interesados en su vehículo de inventario compartido:\n🚙 *${formData.year} ${formData.make} ${formData.model}*\n💰 Precio: $${Number(formData.price || 0).toLocaleString()}\n📈 Km: ${Number(formData.km || 0).toLocaleString()} km\n🎨 Color: ${formData.color}\n⚙️ Transmisión: ${formData.transmission}`,
+        createdAt: new Date().toISOString(),
+        vehicleId: vehicle.id || ''
+      });
+
+      onClose();
+      navigate('/chats', { state: { activeChatId: chatRoomId } });
+    } catch (err: any) {
+      console.error("Error starting internal chat", err);
+      alert("No se pudo iniciar el chat: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const utility = (formData.price || 0) - (formData.purchasePrice || 0) - totalExpenses;
 
@@ -472,7 +518,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             >
               Info del Vehículo
             </button>
-            {!isNew && userData?.role !== 'seller' && (
+            {!isNew && userData?.role !== 'seller' && (isOwnVehicle || isMaster) && (
               <button 
                  onClick={() => setActiveTab('expenses')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -519,6 +565,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
           )}
           {activeTab === 'info' && (
             <form id="vehicle-form" onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+              <fieldset disabled={isReadOnly} className="contents">
               {/* Left Column - Photo & Status */}
               <div className="space-y-6">
                 <div>
@@ -655,7 +702,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   )}
                 </div>
 
-                {isAdmin && (
+                {isAdmin && (isOwnVehicle || isMaster) && (
                   <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
                     <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
                       <span>Precio de Compra</span>
@@ -772,7 +819,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   </div>
                 </div>
 
-                {!isNew && isAdmin && (
+                {!isNew && isAdmin && (isOwnVehicle || isMaster) && (
                   <div className="mt-8 p-4 bg-green-50 rounded-xl border border-green-200">
                     <h4 className="text-sm font-bold text-green-900 mb-2">Resumen Financiero</h4>
                     <div className="space-y-1 text-sm text-green-800">
@@ -796,6 +843,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
                   </div>
                 )}
               </div>
+              </fieldset>
             </form>
           )}
 
@@ -1071,9 +1119,21 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
         {activeTab === 'info' && (
           <div className="p-4 border-t bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">Cancelar</button>
-            <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg font-bold">
-              {loading ? 'Guardando...' : 'Guardar Vehículo'}
-            </button>
+            {isReadOnly ? (
+              <button
+                type="button"
+                onClick={handleStartChat}
+                disabled={loading}
+                className="px-5 py-2 text-sm text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-lg font-bold flex items-center gap-2 shadow-md animate-pulse disabled:opacity-50"
+              >
+                <MessageSquare className="w-4.5 h-4.5" />
+                {loading ? 'Iniciando...' : 'Iniciar Chat con Agencia'}
+              </button>
+            ) : (
+              <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg font-bold">
+                {loading ? 'Guardando...' : 'Guardar Vehículo'}
+              </button>
+            )}
           </div>
         )}
 

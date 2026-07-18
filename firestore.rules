@@ -33,7 +33,7 @@ service cloud.firestore {
     
     // AGENCIES
     match /agencies/{agencyId} {
-      allow read: if isMaster() || (isAuthenticated() && getUserAgencyId() == agencyId);
+      allow read: if isMaster() || (isAuthenticated() && (getUserAgencyId() == agencyId || resource.data.shareInventory == true));
       allow write: if isMaster() || (isAdmin() && getUserAgencyId() == agencyId);
     }
     
@@ -113,7 +113,10 @@ service cloud.firestore {
     
     // VEHICLES
     match /vehicles/{vehicleId} {
-      allow read: if isSameAgency(resource.data.agencyId);
+      allow read: if isSameAgency(resource.data.agencyId) || 
+                    (resource.data.status == 'available' && 
+                     get(/databases/$(database)/documents/agencies/$(resource.data.agencyId)).data.shareInventory == true &&
+                     get(/databases/$(database)/documents/agencies/$(getUserAgencyId())).data.shareInventory == true);
       
       allow create: if isSameAgency(request.resource.data.agencyId);
                     
@@ -128,14 +131,14 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/vehicles/$(vehicleId)).data.agencyId;
       }
       
-      allow read: if isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
+      allow read: if (resource.data != null && 'agencyId' in resource.data && isSameAgency(resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
       
-      allow create: if isSameAgency(getVehicleAgencyId(request.resource.data.vehicleId));
+      allow create: if (request.resource.data != null && 'agencyId' in request.resource.data && isSameAgency(request.resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(request.resource.data.vehicleId));
       
-      allow update: if isSameAgency(getVehicleAgencyId(resource.data.vehicleId)) &&
-                    request.resource.data.vehicleId == resource.data.vehicleId;
+      allow update: if (isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId) ||
+                    (isSameAgency(getVehicleAgencyId(resource.data.vehicleId)) && request.resource.data.vehicleId == resource.data.vehicleId);
                     
-      allow delete: if isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
+      allow delete: if (resource.data != null && 'agencyId' in resource.data && isSameAgency(resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
     }
     
     // NOTES
@@ -160,6 +163,19 @@ service cloud.firestore {
       allow create: if isSameAgency(request.resource.data.agencyId);
       allow update: if isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId;
       allow delete: if isSameAgency(resource.data.agencyId);
+    }
+
+    // AGENCY CHATS
+    match /agencyChats/{chatId} {
+      allow read, write: if isAuthenticated() && 
+                          (getUserAgencyId() in resource.data.agencyIds);
+      allow create: if isAuthenticated() && 
+                    (getUserAgencyId() in request.resource.data.agencyIds);
+      
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated() && 
+                            (getUserAgencyId() in get(/databases/$(database)/documents/agencyChats/$(chatId)).data.agencyIds);
+      }
     }
 
     // Default deny

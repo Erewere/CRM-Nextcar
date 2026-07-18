@@ -47,10 +47,13 @@ export function ClosedSales() {
     if (userData?.role !== 'master') {
       clientsQ = query(collection(db, "clients"), where("agencyId", "==", userData.agencyId));
       vehiclesQ = query(collection(db, "vehicles"), where("agencyId", "==", userData.agencyId));
+      expensesQ = query(collection(db, "vehicleExpenses"), where("agencyId", "==", userData.agencyId));
     }
 
     const unsubClients = onSnapshot(clientsQ, (snap) => {
-      const rawClients = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+      const rawClients = snap.docs
+        .map(d => ({ ...d.data(), id: d.id } as Client))
+        .filter(c => !c.isDeleted);
       setClients(deduplicateClients(rawClients));
     });
 
@@ -60,7 +63,7 @@ export function ClosedSales() {
 
     let dealsQ = userData?.role !== 'master' ? query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)) : query(collection(db, "deals"));
     const unsubDeals = onSnapshot(dealsQ, (snap) => {
-      setDeals(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      setDeals(snap.docs.map(d => ({ ...d.data(), id: d.id }) as any).filter(d => !d.isDeleted));
     });
 
     const unsubExpenses = onSnapshot(expensesQ, (snap) => {

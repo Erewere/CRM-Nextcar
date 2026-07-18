@@ -21,8 +21,9 @@ import {
   Blocks,
   Key,
   TrendingUp,
+  MessageSquare,
 } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
 
 import { TaskReminders } from "./TaskReminders";
@@ -32,6 +33,7 @@ import { NotificationsPopover } from "./NotificationsPopover";
 import { useIsMobile } from "../hooks/useIsMobile";
 
 import { MobileFab } from "./MobileFab";
+import { NextcarLogo } from "./NextcarLogo";
 
 export function Layout() {
   const { userData } = useAuth();
@@ -44,6 +46,7 @@ export function Layout() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
   const isMobile = useIsMobile();
+  const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -88,6 +91,46 @@ export function Layout() {
     } else if (userData?.role === "master") {
       setAgencyName("Master Admin");
     }
+  }, [userData]);
+
+  useEffect(() => {
+    if (!userData?.agencyId) {
+      setUnreadChatsCount(0);
+      return;
+    }
+
+    let q;
+    if (userData.role === 'master') {
+      q = query(collection(db, 'agencyChats'));
+    } else {
+      q = query(
+        collection(db, 'agencyChats'),
+        where('participants', 'array-contains', userData.agencyId)
+      );
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (userData.role === 'master') {
+          const unreadBy = data.unreadBy || {};
+          const hasAnyUnread = Object.values(unreadBy).some(val => val === true);
+          if (hasAnyUnread) {
+            count++;
+          }
+        } else {
+          if (data.unreadBy?.[userData.agencyId] === true) {
+            count++;
+          }
+        }
+      });
+      setUnreadChatsCount(count);
+    }, (error) => {
+      console.error("Error listening to unread chats count:", error);
+    });
+
+    return () => unsubscribe();
   }, [userData]);
 
   const handleLogout = async () => {
@@ -156,6 +199,13 @@ export function Layout() {
       icon: Blocks,
       roles: ["master", "admin"],
     },
+    {
+      name: "Chat Interagencias",
+      path: "/chats",
+      icon: MessageSquare,
+      roles: ["master", "admin", "seller"],
+      badge: unreadChatsCount > 0 ? unreadChatsCount : undefined,
+    },
   ].filter((item) => {
     if (
       userData?.role === 'master' &&
@@ -192,8 +242,8 @@ export function Layout() {
             isSidebarCollapsed && "justify-center px-2",
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 font-bold text-white shadow-lg shadow-blue-900/20">
-            NX
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 border border-slate-800/80 shadow-lg p-1.5">
+            <NextcarLogo variant="icon" />
           </div>
           {!isSidebarCollapsed && (
             <span className="text-xl font-bold tracking-tight text-white truncate">
@@ -219,14 +269,24 @@ export function Layout() {
                 )
               }
             >
-              <item.icon
-                className={clsx(
-                  "shrink-0",
-                  isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5",
+              <div className="relative shrink-0 flex items-center justify-center">
+                <item.icon
+                  className={clsx(
+                    "shrink-0",
+                    isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5",
+                  )}
+                />
+                {item.badge !== undefined && isSidebarCollapsed && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-slate-900 animate-pulse" />
                 )}
-              />
+              </div>
               {!isSidebarCollapsed && (
                 <span className="truncate">{item.name}</span>
+              )}
+              {!isSidebarCollapsed && item.badge !== undefined && (
+                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                  {item.badge}
+                </span>
               )}
             </NavLink>
           ))}
@@ -384,6 +444,7 @@ export function Layout() {
             { name: "Inicio", path: "/", icon: LayoutDashboard },
             { name: "Contactos", path: "/persons", icon: Users },
             { name: "Inventario", path: "/inventory", icon: Car },
+            { name: "Chats", path: "/chats", icon: MessageSquare, badge: unreadChatsCount > 0 ? unreadChatsCount : undefined },
             { name: "Citas", path: "/tasks", icon: CheckSquare },
           ].map(item => (
             <NavLink
@@ -392,12 +453,19 @@ export function Layout() {
               end={item.path === "/"}
               className={({ isActive }) =>
                 clsx(
-                  "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
+                  "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors relative",
                   isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 )
               }
             >
-              <item.icon className="w-5 h-5" />
+              <div className="relative">
+                <item.icon className="w-5 h-5" />
+                {item.badge !== undefined && (
+                  <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-slate-900">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] font-medium">{item.name}</span>
             </NavLink>
           ))}

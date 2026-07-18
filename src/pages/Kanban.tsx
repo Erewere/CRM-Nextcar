@@ -36,6 +36,7 @@ import { ClientCard, SortableClientCard } from "../components/ClientCard";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
 import { DealWonModal } from "../components/DealWonModal";
+import { LostReasonModal } from "../components/LostReasonModal";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { Settings, ChevronUp, ChevronDown, Archive, X } from "lucide-react";
@@ -199,6 +200,7 @@ export function Kanban() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientToMarkWon, setClientToMarkWon] = useState<{ client: Client, originalStatus: string } | null>(null);
+  const [clientToMarkLost, setClientToMarkLost] = useState<{ client: Client, originalStatus: string, overColumnId: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
@@ -257,7 +259,7 @@ export function Kanban() {
       (snapshot) => {
         let data = snapshot.docs.map(
           (d) => ({ ...d.data(), id: d.id }) as Client,
-        );
+        ).filter(c => !c.isDeleted);
         
         data = deduplicateClients(data);
 
@@ -460,6 +462,20 @@ export function Kanban() {
     const originalStatus = activeOriginalStatusRef.current;
     
     if (client && originalStatus !== overColumnId) {
+      if (userData?.role === "admin") {
+        const canModify = !client.id ||
+          (client.creatorId === userData?.id) ||
+          (client.createdByAdmin === true) ||
+          (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId));
+        if (!canModify) {
+          alert("Como administrador, no puedes modificar el embudo de otro vendedor. Solo puedes modificar contactos o tratos creados por ti.");
+          // Revert locally modified state
+          setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus as string } : c));
+          activeOriginalStatusRef.current = null; activeColumnRef.current = null;
+          return;
+        }
+      }
+
       // The array was already modified locally in handleDragOver, 
       // we only need to persist to Firebase if the status is different from start
       try {
@@ -469,6 +485,13 @@ export function Kanban() {
 
         if (isWon) {
           setClientToMarkWon({ client, originalStatus: originalStatus as string });
+          activeOriginalStatusRef.current = null; activeColumnRef.current = null;
+          return;
+        }
+
+        const isLost = overColumn ? checkIsLost(overColumnId, [overColumn]) : false;
+        if (isLost) {
+          setClientToMarkLost({ client, originalStatus: originalStatus as string, overColumnId: overColumnId as string });
           activeOriginalStatusRef.current = null; activeColumnRef.current = null;
           return;
         }
@@ -589,6 +612,63 @@ export function Kanban() {
     // Revert local state to originalStatus
     setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus } : c));
     setClientToMarkWon(null);
+  };
+
+  const handleDealLostConfirm = async (reason: string, details: string) => {
+    if (!clientToMarkLost) return;
+    const { client, overColumnId } = clientToMarkLost;
+    const fullReason = reason === "Otro" ? details : `${reason}${details ? ` - ${details}` : ""}`;
+
+    try {
+      const updates: any = {
+        status: overColumnId,
+        lostReason: fullReason,
+        lostAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const isExistingDeal = deals.some(d => d.id === client.id);
+      const actualClientId = client.originalClientId || client.id;
+      if (isExistingDeal) {
+        await setDoc(doc(db, "deals", client.id), updates, { merge: true });
+      } else {
+        const dealRef = doc(collection(db, "deals"));
+        await setDoc(dealRef, {
+          ...updates,
+          id: dealRef.id,
+          clientId: actualClientId,
+          agencyId: userData?.agencyId,
+          sellerId: client.sellerId || userData?.id,
+          createdAt: new Date().toISOString(),
+          title: `Trato con ${client.name}`,
+          value: client.dealValue ? Number(client.dealValue) : 0,
+          vehicle: client.vehicle || null,
+          vehicleId: client.vehicleId || null
+        });
+      }
+      
+      if (actualClientId) {
+        await updateDoc(doc(db, "clients", actualClientId), {
+          status: overColumnId,
+          lostReason: fullReason,
+          lostAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    } catch (e) {
+      console.error("Status update error", e);
+    } finally {
+      setClientToMarkLost(null);
+    }
+  };
+
+  const handleDealLostCancel = () => {
+    if (!clientToMarkLost) return;
+    const { client, originalStatus } = clientToMarkLost;
+    
+    // Revert local state to originalStatus
+    setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus } : c));
+    setClientToMarkLost(null);
   };
 
   return (
@@ -773,6 +853,14 @@ export function Kanban() {
           client={clientToMarkWon.client}
           onConfirm={handleDealWonConfirm}
           onCancel={handleDealWonCancel}
+        />
+      )}
+      {clientToMarkLost && (
+        <LostReasonModal
+          isOpen={!!clientToMarkLost}
+          clientName={clientToMarkLost.client.name}
+          onConfirm={handleDealLostConfirm}
+          onClose={handleDealLostCancel}
         />
       )}
       {showArchived && (

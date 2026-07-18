@@ -148,6 +148,12 @@ export function Inventory() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my');
+  const [ownAgencySharing, setOwnAgencySharing] = useState(false);
+  const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
+  const [sharedVehicles, setSharedVehicles] = useState<Vehicle[]>([]);
+  const [agencyNames, setAgencyNames] = useState<Record<string, string>>({});
+
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
 
   const [showImportExcel, setShowImportExcel] = useState(false);
@@ -354,7 +360,7 @@ export function Inventory() {
     if (userData?.role !== 'master') {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
       clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
-      expensesQ = query(collection(db, 'vehicleExpenses'));
+      expensesQ = query(collection(db, 'vehicleExpenses'), where('agencyId', '==', userData.agencyId));
     }
 
     const unsubscribeVehicles = onSnapshot(q, (snapshot) => {
@@ -393,6 +399,63 @@ export function Inventory() {
     };
   }, [userData]);
 
+  // Listen to own agency and other agencies for sharing
+  useEffect(() => {
+    if (!userData?.agencyId || userData?.role === 'master') return;
+
+    // Listen to our own agency's shareInventory
+    const unsubscribeOwnAgency = onSnapshot(doc(db, 'agencies', userData.agencyId), (snap) => {
+      if (snap.exists()) {
+        setOwnAgencySharing(!!snap.data().shareInventory);
+      }
+    });
+
+    // Listen to other agencies that are sharing
+    const unsubscribeAgencies = onSnapshot(collection(db, 'agencies'), (snapshot) => {
+      const names: Record<string, string> = {};
+      const otherSharing: string[] = [];
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        names[doc.id] = data.name || 'Agencia';
+        if (doc.id !== userData.agencyId && data.shareInventory === true) {
+          otherSharing.push(doc.id);
+        }
+      });
+      setAgencyNames(names);
+      setSharingAgencies(otherSharing);
+    });
+
+    return () => {
+      unsubscribeOwnAgency();
+      unsubscribeAgencies();
+    };
+  }, [userData]);
+
+  // Subscribe to shared vehicles when eligible
+  useEffect(() => {
+    if (userData?.role === 'master') return;
+    if (!ownAgencySharing || sharingAgencies.length === 0) {
+      setSharedVehicles([]);
+      return;
+    }
+
+    const sliceAgencies = sharingAgencies.slice(0, 10);
+    const sharedQ = query(
+      collection(db, 'vehicles'),
+      where('agencyId', 'in', sliceAgencies),
+      where('status', '==', 'available')
+    );
+
+    const unsubscribeShared = onSnapshot(sharedQ, (snapshot) => {
+      const loaded = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Vehicle));
+      setSharedVehicles(loaded);
+    }, (err) => {
+      console.error("Error loading shared vehicles:", err);
+    });
+
+    return () => unsubscribeShared();
+  }, [ownAgencySharing, sharingAgencies, userData]);
+
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, 'vehicles', id));
     setVehicleToDelete(null);
@@ -414,7 +477,8 @@ export function Inventory() {
   };
 
   const filteredVehicles = React.useMemo(() => {
-    let result = vehicles.filter(v => 
+    const listToFilter = activeTab === 'shared' ? sharedVehicles : vehicles;
+    let result = listToFilter.filter(v => 
       `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color} ${v.equipment || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -447,7 +511,7 @@ export function Inventory() {
     }
 
     return result;
-  }, [vehicles, searchTerm, filterOwnership, sortConfig, expenses]);
+  }, [vehicles, sharedVehicles, activeTab, searchTerm, filterOwnership, sortConfig, expenses]);
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
 
@@ -535,6 +599,46 @@ export function Inventory() {
               <option value="consignacion">Consignación</option>
             </select>
           </div>
+
+          {/* TAB CONTROL FOR COLLABORATIVE INVENTORY */}
+          {userData?.role !== 'master' && (
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setActiveTab('my')}
+                className={clsx(
+                  "px-4 py-1.5 rounded-md text-xs font-semibold transition-all",
+                  activeTab === 'my'
+                    ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
+                )}
+              >
+                Mi Inventario
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!ownAgencySharing) {
+                    alert("Para consultar el inventario de otras agencias, primero debes habilitar 'Compartir mi Inventario' en la sección de Agencias & Usuarios.");
+                    return;
+                  }
+                  setActiveTab('shared');
+                }}
+                className={clsx(
+                  "px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5",
+                  activeTab === 'shared'
+                    ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
+                )}
+              >
+                Inventario Compartido
+                {!ownAgencySharing && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Inactivo (Actívalo en Agencias)"></span>
+                )}
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-700 rounded-lg shrink-0">
             <button
               onClick={() => setViewMode('grid')}
@@ -633,6 +737,11 @@ export function Inventory() {
                   </div>
                 </div>
                 <div className="p-4">
+                  {vehicle.agencyId !== userData?.agencyId && (
+                    <div className="mb-2 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold rounded-md border border-indigo-100 dark:border-indigo-900/30 w-max">
+                      Agencia: {agencyNames[vehicle.agencyId] || 'Agencia Externa'}
+                    </div>
+                  )}
                   <h3 className="font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 mt-1 flex justify-between">
                     <span>{vehicle.color} • {vehicle.km?.toLocaleString() || 0} km</span>
@@ -658,7 +767,7 @@ export function Inventory() {
                   <div className="flex items-center justify-between mt-4">
                     <span className="text-lg font-bold text-blue-600">${Number(vehicle.price || 0).toLocaleString()}</span>
                   </div>
-                  {(userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice && (
+                  {(userData?.role === 'master' || (userData?.role === 'admin' && vehicle.agencyId === userData?.agencyId)) && vehicle.purchasePrice && (
                     <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex flex-col gap-1 border-t pt-2">
                        <div className="flex justify-between items-center">
                          <span>Costo: ${Number(vehicle.purchasePrice).toLocaleString()}</span>
@@ -771,15 +880,16 @@ export function Inventory() {
                       if (col.id === 'transmission') val = vehicle.transmission;
                       if (col.id === 'bodyType') val = vehicle.bodyType;
                       if (col.id === 'price') val = `$${Number(vehicle.price || 0).toLocaleString()}`;
-                      if (col.id === 'purchasePrice') val = (userData?.role === 'admin' || userData?.role === 'master') && vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '-';
+                      const isFinancialAuthorized = userData?.role === 'master' || (userData?.role === 'admin' && vehicle.agencyId === userData?.agencyId);
+                      if (col.id === 'purchasePrice') val = isFinancialAuthorized && vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '-';
                       if (col.id === 'expenses') {
                         const vehicleTotalExpenses = expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0);
-                        val = (userData?.role === 'admin' || userData?.role === 'master') ? `$${vehicleTotalExpenses.toLocaleString()}` : '-';
+                        val = isFinancialAuthorized ? `$${vehicleTotalExpenses.toLocaleString()}` : '-';
                       }
                       if (col.id === 'profit') {
                         const vehicleTotalExpenses = expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0);
                         const utility = (vehicle.price || 0) - (vehicle.purchasePrice || 0) - vehicleTotalExpenses;
-                        val = (userData?.role === 'admin' || userData?.role === 'master') ? (
+                        val = isFinancialAuthorized ? (
                           <span className={utility >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
                             ${utility.toLocaleString()}
                           </span>
