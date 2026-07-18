@@ -11,14 +11,15 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients } from '../lib/clientUtils';
-import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare } from 'lucide-react';
+import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
 
 interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
   onClose: () => void;
+  clientContext?: Client;
 }
 
-export function VehicleDetailModal({ vehicle, onClose }: Props) {
+export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   const { userData } = useAuth();
   const navigate = useNavigate();
   const isNew = !vehicle.id;
@@ -564,7 +565,41 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
             </div>
           )}
           {activeTab === 'info' && (
-            <form id="vehicle-form" onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+            <>
+              {clientContext && (
+                <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 rounded-xl flex items-start gap-3 text-slate-850 dark:text-slate-100 shadow-sm">
+                  <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-650 dark:text-amber-400 p-2 rounded-lg shrink-0 mt-0.5">
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-sm text-amber-800 dark:text-amber-300">¡Match de Auto Encontrado!</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                      Este vehículo de la agencia <span className="font-semibold text-slate-900 dark:text-white">{agencies.find(a => a.id === vehicle.agencyId)?.name || "otra agencia participante"}</span> coincide con lo que está buscando tu cliente:
+                    </p>
+                    <div className="mt-3 text-xs grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-slate-650 dark:text-slate-300 bg-white dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+                      <div><span className="font-bold text-slate-700 dark:text-slate-400">Cliente:</span> {clientContext.name}</div>
+                      {clientContext.phone && <div><span className="font-bold text-slate-700 dark:text-slate-400">Teléfono:</span> {clientContext.phone}</div>}
+                      {clientContext.email && <div><span className="font-bold text-slate-700 dark:text-slate-400">Email:</span> {clientContext.email}</div>}
+                      {clientContext.wantedVehicle && (
+                        <div className="col-span-1 sm:col-span-2 mt-1 border-t pt-1.5 border-slate-200 dark:border-slate-800">
+                          <span className="font-bold text-slate-700 dark:text-slate-400">Preferencias de búsqueda:</span>{" "}
+                          <span className="italic">
+                            {[
+                              clientContext.wantedVehicle.make || "Cualquier marca",
+                              clientContext.wantedVehicle.model || "",
+                              clientContext.wantedVehicle.yearMin || clientContext.wantedVehicle.yearMax
+                                ? `(${clientContext.wantedVehicle.yearMin || "Cualquiera"} - ${clientContext.wantedVehicle.yearMax || "Cualquiera"})`
+                                : "",
+                              clientContext.wantedVehicle.priceMax ? `Máx: $${clientContext.wantedVehicle.priceMax.toLocaleString()}` : ""
+                            ].filter(Boolean).join(" ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <form id="vehicle-form" onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
               <fieldset disabled={isReadOnly} className="contents">
               {/* Left Column - Photo & Status */}
               <div className="space-y-6">
@@ -845,6 +880,7 @@ export function VehicleDetailModal({ vehicle, onClose }: Props) {
               </div>
               </fieldset>
             </form>
+          </>
           )}
 
           {activeTab === 'expenses' && !isNew && userData?.role !== 'seller' && (

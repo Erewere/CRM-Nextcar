@@ -27,6 +27,7 @@ import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/fire
 import clsx from "clsx";
 
 import { TaskReminders } from "./TaskReminders";
+import { SharedMatchNotifications } from "./SharedMatchNotifications";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
@@ -218,6 +219,7 @@ export function Layout() {
   return (
     <div className="min-h-[100dvh] bg-gray-50 dark:bg-slate-900 flex flex-col md:flex-row">
       <TaskReminders />
+      <SharedMatchNotifications />
       {/* Sidebar */}
       <aside
         className={clsx(

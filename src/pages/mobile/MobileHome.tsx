@@ -6,11 +6,14 @@ import { es } from "date-fns/locale";
 import { 
   CheckCircle, Circle, Clock, Phone, Calendar, MessageCircle, FileText, 
   AlertCircle, TrendingUp, Star, Zap, ChevronRight, Activity, Flame, Car,
-  DollarSign, Award, ShieldAlert, UserCheck, BarChart2, ArrowUpRight, Users, Target, Briefcase, Sparkles
+  DollarSign, Award, ShieldAlert, UserCheck, BarChart2, ArrowUpRight, Users, Target, Briefcase, Sparkles,
+  ExternalLink, MessageSquare, BadgeCheck
 } from "lucide-react";
 import clsx from "clsx";
 import { AiAdvisorPanel } from "../../components/AiAdvisorPanel";
 import { getClientMatches } from "../../services/matchingEngine";
+import { useSharedInventoryMatches } from "../../hooks/useSharedInventoryMatches";
+import { VehicleDetailModal } from "../../components/VehicleDetailModal";
 
 const getWantedTitle = (c: Client) => {
   if (c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model || (c.wantedVehicle.bodyType && c.wantedVehicle.bodyType !== 'Cualquiera'))) {
@@ -72,6 +75,11 @@ export function MobileHome({
   const navigate = useNavigate();
   const [currentTime] = useState(new Date());
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+
+  // Shared matches state
+  const { ownAgencySharing, matches, loading: matchesLoading } = useSharedInventoryMatches();
+  const [selectedSharedVehicle, setSelectedSharedVehicle] = useState<Vehicle | null>(null);
+  const [selectedSharedClient, setSelectedSharedClient] = useState<Client | null>(null);
 
   const greeting = useMemo(() => {
     const hour = currentTime.getHours();
@@ -742,7 +750,110 @@ export function MobileHome({
           </div>
         )}
 
+        {/* Matches de Inventario Compartido Mobile */}
+        <section className="space-y-3 mt-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
+              <h2 className="text-base font-black text-slate-800 dark:text-white">Matches de Inventario Compartido</h2>
+            </div>
+            {matches.length > 0 && (
+              <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                {matches.length} Matches
+              </span>
+            )}
+          </div>
+
+          {!ownAgencySharing ? (
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900/60 flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                Para ver los autos de la red Nextcar, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
+              </p>
+            </div>
+          ) : matches.length === 0 ? (
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center py-6">
+              <Car className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-1.5" />
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">No hay coincidencias en red en este momento.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {matches.map((match, idx) => (
+                <div key={`mob-shared-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                  <div className="flex justify-between items-start mb-2.5">
+                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-200/20">
+                      Match {match.score}%
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 max-w-[120px] truncate">
+                      {match.agencyName}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-900/40 p-2 rounded-xl border border-slate-100 dark:border-slate-800 mb-3">
+                    <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-850 flex items-center justify-center shrink-0 overflow-hidden">
+                      {match.vehicle.photoUrl ? (
+                        <img src={match.vehicle.photoUrl} alt="auto" className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
+                      ) : (
+                        <Car className="w-5 h-5 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 truncate">
+                        {match.vehicle.make} {match.vehicle.model}
+                      </h4>
+                      <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {match.vehicle.year} • ${match.vehicle.price?.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400 mb-3 leading-snug">
+                    <span className="font-extrabold text-slate-900 dark:text-white">{match.client.name}</span> busca:{" "}
+                    <span className="italic">
+                      {match.client.wantedVehicle?.make || "Cualquiera"} {match.client.wantedVehicle?.model || ""}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-700/60">
+                    <button
+                      onClick={() => {
+                        setSelectedSharedVehicle(match.vehicle);
+                        setSelectedSharedClient(match.client);
+                      }}
+                      className="py-1.5 px-2 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[10px] font-bold rounded-lg text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Ver Auto
+                    </button>
+                    <a
+                      href={`https://wa.me/${match.client.phone?.replace(/[^0-9]/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-1.5 px-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[10px] font-bold rounded-lg text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      WhatsApp
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
       </div>
+
+      {/* Shared Matches Modal for Mobile */}
+      {selectedSharedVehicle && selectedSharedClient && (
+        <VehicleDetailModal
+          vehicle={selectedSharedVehicle}
+          clientContext={selectedSharedClient}
+          onClose={() => {
+            setSelectedSharedVehicle(null);
+            setSelectedSharedClient(null);
+          }}
+        />
+      )}
     </div>
   );
 }

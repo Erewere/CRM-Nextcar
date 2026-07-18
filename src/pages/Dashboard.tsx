@@ -14,10 +14,13 @@ import { db } from "../lib/firebase";
 import { Client, Vehicle, Task, User } from "../types";
 import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
 import { ClientDetailModal } from "../components/ClientDetailModal";
+import { VehicleDetailModal } from "../components/VehicleDetailModal";
+import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { MobileHome } from "./mobile/MobileHome";
 import { MobileClientDetail } from "./mobile/MobileClientDetail";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { deduplicateClients } from "../lib/clientUtils";
+import { BadgeCheck, ExternalLink } from "lucide-react";
 import {
   BarChart,
   Bar,
