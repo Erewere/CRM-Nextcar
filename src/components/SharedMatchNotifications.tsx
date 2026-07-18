@@ -3,6 +3,7 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { Sparkles, X, Car, MessageSquare, ExternalLink, ShieldAlert, Award } from "lucide-react";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 import { Vehicle, Client } from "../types";
+import { useIsMobile } from "../hooks/useIsMobile";
 import clsx from "clsx";
 
 export function SharedMatchNotifications() {
@@ -10,9 +11,10 @@ export function SharedMatchNotifications() {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const isMobile = useIsMobile();
 
-  // If there are no matches, or we are loading, we don't render the notification widget
-  if (loading || matches.length === 0) return null;
+  // If mobile, or there are no matches, or we are loading, we don't render the notification widget
+  if (isMobile || loading || matches.length === 0) return null;
 
   return (
     <>

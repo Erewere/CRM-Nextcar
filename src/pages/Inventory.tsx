@@ -145,10 +145,25 @@ export function Inventory() {
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOwnership, setFilterOwnership] = useState<string>('all');
+  const [filterBodyType, setFilterBodyType] = useState<string>('all');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my');
+  const [activeTab, setActiveTab] = useState<'my' | 'shared'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') === 'shared' ? 'shared' : 'my';
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'shared') {
+      setActiveTab('shared');
+    } else if (tabParam === 'my') {
+      setActiveTab('my');
+    }
+  }, [window.location.search]);
+
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
   const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
   const [sharedVehicles, setSharedVehicles] = useState<Vehicle[]>([]);
@@ -476,6 +491,14 @@ export function Inventory() {
     }
   };
 
+  const uniqueBodyTypes = React.useMemo(() => {
+    const list = activeTab === 'shared' ? sharedVehicles : vehicles;
+    const types = list
+      .map(v => v.bodyType)
+      .filter((t): t is string => !!t && t.trim() !== "");
+    return Array.from(new Set(types));
+  }, [vehicles, sharedVehicles, activeTab]);
+
   const filteredVehicles = React.useMemo(() => {
     const listToFilter = activeTab === 'shared' ? sharedVehicles : vehicles;
     let result = listToFilter.filter(v => 
@@ -484,6 +507,10 @@ export function Inventory() {
 
     if (filterOwnership !== 'all') {
       result = result.filter(v => (v.ownership || 'propio') === filterOwnership);
+    }
+
+    if (filterBodyType !== 'all') {
+      result = result.filter(v => v.bodyType?.toLowerCase() === filterBodyType.toLowerCase());
     }
 
     if (sortConfig) {
@@ -511,9 +538,13 @@ export function Inventory() {
     }
 
     return result;
-  }, [vehicles, sharedVehicles, activeTab, searchTerm, filterOwnership, sortConfig, expenses]);
+  }, [vehicles, sharedVehicles, activeTab, searchTerm, filterOwnership, filterBodyType, sortConfig, expenses]);
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
+
+  if (isMobile) {
+    return <MobileInventory />;
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -578,7 +609,7 @@ export function Inventory() {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between gap-4">
-          <div className="flex flex-1 max-w-md gap-3">
+          <div className="flex flex-1 max-w-xl gap-3">
             <div className="relative flex-1">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
@@ -590,13 +621,14 @@ export function Inventory() {
               />
             </div>
             <select
-              value={filterOwnership}
-              onChange={(e) => setFilterOwnership(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filterBodyType}
+              onChange={(e) => setFilterBodyType(e.target.value)}
+              className="px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
             >
-              <option value="all">Todos</option>
-              <option value="propio">Propio</option>
-              <option value="consignacion">Consignación</option>
+              <option value="all">Carrocería</option>
+              {uniqueBodyTypes.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
             </select>
           </div>
 

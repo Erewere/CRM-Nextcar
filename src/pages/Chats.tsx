@@ -229,7 +229,7 @@ export function Chats() {
   }
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="h-full flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 overflow-hidden md:rounded-xl md:border border-slate-200 dark:border-slate-800 md:shadow-sm">
       
       {/* Sidebar List of Chats */}
       <div className={clsx(

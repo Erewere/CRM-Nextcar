@@ -168,6 +168,8 @@ export function useSharedInventoryMatches() {
   return {
     ownAgencySharing,
     sharingAgenciesCount: Object.keys(sharingAgencies).length,
+    sharingAgencies,
+    otherVehicles,
     matches,
     loading,
   };

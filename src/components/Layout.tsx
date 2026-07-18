@@ -32,6 +32,7 @@ import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
 import { NextcarLogo } from "./NextcarLogo";
@@ -48,6 +49,7 @@ export function Layout() {
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
   const isMobile = useIsMobile();
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
+  const { matches: sharedMatches, ownAgencySharing } = useSharedInventoryMatches();
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -216,8 +218,24 @@ export function Layout() {
     return item.roles.includes(userData?.role || "");
   });
 
+  const hasSharedMatches = ownAgencySharing && sharedMatches.length > 0;
+
+  const processedNavItems = navItems.map(item => {
+    if (item.name === "Inventario") {
+      return {
+        ...item,
+        path: hasSharedMatches ? "/inventory?tab=shared" : "/inventory",
+        badge: hasSharedMatches ? sharedMatches.length : undefined
+      };
+    }
+    return item;
+  });
+
   return (
-    <div className="min-h-[100dvh] bg-gray-50 dark:bg-slate-900 flex flex-col md:flex-row">
+    <div className={clsx(
+      "bg-gray-50 dark:bg-slate-900 flex",
+      isMobile ? "h-[100dvh] flex-col overflow-hidden w-full" : "min-h-[100dvh] md:flex-row"
+    )}>
       <TaskReminders />
       <SharedMatchNotifications />
       {/* Sidebar */}
@@ -255,7 +273,7 @@ export function Layout() {
         </div>
 
         <nav className="mt-4 flex-1 space-y-1 px-4 overflow-y-auto">
-          {navItems.map((item) => (
+          {processedNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
@@ -279,14 +297,20 @@ export function Layout() {
                   )}
                 />
                 {item.badge !== undefined && isSidebarCollapsed && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-slate-900 animate-pulse" />
+                  <span className={clsx(
+                    "absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-slate-900 animate-pulse",
+                    item.name === "Inventario" ? "bg-amber-500" : "bg-red-500"
+                  )} />
                 )}
               </div>
               {!isSidebarCollapsed && (
                 <span className="truncate">{item.name}</span>
               )}
               {!isSidebarCollapsed && item.badge !== undefined && (
-                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                <span className={clsx(
+                  "ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm",
+                  item.name === "Inventario" ? "bg-amber-500 animate-pulse" : "bg-red-500"
+                )}>
                   {item.badge}
                 </span>
               )}
@@ -368,7 +392,7 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className={clsx("flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors", isMobile ? "h-[calc(100dvh-64px)]" : "h-[100dvh]")}>
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
         {!isMobile && <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
           <div className="flex flex-col justify-center overflow-hidden">
             <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
@@ -431,21 +455,26 @@ export function Layout() {
           </div>
         </header>}
 
-        <div className="flex-1 overflow-auto p-4 md:p-6 relative transition-colors">
+        <div className={clsx(
+          "flex-1 relative transition-colors",
+          isMobile 
+            ? ((location.pathname === '/chats' || location.pathname === '/inventory') ? "h-full overflow-hidden" : "overflow-auto p-4") 
+            : "overflow-auto p-4 md:p-6"
+        )}>
           <Outlet />
         </div>
       </main>
       
       {/* Global Mobile FAB */}
-      {isMobile && <MobileFab />}
+      {isMobile && location.pathname !== '/chats' && <MobileFab />}
       
       {/* Mobile Bottom Navigation */}
       {isMobile && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <nav className="md:hidden w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0">
           {[
             { name: "Inicio", path: "/", icon: LayoutDashboard },
             { name: "Contactos", path: "/persons", icon: Users },
-            { name: "Inventario", path: "/inventory", icon: Car },
+            { name: "Inventario", path: (ownAgencySharing && sharedMatches.length > 0) ? "/inventory?tab=shared" : "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0) ? sharedMatches.length : undefined },
             { name: "Chats", path: "/chats", icon: MessageSquare, badge: unreadChatsCount > 0 ? unreadChatsCount : undefined },
             { name: "Citas", path: "/tasks", icon: CheckSquare },
           ].map(item => (
@@ -463,7 +492,10 @@ export function Layout() {
               <div className="relative">
                 <item.icon className="w-5 h-5" />
                 {item.badge !== undefined && (
-                  <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-slate-900">
+                  <span className={clsx(
+                    "absolute -top-1.5 -right-2 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-slate-900",
+                    item.name === "Inventario" ? "bg-amber-500 animate-pulse" : "bg-red-500"
+                  )}>
                     {item.badge}
                   </span>
                 )}
