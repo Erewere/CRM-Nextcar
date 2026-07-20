@@ -40,6 +40,7 @@ import clsx from "clsx";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
+import { useReadOnly } from "../hooks/useReadOnly";
 import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 
@@ -50,6 +51,7 @@ import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 export function Persons() {
   const isMobile = useIsMobile();
   const { userData, googleToken, connectGoogleServices } = useAuth();
+  const isReadOnly = useReadOnly();
   const location = useLocation();
   const navigate = useNavigate();
   const [persons, setPersons] = useState<Client[]>([]);
@@ -776,7 +778,7 @@ export function Persons() {
       <div className="p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex bg-gray-100 p-1 rounded-lg">
+            <div className="flex bg-gray-100 p-1 rounded">
               <button
                 onClick={() => setViewMode("list")}
                 className={clsx(
@@ -832,23 +834,27 @@ export function Persons() {
               <span className="hidden sm:inline">Importar Excel</span>
               <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
             </label>
-            <button
-              onClick={handleImportGoogleContacts}
-              disabled={importingContacts}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm"
-            >
-              <Download className="w-4 h-4 shrink-0" />{" "}
-              <span className="hidden sm:inline">
-                {importingContacts ? "Importando..." : "Importar de Google"}
-              </span>
-              <span className="sm:hidden">Importar</span>
-            </button>
-            <button
-              onClick={() => setShowAddPerson(true)}
-              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
-            >
-              <Plus className="w-4 h-4 shrink-0" /> Nuevo Contacto
-            </button>
+            {!isReadOnly && (
+              <>
+                <button
+                  onClick={handleImportGoogleContacts}
+                  disabled={importingContacts}
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm"
+                >
+                  <Download className="w-4 h-4 shrink-0" />{" "}
+                  <span className="hidden sm:inline">
+                    {importingContacts ? "Importando..." : "Importar de Google"}
+                  </span>
+                  <span className="sm:hidden">Importar</span>
+                </button>
+                <button
+                  onClick={() => setShowAddPerson(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
+                >
+                  <Plus className="w-4 h-4 shrink-0" /> Nuevo Contacto
+                </button>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 relative max-w-md">
@@ -871,7 +877,7 @@ export function Persons() {
               return (
               <div
                 key={`${person.id}-${idx}`}
-                className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+                className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-sm transition-shadow cursor-pointer"
                 onClick={() => setSelectedPerson(person)}
               >
                 <div className="flex items-start gap-4">
@@ -1003,7 +1009,7 @@ export function Persons() {
                   {showColSettings && (
                     <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowColSettings(false)} />
-                    <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg p-2 z-50">
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm p-2 z-50">
                       <div className="text-xs font-bold text-gray-500 dark:text-slate-400 mb-2 uppercase px-2">
                         Columnas visibles
                       </div>
@@ -1392,7 +1398,7 @@ export function Persons() {
                       </div>
                       
                       {matches.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto left-0">
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm max-h-48 overflow-y-auto left-0">
                           {matches.map(match => (
                             <div 
                               key={`match-${match.id}`}
@@ -1483,7 +1489,7 @@ export function Persons() {
                       </div>
 
                       {matches.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto left-0">
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm max-h-48 overflow-y-auto left-0">
                           {matches.map(match => (
                             <div 
                               key={`match-${match.id}`}
@@ -1624,7 +1630,7 @@ export function Persons() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                 Confirmar eliminación
@@ -1633,16 +1639,16 @@ export function Persons() {
                 ¿Estás seguro que deseas eliminar {selectedClients.length} contactos? Esta acción no se puede deshacer.
               </p>
             </div>
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3">
+            <div className="p-4 bg-[#f4f5f5] dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded transition-colors"
               >
                 Eliminar
               </button>

@@ -106,7 +106,7 @@ export class LeadScoringEngine {
   }
 
   /**
-   * Genera el score del cliente evaluando diversas variables integradas de Nextcar CRM.
+   * Genera el score del cliente evaluando diversas variables integradas de LUHO CRM.
    * Soporta opcionalmente pipelineStages (para calcular progresión real de la agencia)
    * y clientNotes (para analizar sentimiento e intención de compra en notas y comentarios).
    */

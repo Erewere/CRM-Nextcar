@@ -157,9 +157,9 @@ export function MobileHome({
   }, [clients, activeContacts]);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto pb-24 bg-slate-50 dark:bg-slate-900">
+    <div className="flex flex-col h-full overflow-y-auto pb-24 bg-[#f4f5f5] dark:bg-slate-900">
       {/* Dynamic Role-Based Header */}
-      <div className="px-5 pt-6 pb-4 bg-slate-900 text-white shadow-md sticky top-0 z-20 border-b border-slate-850">
+      <div className="px-5 pt-6 pb-4 bg-slate-900 text-white shadow-sm sticky top-0 z-20 border-b border-slate-850">
         <div className="flex justify-between items-center">
           <div>
             <span className={clsx(
@@ -194,9 +194,9 @@ export function MobileHome({
             
             {/* Admin Metrics Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
                     <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ingresos Totales</p>
@@ -206,9 +206,9 @@ export function MobileHome({
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
                     <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Utilidad Bruta</p>
@@ -218,9 +218,9 @@ export function MobileHome({
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
                     <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Leads Totales</p>
@@ -230,9 +230,9 @@ export function MobileHome({
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
                     <Target className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tasa Cierre</p>
@@ -251,10 +251,10 @@ export function MobileHome({
               </div>
               <div className="space-y-2.5">
                 {sellerPerformance.map((seller) => (
-                  <div key={seller.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                  <div key={seller.id} className="bg-white dark:bg-slate-800 rounded p-4 border border-gray-200 dark:border-slate-700 shadow-sm space-y-3">
                     <div className="flex items-center gap-3">
                       {seller.photoURL ? (
-                        <img src={seller.photoURL} alt={seller.name} className="w-9 h-9 rounded-full object-cover border border-slate-200" referrerPolicy="no-referrer" />
+                        <img src={seller.photoURL} alt={seller.name} className="w-9 h-9 rounded-full object-cover border border-gray-200" referrerPolicy="no-referrer" />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-inner">
                           {seller.name.substring(0, 2).toUpperCase()}
@@ -266,7 +266,7 @@ export function MobileHome({
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-750 text-center">
+                    <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-gray-200 dark:border-slate-750 text-center">
                       <div>
                         <p className="text-[9px] text-slate-400 font-bold uppercase">Cierres</p>
                         <p className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5">{seller.wonClients} de {seller.totalClients}</p>
@@ -293,7 +293,7 @@ export function MobileHome({
             </section>
 
             {/* Embudo Comercial Horizontal Progress */}
-            <section className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <section className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm space-y-4">
               <div>
                 <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-1.5">
                   <BarChart2 className="w-4 h-4 text-indigo-500" />
@@ -323,14 +323,14 @@ export function MobileHome({
                 <Flame className="w-5 h-5 text-indigo-500 fill-indigo-500/10" />
                 <h2 className="text-base font-black text-slate-800 dark:text-white">Lead Intelligence General</h2>
               </div>
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm divide-y divide-slate-100 dark:divide-slate-750">
+              <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm divide-y divide-slate-100 dark:divide-slate-750">
                 {clientsWithScores.slice(0, 5).map((client) => {
                   const sellerObj = sellerPerformance.find(s => s.id === client.sellerId);
                   return (
                     <div 
                       key={`admin-lead-${client.id}`}
                       onClick={() => onSelectClient(client)}
-                      className="p-4 flex items-center justify-between active:bg-slate-50 dark:active:bg-slate-700/50 cursor-pointer"
+                      className="p-4 flex items-center justify-between active:bg-[#f4f5f5] dark:active:bg-slate-700/50 cursor-pointer"
                     >
                       <div className="min-w-0 flex-1 pr-3">
                         <div className="flex items-center gap-1.5">
@@ -377,14 +377,14 @@ export function MobileHome({
                   {inactiveAlerts.slice(0, 4).map((alert, index) => {
                     const sellerObj = sellerPerformance.find(s => s.id === alert.task.sellerId);
                     return (
-                      <div key={`admin-alert-${alert.task.id}-${index}`} className="p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-start gap-3">
+                      <div key={`admin-alert-${alert.task.id}-${index}`} className="p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-black text-slate-900 dark:text-slate-200 line-clamp-1">{alert.task.title}</p>
                           <p className="text-[10px] text-slate-500 mt-1">
                             Cliente: <span className="font-bold text-slate-700 dark:text-slate-300">{alert.client?.name || "N/A"}</span>
                           </p>
-                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/50 text-[9px] text-slate-400">
+                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-800/50 text-[9px] text-slate-400">
                             <span>Vence: {alert.task.dueDate}</span>
                             <span className="font-bold text-red-600 dark:text-red-400">Asesor: {sellerObj?.name || "Asesor"}</span>
                           </div>
@@ -405,9 +405,9 @@ export function MobileHome({
             
             {/* Advisor Metrics Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
                     <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mis Cierres</p>
@@ -417,9 +417,9 @@ export function MobileHome({
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
                     <DollarSign className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mis Ventas</p>
@@ -429,9 +429,9 @@ export function MobileHome({
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
                     <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prospectos Activos</p>
@@ -441,9 +441,9 @@ export function MobileHome({
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="w-7 h-7 rounded-lg bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
+                  <div className="w-7 h-7 rounded bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
                     <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Coincidencias</p>
@@ -468,10 +468,10 @@ export function MobileHome({
                     <div 
                       key={`seller-lead-${client.id}`} 
                       className={clsx(
-                        "bg-white dark:bg-slate-800 rounded-2xl border transition-all duration-250 shadow-sm",
+                        "bg-white dark:bg-slate-800 rounded border transition-all duration-250 shadow-sm",
                         isSelected 
                           ? "border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/10" 
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                          : "border-gray-200 dark:border-slate-700 hover:border-slate-300"
                       )}
                     >
                       {/* Main Summary Header of Card */}
@@ -510,7 +510,7 @@ export function MobileHome({
 
                       {/* Expanded Factor Score Details */}
                       {isSelected && (
-                        <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-750 space-y-3 bg-slate-50/50 dark:bg-slate-850/30 rounded-b-2xl animate-fadeIn">
+                        <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-slate-750 space-y-3 bg-[#f4f5f5]/50 dark:bg-slate-850/30 rounded-b-2xl animate-fadeIn">
                           <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Factores del Lead Score:</div>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                             <div className="space-y-1">
@@ -554,10 +554,10 @@ export function MobileHome({
                             </div>
                           </div>
 
-                          <div className="flex gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-750">
+                          <div className="flex gap-2 pt-2.5 border-t border-gray-200 dark:border-slate-750">
                             <button
                               onClick={() => onSelectClient(client)}
-                              className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all"
+                              className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded shadow-sm flex items-center justify-center gap-1.5 transition-all"
                             >
                               Atender Lead
                               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -589,7 +589,7 @@ export function MobileHome({
                   return (
                     <div 
                       key={`seller-match-${client.id}`} 
-                      className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3"
+                      className="bg-white dark:bg-slate-800 rounded p-4 border border-gray-200 dark:border-slate-700 shadow-sm space-y-3"
                     >
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-slate-400">PROPUESTA DE NEGOCIO</span>
@@ -603,7 +603,7 @@ export function MobileHome({
                         <p className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">{client.name}</p>
                       </div>
 
-                      <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-750">
+                      <div className="flex items-start gap-3 bg-[#f4f5f5] dark:bg-slate-900/60 p-3 rounded border border-gray-200 dark:border-slate-750">
                         <Car className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Auto Disponible en Inventario:</p>
@@ -619,7 +619,7 @@ export function MobileHome({
                       <div className="flex justify-end">
                         <button
                           onClick={() => onSelectClient(client)}
-                          className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl hover:bg-slate-200 flex items-center gap-1 transition-colors"
+                          className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded hover:bg-slate-200 flex items-center gap-1 transition-colors"
                         >
                           Ver Detalles
                           <ChevronRight className="w-3.5 h-3.5" />
@@ -656,7 +656,7 @@ export function MobileHome({
                       <div 
                         key={`${task.id}-${idx}`}
                         onClick={() => handleTaskClick(task.clientId)}
-                        className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between active:scale-[0.98] transition-transform cursor-pointer"
+                        className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm border border-gray-200 dark:border-slate-700 flex items-center justify-between active:scale-[0.98] transition-transform cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shrink-0">
@@ -686,7 +686,7 @@ export function MobileHome({
                   <h3 className="text-sm font-black text-slate-800 dark:text-white">Seguimientos Pendientes Hoy</h3>
                 </div>
                 {todayFollowUps.length === 0 ? (
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 text-center shadow-sm">
+                  <div className="bg-white dark:bg-slate-800 rounded p-6 border border-gray-200 dark:border-slate-700 text-center shadow-sm">
                     <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
                     <p className="text-xs font-bold text-slate-600 dark:text-slate-300">¡Seguimientos al día!</p>
                   </div>
@@ -698,7 +698,7 @@ export function MobileHome({
                         <div 
                           key={`${task.id}-${idx}`}
                           onClick={() => handleTaskClick(task.clientId)}
-                          className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
+                          className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm border border-gray-200 dark:border-slate-700 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
                         >
                           <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -728,7 +728,7 @@ export function MobileHome({
                         <div 
                           key={`${task.id}-${idx}`}
                           onClick={() => handleTaskClick(task.clientId)}
-                          className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-rose-200 dark:border-rose-900/40 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
+                          className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm border border-rose-200 dark:border-rose-900/40 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
                         >
                           <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 text-rose-600 dark:text-rose-400" />
@@ -765,21 +765,21 @@ export function MobileHome({
           </div>
 
           {!ownAgencySharing ? (
-            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900/60 flex items-start gap-3">
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200 dark:border-amber-900/60 flex items-start gap-3">
               <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Para ver los autos de la red Nextcar, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
+                Para ver los autos de la red LUHO, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
               </p>
             </div>
           ) : matches.length === 0 ? (
-            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center py-6">
+            <div className="p-4 bg-white dark:bg-slate-800 rounded border border-dashed border-gray-200 dark:border-slate-700 text-center py-6">
               <Car className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-1.5" />
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">No hay coincidencias en red en este momento.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {matches.map((match, idx) => (
-                <div key={`mob-shared-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div key={`mob-shared-${idx}`} className="bg-white dark:bg-slate-800 rounded p-3.5 border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                   <div className="flex justify-between items-start mb-2.5">
                     <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-200/20">
                       Match {match.score}%
@@ -789,7 +789,7 @@ export function MobileHome({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-900/40 p-2 rounded-xl border border-slate-100 dark:border-slate-800 mb-3">
+                  <div className="flex items-center gap-2.5 bg-[#f4f5f5] dark:bg-slate-900/40 p-2 rounded border border-gray-200 dark:border-slate-800 mb-3">
                     <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-850 flex items-center justify-center shrink-0 overflow-hidden">
                       {match.vehicle.photoUrl ? (
                         <img src={match.vehicle.photoUrl} alt="auto" className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
@@ -814,13 +814,13 @@ export function MobileHome({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-700/60">
+                  <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-gray-200 dark:border-slate-700/60">
                     <button
                       onClick={() => {
                         setSelectedSharedVehicle(match.vehicle);
                         setSelectedSharedClient(match.client);
                       }}
-                      className="py-1.5 px-2 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[10px] font-bold rounded-lg text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1"
+                      className="py-1.5 px-2 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[10px] font-bold rounded text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       Ver Auto
@@ -829,7 +829,7 @@ export function MobileHome({
                       href={`https://wa.me/${match.client.phone?.replace(/[^0-9]/g, "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="py-1.5 px-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[10px] font-bold rounded-lg text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1"
+                      className="py-1.5 px-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[10px] font-bold rounded text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                       WhatsApp

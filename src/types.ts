@@ -61,6 +61,10 @@ export interface Agency {
   pipelineStages?: PipelineStage[];
   businessHours?: { start: string; end: string };
   createdAt: string | Date;
+  hasFreeAccess?: boolean;
+  subscriptionStatus?: string;
+  aiCredits?: number;
+  stripeCustomerId?: string;
 }
 
 export interface Deal {

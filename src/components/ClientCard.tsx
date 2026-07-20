@@ -81,7 +81,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
     <div 
       onClick={onClick}
       className={clsx(
-        "group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl text-left relative overflow-hidden",
+        "group bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl text-left relative overflow-hidden",
         disabled ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
         client.origin === 'whatsapp' && "border-l-4 border-l-green-400"
       )}
@@ -119,21 +119,21 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
                 <MessageCircle className="w-2.5 h-2.5" /> WA WP
               </span>
             ) : (
-              <span className="rounded bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
+              <span className="rounded bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
                 <Phone className="w-2.5 h-2.5" /> {client.phone || 'Tel'}
               </span>
             )}
           </div>
           
           <div 
-            className={clsx("group/tooltip relative w-[24px] h-[24px] rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-md", statusColorClass)}
+            className={clsx("group/tooltip relative w-[24px] h-[24px] rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-sm", statusColorClass)}
           >
             {hasNoTasks ? (
               <AlertTriangle className="w-3.5 h-3.5" />
             ) : (
               <ChevronRight className="w-4 h-4 ml-0.5" />
             )}
-            <div className="absolute bottom-full mb-2 right-0 z-50 w-max max-w-[200px] bg-slate-800 dark:bg-slate-700 text-white text-[10px] px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-none pointer-events-none whitespace-normal text-right">
+            <div className="absolute bottom-full mb-2 right-0 z-50 w-max max-w-[200px] bg-slate-800 dark:bg-slate-700 text-white text-[10px] px-2 py-1 rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-none pointer-events-none whitespace-normal text-right">
               {statusTitle}
               <div className="absolute top-full right-2 -mt-[1px] border-4 border-transparent border-t-slate-800 dark:border-t-slate-700"></div>
             </div>
@@ -169,7 +169,7 @@ export function SortableClientCard({ client, tasks, onClick }: Props) {
       <div 
         ref={setNodeRef} 
         style={style} 
-        className="rounded-xl border-2 border-dashed border-blue-400 opacity-60 transition-all duration-300"
+        className="rounded border-2 border-dashed border-blue-400 opacity-60 transition-all duration-300"
       >
         <div className="w-full pointer-events-none">
           <ClientCard client={client} tasks={tasks} disabled={isDragDisabled} />

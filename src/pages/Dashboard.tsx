@@ -21,6 +21,7 @@ import { MobileClientDetail } from "./mobile/MobileClientDetail";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { deduplicateClients } from "../lib/clientUtils";
 import { BadgeCheck, ExternalLink } from "lucide-react";
+import { useReadOnly } from "../hooks/useReadOnly";
 import {
   BarChart,
   Bar,
@@ -86,7 +87,7 @@ const getWantedTitle = (c: Client) => {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-lg border border-slate-100 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-800 p-3 rounded shadow-sm border border-gray-200 dark:border-slate-700">
         <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">{label}</p>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: payload[0].payload.color || payload[0].color || "#3b82f6" }}></div>
@@ -102,6 +103,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function Dashboard() {
   const { userData } = useAuth();
+  const isReadOnly = useReadOnly();
   const isMobile = useIsMobile();
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
@@ -440,7 +442,7 @@ export function Dashboard() {
 
   if (userData?.role === "unassigned") {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 text-center h-[60vh]">
+      <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 text-center h-[60vh]">
         <Users className="w-16 h-16 text-slate-300 mb-4" />
         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
           Cuenta en Revisión
@@ -572,7 +574,8 @@ export function Dashboard() {
 
   if (isMobile) {
     return (
-      <>
+      <div className={isReadOnly ? "pointer-events-none opacity-80 select-none relative" : ""}>
+        {isReadOnly && <div className="absolute inset-0 z-50 pointer-events-auto cursor-not-allowed bg-transparent" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} />}
         <MobileHome 
           userName={userData?.name || userData?.email || "Asesor"}
           agencyId={userData?.agencyId || ""}
@@ -602,20 +605,22 @@ export function Dashboard() {
              />
           </div>
         )}
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4 pb-8">
-      {/* AI Advisor Panel */}
-      <AiAdvisorPanel 
-        userName={userData?.name || userData?.email || "Asesor"}
-        agencyId={userData?.agencyId || ''}
-        activeContacts={activeContacts}
-        tasks={tasks}
-        pipelineStages={pipelineStages}
-      />
+    <div className={isReadOnly ? "pointer-events-none opacity-80 select-none relative" : ""}>
+      {isReadOnly && <div className="absolute inset-0 z-50 pointer-events-auto cursor-not-allowed bg-transparent" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} />}
+      <div className="space-y-4 pb-8">
+        {/* AI Advisor Panel */}
+        <AiAdvisorPanel 
+          userName={userData?.name || userData?.email || "Asesor"}
+          agencyId={userData?.agencyId || ''}
+          activeContacts={activeContacts}
+          tasks={tasks}
+          pipelineStages={pipelineStages}
+        />
 
       {isMobile ? (
         <div className="flex border-b border-gray-200 dark:border-slate-700 mb-6 mt-4">
@@ -673,9 +678,9 @@ export function Dashboard() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded border border-gray-200 dark:border-slate-700 shadow-sm">
           <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
-            <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700 hidden sm:flex">
+            <div className="flex items-center gap-2 pr-3 border-r border-gray-200 dark:border-slate-700 hidden sm:flex">
               <Filter className="w-4 h-4 text-slate-400" />
               <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
                 Filtros
@@ -690,7 +695,7 @@ export function Dashboard() {
               }}
               className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
                 activeDateFilter === "today"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
                   : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
               }`}
             >
@@ -708,7 +713,7 @@ export function Dashboard() {
               }}
               className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
                 activeDateFilter === "week"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
                   : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
               }`}
             >
@@ -727,7 +732,7 @@ export function Dashboard() {
               }}
               className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
                 activeDateFilter === "month"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
                   : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
               }`}
             >
@@ -741,7 +746,7 @@ export function Dashboard() {
               }}
               className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
                 activeDateFilter === "all"
-                  ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-md"
+                  ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-sm"
                   : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
               }`}
             >
@@ -754,29 +759,29 @@ export function Dashboard() {
       {isMobile ? (
         <>
           {/* Mobile Action Center */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
-            <div className="p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+          <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+            <div className="p-3 border-b border-gray-200 dark:border-slate-700 bg-[#f4f5f5] dark:bg-slate-900">
               <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 Centro de Atención
               </h3>
             </div>
             <div className="p-4 grid grid-cols-2 gap-3">
-              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors">
+              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-rose-500" />
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Atrasadas</p>
                 </div>
                 <span className="text-rose-600 font-black text-lg">{overdueTasks.length}</span>
               </Link>
-              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
+              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-blue-500" />
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Para Hoy</p>
                 </div>
                 <span className="text-blue-600 font-black text-lg">{todayTasks.length}</span>
               </Link>
-              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              <Link to="/tasks" className="flex flex-col gap-1 justify-between p-3 rounded bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Esta Sem.</p>
@@ -785,7 +790,7 @@ export function Dashboard() {
               </Link>
               
               {buscanAutoCount > 0 && (
-                <Link to="/persons" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors">
+                <Link to="/persons" className="flex flex-col gap-1 justify-between p-3 rounded bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors">
                   <div className="flex items-center gap-2">
                     <Car className="w-4 h-4 text-indigo-500" />
                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Buscan Auto</p>
@@ -794,7 +799,7 @@ export function Dashboard() {
                 </Link>
               )}
 {allClientMatches > 0 && (
-                <Link to="/persons" className="flex flex-col gap-1 justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors">
+                <Link to="/persons" className="flex flex-col gap-1 justify-between p-3 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors">
                   <div className="flex items-center gap-2">
                     <Target className="w-4 h-4 text-emerald-500" />
                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Matches</p>
@@ -806,19 +811,19 @@ export function Dashboard() {
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <Link to="/persons" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+            <Link to="/persons" className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Total Prospectos</p>
               <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100">{filteredClients.length}</h2>
             </Link>
-            <Link to="/kanban" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+            <Link to="/kanban" className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Activos</p>
               <h2 className="text-2xl font-black text-blue-600 dark:text-blue-400">{activeContacts.length}</h2>
             </Link>
-            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Ventas Cerradas</p>
               <h2 className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{wonContacts.length}</h2>
             </Link>
-            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+            <Link to="/closed-sales" className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Ingresos</p>
               <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
@@ -827,14 +832,14 @@ export function Dashboard() {
           </div>
           
           {buscanAutoClients.length > 0 && (
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 mt-4">
+            <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-4 mt-4">
               <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
                 <Car className="w-4 h-4 text-indigo-500" />
                 Vehículos Buscados
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {buscanAutoClients.slice(0, 6).map((client, idx) => (
-                  <div key={`${client.id}-${idx}`} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-lg p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
+                  <div key={`${client.id}-${idx}`} className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer" onClick={() => setSelectedClient(client)}>
                     <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
                       {getWantedTitle(client)}
                     </p>
@@ -859,7 +864,7 @@ export function Dashboard() {
             /* ========================================================================= */
             <div className="space-y-6">
               {/* Admin Headbanner */}
-              <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
+              <div className="bg-slate-900 text-white rounded p-6 border border-slate-800 shadow-xl relative overflow-hidden">
                 <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 bg-gradient-to-l from-indigo-500 to-transparent pointer-events-none" />
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -867,13 +872,13 @@ export function Dashboard() {
                       Panel de Control General
                     </span>
                     <h1 className="text-2xl font-black tracking-tight text-white mt-3">
-                      Consola de Administración: {agencyName || "Nextcar Agency"}
+                      Consola de Administración: {agencyName || "LUHO Agency"}
                     </h1>
                     <p className="text-slate-400 text-xs mt-1">
                       Monitoreo en tiempo real de ingresos, rendimiento de asesores e inteligencia comercial.
                     </p>
                   </div>
-                  <div className="bg-slate-800 border border-slate-700/50 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="bg-slate-800 border border-slate-700/50 rounded px-4 py-3 flex items-center gap-3">
                     <Activity className="w-5 h-5 text-indigo-400 animate-pulse" />
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Estado de Agencia</p>
@@ -885,7 +890,7 @@ export function Dashboard() {
 
               {/* Admin KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <DollarSign className="w-12 h-12 text-emerald-500" />
                   </div>
@@ -901,7 +906,7 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <TrendingUp className="w-12 h-12 text-indigo-500" />
                   </div>
@@ -917,7 +922,7 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <Users className="w-12 h-12 text-blue-500" />
                   </div>
@@ -933,7 +938,7 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <Target className="w-12 h-12 text-orange-500" />
                   </div>
@@ -956,7 +961,7 @@ export function Dashboard() {
                 {/* Left Column (8/12) */}
                 <div className="xl:col-span-8 space-y-6">
                   {/* Advisor Performance Board */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 overflow-hidden">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6 overflow-hidden">
                     <div className="flex justify-between items-center mb-6">
                       <div>
                         <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -970,7 +975,7 @@ export function Dashboard() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-slate-100 dark:border-slate-700 pb-3 text-slate-400 text-[11px] uppercase font-black tracking-wider">
+                          <tr className="border-b border-gray-200 dark:border-slate-700 pb-3 text-slate-400 text-[11px] uppercase font-black tracking-wider">
                             <th className="py-3 px-2">Asesor</th>
                             <th className="py-3 text-center">Prospectos</th>
                             <th className="py-3 text-center">Cierres</th>
@@ -981,10 +986,10 @@ export function Dashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
                           {sellerPerformance.map((seller) => (
-                            <tr key={seller.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
+                            <tr key={seller.id} className="hover:bg-[#f4f5f5]/50 dark:hover:bg-slate-700/20 transition-colors">
                               <td className="py-4 px-2 flex items-center gap-3">
                                 {seller.photoURL ? (
-                                  <img src={seller.photoURL} alt={seller.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" referrerPolicy="no-referrer" />
+                                  <img src={seller.photoURL} alt={seller.name} className="w-8 h-8 rounded-full object-cover border border-gray-200" referrerPolicy="no-referrer" />
                                 ) : (
                                   <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-inner">
                                     {seller.name.substring(0, 2).toUpperCase()}
@@ -1028,7 +1033,7 @@ export function Dashboard() {
                   </div>
 
                   {/* Funnel Section */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
@@ -1058,7 +1063,7 @@ export function Dashboard() {
                 <div className="xl:col-span-4 space-y-6">
                   
                   {/* Mayor Lead Score Panel for Admin */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 flex flex-col">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5 flex flex-col">
                     <div className="mb-4">
                       <div className="flex items-center justify-between">
                         <span className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/30">
@@ -1119,7 +1124,7 @@ export function Dashboard() {
                   </div>
 
                   {/* Inactivity & Alertas for Admin */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5">
                     <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 mb-4">
                       <ShieldAlert className="w-4.5 h-4.5 text-red-500" />
                       Alertas de Inactividad de Agencia
@@ -1130,13 +1135,13 @@ export function Dashboard() {
                         return (
                           <div 
                             key={`admin-alert-${alert.task.id}-${index}`}
-                            className="p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded-xl"
+                            className="p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded"
                           >
                             <p className="text-xs font-black text-slate-800 dark:text-slate-200 line-clamp-1">{alert.task.title}</p>
                             <p className="text-[10px] text-slate-400 mt-1">
                               Cliente: <span className="font-bold text-slate-600 dark:text-slate-300">{alert.client?.name || "N/A"}</span>
                             </p>
-                            <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400">
+                            <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-800 text-[9px] text-slate-400">
                               <span>Vencimiento: {alert.task.dueDate}</span>
                               <span className="font-bold text-red-600 dark:text-red-400">Responsable: {sellerObj?.name || "Asesor"}</span>
                             </div>
@@ -1159,7 +1164,7 @@ export function Dashboard() {
             /* ========================================================================= */
             <div className="space-y-6">
               {/* Advisor Banner */}
-              <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
+              <div className="bg-slate-900 text-white rounded p-6 border border-slate-800 shadow-xl relative overflow-hidden">
                 <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 bg-gradient-to-l from-indigo-500 to-transparent pointer-events-none" />
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -1173,7 +1178,7 @@ export function Dashboard() {
                       Enfócate en tus prospectos prioritarios (Mayor Lead Score) y completa tus seguimientos diarios.
                     </p>
                   </div>
-                  <div className="bg-slate-800 border border-slate-700/50 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="bg-slate-800 border border-slate-700/50 rounded px-4 py-3 flex items-center gap-3">
                     <Award className="w-5 h-5 text-emerald-400" />
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Tu Meta Mensual</p>
@@ -1185,7 +1190,7 @@ export function Dashboard() {
 
               {/* Seller KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <CheckCircle className="w-12 h-12 text-emerald-500" />
                   </div>
@@ -1201,7 +1206,7 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <DollarSign className="w-12 h-12 text-slate-500" />
                   </div>
@@ -1217,7 +1222,7 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <Target className="w-12 h-12 text-indigo-500" />
                   </div>
@@ -1233,7 +1238,7 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <Award className="w-12 h-12 text-orange-500" />
                   </div>
@@ -1257,8 +1262,8 @@ export function Dashboard() {
                 <div className="xl:col-span-8 space-y-6">
                   
                   {/* Mayor Lead Score Detailed Board */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-700/50 pb-4">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-700/50 pb-4">
                       <div>
                         <span className="inline-flex items-center gap-1 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-full">
                           <Flame className="w-3.5 h-3.5 text-indigo-500 animate-bounce" />
@@ -1277,7 +1282,7 @@ export function Dashboard() {
                       {clientsWithScores.slice(0, 6).map((client) => (
                         <div 
                           key={`seller-lead-${client.id}`}
-                          className="p-4 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-50 hover:dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                          className="p-4 bg-[#f4f5f5] dark:bg-slate-900/50 hover:bg-[#f4f5f5] hover:dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
@@ -1302,36 +1307,36 @@ export function Dashboard() {
                             <div className="flex flex-wrap gap-2 mt-3 text-[10px]">
                               <span className={`px-2 py-0.5 rounded border ${
                                 client.scoreDetails?.factors.profileCompleteness && client.scoreDetails.factors.profileCompleteness >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-slate-200/50 dark:border-slate-700/50"
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
+                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
                               }`}>
                                 Perfil Completo: {client.scoreDetails?.factors.profileCompleteness || 0}/25
                               </span>
                               <span className={`px-2 py-0.5 rounded border ${
                                 client.scoreDetails?.factors.budget && client.scoreDetails.factors.budget >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-slate-200/50 dark:border-slate-700/50"
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
+                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
                               }`}>
                                 Presupuesto: {client.scoreDetails?.factors.budget || 0}/20
                               </span>
                               <span className={`px-2 py-0.5 rounded border ${
                                 client.scoreDetails?.factors.urgency && client.scoreDetails.factors.urgency >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-slate-200/50 dark:border-slate-700/50"
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
+                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
                               }`}>
                                 Pipeline: {client.scoreDetails?.factors.urgency || 0}/25
                               </span>
                               <span className={`px-2 py-0.5 rounded border ${
                                 client.scoreDetails?.factors.activity && client.scoreDetails.factors.activity >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-slate-200/50 dark:border-slate-700/50"
+                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
+                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
                               }`}>
                                 Seguimiento: {client.scoreDetails?.factors.activity || 0}/30
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-4 border-t md:border-t-0 border-slate-100 dark:border-slate-800 pt-3 md:pt-0">
+                          <div className="flex items-center gap-4 border-t md:border-t-0 border-gray-200 dark:border-slate-800 pt-3 md:pt-0">
                             {/* Score Display */}
                             <div className="text-center md:px-4">
                               <span className="block text-2xl font-black text-slate-850 dark:text-slate-100">{client.leadScore}</span>
@@ -1341,7 +1346,7 @@ export function Dashboard() {
                             {/* Action Button */}
                             <button
                               onClick={() => setSelectedClient(client)}
-                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black rounded-xl shadow-md shadow-blue-500/15 flex items-center gap-1.5 transition-all"
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black rounded shadow-sm shadow-blue-500/15 flex items-center gap-1.5 transition-all"
                             >
                               Atender
                               <ArrowUpRight className="w-4 h-4" />
@@ -1358,7 +1363,7 @@ export function Dashboard() {
                   </div>
 
                   {/* Top Inventory Matches */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
                     <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-2">
                       <Target className="w-5 h-5 text-indigo-500" />
                       Coincidencias de Inventario de Alta Prioridad
@@ -1373,7 +1378,7 @@ export function Dashboard() {
                         return (
                           <div 
                             key={`match-box-${client.id}`}
-                            className="bg-slate-50 dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between"
+                            className="bg-[#f4f5f5] dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800/80 rounded p-4 flex flex-col justify-between"
                           >
                             <div>
                               <div className="flex justify-between items-start">
@@ -1390,7 +1395,7 @@ export function Dashboard() {
                               <p className="text-xs text-slate-400 mt-1">
                                 Busca: {getWantedTitle(client as Client)}
                               </p>
-                              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-800">
                                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                                   Auto Compatible Disponible:
                                 </p>
@@ -1404,7 +1409,7 @@ export function Dashboard() {
                             </div>
                             <button
                               onClick={() => setSelectedClient(client as Client)}
-                              className="mt-4 w-full py-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 text-xs font-extrabold rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5"
+                              className="mt-4 w-full py-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 text-xs font-extrabold rounded border border-gray-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5"
                             >
                               Ver Ficha de Cliente
                             </button>
@@ -1424,8 +1429,8 @@ export function Dashboard() {
                 <div className="xl:col-span-4 space-y-6">
                   
                   {/* Advisor Activity Center (Tasks) */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-5 border-b border-slate-150 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900">
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-5 border-b border-slate-150 dark:border-slate-700/60 bg-[#f4f5f5] dark:bg-slate-900">
                       <h3 className="text-sm font-bold text-slate-800 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <Calendar className="w-4.5 h-4.5 text-blue-600" />
                         Mi Agenda y Seguimiento
@@ -1433,7 +1438,7 @@ export function Dashboard() {
                     </div>
                     
                     <div className="p-5 flex flex-col gap-4">
-                      <Link to="/tasks" className="flex flex-col gap-1 justify-between p-4 rounded-xl bg-rose-50 hover:bg-rose-100/80 border border-rose-100 transition-all h-full group">
+                      <Link to="/tasks" className="flex flex-col gap-1 justify-between p-4 rounded bg-rose-50 hover:bg-rose-100/80 border border-rose-100 transition-all h-full group">
                         <div className="flex items-center gap-3">
                           <AlertCircle className="w-5 h-5 text-rose-500" />
                           <div>
@@ -1444,7 +1449,7 @@ export function Dashboard() {
                         <span className="text-rose-600 font-black text-2xl mt-2 block">{overdueTasks.length}</span>
                       </Link>
 
-                      <Link to="/tasks" className="flex flex-col gap-1 justify-between p-4 rounded-xl bg-blue-50 hover:bg-blue-100/80 border border-blue-100 transition-all h-full group">
+                      <Link to="/tasks" className="flex flex-col gap-1 justify-between p-4 rounded bg-blue-50 hover:bg-blue-100/80 border border-blue-100 transition-all h-full group">
                         <div className="flex items-center gap-3">
                           <Clock className="w-5 h-5 text-blue-500" />
                           <div>
@@ -1455,7 +1460,7 @@ export function Dashboard() {
                         <span className="text-blue-600 font-black text-2xl mt-2 block">{todayTasks.length}</span>
                       </Link>
 
-                      <Link to="/tasks" className="flex flex-col gap-1 justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-700 transition-all h-full group">
+                      <Link to="/tasks" className="flex flex-col gap-1 justify-between p-4 rounded bg-[#f4f5f5] dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-900 border border-gray-200 dark:border-slate-700 transition-all h-full group">
                         <div className="flex items-center gap-3">
                           <Calendar className="w-5 h-5 text-slate-500" />
                           <div>
@@ -1470,7 +1475,7 @@ export function Dashboard() {
 
                   {/* Most wanted vehicles by my clients */}
                   {buscanAutoCount > 0 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+                    <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5">
                       <h4 className="text-sm font-bold text-slate-850 dark:text-slate-200 mb-4 flex items-center gap-2">
                         <Car className="w-4.5 h-4.5 text-indigo-500" />
                         Vehículos Más Solicitados
@@ -1479,7 +1484,7 @@ export function Dashboard() {
                         {buscanAutoClients.slice(0, 5).map((client, idx) => (
                           <div 
                             key={`wanted-vehicle-${client.id}-${idx}`}
-                            className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-xl p-3 hover:bg-slate-100/50 transition-colors cursor-pointer"
+                            className="bg-[#f4f5f5] dark:bg-slate-900/50 border border-gray-200 dark:border-slate-800 rounded p-3 hover:bg-slate-100/50 transition-colors cursor-pointer"
                             onClick={() => setSelectedClient(client as Client)}
                           >
                             <p className="text-[11px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-wider truncate mb-1">
@@ -1510,6 +1515,7 @@ export function Dashboard() {
           onUpdated={() => setRefreshKey(prev => prev + 1)}
         />
       )}
+    </div>
     </div>
   );
 }

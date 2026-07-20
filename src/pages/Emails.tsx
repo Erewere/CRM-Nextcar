@@ -130,7 +130,7 @@ export function Emails() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] min-h-[600px] flex flex-col items-stretch overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <div className="h-[calc(100vh-8rem)] min-h-[600px] flex flex-col items-stretch overflow-hidden bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700">
       <div className="p-4 border-b border-gray-200 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 flex items-center justify-end z-10 relative">
         <div className="flex items-center gap-3">
           {googleToken && (
@@ -138,14 +138,14 @@ export function Emails() {
                <button
                  onClick={fetchEmails}
                  disabled={loading}
-                 className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:bg-slate-900 shadow-sm transition-all focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+                 className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 font-medium rounded hover:bg-gray-50 dark:bg-slate-900 shadow-sm transition-all focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
                >
                  <RefreshCw className={clsx("w-4 h-4", loading && "animate-spin")} />
                  Actualizar
                </button>
                <button
                  onClick={() => disconnectGoogleServices()}
-                 className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-red-600 border border-gray-300 font-medium rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 shadow-sm transition-all focus:ring-2 focus:ring-red-100"
+                 className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-red-600 border border-gray-300 font-medium rounded hover:bg-red-50 dark:hover:bg-red-900/20 shadow-sm transition-all focus:ring-2 focus:ring-red-100"
                >
                  Desconectar
                </button>
@@ -158,20 +158,20 @@ export function Emails() {
         <div className="absolute inset-0 bg-gray-50 dark:bg-slate-900 flex items-stretch">
           {!googleToken ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-4 overflow-y-auto">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 max-w-xl w-full my-8">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-blue-200 dark:border-blue-800/50 mx-auto">
+              <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-8 max-w-xl w-full my-8">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center mb-6 shadow-sm border border-blue-200 dark:border-blue-800/50 mx-auto">
                   <Mail className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-slate-200 mb-3">Integración de Correos (Gmail / Workspace)</h2>
                 <p className="text-gray-600 dark:text-slate-400 text-sm mb-8 leading-relaxed max-w-md mx-auto">
                   Al conectar tu cuenta de Google mediante inicio de sesión seguro (OAuth), el CRM podrá acceder a tus correos y enviar mensajes en tu nombre. No necesitamos conocer tu contraseña.
                 </p>
-                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center max-w-md mx-auto">
+                <div className="bg-[#f4f5f5] dark:bg-slate-900/50 rounded p-6 border border-gray-200 dark:border-slate-700 flex flex-col items-center text-center max-w-md mx-auto">
                   <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-6">Conectar cuenta de Google</h3>
                   <button 
                     onClick={handleConnect}
                     disabled={googleLoading}
-                    className="flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm w-full sm:w-auto mx-auto disabled:opacity-50"
+                    className="flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm w-full sm:w-auto mx-auto disabled:opacity-50"
                   >
                     {googleLoading ? (
                       <span className="text-sm">Conectando...</span>
@@ -196,7 +196,7 @@ export function Emails() {
                {/* Sidebar (List of correos) */}
                <div className="w-[450px] shrink-0 border-r border-gray-200 bg-white dark:bg-slate-800 flex flex-col h-full overflow-hidden">
                   {error && (
-                    <div className="m-4 bg-red-50 border border-red-200 text-red-600 rounded-lg p-3 text-sm flex items-start gap-2 shrink-0">
+                    <div className="m-4 bg-red-50 border border-red-200 text-red-600 rounded p-3 text-sm flex items-start gap-2 shrink-0">
                       <AlertCircle className="w-5 h-5 shrink-0" />
                       <div>
                         {error}

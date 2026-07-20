@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Moon,
+  AlertCircle,
   Sun,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +26,8 @@ import {
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
+import { useReadOnly } from "../hooks/useReadOnly";
+import { WelcomeTour } from "./WelcomeTour";
 
 import { TaskReminders } from "./TaskReminders";
 import { SharedMatchNotifications } from "./SharedMatchNotifications";
@@ -35,10 +38,29 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
-import { NextcarLogo } from "./NextcarLogo";
+import { LuhoLogo } from "./LuhoLogo";
+
+const safeDate = (val: any) => {
+  if (!val) return new Date();
+  if (typeof val.toDate === 'function') return val.toDate();
+  if (val.seconds) return new Date(val.seconds * 1000);
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? new Date() : d;
+};
 
 export function Layout() {
-  const { userData } = useAuth();
+  const { userData, agencyData } = useAuth();
+  let trialDaysLeft = null;
+  if (agencyData?.subscriptionStatus === "trialing") {
+    if (agencyData.createdAt) {
+      const createdDate = safeDate(agencyData.createdAt);
+      const daysSinceCreation = Math.floor((new Date().getTime() - createdDate.getTime()) / (1000 * 3600 * 24));
+      trialDaysLeft = Math.max(0, 30 - daysSinceCreation);
+    } else if (agencyData.trialEndsAt) {
+      trialDaysLeft = Math.max(0, Math.ceil((safeDate(agencyData.trialEndsAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
+    }
+  }
+  const isGlobalReadOnly = useReadOnly();
   const navigate = useNavigate();
   const location = useLocation();
   const [agencyName, setAgencyName] = useState<string>("");
@@ -54,8 +76,8 @@ export function Layout() {
   useEffect(() => {
     // Check local storage for dark mode preference
     const savedMode = localStorage.getItem("darkMode") === "true";
-    setIsDarkMode(savedMode);
-    if (savedMode) {
+    setIsDarkMode(false); localStorage.setItem("darkMode", "false"); document.documentElement.classList.remove("dark");
+    if (false) {
       document.documentElement.classList.add("dark");
     }
 
@@ -221,14 +243,19 @@ export function Layout() {
   const hasSharedMatches = ownAgencySharing && sharedMatches.length > 0;
 
   const processedNavItems = navItems.map(item => {
-    if (item.name === "Inventario") {
-      return {
-        ...item,
+    let finalItem = { ...item };
+    if (finalItem.name === "Inventario") {
+      finalItem = {
+        ...finalItem,
         path: hasSharedMatches ? "/inventory?tab=shared" : "/inventory",
         badge: hasSharedMatches ? sharedMatches.length : undefined
       };
     }
-    return item;
+    
+    if (isGlobalReadOnly && finalItem.path !== '/' && finalItem.path !== '/billing') {
+      (finalItem as any).disabled = true;
+    }
+    return finalItem;
   });
 
   return (
@@ -241,7 +268,7 @@ export function Layout() {
       {/* Sidebar */}
       <aside
         className={clsx(
-          "hidden md:flex sticky top-0 h-screen z-50 bg-slate-900 text-slate-300 flex-col items-stretch shrink-0 transition-[width,transform] duration-300",
+          "hidden md:flex sticky top-0 h-screen z-50 bg-white border-r border-gray-200 dark:bg-slate-900 dark:border-slate-800 text-slate-600 dark:text-slate-300 flex-col items-stretch shrink-0 transition-[width,transform] duration-300",
           isSidebarCollapsed ? "w-20" : "w-64",
         )}
       >
@@ -258,17 +285,18 @@ export function Layout() {
 
         <div
           className={clsx(
-            "hidden md:flex items-center gap-3 p-6 border-b border-slate-800",
-            isSidebarCollapsed && "justify-center px-2",
+            "hidden md:flex items-center p-6 border-b border-gray-200 dark:border-slate-800 h-[72px]",
+            isSidebarCollapsed ? "justify-center px-2" : "justify-start"
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 border border-slate-800/80 shadow-lg p-1.5">
-            <NextcarLogo variant="icon" />
-          </div>
-          {!isSidebarCollapsed && (
-            <span className="text-xl font-bold tracking-tight text-white truncate">
-              Nextcar <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">CRM</span>
-            </span>
+          {isSidebarCollapsed ? (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded p-1.5">
+              <LuhoLogo variant="icon" />
+            </div>
+          ) : (
+            <div className="flex h-12 w-32 items-center justify-start">
+              <LuhoLogo variant="full" className="ml-[-8px]" />
+            </div>
           )}
         </div>
 
@@ -279,13 +307,19 @@ export function Layout() {
               to={item.path}
               end={item.path === "/"}
               title={isSidebarCollapsed ? item.name : undefined}
+              onClick={(e) => {
+                if ((item as any).disabled) {
+                  e.preventDefault();
+                }
+              }}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-3 py-2 rounded-lg text-sm transition-all duration-200",
+                  "flex items-center gap-3 py-2 rounded text-sm transition-all duration-200",
                   isSidebarCollapsed ? "justify-center px-0" : "px-3",
+                  (item as any).disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
                   isActive
-                    ? "bg-gradient-to-r from-blue-600/20 to-indigo-600/10 text-blue-400 font-semibold shadow-sm border border-blue-500/10"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-slate-100",
+                    ? "bg-blue-50 text-blue-700 font-semibold shadow-sm border border-blue-100 dark:bg-gradient-to-r dark:from-blue-600/20 dark:to-indigo-600/10 dark:text-blue-400 dark:border-blue-500/10"
+                    : "text-slate-600 hover:bg-[#f4f5f5] hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
                 )
               }
             >
@@ -318,11 +352,11 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="mt-auto border-t border-slate-800 p-4">
+        <div className="mt-auto border-t border-gray-200 dark:border-slate-800 p-4">
           <button
             onClick={() => setShowUserSettingsModal(true)}
             className={clsx(
-              "w-full flex items-center rounded-xl bg-slate-800/50 mb-2 hover:bg-slate-800 transition-colors cursor-pointer text-left",
+              "tour-profile-button w-full flex items-center rounded bg-[#f4f5f5] dark:bg-slate-800/50 mb-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left border border-gray-200 dark:border-transparent",
               isSidebarCollapsed ? "justify-center p-2" : "gap-3 p-3",
             )}
           >
@@ -330,12 +364,12 @@ export function Layout() {
               <img
                 src={userData.photoURL}
                 alt="Avatar"
-                className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                className="h-10 w-10 shrink-0 rounded object-cover"
                 title={isSidebarCollapsed ? userData?.name : undefined}
               />
             ) : (
               <div
-                className="h-10 w-10 shrink-0 rounded-lg bg-slate-600 flex items-center justify-center text-white font-bold uppercase"
+                className="h-10 w-10 shrink-0 rounded bg-slate-600 flex items-center justify-center text-white font-bold uppercase"
                 title={isSidebarCollapsed ? userData?.name : undefined}
               >
                 {userData?.name?.substring(0, 2) || "US"}
@@ -343,10 +377,10 @@ export function Layout() {
             )}
             {!isSidebarCollapsed && (
               <div className="flex flex-col overflow-hidden">
-                <span className="text-sm font-semibold text-white truncate">
+                <span className="text-sm font-semibold text-slate-800 dark:text-white truncate">
                   {userData?.name}
                 </span>
-                <span className="text-[10px] text-slate-400 capitalize">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">
                   {userData?.role}
                 </span>
               </div>
@@ -356,7 +390,7 @@ export function Layout() {
             onClick={() => setShowPasswordModal(true)}
             title={isSidebarCollapsed ? "Cambiar Contraseña" : undefined}
             className={clsx(
-              "w-full flex items-center rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors mb-1",
+              "w-full flex items-center rounded text-sm text-slate-500 hover:bg-[#f4f5f5] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors mb-1",
               isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2",
             )}
           >
@@ -374,7 +408,7 @@ export function Layout() {
             onClick={handleLogout}
             title={isSidebarCollapsed ? "Cerrar Sesión" : undefined}
             className={clsx(
-              "w-full flex items-center rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors",
+              "w-full flex items-center rounded text-sm text-slate-500 hover:bg-[#f4f5f5] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors",
               isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2",
             )}
           >
@@ -392,8 +426,8 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans w-full relative transition-colors">
-        {!isMobile && <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#f4f5f5] dark:bg-slate-900 font-sans w-full relative transition-colors">
+        {!isMobile && <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
           <div className="flex flex-col justify-center overflow-hidden">
             <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
               <h1 className="text-[30px] font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors leading-none">
@@ -413,6 +447,13 @@ export function Layout() {
                    userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
                 </span>
               </div>
+              {trialDaysLeft !== null && (
+                <div className="flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800/50 px-2 py-0.5 shrink-0 transition-colors">
+                  <span className="text-[10px] md:text-[11px] font-medium text-orange-700 dark:text-orange-300">
+                    Prueba: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
+                  </span>
+                </div>
+              )}
             </div>
             <p className="text-[15px] text-slate-500 dark:text-slate-400 hidden sm:block mt-1.5 truncate max-w-md leading-none">
               {location.pathname === '/' ? 'Métricas clave y estado de tus ventas' :
@@ -429,22 +470,10 @@ export function Layout() {
           </div>
           <div className="flex items-center gap-4 shrink-0">
             <NotificationsPopover />
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label="Toggle dark mode"
-            >
-              {isDarkMode ? (
-                <Sun className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5" />
-              )}
-            </button>
 
             {/* Simulating "Integration with website" CTA just conceptually or link out */}
             <a
-              href="https://www.nextcar.erewere.com"
+              href="https://www.nextcar.com.mx"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
@@ -455,12 +484,35 @@ export function Layout() {
           </div>
         </header>}
 
+        {(isGlobalReadOnly && userData?.role !== 'master' && userData?.agencyId !== 'unassigned') && (
+          <div className="bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 p-3 sm:p-4 px-4 sm:px-6 flex items-center justify-between z-10 relative">
+            <div className="flex items-center gap-3">
+              <div className="bg-red-100 dark:bg-red-800 p-1.5 rounded-full shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-300" />
+              </div>
+              <p className="text-sm text-red-800 dark:text-red-200 font-medium">
+                Suscripción inactiva. Tu acceso es de solo lectura y limitado. 
+                {userData?.role === 'admin' ? " Ve a Facturación para reactivarla." : " Contacta a tu administrador para reactivarla."}
+              </p>
+            </div>
+            {userData?.role === 'admin' && (
+              <button
+                onClick={() => navigate('/billing')}
+                className="inline-flex bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded transition-colors whitespace-nowrap ml-2 sm:ml-4 cursor-pointer"
+              >
+                Reactivar
+              </button>
+            )}
+          </div>
+        )}
+
         <div className={clsx(
           "flex-1 relative transition-colors",
           isMobile 
             ? ((location.pathname === '/chats' || location.pathname === '/inventory') ? "h-full overflow-hidden" : "overflow-auto p-4") 
             : (location.pathname === '/chats' ? "h-full overflow-hidden p-4 md:p-6" : "overflow-auto p-4 md:p-6")
         )}>
+          <WelcomeTour />
           <Outlet />
         </div>
       </main>
@@ -470,21 +522,33 @@ export function Layout() {
       
       {/* Mobile Bottom Navigation */}
       {isMobile && (
-        <nav className="md:hidden w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0">
+        <nav className="md:hidden w-full bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0">
           {[
             { name: "Inicio", path: "/", icon: LayoutDashboard },
             { name: "Contactos", path: "/persons", icon: Users },
             { name: "Inventario", path: (ownAgencySharing && sharedMatches.length > 0) ? "/inventory?tab=shared" : "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0) ? sharedMatches.length : undefined },
             { name: "Chats", path: "/chats", icon: MessageSquare, badge: unreadChatsCount > 0 ? unreadChatsCount : undefined },
             { name: "Citas", path: "/tasks", icon: CheckSquare },
-          ].map(item => (
+          ].map(item => {
+            const finalItem = { ...item };
+            if (isGlobalReadOnly && finalItem.path !== '/' && finalItem.path !== '/billing') {
+              (finalItem as any).disabled = true;
+            }
+            return finalItem;
+          }).map(item => (
             <NavLink
               key={item.path}
               to={item.path}
               end={item.path === "/"}
+              onClick={(e) => {
+                if ((item as any).disabled) {
+                  e.preventDefault();
+                }
+              }}
               className={({ isActive }) =>
                 clsx(
                   "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors relative",
+                  (item as any).disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
                   isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 )
               }

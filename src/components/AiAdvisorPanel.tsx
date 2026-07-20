@@ -96,7 +96,7 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
 
   if (recommendations.length === 0) {
     return (
-      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-lg shadow border border-indigo-500/30 overflow-hidden text-white mb-4">
+      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded shadow border border-indigo-500/30 overflow-hidden text-white mb-4">
         <div 
         className="p-2 sm:p-3 flex items-center justify-between bg-black/20 cursor-pointer hover:bg-black/30 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -121,7 +121,7 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
   }
 
   return (
-    <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-lg shadow border border-indigo-500/30 overflow-hidden text-white mb-4">
+    <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded shadow border border-indigo-500/30 overflow-hidden text-white mb-4">
       <div 
         className="p-2 sm:p-3 flex items-center justify-between bg-black/20 cursor-pointer hover:bg-black/30 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -172,12 +172,12 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
               to="/persons" 
               state={{ clientId: rec.clientId }} 
               key={`${rec.clientId}-${idx}`} 
-              className="bg-white/5 hover:bg-white/10 transition-colors border border-white/10 rounded-lg p-4 flex flex-col justify-between group relative overflow-hidden cursor-pointer"
+              className="bg-white/5 hover:bg-white/10 transition-colors border border-white/10 rounded p-4 flex flex-col justify-between group relative overflow-hidden cursor-pointer"
             >
               <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
               
               <div className="flex items-start gap-3 mb-4 relative z-10">
-                <div className="mt-0.5 p-2 bg-black/20 rounded-lg shrink-0 border border-white/5 shadow-inner">
+                <div className="mt-0.5 p-2 bg-black/20 rounded shrink-0 border border-white/5 shadow-inner">
                   {rec.icon}
                 </div>
                 <div>
@@ -194,7 +194,7 @@ export function AiAdvisorPanel({ userName, agencyId, activeContacts, tasks, pipe
               </div>
               <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between relative z-10">
                 <span className="text-[11px] text-indigo-300/80 uppercase tracking-wider font-semibold">Probabilidad cierre</span>
-                <span className={`text-sm font-black ${rec.probability > 75 ? 'text-emerald-400' : rec.probability > 50 ? 'text-amber-400' : 'text-blue-400'} drop-shadow-md`}>
+                <span className={`text-sm font-black ${rec.probability > 75 ? 'text-emerald-400' : rec.probability > 50 ? 'text-amber-400' : 'text-blue-400'} drop-shadow-sm`}>
                   {rec.probability}%
                 </span>
               </div>

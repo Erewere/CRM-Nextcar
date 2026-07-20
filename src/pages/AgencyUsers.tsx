@@ -403,7 +403,7 @@ export function AgencyUsers() {
     <div className="max-w-6xl mx-auto py-4 space-y-4">
 
       {isMaster && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 flex flex-col md:flex-row items-end gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-4 flex flex-col md:flex-row items-end gap-4">
           <div className="flex-1 w-full">
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nueva Agencia</label>
             <input
@@ -411,13 +411,13 @@ export function AgencyUsers() {
               value={newAgencyName}
               onChange={(e) => setNewAgencyName(e.target.value)}
               placeholder="Nombre de la nueva agencia..."
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             />
           </div>
           <button
             onClick={handleCreateAgency}
             disabled={!newAgencyName.trim()}
-            className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Crear Agencia
@@ -426,8 +426,8 @@ export function AgencyUsers() {
       )}
 
       {isMaster && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+          <div className="p-5 border-b border-gray-200 dark:border-slate-700">
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <Building className="w-5 h-5 text-indigo-500" />
               Gestión de Agencias
@@ -437,8 +437,8 @@ export function AgencyUsers() {
             </p>
           </div>
           <ul className="divide-y divide-slate-100 dark:divide-slate-700/50 max-h-[400px] overflow-y-auto">
-            {agencies.map(a => (
-              <li key={`agency-${a.id}`} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
+            {agencies.map((a, index) => (
+              <li key={`agency-${a.id}`} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#f4f5f5] dark:bg-slate-900/50 transition-colors">
                 <div className="flex-1">
                   <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                     {a.name}
@@ -460,7 +460,7 @@ export function AgencyUsers() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => handleToggleFreeAccess(a.id, !!a.hasFreeAccess)}
-                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                    className={`px-4 py-1.5 text-sm font-medium rounded transition-colors flex items-center gap-1.5 ${
                       a.hasFreeAccess 
                         ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
                         : 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-200'
@@ -475,7 +475,7 @@ export function AgencyUsers() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col gap-4">
         <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Añadir Nuevo Usuario</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full items-end">
           {isMaster && (
@@ -484,10 +484,10 @@ export function AgencyUsers() {
               <select
                 value={inviteTargetAgencyId}
                 onChange={(e) => setInviteTargetAgencyId(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
               >
                 <option value="">Selecciona una agencia...</option>
-                {agencies.map(a => (
+                {agencies.map((a, index) => (
                   <option key={`agency-${a.id}`} value={a.id}>{a.name}</option>
                 ))}
               </select>
@@ -500,7 +500,7 @@ export function AgencyUsers() {
               value={inviteName}
               onChange={(e) => setInviteName(e.target.value)}
               placeholder="Ej. Juan Pérez"
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             />
           </div>
           <div className="w-full">
@@ -510,7 +510,7 @@ export function AgencyUsers() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="usuario@ejemplo.com"
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             />
           </div>
           <div className="w-full">
@@ -518,7 +518,7 @@ export function AgencyUsers() {
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             >
               <option value="seller">Vendedor</option>
               <option value="admin">Administrador</option>
@@ -529,14 +529,14 @@ export function AgencyUsers() {
           <button
             onClick={handleCreateUser}
             disabled={!inviteEmail.trim() || !inviteName.trim() || inviting || (isMaster && !inviteTargetAgencyId)}
-            className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
+            className="w-full md:w-auto px-6 py-2 bg-[#2E914F] hover:bg-[#257A41] text-white font-medium rounded disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
           >
             <Plus className="w-4 h-4" />
             {inviting ? 'Creando...' : 'Crear Usuario'}
           </button>
         </div>
         {inviteSuccessMsg && (
-          <div className="mt-4 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-4 rounded-lg flex flex-col gap-2 border border-green-200 dark:border-green-800">
+          <div className="mt-4 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-4 rounded flex flex-col gap-2 border border-green-200 dark:border-green-800">
             <div className="flex items-center gap-2 font-semibold">
               <CheckCircle className="w-5 h-5" />
               {inviteSuccessMsg}
@@ -557,7 +557,7 @@ export function AgencyUsers() {
       </div>
 
       {userData?.role === 'admin' && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm flex flex-col">
+        <div className="bg-white dark:bg-slate-800 rounded border border-orange-200 dark:border-orange-800 shadow-sm flex flex-col">
           <div className="p-5 border-b border-orange-100 dark:border-orange-900 bg-orange-50 dark:bg-orange-900/20">
             <h3 className="text-sm font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -568,7 +568,7 @@ export function AgencyUsers() {
             </p>
           </div>
           <div className="p-5 flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-slate-700">
               <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Umbral de Inactividad (Días)</label>
               <div className="flex items-center gap-2">
                 <input 
@@ -577,7 +577,7 @@ export function AgencyUsers() {
                   max="365"
                   value={inactivityAlertDays}
                   onChange={(e) => setInactivityAlertDays(Number(e.target.value))}
-                  className="border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 w-20 text-center"
+                  className="border border-gray-200 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 w-20 text-center"
                 />
                 <button 
                   onClick={handleSaveInactivity} 
@@ -599,7 +599,7 @@ export function AgencyUsers() {
                 inactiveAlerts.map(({ task, client }) => (
                   <div 
                     key={`task-${task.id}`} 
-                    className="p-3 rounded-lg bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 cursor-pointer hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-colors"
+                    className="p-3 rounded bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 cursor-pointer hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-colors"
                     onClick={() => {
                       if (client) {
                         navigate('/persons', { state: { clientId: client.id } });
@@ -625,7 +625,7 @@ export function AgencyUsers() {
 
       {/* Horario de Calendario */}
       {userData?.role === 'admin' && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-indigo-500" />
@@ -658,7 +658,7 @@ export function AgencyUsers() {
               <button 
                 onClick={handleSaveBusinessHours}
                 disabled={savingHours}
-                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded disabled:opacity-50 transition-colors"
               >
                 {savingHours ? 'Guardando...' : 'Guardar'}
               </button>
@@ -669,7 +669,7 @@ export function AgencyUsers() {
 
       {/* Compartir Inventario */}
       {userData?.role === 'admin' && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <Building className="w-5 h-5 text-indigo-500" />
@@ -680,7 +680,7 @@ export function AgencyUsers() {
             </p>
           </div>
           
-          <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex-1">
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Compartir mi Inventario</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -693,7 +693,7 @@ export function AgencyUsers() {
                 onClick={handleToggleShareInventory}
                 disabled={savingSharing}
                 type="button"
-                className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors shadow-sm ${
+                className={`px-4 py-2 text-sm font-bold rounded transition-colors shadow-sm ${
                   shareInventory
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 text-slate-700'
@@ -707,7 +707,7 @@ export function AgencyUsers() {
       )}
 
       {/* Sección de Gestión de Etiquetas */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+      <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 space-y-4">
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
             <Tag className="w-5 h-5 text-indigo-500" />
@@ -724,7 +724,7 @@ export function AgencyUsers() {
             value={newTagInput}
             onChange={(e) => setNewTagInput(e.target.value)}
             placeholder="Ejemplo: Arrendamiento o Busca de auto"
-            className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-sm"
+            className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-sm"
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleAddTag();
             }}
@@ -732,7 +732,7 @@ export function AgencyUsers() {
           <button
             onClick={handleAddTag}
             disabled={!newTagInput.trim() || loadingTags}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1 shrink-0"
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded disabled:opacity-50 transition-colors flex items-center gap-1 shrink-0"
           >
             <Plus className="w-4 h-4" />
             Agregar
@@ -765,10 +765,10 @@ export function AgencyUsers() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
         <ul className="divide-y divide-slate-100">
           {users.map(u => (
-            <li key={`user-${u.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:bg-slate-900 transition-colors">
+            <li key={`user-${u.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#f4f5f5] dark:bg-slate-900 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <div className="font-bold text-slate-800 dark:text-slate-200">
@@ -797,7 +797,7 @@ export function AgencyUsers() {
                       className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="unassigned">-- Sin Asignar --</option>
-                      {agencies.map(a => (
+                      {agencies.map((a, index) => (
                         <option value={a.id} key={`agency-${a.id}`}>{a.name}</option>
                       ))}
                     </select>
@@ -811,7 +811,7 @@ export function AgencyUsers() {
                       value={u.role || 'unassigned'}
                       onChange={(e) => handleUpdateRole(u.id, e.target.value, u.name, u.email)}
                       className="text-sm border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-3 bg-white dark:bg-slate-800 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      disabled={(!isMaster && u.role === 'master')}
+                      disabled={(!isMaster && u.role === 'master') || (u.role === 'master' && u.id === userData?.id)}
                     >
                       {isMaster && u.role === 'master' && <option value="master">Master</option>}
                       <option value="admin">Administrador</option>

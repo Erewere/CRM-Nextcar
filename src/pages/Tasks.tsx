@@ -665,7 +665,7 @@ export function Tasks() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => setMiniCalendarDate((prev) => subMonths(prev, 1))}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500 transition-colors"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded text-gray-500 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -674,7 +674,7 @@ export function Tasks() {
           </div>
           <button
             onClick={() => setMiniCalendarDate((prev) => addMonths(prev, 1))}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500 transition-colors"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded text-gray-500 transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -706,9 +706,9 @@ export function Tasks() {
                   setCurrentDate(day);
                 }}
                 className={clsx(
-                  "h-8 flex flex-col items-center justify-center rounded-lg text-xs cursor-pointer transition-all relative",
+                  "h-8 flex flex-col items-center justify-center rounded text-xs cursor-pointer transition-all relative",
                   isToday
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-md shadow-blue-500/20"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-sm shadow-blue-500/20"
                     : isCurrentMonth
                       ? "text-slate-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 font-medium"
                       : "text-gray-300 dark:text-slate-600",
@@ -1194,7 +1194,7 @@ export function Tasks() {
                         Posponer ({selectedTaskIds.length})
                       </button>
                       {showPostponeMenu && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50 p-1">
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 z-50 p-1">
                           <button
                             onClick={() => {
                               handlePostponeSelectedTasks(1);
@@ -1244,7 +1244,7 @@ export function Tasks() {
                   {showColumnSettings && (
                     <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowColumnSettings(false)} />
-                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50 p-3 text-sm">
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 z-50 p-3 text-sm">
                     <div className="font-bold text-xs uppercase text-gray-500 dark:text-slate-400 mb-3">
                       Columnas Visibles
                     </div>
@@ -1296,7 +1296,7 @@ export function Tasks() {
                 <Filter className="w-3.5 h-3.5" /> Filtro
               </button>
               {showFilterMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded shadow-lg border border-gray-200 dark:border-slate-700 z-50 p-2 text-sm text-gray-700 dark:text-slate-300">
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 z-50 p-2 text-sm text-gray-700 dark:text-slate-300">
                   <div className="font-bold text-xs uppercase text-gray-500 dark:text-slate-400 mb-2 px-2">
                     Estado
                   </div>
@@ -2111,7 +2111,7 @@ export function Tasks() {
                               className={clsx(
                                 "text-sm md:text-lg font-bold w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full",
                                 isSameDay(day, today)
-                                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
                                   : "text-gray-900 dark:text-slate-100",
                               )}
                             >
@@ -2296,7 +2296,7 @@ export function Tasks() {
                       return (
                         <div
                           key={monthDate.toISOString()}
-                          className="border border-gray-200 dark:border-slate-700 rounded-lg p-3"
+                          className="border border-gray-200 dark:border-slate-700 rounded p-3"
                         >
                           <div className="font-bold text-sm text-gray-800 dark:text-slate-200 mb-3 capitalize text-center">
                             {format(monthDate, "MMMM", { locale: es })}
@@ -2376,7 +2376,7 @@ export function Tasks() {
                 <div className="p-2 border-b border-gray-100 dark:border-slate-700/50">
                   <button
                     onClick={() => setShowNewTaskModal(true)}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700/50 rounded transition-colors"
                   >
                     <div className="w-6 h-6 rounded-full flex items-center justify-center bg-blue-100/50 text-blue-600 shrink-0">
                       <span className="text-lg leading-none mt-[-2px]">+</span>
@@ -2391,7 +2391,7 @@ export function Tasks() {
                     .map(({ task, client }) => (
                       <div
                         key={`task-${task.id}`}
-                        className="group flex gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/30 transition-all"
+                        className="group flex gap-3 p-3 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-slate-700/30 transition-all"
                         onClick={() => handleTaskClick(task)}
                       >
                         <button
@@ -2433,7 +2433,7 @@ export function Tasks() {
                                     parseISO(task.dueDate),
                                   ) && !task.completed
                                     ? "text-rose-500 border-rose-200 bg-rose-50 dark:bg-rose-900/20 dark:border-rose-800"
-                                    : "text-slate-600 border-slate-200 dark:text-slate-300 dark:border-slate-700/60 dark:bg-slate-800"
+                                    : "text-slate-600 border-gray-200 dark:text-slate-300 dark:border-slate-700/60 dark:bg-slate-800"
                                 )}
                               >
                                 <Clock className="w-3 h-3" />
@@ -2487,7 +2487,7 @@ export function Tasks() {
       {/* Delete Confirmation Modal */}
       {taskToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                 Confirmar eliminación
@@ -2499,16 +2499,16 @@ export function Tasks() {
                 Esta acción no se puede deshacer.
               </p>
             </div>
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3">
+            <div className="p-4 bg-[#f4f5f5] dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3">
               <button
                 onClick={() => setTaskToDelete(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded transition-colors"
               >
                 Eliminar
               </button>

@@ -205,15 +205,15 @@ export function Chats() {
     if (!vehicle) return null;
 
     return (
-      <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl flex gap-3 max-w-sm text-xs">
+      <div className="mt-3 p-3 bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded flex gap-3 max-w-sm text-xs">
         {(vehicle.photoUrls?.[0] || vehicle.photoUrl) ? (
           <img
             src={vehicle.photoUrls?.[0] || vehicle.photoUrl}
             alt={vehicle.model}
-            className="w-16 h-16 object-cover rounded-lg shrink-0 border border-slate-200 dark:border-slate-700"
+            className="w-16 h-16 object-cover rounded shrink-0 border border-gray-200 dark:border-slate-700"
           />
         ) : (
-          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 rounded-lg shrink-0">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 rounded shrink-0">
             <Car className="w-8 h-8" />
           </div>
         )}
@@ -229,14 +229,14 @@ export function Chats() {
   }
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 overflow-hidden md:rounded-xl md:border border-slate-200 dark:border-slate-800 md:shadow-sm">
+    <div className="h-full flex flex-col md:flex-row bg-[#f4f5f5] dark:bg-slate-950 overflow-hidden md:rounded md:border border-gray-200 dark:border-slate-800 md:shadow-sm">
       
       {/* Sidebar List of Chats */}
       <div className={clsx(
-        "w-full md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden",
+        "w-full md:w-80 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden",
         activeChat && "hidden md:flex"
       )}>
-        <div className="p-4 border-b border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-950/20">
+        <div className="p-4 border-b border-gray-200 dark:border-slate-850 bg-[#f4f5f5]/50 dark:bg-slate-950/20">
           <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-blue-500" />
             Chats Interagencias
@@ -275,7 +275,7 @@ export function Chats() {
                   key={chat.id}
                   onClick={() => setActiveChat(chat)}
                   className={clsx(
-                    "w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center gap-3 relative",
+                    "w-full text-left p-4 hover:bg-[#f4f5f5] dark:hover:bg-slate-800/40 transition-colors flex items-center gap-3 relative",
                     activeChat?.id === chat.id && "bg-blue-50/50 dark:bg-slate-800/80"
                   )}
                 >
@@ -325,7 +325,7 @@ export function Chats() {
         {activeChat ? (
           <>
             {/* Active Chat Header */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/20 shrink-0">
+            <div className="p-4 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between bg-[#f4f5f5]/50 dark:bg-slate-950/20 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   onClick={() => setActiveChat(null)}
@@ -348,14 +348,14 @@ export function Chats() {
               </div>
 
               {/* Secure Info Alert */}
-              <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-semibold">
+              <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded text-xs font-semibold">
                 <Info className="w-3.5 h-3.5 shrink-0" />
                 Seguro: Solo visible para administradores autorizados.
               </div>
             </div>
 
             {/* Message Feed Area */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/30 dark:bg-slate-950/10 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#f4f5f5]/30 dark:bg-slate-950/10 space-y-4">
               {messages.map((message, idx) => {
                 const isMe = message.senderAgencyId === userData?.agencyId;
 
@@ -368,10 +368,10 @@ export function Chats() {
                     )}
                   >
                     <div className={clsx(
-                      "px-4 py-2.5 rounded-2xl shadow-sm text-sm whitespace-pre-line leading-relaxed break-words [word-break:break-word]",
+                      "px-4 py-2.5 rounded shadow-sm text-sm whitespace-pre-line leading-relaxed break-words [word-break:break-word]",
                       isMe 
                         ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tr-none" 
-                        : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none"
+                        : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-gray-200 dark:border-slate-700 rounded-tl-none"
                     )}>
                       {message.text}
                       {message.vehicleId && (
@@ -389,25 +389,25 @@ export function Chats() {
 
             {/* Form Input area */}
             {anyParticipantDisabledSharing ? (
-              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-950/20 text-amber-850 dark:text-amber-300 flex items-center gap-3 shrink-0 text-sm font-semibold">
+              <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-950/20 text-amber-850 dark:text-amber-300 flex items-center gap-3 shrink-0 text-sm font-semibold">
                 <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 animate-bounce" />
                 <span>
                   El chat está inactivo porque una de las agencias participantes ha desactivado 'Compartir mi Inventario'. No se pueden enviar más mensajes.
                 </span>
               </div>
             ) : (
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3 shrink-0">
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3 shrink-0">
                 <input
                   type="text"
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   placeholder="Escribe un mensaje de respuesta..."
-                  className="flex-1 px-4 py-2.5 border rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="flex-1 px-4 py-2.5 border rounded bg-[#f4f5f5] dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 <button
                   type="submit"
                   disabled={!inputText.trim()}
-                  className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-md transition-all flex items-center justify-center shrink-0 disabled:opacity-50"
+                  className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded shadow-sm transition-all flex items-center justify-center shrink-0 disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -417,7 +417,7 @@ export function Chats() {
         ) : (
           /* Empty Active Chat Fallback */
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
-            <div className="w-16 h-16 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-4 text-slate-400 border">
+            <div className="w-16 h-16 rounded bg-[#f4f5f5] dark:bg-slate-800 flex items-center justify-center mb-4 text-slate-400 border">
               <MessageSquare className="w-8 h-8" />
             </div>
             <h3 className="font-bold text-slate-700 dark:text-slate-300 mb-1">Tus Conversaciones</h3>

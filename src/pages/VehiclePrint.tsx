@@ -64,7 +64,7 @@ export function VehiclePrint() {
             <img 
               src={vehicle.photoUrls?.[0] || vehicle.photoUrl} 
               alt={`${vehicle.make} ${vehicle.model}`} 
-              className="max-h-[300px] print:max-h-[220px] w-auto object-cover rounded-2xl shadow-xl border-4 border-slate-200"
+              className="max-h-[300px] print:max-h-[220px] w-auto object-cover rounded shadow-xl border-4 border-gray-200"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgLoaded(true)}
               
@@ -74,31 +74,31 @@ export function VehiclePrint() {
 
         {/* Details Grid */}
         <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-6 print:mb-4 text-lg print:text-base">
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
             <span className="font-bold text-slate-500 uppercase">Transmisión:</span>
             <span className="font-black text-right">{vehicle.transmission}</span>
           </div>
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
             <span className="font-bold text-slate-500 uppercase">Kilometraje:</span>
             <span className="font-black text-right">{vehicle.km.toLocaleString()} km</span>
           </div>
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
             <span className="font-bold text-slate-500 uppercase">Color:</span>
             <span className="font-black text-right">{vehicle.color}</span>
           </div>
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
             <span className="font-bold text-slate-500 uppercase">Carrocería:</span>
             <span className="font-black text-right">{vehicle.bodyType}</span>
           </div>
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
             <span className="font-bold text-slate-500 uppercase">Cilindros:</span>
             <span className="font-black text-right">{vehicle.cylinders || '-'}</span>
           </div>
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
             <span className="font-bold text-slate-500 uppercase">Motor:</span>
             <span className="font-black text-right">{vehicle.liters ? `${vehicle.liters} L` : '-'}</span>
           </div>
-          <div className="flex justify-between border-b-2 border-slate-100 pb-1.5 col-span-2">
+          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5 col-span-2">
             <span className="font-bold text-slate-500 uppercase">Pasajeros:</span>
             <span className="font-black text-right">{vehicle.passengers || '-'}</span>
           </div>
@@ -106,7 +106,7 @@ export function VehiclePrint() {
 
         {/* Equipment / Extra Info */}
         {vehicle.equipment && (
-          <div className="mb-6 print:mb-4 bg-slate-100 p-4 rounded-xl">
+          <div className="mb-6 print:mb-4 bg-slate-100 p-4 rounded">
             <h3 className="text-lg print:text-sm font-black uppercase tracking-widest mb-1 text-slate-800">
               Equipamiento Destacado
             </h3>
@@ -116,7 +116,7 @@ export function VehiclePrint() {
 
         {/* Price */}
         {vehicle.price > 0 && (
-          <div className="mt-auto text-center border-t-[6px] print:border-t-[4px] border-slate-900 pt-6 print:pt-4 bg-slate-50 rounded-b-xl -mx-6 -mb-6 print:-mx-5 print:-mb-5 pb-6 print:pb-4">
+          <div className="mt-auto text-center border-t-[6px] print:border-t-[4px] border-slate-900 pt-6 print:pt-4 bg-[#f4f5f5] rounded-b-xl -mx-6 -mb-6 print:-mx-5 print:-mb-5 pb-6 print:pb-4">
             <div className="text-xl print:text-lg font-bold text-slate-500 uppercase mb-2 tracking-widest">Precio de Venta</div>
             <div className="text-6xl print:text-5xl font-black text-slate-900">${vehicle.price.toLocaleString()}</div>
           </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { useReadOnly } from "../hooks/useReadOnly";
 import {
   collection,
   query,
@@ -65,7 +66,7 @@ function TerminalDropBar({
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex gap-2 w-[calc(100%-2rem)] max-w-lg">
-      <div className="bg-slate-800 backdrop-blur-md shadow-2xl rounded-2xl flex items-center justify-center p-2 border border-slate-700 w-full overflow-x-auto gap-2">
+      <div className="bg-slate-800 backdrop-blur-md shadow-2xl rounded flex items-center justify-center p-2 border border-slate-700 w-full overflow-x-auto gap-2">
         {columns.map((col) => (
           <TerminalDropZone key={`col-${col.id}`} column={col} />
         ))}
@@ -92,7 +93,7 @@ function TerminalDropZone({
     <div
       ref={setNodeRef}
       className={clsx(
-        "flex flex-col items-center justify-center flex-1 min-w-[70px] md:min-w-[90px] shrink-0 h-16 md:h-20 rounded-xl transition-all duration-300 border-2",
+        "flex flex-col items-center justify-center flex-1 min-w-[70px] md:min-w-[90px] shrink-0 h-16 md:h-20 rounded transition-all duration-300 border-2",
         isOver
           ? "border-blue-400 bg-blue-500/20 scale-105"
           : "border-transparent bg-slate-700/50 text-slate-300 hover:bg-slate-700",
@@ -126,15 +127,15 @@ function ArchivedClientsModal({
 }) {
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-end">
-      <div className="w-[800px] max-w-full h-full bg-slate-50 dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white dark:bg-slate-800">
+      <div className="w-[800px] max-w-full h-full bg-[#f4f5f5] dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800">
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
             <Archive className="w-5 h-5 text-slate-500 dark:text-slate-400" />
             Contactos Archivados
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 dark:text-slate-400 transition-colors"
+            className="p-2 hover:bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -151,7 +152,7 @@ function ArchivedClientsModal({
                 key={`col-${col.id}`}
                 className="flex-1 flex flex-col min-w-[320px] max-w-[400px]"
               >
-                <h3 className="font-bold text-slate-700 dark:text-slate-300 flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm mb-4 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-bold text-slate-700 dark:text-slate-300 flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded shadow-sm mb-4 border border-gray-200 dark:border-slate-700">
                   {col.title}
                   <span className="bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 rounded-full text-xs text-slate-600 dark:text-slate-400 font-semibold">
                     {columnClients.length}
@@ -177,7 +178,7 @@ function ArchivedClientsModal({
                     );
                   })}
                   {columnClients.length === 0 && (
-                    <div className="bg-white dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center text-slate-400 text-sm">
+                    <div className="bg-white dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600 rounded p-8 text-center text-slate-400 text-sm">
                       No hay contactos en esta etapa
                     </div>
                   )}
@@ -193,6 +194,7 @@ function ArchivedClientsModal({
 
 export function Kanban() {
   const { userData } = useAuth();
+  const isReadOnly = useReadOnly();
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [columns, setColumns] = useState<PipelineStage[]>(DEFAULT_COLUMNS);
@@ -319,6 +321,7 @@ export function Kanban() {
   const activeColumnRef = React.useRef<any>(null);
 
   const handleDragStart = (event: any) => {
+    if (isReadOnly) return;
     setActiveId(event.active.id);
     
     if (event.active.data.current?.type === "Column") {
@@ -425,6 +428,7 @@ export function Kanban() {
   const terminalColumns = columns.filter((c) => isTerminalColumn(c));
 
   const handleDragEnd = async (event: any) => {
+    if (isReadOnly) return;
     const { active, over } = event;
     setActiveId(null);
     if (!over) return;
@@ -678,7 +682,7 @@ export function Kanban() {
           {userData?.role === "admin" && (
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded-lg transition-colors ml-2"
+              className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors ml-2"
               title="Configurar Etapas del Pipeline"
             >
               <Settings className="w-5 h-5" />
@@ -686,7 +690,7 @@ export function Kanban() {
           )}
           <button
             onClick={() => setShowArchived(true)}
-            className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded-lg transition-colors ml-2"
+            className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors ml-2"
             title="Ver Ganados y Perdidos"
           >
             <Archive className="w-5 h-5" />
@@ -700,7 +704,7 @@ export function Kanban() {
                     setSelectedSellerId(e.target.value);
                     localStorage.setItem("kanban_filterSeller", e.target.value);
                   }}
-                  className="text-sm border-slate-200 dark:border-slate-700 rounded-md py-1.5 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800"
+                  className="text-sm border-gray-200 dark:border-slate-700 rounded-md py-1.5 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800"
                 >
                   <option value="all">Todos los vendedores</option>
                   {users.map((u) => (
@@ -716,7 +720,7 @@ export function Kanban() {
         </div>
         <button
           onClick={() => setSelectedClient({} as Client)}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-blue-200"
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded text-xs font-bold shadow-sm shadow-blue-200"
         >
           + NUEVO TRATO
         </button>
@@ -730,7 +734,7 @@ export function Kanban() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex flex-1 overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="flex flex-1 overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded">
             <SortableContext items={activeColumns.map((c) => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
               {activeColumns.map((col, index) => {
                 const columnClients = filteredClients.filter(
@@ -822,7 +826,7 @@ export function Kanban() {
               </div>
             ) : activeColumnRef.current ? (
               <div className="w-[270px] shadow-2xl opacity-100 rotate-2">
-                <div className="flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative">
+                <div className="flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 relative">
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-[14px] font-bold text-slate-800 dark:text-slate-100">{activeColumnRef.current.title}</span>
                   </div>

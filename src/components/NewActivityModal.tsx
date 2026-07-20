@@ -352,7 +352,7 @@ export function NewActivityModal({
       />
       {/* Modal Content */}
       <motion.div 
-        className="bg-white dark:bg-slate-800 md:rounded-lg shadow-2xl w-full max-w-5xl h-[100dvh] md:h-[85vh] flex flex-col overflow-hidden relative z-10"
+        className="bg-white dark:bg-slate-800 md:rounded shadow-2xl w-full max-w-5xl h-[100dvh] md:h-[85vh] flex flex-col overflow-hidden relative z-10"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
@@ -525,7 +525,7 @@ export function NewActivityModal({
                     className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-2 pl-9 pr-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                   {showNameSuggestions && clientName && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm z-50 max-h-48 overflow-y-auto">
                       {clients.filter((p) =>
                         p.name
                           ?.toLowerCase()
@@ -678,7 +678,7 @@ export function NewActivityModal({
 
                 return (
                   <div
-                    className="absolute left-12 right-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs px-2 py-1.5 rounded z-10 shadow-md border border-blue-500 overflow-hidden flex flex-col cursor-grab active:cursor-grabbing"
+                    className="absolute left-12 right-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs px-2 py-1.5 rounded z-10 shadow-sm border border-blue-500 overflow-hidden flex flex-col cursor-grab active:cursor-grabbing"
                     style={{
                       top: `${topPx}px`,
                       minHeight: "30px",

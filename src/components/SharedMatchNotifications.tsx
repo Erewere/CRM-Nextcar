@@ -38,7 +38,7 @@ export function SharedMatchNotifications() {
 
         {/* Collapsible Panel */}
         {isOpen && (
-          <div className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900 shadow-2xl rounded-2xl w-80 md:w-96 max-h-[480px] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900 shadow-2xl rounded w-80 md:w-96 max-h-[480px] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
             {/* Header */}
             <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -50,20 +50,20 @@ export function SharedMatchNotifications() {
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 hover:bg-white/20 rounded-lg text-white/90 transition-colors"
+                className="p-1 hover:bg-white/20 rounded text-white/90 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 dark:bg-slate-900">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#f4f5f5] dark:bg-slate-900">
               {matches.map((match, idx) => {
                 const percentage = match.score;
                 return (
                   <div
                     key={`${match.vehicle.id}-${match.client.id}-${idx}`}
-                    className="p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 rounded-xl shadow-sm flex flex-col gap-2 hover:border-amber-300 dark:hover:border-amber-800/80 transition-colors group"
+                    className="p-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700/60 rounded shadow-sm flex flex-col gap-2 hover:border-amber-300 dark:hover:border-amber-800/80 transition-colors group"
                   >
                     <div className="flex justify-between items-start gap-2">
                       <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200/40">
@@ -75,7 +75,7 @@ export function SharedMatchNotifications() {
                     </div>
 
                     <div className="flex items-start gap-2.5">
-                      <div className="bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 p-2 rounded-lg shrink-0 mt-0.5">
+                      <div className="bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 p-2 rounded shrink-0 mt-0.5">
                         <Car className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
@@ -88,7 +88,7 @@ export function SharedMatchNotifications() {
                       </div>
                     </div>
 
-                    <div className="border-t border-dashed border-slate-100 dark:border-slate-700 pt-2 mt-1">
+                    <div className="border-t border-dashed border-gray-200 dark:border-slate-700 pt-2 mt-1">
                       <p className="text-[10px] text-slate-600 dark:text-slate-400">
                         Buscado por el cliente: <span className="font-extrabold text-slate-900 dark:text-white">{match.client.name}</span>
                       </p>
@@ -101,7 +101,7 @@ export function SharedMatchNotifications() {
                           setSelectedVehicle(match.vehicle);
                           setSelectedClient(match.client);
                         }}
-                        className="py-1.5 px-2 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[10px] font-bold rounded-lg text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1"
+                        className="py-1.5 px-2 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[10px] font-bold rounded text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         Ver Auto
@@ -110,7 +110,7 @@ export function SharedMatchNotifications() {
                         href={`https://wa.me/${match.client.phone?.replace(/[^0-9]/g, "")}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="py-1.5 px-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[10px] font-bold rounded-lg text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1"
+                        className="py-1.5 px-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[10px] font-bold rounded text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
                         WhatsApp Cliente

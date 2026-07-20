@@ -67,10 +67,10 @@ export function Integrations() {
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900 overflow-y-auto">
 
       <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded flex items-center justify-center shrink-0">
                 <MessageCircle className="w-6 h-6 text-green-600 dark:text-green-500" />
               </div>
               <div>
@@ -90,7 +90,7 @@ export function Integrations() {
 
               <div className="space-y-5">
                 <div className="flex gap-3 text-sm">
-                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-slate-200 dark:border-slate-700">1</div>
+                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-gray-200 dark:border-slate-700">1</div>
                   <div className="text-slate-600 dark:text-slate-400">
                     <strong className="text-slate-800 dark:text-slate-200 block mb-0.5">Crea una Aplicación</strong>
                     En Meta for Developers, crea una aplicación tipo "Negocios".
@@ -98,7 +98,7 @@ export function Integrations() {
                 </div>
 
                 <div className="flex gap-3 text-sm">
-                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-slate-200 dark:border-slate-700">2</div>
+                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-gray-200 dark:border-slate-700">2</div>
                   <div className="text-slate-600 dark:text-slate-400">
                     <strong className="text-slate-800 dark:text-slate-200 block mb-0.5">Agrega WhatsApp</strong>
                     Añade el producto "WhatsApp" a tu aplicación.
@@ -106,7 +106,7 @@ export function Integrations() {
                 </div>
 
                 <div className="flex gap-3 text-sm">
-                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-slate-200 dark:border-slate-700">3</div>
+                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-gray-200 dark:border-slate-700">3</div>
                   <div className="text-slate-600 dark:text-slate-400">
                     <strong className="text-slate-800 dark:text-slate-200 block mb-0.5">Copia las Credenciales</strong>
                     Ve a "Configuración de la API" en WhatsApp y copia el ID del número, ID de la cuenta y genera un token permanente. Pégalos en el formulario.
@@ -114,11 +114,11 @@ export function Integrations() {
                 </div>
 
                 <div className="flex gap-3 text-sm">
-                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-slate-200 dark:border-slate-700">4</div>
+                  <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-gray-200 dark:border-slate-700">4</div>
                   <div className="text-slate-600 dark:text-slate-400">
                     <strong className="text-slate-800 dark:text-slate-200 block mb-0.5">Configura el Webhook</strong>
                     En la sección "Webhooks" de Meta, usa esta URL de devolución y el token <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-xs">CRM_VERIFY_TOKEN</code>:
-                    <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono break-all text-slate-800 dark:text-slate-300 select-all">
+                    <div className="mt-2 p-2 bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded text-xs font-mono break-all text-slate-800 dark:text-slate-300 select-all">
                       {webhookUrl || 'Cargando URL...'}
                     </div>
                   </div>
@@ -128,7 +128,7 @@ export function Integrations() {
 
             {/* Formulario */}
             <div>
-              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+              <div className="bg-[#f4f5f5] dark:bg-slate-900/50 rounded p-5 border border-gray-200 dark:border-slate-700">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4">Credenciales de WhatsApp</h3>
                 <form onSubmit={handleSave} className="space-y-4">
                   <div>
@@ -141,7 +141,7 @@ export function Integrations() {
                       value={phoneNumberId}
                       onChange={(e) => setPhoneNumberId(e.target.value)}
                       placeholder="Ej. 104234567890123"
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                   </div>
 
@@ -155,7 +155,7 @@ export function Integrations() {
                       value={accountId}
                       onChange={(e) => setAccountId(e.target.value)}
                       placeholder="Ej. 103456789012345"
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                   </div>
 
@@ -169,7 +169,7 @@ export function Integrations() {
                       value={accessToken}
                       onChange={(e) => setAccessToken(e.target.value)}
                       placeholder="EAAL..."
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
                     />
                   </div>
 
@@ -177,7 +177,7 @@ export function Integrations() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-70 text-sm"
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors disabled:opacity-70 text-sm"
                     >
                       {loading ? 'Guardando...' : (
                         <>
@@ -202,10 +202,10 @@ export function Integrations() {
 
 
         {/* Virtual Assistants API */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mt-8">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded flex items-center justify-center shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 dark:text-purple-500"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
               </div>
               <div>
@@ -221,24 +221,24 @@ export function Integrations() {
              </div>
              
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/50">
+               <div className="border border-gray-200 dark:border-slate-700 rounded p-4 bg-[#f4f5f5] dark:bg-slate-900/50">
                  <div className="flex items-center gap-2 mb-3">
                    <span className="bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded text-xs uppercase">GET</span>
                    <span className="font-mono text-sm font-semibold">/api/public/v1/inventory</span>
                  </div>
                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Obtiene la lista de vehículos disponibles.</p>
-                 <div className="bg-slate-800 text-slate-300 p-3 rounded-lg text-xs font-mono overflow-x-auto">
+                 <div className="bg-slate-800 text-slate-300 p-3 rounded text-xs font-mono overflow-x-auto">
                    curl {window.location.origin}/api/public/v1/inventory?agencyId={userData?.agencyId}
                  </div>
                </div>
 
-               <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/50">
+               <div className="border border-gray-200 dark:border-slate-700 rounded p-4 bg-[#f4f5f5] dark:bg-slate-900/50">
                  <div className="flex items-center gap-2 mb-3">
                    <span className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-xs uppercase">POST</span>
                    <span className="font-mono text-sm font-semibold">/api/public/v1/leads</span>
                  </div>
                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Crea un nuevo prospecto (Lead) en el CRM.</p>
-                 <div className="bg-slate-800 text-slate-300 p-3 rounded-lg text-xs font-mono overflow-x-auto">
+                 <div className="bg-slate-800 text-slate-300 p-3 rounded text-xs font-mono overflow-x-auto">
                    {`curl -X POST ${window.location.origin}/api/public/v1/leads \
   -H "Content-Type: application/json" \
   -d '{"agencyId": "${userData?.agencyId}", "name": "Juan Perez", "phone": "5551234567"}'`}

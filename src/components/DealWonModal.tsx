@@ -80,14 +80,14 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
     <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4">
       <motion.div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} />
       <motion.div 
-        className="bg-white dark:bg-slate-900 md:rounded-xl rounded-t-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 relative z-10"
+        className="bg-white dark:bg-slate-900 md:rounded rounded-t-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-gray-200 dark:border-slate-800 relative z-10"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
         transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
         style={{ transformOrigin: "bottom center" }}
       >
-        <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/20">
+        <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/20">
           <h2 className="text-lg font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
             🎉 ¡Trato Ganado!
           </h2>
@@ -109,7 +109,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value as any)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
               >
                 <option value="contado">Contado</option>
                 <option value="credito_bancario">Crédito Bancario</option>
@@ -128,13 +128,13 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                 step="any"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                 placeholder="Ej. 150000"
               />
             </div>
 
             {method === 'credito' && (
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
+              <div className="bg-[#f4f5f5] dark:bg-slate-800/50 p-4 rounded border border-gray-200 dark:border-slate-700 space-y-4">
                 <h3 className="text-sm font-bold flex items-center gap-2 text-slate-800 dark:text-slate-200">
                   <Calculator className="w-4 h-4 text-blue-500" />
                   Estructura de Financiamiento
@@ -152,7 +152,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                       step="any"
                       value={downPayment}
                       onChange={(e) => setDownPayment(e.target.value)}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                       placeholder="0"
                     />
                   </div>
@@ -167,7 +167,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                       step="1"
                       value={termMonths}
                       onChange={(e) => setTermMonths(e.target.value)}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                       placeholder="24"
                     />
                   </div>
@@ -185,7 +185,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                       step="any"
                       value={interestRate}
                       onChange={(e) => setInterestRate(e.target.value)}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                       placeholder="1.5"
                     />
                   </div>
@@ -199,7 +199,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                       required
                       value={firstPaymentDate}
                       onChange={(e) => setFirstPaymentDate(e.target.value)}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                     />
                   </div>
                   <div>
@@ -209,7 +209,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                     <select
                       value={interestType}
                       onChange={(e) => setInterestType(e.target.value as any)}
-                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                     >
                       <option value="mensual">Mensual</option>
                       <option value="anual">Anual</option>
@@ -218,7 +218,7 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                 </div>
 
                 {summary && summary.calculatedTotalAmount !== undefined && (
-                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-lg">
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded">
                     <div className="text-xs text-blue-600 dark:text-blue-400 mb-2 font-medium">Resumen (Interés Global Fijo)</div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-slate-600 dark:text-slate-400">Monto a financiar:</span>
@@ -251,18 +251,18 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
           </form>
         </div>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-2 shrink-0">
+        <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-[#f4f5f5] dark:bg-slate-900/50 flex justify-end gap-2 shrink-0">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
           >
             Cancelar
           </button>
           <button
             type="submit"
             form="deal-won-form"
-            className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm"
+            className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors shadow-sm"
           >
             Guardar Venta
           </button>

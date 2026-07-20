@@ -150,7 +150,10 @@ async function startServer() {
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
-      const adminDb = getClientDb();
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).send("Admin database not initialized");
+      }
 
       // Handle the event
       switch (event.type) {
@@ -160,12 +163,12 @@ async function startServer() {
           
           if (agencyId) {
             const updates: any = {
-              updatedAt: serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
             };
             
             // Check if this was a credit purchase
             if (checkoutSession.metadata && checkoutSession.metadata.creditsToAdd) {
-               updates.aiCredits = increment(parseInt(checkoutSession.metadata.creditsToAdd, 10));
+               updates.aiCredits = FieldValue.increment(parseInt(checkoutSession.metadata.creditsToAdd, 10));
             } else {
                // Otherwise assume it's the main subscription
                updates.subscriptionStatus = "active";
@@ -173,18 +176,18 @@ async function startServer() {
             }
             
             // Update agency status
-            await setDoc(doc(adminDb, "agencies", agencyId), updates, { merge: true });
+            await adminDb.collection("agencies").doc(agencyId).set(updates, { merge: true });
           }
           break;
         case "customer.subscription.deleted":
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
           // Find agency by customerId and update status
-          const agenciesSnapshot = await getDocs(query(collection(adminDb, "agencies"), where("stripeCustomerId", "==", customerId)));
+          const agenciesSnapshot = await adminDb.collection("agencies").where("stripeCustomerId", "==", customerId).get();
           
           if (!agenciesSnapshot.empty) {
             const agencyDoc = agenciesSnapshot.docs[0];
-            await setDoc(agencyDoc.ref, { subscriptionStatus: "canceled", updatedAt: serverTimestamp() }, { merge: true });
+            await agencyDoc.ref.set({ subscriptionStatus: "canceled", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
           }
           break;
         // ... handle other event types
@@ -279,13 +282,15 @@ async function startServer() {
         displayName: name || email.split('@')[0],
       });
 
-      const db = getClientDb();
-      await setDoc(doc(db, "users", userRecord.uid), {
+      const adminDb = getAdminDb();
+      if (!adminDb) throw new Error("Admin database not initialized");
+      
+      await adminDb.collection("users").doc(userRecord.uid).set({
         email,
         role,
         agencyId,
         name: name || email.split('@')[0],
-        createdAt: serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
@@ -324,8 +329,10 @@ async function startServer() {
       }
 
       // Delete from Firestore
-      const db = getClientDb();
-      await deleteDoc(doc(db, "users", uid));
+      const adminDb = getAdminDb();
+      if (!adminDb) throw new Error("Admin database not initialized");
+      
+      await adminDb.collection("users").doc(uid).delete();
 
       res.status(200).json({ success: true });
     } catch (err: any) {
@@ -769,10 +776,14 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(400).json({ error: "agencyId is required" });
       }
 
-      const db = getClientDb();
-      const vehiclesRef = collection(db, "vehicles");
-      const q = query(vehiclesRef, where("agencyId", "==", agencyId), where("status", "==", "available"));
-      const snapshot = await getDocs(q);
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Admin DB not configured" });
+      
+      const snapshot = await adminDb
+        .collection("vehicles")
+        .where("agencyId", "==", agencyId)
+        .where("status", "==", "available")
+        .get();
 
       const vehicles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json({ vehicles });
@@ -790,8 +801,8 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(400).json({ error: "agencyId and name are required" });
       }
 
-      const db = getClientDb();
-      const clientsRef = collection(db, "clients");
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Admin DB not configured" });
       
       const newClient = {
         agencyId,
@@ -802,12 +813,13 @@ Return a JSON array of recommendation objects with the following schema:
         origin: origin || "website",
         status: "new",
         sellerId: sellerId || "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
       };
       
-      console.log("Adding doc to clients collection via client SDK");
-      const docRef = await addDoc(clientsRef, newClient);
+      console.log("Adding doc to clients collection via Admin SDK");
+      const docRef = await adminDb.collection("clients").add(newClient);
+
       res.status(201).json({ success: true, leadId: docRef.id });
     } catch (e: any) {
       res.status(500).json({ error: e.message, stack: e.stack });

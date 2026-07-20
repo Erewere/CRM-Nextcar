@@ -74,14 +74,14 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
       <motion.div className="absolute inset-0" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
       <motion.div 
-        className="bg-white dark:bg-slate-800 md:rounded-xl rounded-t-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col h-[90dvh] md:max-h-[90vh] relative z-10"
+        className="bg-white dark:bg-slate-800 md:rounded rounded-t-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col h-[90dvh] md:max-h-[90vh] relative z-10"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
         transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
         style={{ transformOrigin: "bottom center" }}
       >
-        <div className="p-4 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+        <div className="p-4 border-b flex justify-between items-center bg-[#f4f5f5] dark:bg-slate-900">
           <h2 className="font-bold text-lg text-slate-800 dark:text-slate-200">Configurar Etapas</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">✕</button>
         </div>
@@ -93,17 +93,17 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
               placeholder="Nueva etapa..." 
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             />
-            <button onClick={handleAdd} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">
+            <button onClick={handleAdd} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-2 rounded text-sm font-semibold">
               Agregar
             </button>
           </div>
 
           <div className="space-y-2">
             {stages.map((stage, i) => (
-              <div key={`${stage.id}-${i}`} className="flex items-center justify-between border rounded-lg p-2 bg-white dark:bg-slate-800">
+              <div key={`${stage.id}-${i}`} className="flex items-center justify-between border rounded p-2 bg-white dark:bg-slate-800">
                 <span className="font-medium text-sm text-slate-700 dark:text-slate-300">{stage.title}</span>
                 <div className="flex gap-1">
                   <button onClick={() => moveUp(i)} disabled={i === 0} className="p-1 text-slate-400 hover:text-blue-600 disabled:opacity-30">
@@ -121,9 +121,9 @@ export function PipelineSettingsModal({ onClose, currentStages }: Props) {
           </div>
         </div>
 
-        <div className="p-4 border-t bg-slate-50 dark:bg-slate-900 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded-lg">Cancelar</button>
-          <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg font-bold">
+        <div className="p-4 border-t bg-[#f4f5f5] dark:bg-slate-900 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded">Cancelar</button>
+          <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded font-bold">
             {loading ? 'Guardando...' : 'Guardar'}
           </button>
         </div>

@@ -10,6 +10,7 @@ import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestor
 import { db } from '../lib/firebase';
 import { Client, Deal } from '../types';
 import { deduplicateClients } from '../lib/clientUtils';
+import { useReadOnly } from '../hooks/useReadOnly';
 
 export function MobileFab() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,6 +18,7 @@ export function MobileFab() {
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const { userData } = useAuth();
+  const isReadOnly = useReadOnly();
   
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -75,6 +77,8 @@ export function MobileFab() {
     if (pressTimer) clearTimeout(pressTimer);
   };
 
+  if (isReadOnly) return null;
+
   return (
     <>
       {/* Dimmed Background Overlay */}
@@ -103,19 +107,19 @@ export function MobileFab() {
              >
               <button 
                 onClick={() => { setIsOpen(false); setShowTaskModal(true); }}
-                className="w-12 h-12 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-full shadow-lg flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+                className="w-12 h-12 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
               >
                 <CheckSquare className="w-5 h-5" />
               </button>
               <button 
                 onClick={() => { setIsOpen(false); setShowVehicleModal(true); }}
-                className="w-12 h-12 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-lg flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+                className="w-12 h-12 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
               >
                 <Car className="w-5 h-5" />
               </button>
               <button 
                 onClick={() => { setIsOpen(false); setShowClientModal(true); }}
-                className="w-12 h-12 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 rounded-full shadow-lg flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+                className="w-12 h-12 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
               >
                 <Users className="w-5 h-5" />
               </button>

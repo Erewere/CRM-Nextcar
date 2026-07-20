@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { User } from '../types';
+import { User, Agency } from '../types';
 
 let cachedAccessToken: string | null = null;
 
@@ -17,6 +17,7 @@ provider.setCustomParameters({ prompt: 'select_account' });
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   userData: User | null;
+  agencyData: Agency | null;
   loading: boolean;
   bootstrapUser: (role: 'master' | 'admin' | 'seller', agencyId: string, name: string) => Promise<void>;
   connectGoogleServices: () => Promise<string | null>;
@@ -29,61 +30,146 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<User | null>(null);
+  const [agencyData, setAgencyData] = useState<Agency | null>(null);
   const [loading, setLoading] = useState(true);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
 
   useEffect(() => {
     let userUnsubscribe: (() => void) | undefined;
+    let agencyUnsubscribe: (() => void) | undefined;
+
+    console.log("AuthContext: useEffect mounting, registering onAuthStateChanged");
+    
+    const timeoutId = setTimeout(() => {
+      console.warn("AuthContext: onAuthStateChanged has not fired after 10 seconds. It might be blocked or delayed.");
+    }, 10000);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      clearTimeout(timeoutId);
+      console.log("AuthContext: onAuthStateChanged triggered. User:", user ? user.email : "null");
       setCurrentUser(user);
       if (user) {
-        // We only persist token in memory, so if they reload, they may need to reconnect or rely on what's cached.
-        // Actually we can't reliably get the Google token onAuthStateChanged without popup.
-        // Fetch user data from firestore
+        setLoading(true);
         try {
+          console.log("AuthContext: Setting up user snapshot for UID:", user.uid);
           userUnsubscribe = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+            console.log("AuthContext: User snapshot received. Exists:", userDoc.exists());
             if (userDoc.exists()) {
               let data = userDoc.data();
-              setUserData({ id: userDoc.id, ...data } as User);
+              const newUserData = { id: userDoc.id, ...data } as User;
+              console.log("AuthContext: User data loaded:", newUserData);
+              setUserData(newUserData);
+
+              if (newUserData.role === 'master' || !newUserData.agencyId || newUserData.agencyId === 'unassigned') {
+                console.log("AuthContext: User is master, or has no agencyId, or is unassigned. Clearing agency subscription.");
+                if (agencyUnsubscribe) {
+                  agencyUnsubscribe();
+                  agencyUnsubscribe = undefined;
+                }
+                setAgencyData(null);
+                setLoading(false);
+              } else {
+                console.log("AuthContext: Setting up agency snapshot for AgencyID:", newUserData.agencyId);
+                if (agencyUnsubscribe) {
+                  console.log("AuthContext: Unsubscribing previous agency listener");
+                  agencyUnsubscribe();
+                }
+                agencyUnsubscribe = onSnapshot(doc(db, 'agencies', newUserData.agencyId), (agencyDoc) => {
+                  console.log("AuthContext: Agency snapshot received. Exists:", agencyDoc.exists());
+                  if (agencyDoc.exists()) {
+                    const agencyDataObj = { id: agencyDoc.id, ...agencyDoc.data() } as Agency;
+                    console.log("AuthContext: Agency data loaded:", agencyDataObj);
+                    setAgencyData(agencyDataObj);
+                  } else {
+                    console.log("AuthContext: Agency doc does not exist.");
+                    setAgencyData(null);
+                  }
+                  setLoading(false);
+                }, (error) => {
+                  console.error("AuthContext: Failed to fetch agency data", error);
+                  setAgencyData(null);
+                  setLoading(false);
+                });
+              }
             } else {
+              console.log("AuthContext: User document does not exist, creating default/pending profile");
               const params = new URLSearchParams(window.location.search);
               const inviteAgencyId = params.get('agencyId');
               
-              // Auto provision a pending user document
+              // Auto provision a pending user document or agency
+              let userRole = 'unassigned';
+              let userAgencyId = 'unassigned';
+              
+              if (inviteAgencyId) {
+                userRole = 'seller';
+                userAgencyId = inviteAgencyId;
+              } else {
+                // Auto create agency with 30 days trial
+                try {
+                  const newAgency = {
+                    name: "Agencia de " + (user.displayName || user.email?.split('@')[0] || "Prueba"),
+                    subscriptionStatus: "trialing",
+                    hasFreeAccess: false,
+                    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    createdAt: serverTimestamp(),
+                    creatorId: user.uid
+                  };
+                  const agencyDocRef = await addDoc(collection(db, 'agencies'), newAgency);
+                  userRole = 'admin';
+                  userAgencyId = agencyDocRef.id;
+                } catch (err) {
+                  console.error("AuthContext: Error auto-provisioning agency", err);
+                }
+              }
+
               const newUserData = {
                 email: user.email || '',
-                role: inviteAgencyId ? 'seller' : 'unassigned',
-                agencyId: inviteAgencyId || 'unassigned',
-                name: user.displayName || 'Usuario Pendiente',
+                role: userRole,
+                agencyId: userAgencyId,
+                name: user.displayName || user.email?.split('@')[0] || 'Usuario',
                 createdAt: serverTimestamp()
               };
-              await setDoc(doc(db, 'users', user.uid), newUserData);
+              setDoc(doc(db, 'users', user.uid), newUserData).catch(err => {
+                console.error("AuthContext: Error auto-provisioning user doc", err);
+              });
+              console.log("AuthContext: Default profile setDoc initiated");
               // The snapshot will automatically re-trigger with the new data
             }
           }, (error) => {
-            console.error("Failed to fetch user data", error);
+            console.error("AuthContext: Failed to fetch user data", error);
             setUserData(null);
+            setLoading(false);
           });
         } catch (error) {
-          console.error("Failed to setup snapshot", error);
+          console.error("AuthContext: Failed to setup snapshot", error);
           setUserData(null);
+          setLoading(false);
         }
       } else {
+        console.log("AuthContext: No user logged in. Cleaning up state.");
         if (userUnsubscribe) {
           userUnsubscribe();
           userUnsubscribe = undefined;
         }
+        if (agencyUnsubscribe) {
+          agencyUnsubscribe();
+          agencyUnsubscribe = undefined;
+        }
         setUserData(null);
+        setAgencyData(null);
         cachedAccessToken = null;
         setGoogleToken(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
+
     return () => {
       unsubscribe();
       if (userUnsubscribe) {
         userUnsubscribe();
+      }
+      if (agencyUnsubscribe) {
+        agencyUnsubscribe();
       }
     };
   }, []);
@@ -157,7 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, userData, loading, bootstrapUser, connectGoogleServices, disconnectGoogleServices, googleToken }}>
+    <AuthContext.Provider value={{ currentUser, userData, agencyData, loading, bootstrapUser, connectGoogleServices, disconnectGoogleServices, googleToken }}>
       {children}
     </AuthContext.Provider>
   );

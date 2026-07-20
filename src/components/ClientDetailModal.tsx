@@ -5,6 +5,7 @@ import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
 import { getClientMatches } from "../services/matchingEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
+import { useReadOnly } from "../hooks/useReadOnly";
 import {
   doc,
   onSnapshot,
@@ -58,12 +59,13 @@ export function ClientDetailModal({
   onUpdated,
 }: Props) {
   const { userData } = useAuth();
+  const isReadOnly = useReadOnly();
   const isNew = !client.id;
-  const canModify = isNew ||
+  const canModify = !isReadOnly && (isNew ||
     (client.creatorId === userData?.id) ||
     (client.createdByAdmin === true) ||
-    (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId));
-  const isAdminReadOnly = userData?.role === "admin" && !canModify;
+    (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId)));
+  const isAdminReadOnly = isReadOnly || (userData?.role === "admin" && !canModify);
 
   const isDealContext = client.originalClientId !== undefined || isNew;
   const [showDealWonModal, setShowDealWonModal] = useState(false);
@@ -933,7 +935,7 @@ export function ClientDetailModal({
         onClick={onClose}
       />
       <motion.div
-        className="bg-white dark:bg-slate-800 w-full max-w-6xl md:rounded-xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden h-[95dvh] relative z-10"
+        className="bg-white dark:bg-slate-800 w-full max-w-6xl md:rounded rounded-t-3xl shadow-2xl flex flex-col overflow-hidden h-[95dvh] relative z-10"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
@@ -1032,7 +1034,7 @@ export function ClientDetailModal({
           
           
               {formData.saleDetails && (
-                <div className="mt-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
+                <div className="mt-6 p-4 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
                       <Calculator className="w-4 h-4" />
@@ -1093,8 +1095,8 @@ export function ClientDetailModal({
                   </div>
                   
                   {formData.saleDetails.method === 'contado' && (
-                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800/50">
-                      <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 border-b border-slate-100 dark:border-slate-700 pb-1">
+                    <div className="bg-white dark:bg-slate-800 rounded p-3 border border-emerald-100 dark:border-emerald-800/50">
+                      <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 border-b border-gray-200 dark:border-slate-700 pb-1">
                         Historial de Pagos
                       </h5>
                       {formData.saleDetails.payments && formData.saleDetails.payments.length > 0 ? (
@@ -1114,7 +1116,7 @@ export function ClientDetailModal({
                               </div>
                             </div>
                           ))}
-                          <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-slate-100 dark:border-slate-700">
+                          <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-gray-200 dark:border-slate-700">
                             <span className="text-slate-600 dark:text-slate-400">Restante</span>
                             <span className={formData.saleDetails.price - formData.saleDetails.payments.reduce((a, p) => a + p.amount, 0) > 0 ? "text-rose-500" : "text-emerald-600"}>
                               {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(
@@ -1183,8 +1185,8 @@ export function ClientDetailModal({
         )}
 
         {showWantedVehicleMenu ? (
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900 flex flex-col items-center">
-            <div className="max-w-2xl w-full bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+          <div className="flex-1 overflow-y-auto p-6 bg-[#f4f5f5] dark:bg-slate-900 flex flex-col items-center">
+            <div className="max-w-2xl w-full bg-white dark:bg-slate-800 p-8 rounded shadow-sm border border-gray-200 dark:border-slate-700">
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Características del Vehículo Buscado</h2>
                 <p className="text-slate-500 dark:text-slate-400 mt-2">
@@ -1444,7 +1446,7 @@ export function ClientDetailModal({
                       className="w-full text-sm py-1 font-medium border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
                     />
                     {showNameSuggestions && formData.name && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm z-50 max-h-48 overflow-y-auto">
                         {existingPersons.filter((p) =>
                           p.name
                             ?.toLowerCase()
@@ -1507,7 +1509,7 @@ export function ClientDetailModal({
                       className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
                     />
                     {showPhoneSuggestions && formData.phone && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm z-50 max-h-48 overflow-y-auto">
                         {existingPersons.filter((p) =>
                           p.phone?.includes(formData.phone || ""),
                         ).length > 0 ? (
@@ -1743,7 +1745,7 @@ export function ClientDetailModal({
                       if (val) handleTagToggle(val);
                       e.target.value = "";
                     }}
-                    className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded p-1.5 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    className="w-full text-sm border border-gray-200 dark:border-slate-700 rounded p-1.5 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none"
                   >
                     <option value="" disabled>
                       Seleccionar etiqueta...
@@ -1796,7 +1798,7 @@ export function ClientDetailModal({
                         if (matches.length === 0) return null;
                         
                         return (
-                          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 rounded-lg shadow-sm">
+                          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 rounded shadow-sm">
                             <h4 className="text-xs font-bold text-green-800 dark:text-green-300 mb-2 flex items-center gap-1.5">
                               <Target className="w-3.5 h-3.5" />
                               Posibles Matches en Inventario ({matches.length})
@@ -1847,7 +1849,7 @@ export function ClientDetailModal({
                       <button
                         type="button"
                         onClick={() => setCurrentStep(2)}
-                        className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md active:scale-95 transition-all text-center"
+                        className="w-full bg-blue-600 text-white font-bold py-3 rounded shadow-sm active:scale-95 transition-all text-center"
                       >
                         Continuar
                       </button>
@@ -1856,13 +1858,13 @@ export function ClientDetailModal({
                         <button
                           type="button"
                           onClick={() => setCurrentStep(1)}
-                          className="w-1/3 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg active:scale-95 transition-all text-center"
+                          className="w-1/3 bg-gray-200 text-gray-800 font-bold py-3 rounded active:scale-95 transition-all text-center"
                         >
                           Atrás
                         </button>
                         <button
                           type="submit"
-                          className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-lg shadow-md active:scale-95 transition-all text-center"
+                          className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded shadow-sm active:scale-95 transition-all text-center"
                         >
                           Guardar Prospecto
                         </button>
@@ -1880,7 +1882,7 @@ export function ClientDetailModal({
             {!isNew ? (
               <div className={`flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 ${isNew ? "hidden md:block" : ""}`}>
                 {/* INTERACTION WIDGET */}
-                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
+                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm">
                   <div className="flex border-b border-gray-200 dark:border-slate-700">
                     <button
                       onClick={() => setActiveTab("activity")}
@@ -2013,7 +2015,7 @@ export function ClientDetailModal({
         ) : (
           <div className="flex flex-col gap-2">
             {deals.map(deal => (
-              <div key={`deal-${deal.id}`} className="p-3 border border-slate-200 dark:border-slate-700 rounded shadow-sm bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div key={`deal-${deal.id}`} className="p-3 border border-gray-200 dark:border-slate-700 rounded shadow-sm bg-[#f4f5f5] dark:bg-slate-800/50 flex justify-between items-center">
                 <div>
                   <h4 className="font-semibold text-slate-800 dark:text-slate-200">{deal.title}</h4>
                   <p className="text-xs text-slate-500">Estado: {deal.status || deal.stageId || 'Open'}</p>
@@ -2062,7 +2064,7 @@ export function ClientDetailModal({
                       {" "}
                       Enfoque{" "}
                     </h3>
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm">
                       {pendingTasks.map((t, idx) => (
                         <div
                           key={`task-${t.id}`}
@@ -2115,7 +2117,7 @@ export function ClientDetailModal({
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm flex items-center justify-center">
                           <CheckSquare className="w-2.5 h-2.5 text-white" />
                         </div>
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-3 rounded-lg mr-2">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-3 rounded mr-2">
                           <div className="flex justify-between items-start mb-1">
                             <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">
                               Trato Ganado / Vehículo Vendido
@@ -2136,7 +2138,7 @@ export function ClientDetailModal({
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white shadow-sm flex items-center justify-center">
                           <CheckSquare className="w-2.5 h-2.5 text-white" />
                         </div>
-                        <div className="bg-amber-50 border border-amber-100/60 p-3 rounded-lg mr-2">
+                        <div className="bg-amber-50 border border-amber-100/60 p-3 rounded mr-2">
                           <div className="flex justify-between items-start mb-1">
                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">
                               Tarea completada
@@ -2170,7 +2172,7 @@ export function ClientDetailModal({
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-yellow-500 border-2 border-white shadow-sm flex items-center justify-center">
                           <FileText className="w-2.5 h-2.5 text-white" />
                         </div>
-                        <div className="bg-white dark:bg-slate-800 border border-yellow-200 p-3 rounded-lg mr-2 shadow-sm">
+                        <div className="bg-white dark:bg-slate-800 border border-yellow-200 p-3 rounded mr-2 shadow-sm">
                           <div className="flex justify-between items-start mb-2">
                             <span className="text-xs font-bold text-gray-800 dark:text-slate-200">
                               {n.sellerId === userData?.id
@@ -2195,7 +2197,7 @@ export function ClientDetailModal({
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-sm flex items-center justify-center">
                           <Upload className="w-2 h-2 text-white" />
                         </div>
-                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-3 rounded-lg mr-2 hover:border-blue-300 transition-colors">
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-3 rounded mr-2 hover:border-blue-300 transition-colors">
                           <div className="flex justify-between items-start mb-1">
                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">
                               Archivo subido
@@ -2254,13 +2256,15 @@ export function ClientDetailModal({
               >
                 Cancelar
               </button>
-              <button
-                form="client-form"
-                type="submit"
-                className="px-6 py-2 bg-[#2E353B] hover:bg-black transition-colors text-white text-sm font-bold rounded shadow-sm"
-              >
-                Guardar
-              </button>
+              {canModify && (
+                <button
+                  form="client-form"
+                  type="submit"
+                  className="px-6 py-2 bg-[#2E353B] hover:bg-black transition-colors text-white text-sm font-bold rounded shadow-sm"
+                >
+                  Guardar
+                </button>
+              )}
             </div>
           </div>
         </div>

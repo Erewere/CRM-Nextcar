@@ -35,9 +35,9 @@ export function LostReasonModal({ isOpen, onClose, onConfirm, clientName }: Prop
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-[#f4f5f5] dark:bg-slate-800/50">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-rose-500" />
             <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
@@ -68,7 +68,7 @@ export function LostReasonModal({ isOpen, onClose, onConfirm, clientName }: Prop
               required
               value={selectedReason}
               onChange={(e) => setSelectedReason(e.target.value)}
-              className="w-full text-sm bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2.5 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              className="w-full text-sm bg-[#f4f5f5] dark:bg-slate-900/50 text-slate-800 dark:text-slate-100 rounded px-3 py-2.5 border border-gray-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
               <option value="" disabled>
                 Seleccione un motivo...
@@ -95,7 +95,7 @@ export function LostReasonModal({ isOpen, onClose, onConfirm, clientName }: Prop
               }
               required={selectedReason === "Otro"}
               rows={3}
-              className="w-full text-sm bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+              className="w-full text-sm bg-[#f4f5f5] dark:bg-slate-900/50 text-slate-800 dark:text-slate-100 rounded px-3 py-2 border border-gray-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
             />
           </div>
 
@@ -103,13 +103,13 @@ export function LostReasonModal({ isOpen, onClose, onConfirm, clientName }: Prop
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-sm transition-colors"
+              className="px-4 py-2 border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded hover:bg-[#f4f5f5] dark:hover:bg-slate-700 text-sm transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-md shadow-rose-200/50 dark:shadow-none"
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded text-sm transition-colors shadow-sm shadow-rose-200/50 dark:shadow-none"
             >
               Registrar Pérdida
             </button>

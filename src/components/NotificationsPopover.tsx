@@ -168,8 +168,8 @@ export function NotificationsPopover() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right transition-all">
-          <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
+        <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right transition-all">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700/50 bg-[#f4f5f5]/50 dark:bg-slate-800/50">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">Notificaciones</h3>
             <span className="text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 py-1 px-2 rounded-full">
               {notifications.length} pendientes
@@ -191,7 +191,7 @@ export function NotificationsPopover() {
                       setIsOpen(false);
                       notif.onClick();
                     }}
-                    className="w-full flex items-start gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left group"
+                    className="w-full flex items-start gap-3 p-4 hover:bg-[#f4f5f5] dark:hover:bg-slate-700/50 transition-colors text-left group"
                   >
                     <div className="mt-1 shrink-0 p-2 bg-slate-100 dark:bg-slate-800 rounded-full group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors shadow-sm">
                       {notif.icon}

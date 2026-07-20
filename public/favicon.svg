@@ -1,4 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#2563eb" />
-  <text x="50" y="65" font-family="Arial, sans-serif" font-size="50" font-weight="bold" fill="white" text-anchor="middle">NX</text>
+<svg viewBox="0 0 300 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(0, 15) scale(1.1)">
+    <!-- Main Roof Arch -->
+    <path d="M 40 66 C 70 52, 110 40, 155 40 C 200 40, 240 48, 285 66 C 240 50, 200 44, 155 44 C 105 44, 70 54, 40 66 Z" fill="#0B132B" />
+    <!-- Left Tail Fin -->
+    <path d="M 40 66 C 60 62, 80 62, 100 66 C 75 66, 50 72, 38 78 C 50 72, 60 70, 70 70 C 60 70, 50 68, 40 66 Z" fill="#0B132B" />
+    <!-- Window Area -->
+    <path d="M 100 54 C 130 47, 170 47, 205 52 C 225 55, 235 60, 245 66 L 95 66 C 98 60, 105 57, 100 54 Z" fill="#0B132B" />
+  </g>
 </svg>

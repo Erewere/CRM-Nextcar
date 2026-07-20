@@ -102,7 +102,7 @@ export function MobileTasks() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center p-6 bg-slate-50 dark:bg-slate-900">
+      <div className="flex h-full items-center justify-center p-6 bg-[#f4f5f5] dark:bg-slate-900">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
       </div>
     );
@@ -111,7 +111,7 @@ export function MobileTasks() {
   const hours = Array.from({ length: 24 }).map((_, i) => i);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
+    <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-950 relative overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <button className="p-2 -ml-2 text-slate-700 dark:text-slate-300">
@@ -136,7 +136,7 @@ export function MobileTasks() {
       {/* Days Scroller */}
       <div 
         ref={scrollRef}
-        className="flex overflow-x-auto hide-scrollbar px-4 py-2 gap-3 snap-x shrink-0 border-b border-slate-200 dark:border-slate-800"
+        className="flex overflow-x-auto hide-scrollbar px-4 py-2 gap-3 snap-x shrink-0 border-b border-gray-200 dark:border-slate-800"
       >
         {days.map(day => {
            const isSelected = isSameDay(day, selectedDate);
@@ -154,7 +154,7 @@ export function MobileTasks() {
                  data-selected={isSelected}
                  onClick={() => setSelectedDate(day)}
                  className={clsx(
-                   "flex flex-col items-center min-w-[50px] snap-center rounded-2xl py-2 px-1 transition-all relative",
+                   "flex flex-col items-center min-w-[50px] snap-center rounded py-2 px-1 transition-all relative",
                    isSelected ? "bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 shadow-sm" : "border border-transparent"
                  )}
               >
@@ -180,7 +180,7 @@ export function MobileTasks() {
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-y-auto relative bg-slate-50 dark:bg-slate-950 pb-32">
+      <div className="flex-1 overflow-y-auto relative bg-[#f4f5f5] dark:bg-slate-950 pb-32">
         <div className="relative pt-4">
           {hours.map(hour => {
             let label = "";
@@ -202,7 +202,7 @@ export function MobileTasks() {
                     </span>
                   )}
                 </div>
-                <div className="flex-1 border-t border-slate-200 dark:border-slate-800 border-dotted mt-2" />
+                <div className="flex-1 border-t border-gray-200 dark:border-slate-800 border-dotted mt-2" />
               </div>
             );
           })}
@@ -222,7 +222,7 @@ export function MobileTasks() {
                <div 
                  key={`${task.id}-${idx}`} 
                  className={clsx(
-                   "absolute left-[60px] right-4 rounded-xl p-3 shadow-sm z-10 border-l-4 overflow-hidden",
+                   "absolute left-[60px] right-4 rounded p-3 shadow-sm z-10 border-l-4 overflow-hidden",
                    isCompleted 
                      ? "bg-slate-200 dark:bg-slate-800 border-slate-400 opacity-60" 
                      : "bg-blue-100 dark:bg-blue-900/40 border-blue-500"
@@ -249,7 +249,7 @@ export function MobileTasks() {
       {/* Floating Action Button */}
       <button
         onClick={() => setShowNewTaskModal(true)}
-        className="fixed bottom-[85px] left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl rounded-full px-5 py-3 flex items-center gap-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-colors z-40"
+        className="fixed bottom-[85px] left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl rounded-full px-5 py-3 flex items-center gap-3 border border-gray-200 dark:border-slate-700 hover:bg-[#f4f5f5] transition-colors z-40"
       >
         <span className="text-sm font-medium whitespace-nowrap">
           Añadir el {format(selectedDate, "d MMM", { locale: es })}

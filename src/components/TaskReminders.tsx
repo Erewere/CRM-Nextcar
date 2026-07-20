@@ -109,7 +109,7 @@ export function TaskReminders() {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
       {activeReminders.map(task => (
-        <div key={`reminder-${task.id}`} className="bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900 shadow-xl rounded-lg p-4 flex items-start gap-3 w-80 animate-in slide-in-from-right-4 fade-in duration-300">
+        <div key={`reminder-${task.id}`} className="bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900 shadow-xl rounded p-4 flex items-start gap-3 w-80 animate-in slide-in-from-right-4 fade-in duration-300">
           <div className="bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 p-2 rounded-full shrink-0">
             <Bell className="w-5 h-5" />
           </div>

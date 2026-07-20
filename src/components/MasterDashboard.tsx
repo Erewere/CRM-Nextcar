@@ -2,6 +2,7 @@ import { getAuth } from "firebase/auth";
 import React, { useEffect, useState, useMemo } from 'react';
 import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { User, ClientFile, Agency, Client, Task } from '../types';
 import { Shield, FileText, Calendar, Mail, FileUp, X, ExternalLink, Plus, Building, Users, Activity, CheckCircle, ChevronDown, ChevronRight, Briefcase, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -29,6 +30,7 @@ interface AgencyStats extends Agency {
 }
 
 export function MasterDashboard() {
+  const { userData } = useAuth();
   const [users, setUsers] = useState<UserStats[]>([]);
   const [agenciesStats, setAgenciesStats] = useState<AgencyStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +77,7 @@ export function MasterDashboard() {
       });
       
       const unassignedUsers = userData.filter(u => !u.agencyId || u.agencyId === 'unassigned');
-      if (unassignedUsers.length > 0) {
+      if (unassignedUsers.length > 0 && !aStats.some(a => a.id === 'unassigned')) {
         aStats.push({
           id: 'unassigned',
           name: 'Usuarios Sin Agencia',
@@ -179,12 +181,12 @@ export function MasterDashboard() {
         </span>
       </div>
       <div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Estadísticas y gestión global del sistema Nextcar CRM.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Estadísticas y gestión global del sistema LUHO CRM.</p>
       </div>
 
       {/* Global Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
               <Building className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -194,7 +196,7 @@ export function MasterDashboard() {
           <p className="text-3xl font-bold text-slate-800 dark:text-slate-100">{totalAgencies}</p>
         </div>
         
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
               <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -204,7 +206,7 @@ export function MasterDashboard() {
           <p className="text-3xl font-bold text-slate-800 dark:text-slate-100">{totalUsers}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
               <Activity className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -220,7 +222,7 @@ export function MasterDashboard() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col md:flex-row items-end gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col md:flex-row items-end gap-4">
         <div className="flex-1 w-full">
           <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nueva Agencia</label>
           <input
@@ -228,13 +230,13 @@ export function MasterDashboard() {
             value={newAgencyName}
             onChange={(e) => setNewAgencyName(e.target.value)}
             placeholder="Nombre de la nueva agencia..."
-            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
           />
         </div>
         <button
           onClick={handleCreateAgency}
           disabled={!newAgencyName.trim()}
-          className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Crear Agencia
@@ -245,21 +247,26 @@ export function MasterDashboard() {
       <div className="space-y-4">
         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Agencias y Usuarios</h2>
         
-        {agenciesStats.map((agency) => {
+        {agenciesStats.map((agency, index) => {
           const isExpanded = expandedAgencies[agency.id] || false;
           
           return (
-            <div key={`agency-${agency.id}`} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div key={`agency-${agency.id}`} className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
               <div 
-                className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors"
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#f4f5f5] dark:hover:bg-slate-750 transition-colors"
                 onClick={() => toggleAgency(agency.id)}
               >
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-slate-100 dark:bg-slate-900 rounded-lg">
+                  <div className="p-2 bg-slate-100 dark:bg-slate-900 rounded">
                     <Building className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-lg">{agency.name}</h3>
+                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-lg">
+                      {agency.name}
+                      <span className="ml-2 text-xs font-normal text-slate-400">
+                        (Ingreso: {format(safeDate(agency.createdAt), "dd MMM yyyy")})
+                      </span>
+                    </h3>
                     <div className="flex items-center gap-4 mt-1 text-sm text-slate-500 dark:text-slate-400">
                       <span className="flex items-center gap-1"><Users className="w-4 h-4"/> {agency.totalUsersCount} usuarios</span>
                       <span className="flex items-center gap-1 text-green-600 dark:text-green-400"><Activity className="w-4 h-4"/> {agency.activeUsersCount} activos</span>
@@ -272,15 +279,16 @@ export function MasterDashboard() {
               </div>
               
               {isExpanded && (
-                <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
+                <div className="border-t border-gray-200 dark:border-slate-700 bg-[#f4f5f5] dark:bg-slate-900/50 p-4">
                   {agency.users.length === 0 ? (
                     <p className="text-center text-slate-500 dark:text-slate-400 py-4">No hay usuarios asignados a esta agencia.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                        <thead className="text-slate-500 dark:text-slate-400 border-b border-gray-200 dark:border-slate-700">
                           <tr>
                             <th className="pb-3 font-medium">Usuario</th>
+                            <th className="pb-3 font-medium">Ingreso</th>
                             <th className="pb-3 font-medium">Rol</th>
                             <th className="pb-3 font-medium">Estadísticas de CRM</th>
                             <th className="pb-3 font-medium text-right">Acciones</th>
@@ -302,12 +310,15 @@ export function MasterDashboard() {
                                   </div>
                                 </div>
                               </td>
+                              <td className="py-3 pr-4 text-xs text-slate-600 dark:text-slate-400">
+                                {format(safeDate(u.createdAt), "dd MMM yyyy")}
+                              </td>
                               <td className="py-3 pr-4">
                                 <select
                                   value={u.role || 'unassigned'}
                                   onChange={(e) => handleUpdateRole(u.id, e.target.value)}
                                   className="text-xs border border-slate-300 dark:border-slate-600 rounded py-1 px-2 bg-white dark:bg-slate-800 w-full max-w-[140px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                  disabled={u.role === 'master'}
+                                  disabled={u.role === 'master' && u.id === userData?.id}
                                 >
                                   {u.role === 'master' && <option value="master">Master</option>}
                                   <option value="admin">Administrador</option>

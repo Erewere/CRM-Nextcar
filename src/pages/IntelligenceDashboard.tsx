@@ -89,7 +89,7 @@ export function IntelligenceDashboard() {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E4002B]"></div>
         </div>
       ) : demandPatterns.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+        <div className="bg-white rounded shadow-sm border border-gray-200 p-12 text-center">
           <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay suficientes datos</h3>
           <p className="text-gray-500">
@@ -101,7 +101,7 @@ export function IntelligenceDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Top Demand Chart */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="lg:col-span-2 bg-white rounded shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-medium text-gray-900 mb-6">Volumen de Búsqueda (Top 5)</h2>
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -130,11 +130,11 @@ export function IntelligenceDashboard() {
 
           {/* Key Insights */}
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">Recomendaciones de Compra</h2>
               <div className="space-y-4">
                 {demandPatterns.filter(p => p.opportunityLevel === 'high' || p.opportunityLevel === 'medium').slice(0, 4).map((pattern, idx) => (
-                  <div key={idx} className="p-4 rounded-lg border border-gray-100 bg-gray-50 flex flex-col gap-2">
+                  <div key={idx} className="p-4 rounded border border-gray-100 bg-gray-50 flex flex-col gap-2">
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-2">
                         <Car className="h-5 w-5 text-gray-500" />
@@ -160,7 +160,7 @@ export function IntelligenceDashboard() {
               </div>
             </div>
             
-            <div className="bg-[#E4002B]/10 rounded-xl border border-[#E4002B]/20 p-6">
+            <div className="bg-[#E4002B]/10 rounded border border-[#E4002B]/20 p-6">
               <h3 className="font-medium text-[#E4002B] mb-2 flex items-center gap-2">
                 <AlertCircle className="h-5 w-5" />
                 Oportunidad Detectada
@@ -174,7 +174,7 @@ export function IntelligenceDashboard() {
         </div>
 
         {/* Oportunidades de Inventario Compartido (Matches de Red) */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-8">
+        <div className="bg-white rounded shadow-sm border border-gray-200 p-6 mt-8">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -193,17 +193,17 @@ export function IntelligenceDashboard() {
           </div>
 
           {!ownAgencySharing ? (
-            <div className="p-5 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-4">
+            <div className="p-5 bg-amber-50 rounded border border-amber-200 flex items-start gap-4">
               <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold text-sm text-amber-850">Compartir Inventario Desactivado</h4>
                 <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Para poder ver y aprovechar los matches con los vehículos compartidos de otras agencias de la red Nextcar, debes activar <strong>Compartir mi Inventario</strong> en la sección de tu Agencia (Usuarios y Agencia).
+                  Para poder ver y aprovechar los matches con los vehículos compartidos de otras agencias de la red LUHO, debes activar <strong>Compartir mi Inventario</strong> en la sección de tu Agencia (Usuarios y Agencia).
                 </p>
               </div>
             </div>
           ) : matches.length === 0 ? (
-            <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <div className="text-center py-10 bg-[#f4f5f5] rounded border border-dashed border-gray-200">
               <Car className="w-10 h-10 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-semibold text-slate-700">No hay coincidencias activas</p>
               <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
@@ -213,7 +213,7 @@ export function IntelligenceDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {matches.map((match, idx) => (
-                <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
+                <div key={idx} className="bg-[#f4f5f5] border border-gray-200 rounded p-4 flex flex-col justify-between shadow-sm hover:shadow-sm transition-shadow">
                   <div>
                     <div className="flex justify-between items-start mb-3">
                       <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full border border-amber-200/50">
@@ -225,7 +225,7 @@ export function IntelligenceDashboard() {
                     </div>
 
                     {/* Vehicle details */}
-                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 mb-4">
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded border border-gray-200 mb-4">
                       <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
                         {match.vehicle.photoUrl ? (
                           <img src={match.vehicle.photoUrl} alt="auto" className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
@@ -258,13 +258,13 @@ export function IntelligenceDashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mt-2 pt-3 border-t border-slate-200">
+                  <div className="grid grid-cols-2 gap-3 mt-2 pt-3 border-t border-gray-200">
                     <button
                       onClick={() => {
                         setSelectedVehicle(match.vehicle);
                         setSelectedClient(match.client);
                       }}
-                      className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                      className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       Ver Auto
@@ -273,7 +273,7 @@ export function IntelligenceDashboard() {
                       href={`https://wa.me/${match.client.phone?.replace(/[^0-9]/g, "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="py-2 px-3 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                      className="py-2 px-3 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                       Chat Cliente

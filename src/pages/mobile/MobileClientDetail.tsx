@@ -363,7 +363,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
   return (
     <div className="fixed inset-0 bg-slate-100 dark:bg-slate-900 z-[100] flex flex-col animate-in slide-in-from-right duration-300">
-      <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 sticky top-0 z-10">
+      <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 shrink-0 sticky top-0 z-10">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white truncate pr-4">
           Ficha del Cliente
         </h2>
@@ -374,7 +374,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
       <div className="flex-1 overflow-y-auto">
         {/* Profile Header */}
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-b border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-b border-gray-200 dark:border-slate-700">
           <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-2xl mb-4">
             {client.name.substring(0,2).toUpperCase()}
           </div>
@@ -388,7 +388,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
             <a 
               href={client.phone ? `tel:${client.phone.replace(/\D/g, '')}` : undefined}
               className={clsx(
-                "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-colors text-sm",
+                "flex-1 flex items-center justify-center gap-2 py-3 rounded font-semibold transition-colors text-sm",
                 client.phone ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-slate-100 dark:bg-slate-700 text-slate-400 pointer-events-none"
               )}
             >
@@ -400,7 +400,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
               target="_blank"
               rel="noopener noreferrer"
               className={clsx(
-                "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-colors text-sm",
+                "flex-1 flex items-center justify-center gap-2 py-3 rounded font-semibold transition-colors text-sm",
                 client.phone ? "bg-[#25D366] text-white hover:bg-[#20b858]" : "bg-slate-100 dark:bg-slate-700 text-slate-400 pointer-events-none"
               )}
             >
@@ -411,7 +411,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         </div>
 
         {/* Pipeline Stage */}
-                <div className="bg-white dark:bg-slate-800 p-4 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 p-4 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
           <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Etapa del Embudo</h3>
           <div className="flex overflow-x-auto pb-2 -mx-4 px-4 snap-x hide-scrollbar gap-2 scroll-smooth">
             {pipelineStages.map((stage, idx) => {
@@ -422,12 +422,12 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                   key={`stage-${stage.id}`}
                   onClick={() => handleStatusChange(stage.id)}
                   className={clsx(
-                    "flex items-center shrink-0 snap-center px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
+                    "flex items-center shrink-0 snap-center px-4 py-2 rounded text-sm font-medium whitespace-nowrap transition-all",
                     isActive 
-                      ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-800" 
+                      ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-800" 
                       : isPast
                         ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50"
-                        : "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400"
+                        : "bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400"
                   )}
                 >
                   {stage.title || stage.name}
@@ -438,7 +438,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         </div>
 
         {/* Quick Interactions */}
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Registro Rápido</h3>
           
           <div className="grid grid-cols-2 gap-2 mb-4">
@@ -447,10 +447,10 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                 key={`action-${action.id}`}
                 onClick={() => setSelectedActionId(selectedActionId === action.id ? null : action.id)}
                 className={clsx(
-                  "flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-colors border",
+                  "flex items-center justify-center gap-2 py-3 rounded text-sm font-medium transition-colors border",
                   selectedActionId === action.id 
                     ? "bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
-                    : "bg-slate-50 border-transparent dark:bg-slate-900 dark:border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    : "bg-[#f4f5f5] border-transparent dark:bg-slate-900 dark:border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                 )}
               >
                 <action.icon className={clsx("w-4 h-4", action.color)} />
@@ -463,7 +463,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
             <button
               onClick={toggleRecording}
               className={clsx(
-                "absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors",
+                "absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded transition-colors",
                 isRecording ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 animate-pulse" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               )}
             >
@@ -474,7 +474,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
               placeholder={isRecording ? "Escuchando..." : "Nota adicional (opcional)..."}
               value={quickNote}
               onChange={(e) => setQuickNote(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-12 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded pl-10 pr-12 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <button
               disabled={(!quickNote.trim() && !selectedActionId) || isSubmittingNote}
@@ -483,7 +483,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                 handleAddQuickNote(action ? action.id : 'note', action ? action.prefix : undefined);
                 setSelectedActionId(null);
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg disabled:opacity-50 transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded disabled:opacity-50 transition-colors"
             >
               {noteSuccess ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
             </button>
@@ -492,14 +492,14 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
         {/* Historial (Notas) */}
         <div ref={historyRef} />
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Historial</h3>
           {notes.length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-4">No hay registros en el historial.</p>
           ) : (
             <div className="space-y-4">
               {notes.map(note => (
-                <div key={`note-${note.id}`} className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700 pb-2 last:border-0 last:pb-0">
+                <div key={`note-${note.id}`} className="relative pl-4 border-l-2 border-gray-200 dark:border-slate-700 pb-2 last:border-0 last:pb-0">
                   <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-medium text-slate-500 dark:text-slate-400">

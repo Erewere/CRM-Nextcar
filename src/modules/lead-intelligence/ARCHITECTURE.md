@@ -1,8 +1,8 @@
-# Lead Intelligence Engine - Nextcar
+# Lead Intelligence Engine - LUHO
 
 ## Arquitectura y Estrategia
 
-Este módulo central está diseñado para convertir datos de prospectos e inventario en oportunidades comerciales accionables de forma automática para la agencia automotriz Nextcar.
+Este módulo central está diseñado para convertir datos de prospectos e inventario en oportunidades comerciales accionables de forma automática para la agencia automotriz LUHO.
 
 ### Estrategia para Firebase Firestore
 Para manejar eficientemente los datos y asegurar consultas rápidas:

@@ -87,7 +87,7 @@ export function MobilePersons() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative">
-      <div className="px-4 py-4 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10 sticky top-0">
+      <div className="px-4 py-4 shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10 sticky top-0">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
             Contactos
@@ -104,16 +104,16 @@ export function MobilePersons() {
             placeholder="Buscar por nombre, teléfono o email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-4 pb-24 space-y-3">
         {filteredClients.map((client, idx) => (
-          <div key={`${client.id}-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+          <div key={`${client.id}-${idx}`} className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col">
             <div 
-              className="p-4 cursor-pointer active:bg-slate-50 dark:active:bg-slate-700/50 transition-colors"
+              className="p-4 cursor-pointer active:bg-[#f4f5f5] dark:active:bg-slate-700/50 transition-colors"
               onClick={() => setSelectedClient(client)}
             >
               <div className="flex items-center justify-between">
@@ -137,12 +137,12 @@ export function MobilePersons() {
                 </div>
               </div>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 px-2 py-2 flex items-center justify-between overflow-x-auto scrollbar-hide">
+            <div className="bg-[#f4f5f5] dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 px-2 py-2 flex items-center justify-between overflow-x-auto scrollbar-hide">
               <div className="flex items-center gap-1 min-w-max">
                 <a 
                   href={`tel:${client.phone || ''}`} 
                   onClick={(e) => { e.stopPropagation(); if(!client.phone) e.preventDefault(); }}
-                  className={clsx("flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors", client.phone ? "active:bg-blue-100 dark:active:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "opacity-50 text-slate-400")}
+                  className={clsx("flex flex-col items-center justify-center w-14 h-12 rounded transition-colors", client.phone ? "active:bg-blue-100 dark:active:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "opacity-50 text-slate-400")}
                 >
                   <Phone className="w-4 h-4 mb-1" />
                   <span className="text-[9px] font-medium">Llamar</span>
@@ -151,35 +151,35 @@ export function MobilePersons() {
                   href={`https://wa.me/${(client.phone || '').replace(/[^0-9]/g, '')}`} 
                   target="_blank" rel="noreferrer"
                   onClick={(e) => { e.stopPropagation(); if(!client.phone) e.preventDefault(); }}
-                  className={clsx("flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors", client.phone ? "active:bg-green-100 dark:active:bg-green-900/40 text-green-600 dark:text-green-400" : "opacity-50 text-slate-400")}
+                  className={clsx("flex flex-col items-center justify-center w-14 h-12 rounded transition-colors", client.phone ? "active:bg-green-100 dark:active:bg-green-900/40 text-green-600 dark:text-green-400" : "opacity-50 text-slate-400")}
                 >
                   <MessageCircle className="w-4 h-4 mb-1" />
                   <span className="text-[9px] font-medium">WhatsApp</span>
                 </a>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setTaskClient(client); }}
-                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-amber-100 dark:active:bg-amber-900/40 text-amber-600 dark:text-amber-400"
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded transition-colors active:bg-amber-100 dark:active:bg-amber-900/40 text-amber-600 dark:text-amber-400"
                 >
                   <Calendar className="w-4 h-4 mb-1" />
                   <span className="text-[9px] font-medium">Tarea</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setStageClient(client); }}
-                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-purple-100 dark:active:bg-purple-900/40 text-purple-600 dark:text-purple-400"
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded transition-colors active:bg-purple-100 dark:active:bg-purple-900/40 text-purple-600 dark:text-purple-400"
                 >
                   <Activity className="w-4 h-4 mb-1" />
                   <span className="text-[9px] font-medium">Etapa</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setHistoryClient(client); }}
-                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
                 >
                   <FileText className="w-4 h-4 mb-1" />
                   <span className="text-[9px] font-medium">Nota</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setSelectedClient(client); }}
-                  className="flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
+                  className="flex flex-col items-center justify-center w-14 h-12 rounded transition-colors active:bg-slate-200 dark:active:bg-slate-700 text-slate-600 dark:text-slate-300"
                 >
                   <User className="w-4 h-4 mb-1" />
                   <span className="text-[9px] font-medium">Ficha</span>
@@ -221,8 +221,8 @@ export function MobilePersons() {
       )}
       {stageClient && (
         <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-4" onClick={() => setStageClient(null)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-900 rounded w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 dark:text-white">Cambiar Etapa</h3>
               <button onClick={() => setStageClient(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500">
                 <X className="w-5 h-5" />
@@ -241,7 +241,7 @@ export function MobilePersons() {
                       console.error(err);
                     }
                   }}
-                  className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-medium text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-4 py-3 hover:bg-[#f4f5f5] dark:hover:bg-slate-800 rounded font-medium text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-between"
                 >
                   {stage.title}
                   {stageClient.status === stage.id && <div className="w-2 h-2 rounded-full bg-blue-500" />}

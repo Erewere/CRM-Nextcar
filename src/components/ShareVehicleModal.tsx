@@ -109,7 +109,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col justify-end md:items-center md:justify-center p-0 md:p-4">
       <motion.div className="absolute inset-0" onClick={onClose} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} />
       <motion.div 
-        className="bg-white dark:bg-slate-900 w-full h-[90dvh] md:h-auto md:max-h-[85vh] md:max-w-md md:rounded-2xl rounded-t-3xl flex flex-col shadow-2xl relative z-10"
+        className="bg-white dark:bg-slate-900 w-full h-[90dvh] md:h-auto md:max-h-[85vh] md:max-w-md md:rounded rounded-t-3xl flex flex-col shadow-2xl relative z-10"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
@@ -117,7 +117,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
         style={{ transformOrigin: "bottom center" }}
       >
         
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 shrink-0">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">Compartir Vehículo</h2>
           <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full bg-slate-100 dark:bg-slate-800">
             <X className="w-5 h-5" />
@@ -136,8 +136,8 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
           </div>
         ) : (
           <>
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 shrink-0 flex gap-4 items-center">
-               <div className="w-16 h-12 bg-slate-200 dark:bg-slate-700 rounded-lg overflow-hidden shrink-0">
+            <div className="p-4 bg-[#f4f5f5] dark:bg-slate-800/50 shrink-0 flex gap-4 items-center">
+               <div className="w-16 h-12 bg-slate-200 dark:bg-slate-700 rounded overflow-hidden shrink-0">
                   {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
                     <img src={vehicle.photoUrls?.[0] || vehicle.photoUrl} className="w-full h-full object-cover" alt="" />
                   ) : (
@@ -150,7 +150,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
                </div>
             </div>
 
-            <div className="p-4 shrink-0 border-b border-slate-200 dark:border-slate-800">
+            <div className="p-4 shrink-0 border-b border-gray-200 dark:border-slate-800">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -158,7 +158,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
                   placeholder="Buscar cliente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
             </div>
@@ -175,10 +175,10 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
                       key={`client-${c.id}`}
                       onClick={() => setSelectedClient(c)}
                       className={clsx(
-                        "w-full flex items-center justify-between p-3 rounded-xl text-left transition-colors",
+                        "w-full flex items-center justify-between p-3 rounded text-left transition-colors",
                         selectedClient?.id === c.id 
                           ? "bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-500" 
-                          : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                          : "hover:bg-[#f4f5f5] dark:hover:bg-slate-800"
                       )}
                     >
                       <div>
@@ -196,11 +196,11 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
               )}
             </div>
 
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 pb-safe">
+            <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 pb-safe">
               <button
                 disabled={!selectedClient || sending || !selectedClient.phone}
                 onClick={handleSend}
-                className="w-full bg-blue-600 text-white rounded-xl py-3.5 font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                className="w-full bg-blue-600 text-white rounded py-3.5 font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
               >
                 {sending ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

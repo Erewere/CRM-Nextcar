@@ -1,8 +1,6 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-  
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -12,21 +10,22 @@ service cloud.firestore {
     }
     
     function isMaster() {
-      return isAuthenticated() && getUserData().role == 'master';
+      return isAuthenticated() && getUserData() != null && getUserData().role == 'master';
     }
     
     function isAdmin() {
-      return isAuthenticated() && getUserData().role == 'admin';
+      return isAuthenticated() && getUserData() != null && getUserData().role == 'admin';
     }
     
     function isSeller() {
-      return isAuthenticated() && getUserData().role == 'seller';
+      return isAuthenticated() && getUserData() != null && getUserData().role == 'seller';
     }
     
     function getUserAgencyId() {
-      return getUserData().agencyId;
+      let data = getUserData();
+      return data == null ? null : data.agencyId;
     }
-
+    
     function isSameAgency(agencyId) {
       return isMaster() || (isAuthenticated() && getUserAgencyId() == agencyId);
     }
@@ -34,62 +33,69 @@ service cloud.firestore {
     // AGENCIES
     match /agencies/{agencyId} {
       allow read: if isAuthenticated();
-      allow write: if isMaster() || (isAdmin() && getUserAgencyId() == agencyId);
+      allow create: if isAuthenticated();
+      allow update, delete: if isMaster() || (isAdmin() && getUserAgencyId() == agencyId);
     }
     
     // USERS
     match /users/{userId} {
-      allow read: if isMaster() || (isAuthenticated() && getUserAgencyId() == resource.data.agencyId);
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isMaster() || (getUserData() != null && getUserAgencyId() == resource.data.agencyId));
       
       allow create: if isAuthenticated() && 
                     request.auth.uid == userId && 
-                    (request.resource.data.role == 'seller' || request.resource.data.role == 'unassigned');
+                    (
+                      request.resource.data.role == 'seller' || 
+                      request.resource.data.role == 'unassigned' || 
+                      (
+                        request.resource.data.role == 'admin' && 
+                        get(/databases/$(database)/documents/agencies/$(request.resource.data.agencyId)).data.creatorId == userId
+                      ) ||
+                      (request.resource.data.role == 'master' && request.auth.token.email == 'luisfj@gmail.com')
+                    );
                     
       allow update: if isMaster() || 
-                     (isAdmin() && 
-                      getUserAgencyId() == resource.data.agencyId && 
-                      request.resource.data.agencyId == resource.data.agencyId &&
-                      request.auth.uid != userId &&
-                      request.resource.data.role != 'master') ||
-                    (isAuthenticated() && request.auth.uid == userId && 
-                     request.resource.data.role == resource.data.role && 
+                    (isAdmin() && 
+                     getUserAgencyId() == resource.data.agencyId && 
                      request.resource.data.agencyId == resource.data.agencyId &&
-                     request.resource.data.createdAt == resource.data.createdAt);
-                     
+                    request.auth.uid != userId &&
+                    request.resource.data.role != 'master') ||
+                  (isAuthenticated() && request.auth.uid == userId &&
+                    request.resource.data.role == resource.data.role && 
+                    request.resource.data.agencyId == resource.data.agencyId &&
+                   request.resource.data.createdAt == resource.data.createdAt);
+                   
       allow delete: if isMaster() || (isAdmin() && getUserAgencyId() == resource.data.agencyId);
     }
     
     // CLIENTS
     match /clients/{clientId} {
       allow read: if isSameAgency(resource.data.agencyId) && 
-                  (isMaster() || isAdmin() || 
-                   resource.data.sellerId == request.auth.uid || 
-                   resource.data.visibility == 'all');
-                   
+                   (isMaster() || isAdmin() || 
+                    resource.data.sellerId == request.auth.uid || 
+                    resource.data.visibility == 'all');
+                    
       allow create: if true;
-                    
-      allow update: if isSameAgency(resource.data.agencyId) &&
-                    request.resource.data.agencyId == resource.data.agencyId && 
-                    
-                    (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || resource.data.visibility == 'all');
-                    
-      allow delete: if isSameAgency(resource.data.agencyId) &&
+      
+      allow update: if isSameAgency(resource.data.agencyId) && 
+                    request.resource.data.agencyId == resource.data.agencyId &&
+                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || resource.data.visibility == 'all');
+                   
+      allow delete: if isSameAgency(resource.data.agencyId) && 
                     (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
     }
     
     // TASKS
     match /tasks/{taskId} {
       allow read: if isSameAgency(resource.data.agencyId) && 
-                  (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
-                  
+                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
+                   
       allow create: if true;
-                    
-      allow update: if isSameAgency(resource.data.agencyId) &&
+      
+      allow update: if isSameAgency(resource.data.agencyId) && 
                     request.resource.data.agencyId == resource.data.agencyId &&
-                    
-                    (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
-                    
-      allow delete: if isSameAgency(resource.data.agencyId) &&
+                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
+                   
+      allow delete: if isSameAgency(resource.data.agencyId) && 
                     (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
     }
 
@@ -99,28 +105,27 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/clients/$(clientId)).data.visibility;
       }
       allow read: if isSameAgency(resource.data.agencyId) && 
-                  (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || getClientVisibility(resource.data.clientId) == 'all');
-                  
+                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || getClientVisibility(resource.data.clientId) == 'all');
+                   
       allow create: if true;
-                    
-      allow update: if isSameAgency(resource.data.agencyId) &&
+      
+      allow update: if isSameAgency(resource.data.agencyId) && 
                     request.resource.data.agencyId == resource.data.agencyId &&
                     (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || getClientVisibility(resource.data.clientId) == 'all');
-                    
-      allow delete: if isSameAgency(resource.data.agencyId) &&
+                   
+      allow delete: if isSameAgency(resource.data.agencyId) && 
                     (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
     }
     
     // VEHICLES
     match /vehicles/{vehicleId} {
       allow read: if isSameAgency(resource.data.agencyId) || 
-                    (resource.data.status == 'available' && 
-                     get(/databases/$(database)/documents/agencies/$(resource.data.agencyId)).data.shareInventory == true &&
+                     (resource.data.status == 'available' && 
+                      get(/databases/$(database)/documents/agencies/$(resource.data.agencyId)).data.shareInventory == true && 
                      get(/databases/$(database)/documents/agencies/$(getUserAgencyId())).data.shareInventory == true);
-      
       allow create: if isSameAgency(request.resource.data.agencyId);
-                    
-      allow update: if isSameAgency(resource.data.agencyId) &&
+      
+      allow update: if isSameAgency(resource.data.agencyId) && 
                     request.resource.data.agencyId == resource.data.agencyId;
       allow delete: if isSameAgency(resource.data.agencyId) && (isMaster() || isAdmin());
     }
@@ -135,9 +140,9 @@ service cloud.firestore {
       
       allow create: if (request.resource.data != null && 'agencyId' in request.resource.data && isSameAgency(request.resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(request.resource.data.vehicleId));
       
-      allow update: if (isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId) ||
+      allow update: if (isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId) || 
                     (isSameAgency(getVehicleAgencyId(resource.data.vehicleId)) && request.resource.data.vehicleId == resource.data.vehicleId);
-                    
+                   
       allow delete: if (resource.data != null && 'agencyId' in resource.data && isSameAgency(resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
     }
     
@@ -168,13 +173,13 @@ service cloud.firestore {
     // AGENCY CHATS
     match /agencyChats/{chatId} {
       allow read, write: if isAuthenticated() && 
-                          (getUserAgencyId() in resource.data.participants);
+                           (getUserAgencyId() in resource.data.participants);
       allow create: if isAuthenticated() && 
-                    (getUserAgencyId() in request.resource.data.participants);
+                     (getUserAgencyId() in request.resource.data.participants);
       
       match /messages/{messageId} {
         allow read, write: if isAuthenticated() && 
-                            (getUserAgencyId() in get(/databases/$(database)/documents/agencyChats/$(chatId)).data.participants);
+                             (getUserAgencyId() in get(/databases/$(database)/documents/agencyChats/$(chatId)).data.participants);
       }
     }
 

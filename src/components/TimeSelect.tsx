@@ -99,7 +99,7 @@ export function TimeSelect({
       </div>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-[140px] max-h-[350px] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg z-50 py-1">
+        <div className="absolute top-full left-0 mt-1 w-[140px] max-h-[350px] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm z-50 py-1">
           {timeOptions.map((option) => {
             const isActive = value === option.value;
             return (

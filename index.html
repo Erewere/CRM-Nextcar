@@ -3,10 +3,51 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nextcar CRM</title>
+    <title>LUHO CRM</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
+    <div id="global-error-reporter" style="display: none; padding: 20px; background-color: #fff5f5; color: #c53030; font-family: monospace; border: 2px solid #f5c2c2; margin: 20px; border-radius: 8px; z-index: 999999; position: relative;">
+      <h2 style="margin: 0 0 10px 0;">Error Crítico detectado:</h2>
+      <p id="global-error-msg" style="font-weight: bold;"></p>
+    </div>
+    <script>
+      window.addEventListener('error', (event) => {
+        const isBenign = (
+          event.message?.toLowerCase().includes('websocket') ||
+          event.filename?.toLowerCase().includes('vite') ||
+          event.message?.toLowerCase().includes('hmr') ||
+          event.message?.toLowerCase().includes('closed without opened')
+        );
+        if (isBenign) return;
+        const errorContainer = document.getElementById('global-error-reporter');
+        if (errorContainer) {
+          errorContainer.style.display = 'block';
+          const msgElement = document.getElementById('global-error-msg');
+          if (msgElement) {
+            msgElement.textContent = event.message + ' at ' + event.filename + ':' + event.lineno;
+          }
+        }
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        const reasonStr = String(event.reason || '');
+        const isBenign = (
+          reasonStr.toLowerCase().includes('websocket') ||
+          reasonStr.toLowerCase().includes('vite') ||
+          reasonStr.toLowerCase().includes('hmr') ||
+          reasonStr.toLowerCase().includes('closed without opened')
+        );
+        if (isBenign) return;
+        const errorContainer = document.getElementById('global-error-reporter');
+        if (errorContainer) {
+          errorContainer.style.display = 'block';
+          const msgElement = document.getElementById('global-error-msg');
+          if (msgElement) {
+            msgElement.textContent = 'Promesa rechazada no manejada: ' + reasonStr;
+          }
+        }
+      });
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -152,7 +152,7 @@ export function MobileInventory() {
   return (
     <div className="flex flex-col h-full overflow-hidden relative">
       {/* Header with Title and Tab Selector */}
-      <div className="px-4 py-4 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10 sticky top-0 space-y-3">
+      <div className="px-4 py-4 shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10 sticky top-0 space-y-3">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
             Inventario
@@ -163,11 +163,11 @@ export function MobileInventory() {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded">
           <button
             onClick={() => setActiveTab('my')}
             className={clsx(
-              "flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5",
+              "flex-1 py-2 text-xs font-bold rounded transition-all flex items-center justify-center gap-1.5",
               activeTab === 'my'
                 ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
@@ -178,14 +178,14 @@ export function MobileInventory() {
           <button
             onClick={() => setActiveTab('shared')}
             className={clsx(
-              "flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 relative",
+              "flex-1 py-2 text-xs font-bold rounded transition-all flex items-center justify-center gap-1.5 relative",
               activeTab === 'shared'
                 ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
             )}
           >
             <Sparkles className={clsx("w-3.5 h-3.5", activeTab === 'shared' ? "text-amber-500" : "text-slate-400")} />
-            <span>Red Nextcar</span>
+            <span>Red LUHO</span>
             {ownAgencySharing && sharedMatches.length > 0 && (
               <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
                 {sharedMatches.length}
@@ -204,7 +204,7 @@ export function MobileInventory() {
                 placeholder="Buscar marca, modelo o año..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
           )}
@@ -213,7 +213,7 @@ export function MobileInventory() {
             <select
               value={filterBodyType}
               onChange={(e) => setFilterBodyType(e.target.value)}
-              className="w-full text-xs bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 font-medium capitalize"
+              className="w-full text-xs bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 font-medium capitalize"
             >
               <option value="all">Carrocería: Todos</option>
               {uniqueBodyTypes.map(t => (
@@ -236,7 +236,7 @@ export function MobileInventory() {
                 <div 
                   key={`${vehicle.id}-${idx}`} 
                   onClick={() => setSelectedVehicle(vehicle)}
-                  className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col cursor-pointer active:scale-[0.99] transition-transform"
+                  className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col cursor-pointer active:scale-[0.99] transition-transform"
                 >
                   <div className="h-48 bg-slate-100 dark:bg-slate-900 relative">
                     {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
@@ -250,7 +250,7 @@ export function MobileInventory() {
                         <CarIcon className="w-16 h-16" />
                       </div>
                     )}
-                    <div className="absolute top-3 left-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-xs font-bold text-slate-900 dark:text-white shadow-sm border border-black/5 dark:border-white/5">
+                    <div className="absolute top-3 left-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-2.5 py-1 rounded text-xs font-bold text-slate-900 dark:text-white shadow-sm border border-black/5 dark:border-white/5">
                       {vehicle.year}
                     </div>
 
@@ -308,14 +308,14 @@ export function MobileInventory() {
 
                     {/* Local Matches Display */}
                     {matches.length > 0 && (
-                      <div className="mt-1 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-xl p-3" onClick={e => e.stopPropagation()}>
+                      <div className="mt-1 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded p-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300 font-extrabold text-[11px] mb-2">
                           <Sparkles className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
                           <span>¡Tienes {matches.length} {matches.length === 1 ? 'cliente interesado!' : 'clientes interesados!'}</span>
                         </div>
                         <div className="space-y-1.5">
                           {matches.slice(0, 3).map((m, mIdx) => (
-                            <div key={`local-match-${mIdx}`} className="flex justify-between items-center text-[10px] bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 shadow-xs">
+                            <div key={`local-match-${mIdx}`} className="flex justify-between items-center text-[10px] bg-white dark:bg-slate-800 p-2 rounded border border-gray-200 dark:border-slate-700 shadow-xs">
                               <div className="min-w-0 flex-1 pr-2">
                                 <span className="font-extrabold text-slate-800 dark:text-slate-200 block truncate">
                                   {m.client.name}
@@ -328,7 +328,7 @@ export function MobileInventory() {
                                 href={`https://wa.me/${m.client.phone?.replace(/[^0-9]/g, "")}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-[9px] transition-colors shrink-0 shadow-sm"
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded font-bold text-[9px] transition-colors shrink-0 shadow-sm"
                               >
                                 <MessageSquare className="w-3 h-3" />
                                 WhatsApp
@@ -339,13 +339,13 @@ export function MobileInventory() {
                       </div>
                     )}
                     
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-700 mt-1">
+                    <div className="pt-3 border-t border-gray-200 dark:border-slate-700 mt-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setVehicleToShare(vehicle);
                         }}
-                        className="w-full flex items-center justify-center gap-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-slate-200/50 dark:border-slate-700"
+                        className="w-full flex items-center justify-center gap-2 bg-[#f4f5f5] dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 py-2.5 rounded font-semibold transition-colors text-sm border border-gray-200/50 dark:border-slate-700"
                       >
                         <Share2 className="w-4 h-4" />
                         Compartir Ficha Técnica
@@ -362,27 +362,27 @@ export function MobileInventory() {
             )}
           </div>
         ) : (
-          /* Red Nextcar Tab */
+          /* Red LUHO Tab */
           <div className="space-y-4">
             {!ownAgencySharing ? (
-              <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-2xl border border-amber-200 dark:border-amber-900/60 flex items-start gap-3">
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200 dark:border-amber-900/60 flex items-start gap-3">
                 <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <h4 className="text-xs font-extrabold text-amber-800 dark:text-amber-400">Acceso a Red Inactivo</h4>
                   <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                    Para visualizar y compartir las coincidencias con autos de otras agencias Nextcar, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
+                    Para visualizar y compartir las coincidencias con autos de otras agencias LUHO, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
                   </p>
                 </div>
               </div>
             ) : (
               <>
                 {/* Sub-tabs inside Shared View */}
-                <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl mb-4 text-xs font-bold">
+                <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded mb-4 text-xs font-bold">
                   <button
                     type="button"
                     onClick={() => setSharedSubTab('matches')}
                     className={clsx(
-                      "flex-1 py-1.5 rounded-lg text-center transition-colors flex items-center justify-center gap-1.5",
+                      "flex-1 py-1.5 rounded text-center transition-colors flex items-center justify-center gap-1.5",
                       sharedSubTab === 'matches'
                         ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
@@ -395,7 +395,7 @@ export function MobileInventory() {
                     type="button"
                     onClick={() => setSharedSubTab('all')}
                     className={clsx(
-                      "flex-1 py-1.5 rounded-lg text-center transition-colors flex items-center justify-center gap-1.5",
+                      "flex-1 py-1.5 rounded text-center transition-colors flex items-center justify-center gap-1.5",
                       sharedSubTab === 'all'
                         ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
@@ -409,7 +409,7 @@ export function MobileInventory() {
                 {sharedSubTab === 'matches' ? (
                   /* Matches Sub-tab */
                   filteredSharedMatches.length === 0 ? (
-                    <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 py-12">
+                    <div className="p-8 text-center bg-white dark:bg-slate-800 rounded border border-dashed border-gray-200 dark:border-slate-700 py-12">
                       <CarIcon className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400">No hay coincidencias en red en este momento.</p>
                       <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 max-w-[240px] mx-auto">
@@ -419,7 +419,7 @@ export function MobileInventory() {
                   ) : (
                     <div className="space-y-4">
                       {filteredSharedMatches.map((match, idx) => (
-                        <div key={`shared-match-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                        <div key={`shared-match-${idx}`} className="bg-white dark:bg-slate-800 rounded p-4 border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
                           <div className="flex justify-between items-start mb-3">
                             <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-200/20">
                               Match {match.score}%
@@ -429,8 +429,8 @@ export function MobileInventory() {
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 mb-3.5">
-                            <div className="w-12 h-12 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden border border-black/5">
+                          <div className="flex items-center gap-3 bg-[#f4f5f5] dark:bg-slate-900/40 p-2.5 rounded border border-gray-200 dark:border-slate-800 mb-3.5">
+                            <div className="w-12 h-12 rounded bg-slate-200 dark:bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden border border-black/5">
                               {match.vehicle.photoUrl ? (
                                 <img src={match.vehicle.photoUrl} alt="auto" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
@@ -464,13 +464,13 @@ export function MobileInventory() {
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+                          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200 dark:border-slate-700/60">
                             <button
                               onClick={() => {
                                 setSelectedSharedVehicle(match.vehicle);
                                 setSelectedSharedClient(match.client);
                               }}
-                              className="py-2.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[11px] font-bold rounded-xl text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1.5"
+                              className="py-2.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[11px] font-bold rounded text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1.5"
                             >
                               <ExternalLink className="w-4 h-4" />
                               Ver Auto
@@ -479,7 +479,7 @@ export function MobileInventory() {
                               href={`https://wa.me/${match.client.phone?.replace(/[^0-9]/g, "")}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="py-2.5 px-3 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[11px] font-bold rounded-xl text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1.5"
+                              className="py-2.5 px-3 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-500 hover:text-white text-[11px] font-bold rounded text-emerald-700 dark:text-emerald-300 transition-colors flex items-center justify-center gap-1.5"
                             >
                               <MessageSquare className="w-4 h-4" />
                               WhatsApp
@@ -492,7 +492,7 @@ export function MobileInventory() {
                 ) : (
                   /* Full Shared Catalog Sub-tab */
                   filteredOtherVehicles.length === 0 ? (
-                    <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 py-12">
+                    <div className="p-8 text-center bg-white dark:bg-slate-800 rounded border border-dashed border-gray-200 dark:border-slate-700 py-12">
                       <Search className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400">No hay autos en la red con los filtros aplicados.</p>
                     </div>
@@ -504,7 +504,7 @@ export function MobileInventory() {
                           <div 
                             key={`shared-all-${vehicle.id}-${idx}`} 
                             onClick={() => setSelectedVehicle(vehicle)}
-                            className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col cursor-pointer active:scale-[0.99] transition-transform"
+                            className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col cursor-pointer active:scale-[0.99] transition-transform"
                           >
                             <div className="h-48 bg-slate-100 dark:bg-slate-900 relative">
                               {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
@@ -518,7 +518,7 @@ export function MobileInventory() {
                                   <CarIcon className="w-16 h-16" />
                                 </div>
                               )}
-                              <div className="absolute top-3 left-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-xs font-bold text-slate-900 dark:text-white shadow-sm border border-black/5 dark:border-white/5">
+                              <div className="absolute top-3 left-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-2.5 py-1 rounded text-xs font-bold text-slate-900 dark:text-white shadow-sm border border-black/5 dark:border-white/5">
                                 {vehicle.year}
                               </div>
                               <div className="absolute top-3 right-3 bg-blue-600 text-white text-[10px] font-black px-2.5 py-1 rounded-md shadow-sm">
@@ -570,13 +570,13 @@ export function MobileInventory() {
                                 </div>
                               </div>
 
-                              <div className="pt-3 border-t border-slate-100 dark:border-slate-700 mt-1">
+                              <div className="pt-3 border-t border-gray-200 dark:border-slate-700 mt-1">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setVehicleToShare(vehicle);
                                   }}
-                                  className="w-full flex items-center justify-center gap-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-slate-200/50 dark:border-slate-700"
+                                  className="w-full flex items-center justify-center gap-2 bg-[#f4f5f5] dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 py-2.5 rounded font-semibold transition-colors text-sm border border-gray-200/50 dark:border-slate-700"
                                 >
                                   <Share2 className="w-4 h-4" />
                                   Compartir Ficha Técnica

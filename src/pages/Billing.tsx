@@ -139,25 +139,39 @@ export function Billing() {
     }
   };
 
+  const isInactive = agency && !agency.hasFreeAccess && agency.subscriptionStatus !== 'active';
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
+      {isInactive && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400 rounded flex items-start gap-3 border border-amber-200 dark:border-amber-900/50 shadow-sm animate-pulse">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-500" />
+          <div>
+            <p className="font-semibold text-sm">Suscripción Inactiva o Periodo de Prueba Vencido</p>
+            <p className="text-xs mt-1 leading-relaxed text-amber-700 dark:text-amber-500/90">
+              La suscripción Pro de tu agencia se encuentra suspendida o inactiva. Por favor, haz clic en <strong>"Actualizar Suscripción"</strong> a continuación para restablecer de forma inmediata el acceso completo para todos los usuarios de la agencia.
+            </p>
+          </div>
+        </div>
+      )}
+
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg flex items-start gap-2 border border-red-100 dark:border-red-900/50">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded flex items-start gap-2 border border-red-100 dark:border-red-900/50">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="text-sm">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="p-4 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg flex items-start gap-2 border border-green-100 dark:border-green-900/50">
+        <div className="p-4 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded flex items-start gap-2 border border-green-100 dark:border-green-900/50">
           <Check className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="text-sm">{success}</p>
         </div>
       )}
 
       {/* Plan Base */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
         <div className="p-6 md:p-8 flex flex-col md:flex-row items-center gap-8">
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Plan Pro - Mensual</h2>
@@ -183,7 +197,7 @@ export function Billing() {
             <button
               onClick={handleSubscribe}
               disabled={loading}
-              className="flex items-center justify-center gap-2 w-full md:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-2 w-full md:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors disabled:opacity-50"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -196,18 +210,18 @@ export function Billing() {
             </button>
           </div>
 
-          <div className="w-full md:w-auto min-w-[280px] bg-slate-50 dark:bg-slate-900 p-6 md:p-8 rounded-xl border border-slate-100 dark:border-slate-700 text-center">
+          <div className="w-full md:w-auto min-w-[280px] bg-[#f4f5f5] dark:bg-slate-900 p-6 md:p-8 rounded border border-gray-200 dark:border-slate-700 text-center">
             <div className="text-5xl font-extrabold text-slate-900 dark:text-white mb-2">
               ${PRICE_PER_USER}
             </div>
             <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 uppercase tracking-wider">
               USD / usuario / mes
             </div>
-            <div className="flex items-center justify-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium bg-white dark:bg-slate-800 py-2 px-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium bg-white dark:bg-slate-800 py-2 px-4 rounded shadow-sm border border-gray-200 dark:border-slate-700">
               <Users className="w-4 h-4 text-blue-500" />
               <span>{userCount} {userCount === 1 ? 'usuario actual' : 'usuarios actuales'}</span>
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center font-bold text-slate-900 dark:text-white">
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center font-bold text-slate-900 dark:text-white">
               <span>Total Estimado:</span>
               <span>${(PRICE_PER_USER * userCount).toFixed(2)} USD / mes</span>
             </div>
@@ -216,14 +230,14 @@ export function Billing() {
       </div>
 
       {/* AI Credits System */}
-      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded-2xl border border-indigo-500/30 overflow-hidden shadow-lg relative">
+      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 rounded border border-indigo-500/30 overflow-hidden shadow-sm relative">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 blur-3xl rounded-full -translate-x-1/2 translate-y-1/2" />
         
         <div className="p-6 md:p-8 relative z-10 flex flex-col md:flex-row gap-8">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30 shadow-inner">
+              <div className="p-2 bg-indigo-500/20 rounded border border-indigo-500/30 shadow-inner">
                 <Bot className="w-6 h-6 text-indigo-300" />
               </div>
               <h2 className="text-2xl font-bold text-white tracking-wide">IA Erewere (SaaS)</h2>
@@ -232,7 +246,7 @@ export function Billing() {
               Potencia tus ventas con nuestro asesor de inteligencia artificial. Los créditos se descuentan por cada recomendación o análisis generado. Los créditos se comparten con toda la agencia.
             </p>
             
-            <div className="inline-flex flex-col items-start bg-black/20 border border-white/10 rounded-xl p-4 mb-8">
+            <div className="inline-flex flex-col items-start bg-black/20 border border-white/10 rounded p-4 mb-8">
               <span className="text-xs font-semibold text-indigo-300 uppercase tracking-widest mb-1">Saldo Actual</span>
               <div className="flex items-end gap-2">
                 <span className="text-4xl font-extrabold text-white">{agency?.aiCredits || 0}</span>
@@ -242,7 +256,7 @@ export function Billing() {
           </div>
 
           <div className="w-full md:w-[320px] flex flex-col gap-4">
-            <div className="bg-white/5 border border-white/10 p-5 rounded-xl hover:bg-white/10 transition-colors">
+            <div className="bg-white/5 border border-white/10 p-5 rounded hover:bg-white/10 transition-colors">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-white font-bold text-lg">Pack Básico</h3>
@@ -253,13 +267,13 @@ export function Billing() {
               <button
                 onClick={() => handleBuyCredits(100, import.meta.env.VITE_STRIPE_PRICE_AI_BASIC || 'price_ai_basic')}
                 disabled={loadingCredits}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium transition-colors text-sm flex items-center justify-center gap-2"
               >
                 <Zap className="w-4 h-4" /> Comprar
               </button>
             </div>
             
-            <div className="bg-indigo-500/20 border border-indigo-400/30 p-5 rounded-xl hover:bg-indigo-500/30 transition-colors relative overflow-hidden">
+            <div className="bg-indigo-500/20 border border-indigo-400/30 p-5 rounded hover:bg-indigo-500/30 transition-colors relative overflow-hidden">
               <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-wider">
                 Popular
               </div>
@@ -273,7 +287,7 @@ export function Billing() {
               <button
                 onClick={() => handleBuyCredits(500, import.meta.env.VITE_STRIPE_PRICE_AI_PRO || 'price_ai_pro')}
                 disabled={loadingCredits}
-                className="w-full py-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
+                className="w-full py-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded font-medium transition-colors text-sm flex items-center justify-center gap-2"
               >
                 <Zap className="w-4 h-4" /> Comprar
               </button>

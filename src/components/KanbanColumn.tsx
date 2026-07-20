@@ -80,10 +80,10 @@ export function KanbanColumn({
   const formattedValue = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(totalValue);
 
   return (
-    <div className="flex w-full h-full flex-col shrink-0 border-r border-slate-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors">
+    <div className="flex w-full h-full flex-col shrink-0 border-r border-gray-200 dark:border-slate-700/70 bg-[#F8FAFC] dark:bg-[#0f172a] relative transition-colors">
       <div
         className={clsx(
-          "group/header flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative",
+          "group/header flex flex-col px-4 py-3 shrink-0 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 relative",
         )}
       >
         <div className="absolute top-0 left-0 h-[3px] w-full bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600">
@@ -147,7 +147,7 @@ export function KanbanColumn({
           <div className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 opacity-0 group-hover/header:opacity-100 transition-opacity hidden md:block">
             <button
               onClick={onAddRight}
-              className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md hover:bg-blue-600 hover:scale-110 transition-transform"
+              className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-sm hover:bg-blue-600 hover:scale-110 transition-transform"
               title="Añadir etapa aquí"
             >
               <Plus className="w-4 h-4" />
