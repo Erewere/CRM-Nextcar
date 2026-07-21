@@ -102,6 +102,7 @@ export interface Deal {
   title: string;
   value?: number;
   status: string; // The pipeline stage ID or 'won' / 'lost'
+  stageId?: string;
   vehicleId?: string;
   vehicle?: string;
   origin?: string;
@@ -185,9 +186,11 @@ export interface Task {
   type?: string;
   notes?: string;
   dueDate: string;
+  dueTime?: string;
   startTime?: string;
   endTime?: string;
   completed: boolean;
+  status?: string;
   googleEventId?: string;
   googleTaskId?: string;
   createdAt: any;

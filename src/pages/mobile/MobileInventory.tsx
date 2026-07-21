@@ -5,7 +5,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Vehicle, Client } from '../../types';
 import { 
   Car as CarIcon, Search, Share2, DollarSign, Calendar, SlidersHorizontal, 
-  Sparkles, ExternalLink, MessageSquare, ShieldAlert, Award 
+  Sparkles, ExternalLink, MessageSquare, ShieldAlert, Award, X 
 } from 'lucide-react';
 import clsx from 'clsx';
 import { ShareVehicleModal } from '../../components/ShareVehicleModal';

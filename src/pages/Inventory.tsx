@@ -89,9 +89,9 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
     const priceMax = wv.priceMax || Infinity;
     if (vehicle.price > priceMax) {
         isExact = false;
-        if (vehicle.price > priceMax * 1.2) {
-            isSimilar = false; // More than 20% over budget
-        } else if (vehicle.price > priceMax * 1.1) {
+        if (vehicle.price > priceMax * 1.15) {
+            isSimilar = false; // Excede más del 15% del presupuesto -> Descalificado
+        } else if (vehicle.price > priceMax * 1.08) {
             differences += 2;
         } else {
             differences += 1;
@@ -152,7 +152,8 @@ export function Inventory() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const { hasSharedMatches } = useSharedInventoryMatches();
+  const { matches } = useSharedInventoryMatches();
+  const hasSharedMatches = matches.length > 0;
 
   const handleDismissMatch = async (client: Client, vehicleId: string, vehiclePrice: number) => {
     try {

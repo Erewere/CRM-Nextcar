@@ -58,10 +58,10 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     // 3. Precio
     const priceMax = wv.priceMax || Infinity;
     if (vehicle.price > priceMax) {
-        if (vehicle.price > priceMax * 1.2) {
-            score -= 40;
-        } else if (vehicle.price > priceMax * 1.1) {
-            score -= 20;
+        if (vehicle.price > priceMax * 1.15) {
+            return; // Descalificado: excede el límite máximo del 15% sobre el presupuesto
+        } else if (vehicle.price > priceMax * 1.08) {
+            score -= 25;
         } else {
             score -= 10;
         }

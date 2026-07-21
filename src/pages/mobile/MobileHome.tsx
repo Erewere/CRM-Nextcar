@@ -7,7 +7,7 @@ import {
   CheckCircle, Circle, Clock, Phone, Calendar, MessageCircle, FileText, 
   AlertCircle, TrendingUp, Star, Zap, ChevronRight, Activity, Flame, Car,
   DollarSign, Award, ShieldAlert, UserCheck, BarChart2, ArrowUpRight, Users, Target, Briefcase, Sparkles,
-  ExternalLink, MessageSquare, BadgeCheck
+  ExternalLink, MessageSquare, BadgeCheck, AlertTriangle
 } from "lucide-react";
 import clsx from "clsx";
 import { AiAdvisorPanel } from "../../components/AiAdvisorPanel";
@@ -32,6 +32,7 @@ interface MobileHomeProps {
   tasks: Task[];
   pipelineStages: PipelineStage[];
   onSelectClient: (client: Client) => void;
+  onSelectVehicle?: (vehicle: Vehicle) => void;
   userRole?: string;
   clientsWithScores?: any[];
   sellerPerformance?: any[];
@@ -61,6 +62,7 @@ export function MobileHome({
   tasks = [], 
   pipelineStages = [],
   onSelectClient,
+  onSelectVehicle,
   userRole = "seller",
   clientsWithScores = [],
   sellerPerformance = [],
@@ -75,6 +77,26 @@ export function MobileHome({
   const navigate = useNavigate();
   const [currentTime] = useState(new Date());
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+
+  const missingChecklistVehicles = useMemo(() => {
+    return (vehicles || []).filter((v: any) => v.checklist?.remindMissing && (
+      !v.checklist.facturaOrigen ||
+      !v.checklist.tarjetaCirculacion ||
+      !v.checklist.tenenciasPagadas ||
+      !v.checklist.verificacionVigente ||
+      !v.checklist.duplicadoLlaves ||
+      !v.checklist.inePropietario
+    )).map((v: any) => {
+      const missingItems: string[] = [];
+      if (!v.checklist?.facturaOrigen) missingItems.push('Factura Origen');
+      if (!v.checklist?.tarjetaCirculacion) missingItems.push('Tarjeta Circulación');
+      if (!v.checklist?.tenenciasPagadas) missingItems.push('Tenencias');
+      if (!v.checklist?.verificacionVigente) missingItems.push('Verificación');
+      if (!v.checklist?.duplicadoLlaves) missingItems.push('Duplicado Llaves');
+      if (!v.checklist?.inePropietario) missingItems.push('INE Propietario');
+      return { ...v, missingItems };
+    });
+  }, [vehicles]);
 
   // Shared matches state
   const { ownAgencySharing, matches, loading: matchesLoading } = useSharedInventoryMatches();
@@ -366,6 +388,38 @@ export function MobileHome({
               </div>
             </section>
 
+            {/* Inventory Checklist Alerts for Mobile */}
+            {missingChecklistVehicles.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  <h2 className="text-base font-black text-slate-800 dark:text-white">Alertas de Inventario</h2>
+                </div>
+                <div className="space-y-2">
+                  {missingChecklistVehicles.slice(0, 4).map((v: any, index: number) => (
+                    <div
+                      key={`missing-v-${v.id || index}`}
+                      onClick={() => onSelectVehicle?.(v)}
+                      className="p-3 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200 dark:border-amber-900/30 rounded flex items-start gap-3 cursor-pointer active:scale-[0.99] transition-transform"
+                    >
+                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-xs font-black text-slate-900 dark:text-slate-200 truncate">{v.make} {v.model} ({v.year})</p>
+                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
+                            Ver <ExternalLink className="w-3 h-3" />
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1 truncate">
+                          Faltan: <span className="font-bold text-amber-800 dark:text-amber-300">{v.missingItems.join(', ')}</span>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Admin Inactivity Alerts */}
             {inactiveAlerts.length > 0 && (
               <section className="space-y-3">
@@ -376,13 +430,27 @@ export function MobileHome({
                 <div className="space-y-2">
                   {inactiveAlerts.slice(0, 4).map((alert, index) => {
                     const sellerObj = sellerPerformance.find(s => s.id === alert.task.sellerId);
+                    const targetClient = alert.client || clients.find(c => c.id === alert.task.clientId);
                     return (
-                      <div key={`admin-alert-${alert.task.id}-${index}`} className="p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded flex items-start gap-3">
+                      <div 
+                        key={`admin-alert-${alert.task.id}-${index}`} 
+                        onClick={() => {
+                          if (targetClient && onSelectClient) {
+                            onSelectClient(targetClient);
+                          }
+                        }}
+                        className={`p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded flex items-start gap-3 transition-all ${
+                          targetClient ? "cursor-pointer active:scale-[0.99]" : ""
+                        }`}
+                      >
                         <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-black text-slate-900 dark:text-slate-200 line-clamp-1">{alert.task.title}</p>
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="text-xs font-black text-slate-900 dark:text-slate-200 line-clamp-1">{alert.task.title}</p>
+                            {targetClient && <ExternalLink className="w-3 h-3 text-red-500 shrink-0 opacity-80" />}
+                          </div>
                           <p className="text-[10px] text-slate-500 mt-1">
-                            Cliente: <span className="font-bold text-slate-700 dark:text-slate-300">{alert.client?.name || "N/A"}</span>
+                            Cliente: <span className="font-bold text-slate-700 dark:text-slate-300">{targetClient?.name || "N/A"}</span>
                           </p>
                           <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-800/50 text-[9px] text-slate-400">
                             <span>Vence: {alert.task.dueDate}</span>

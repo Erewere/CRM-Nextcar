@@ -52,7 +52,8 @@ export class MatchingEngine {
         score += 15;
         reasons.push(`Precio ligeramente superior a su presupuesto pero viable mediante financiamiento.`);
       } else {
-        reasons.push(`El vehículo excede significativamente su presupuesto máximo.`);
+        reasons.push(`El vehículo excede más del 15% del presupuesto máximo del cliente ($${preferences.priceMax.toLocaleString()}).`);
+        return { score: 0, reasons };
       }
     } else {
       score += 15; // Presupuesto abierto

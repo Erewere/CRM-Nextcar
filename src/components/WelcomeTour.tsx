@@ -81,20 +81,20 @@ export function WelcomeTour() {
 
   return (
     <Joyride
-      steps={steps}
-      run={run}
-      continuous
-      scrollToFirstStep
-      showSkipButton
-      showProgress
-      callback={handleJoyrideCallback}
-      locale={{
-        back: 'Atrás',
-        close: 'Cerrar',
-        last: 'Finalizar',
-        next: 'Siguiente',
-        skip: 'Omitir',
-      }}
+      {...({
+        steps,
+        run,
+        continuous: true,
+        scrollToFirstStep: true,
+        callback: handleJoyrideCallback,
+        locale: {
+          back: 'Atrás',
+          close: 'Cerrar',
+          last: 'Finalizar',
+          next: 'Siguiente',
+          skip: 'Omitir',
+        }
+      } as any)}
     />
   );
 }

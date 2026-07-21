@@ -375,9 +375,9 @@ export function Tasks() {
     try {
       const batch = writeBatch(db);
       for (const taskId of selectedTaskIds) {
-        const taskObj = tasks.find((t) => t.id === taskId);
-        if (taskObj && taskObj.dueDate) {
-          const currentDate = new Date(taskObj.dueDate + "T00:00:00");
+        const item = tasks.find((t) => t.task.id === taskId);
+        if (item && item.task.dueDate) {
+          const currentDate = new Date(item.task.dueDate + "T00:00:00");
           const newDate = addDays(currentDate, daysToPostpone);
           batch.update(doc(db, "tasks", taskId), {
             dueDate: format(newDate, "yyyy-MM-dd"),

@@ -143,6 +143,7 @@ export function Dashboard() {
 
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [agencyTags, setAgencyTags] = useState<{ id: string; name: string }[]>(
     [],
@@ -614,6 +615,7 @@ export function Dashboard() {
           tasks={tasks}
           pipelineStages={pipelineStages}
           onSelectClient={setSelectedClient}
+          onSelectVehicle={setSelectedVehicle}
           userRole={userData?.role}
           clientsWithScores={clientsWithScores}
           sellerPerformance={sellerPerformance}
@@ -927,15 +929,25 @@ export function Dashboard() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {missingChecklistVehicles.map((v, i) => (
-                      <div key={i} className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/50 p-3 rounded shadow-sm text-sm">
+                      <div 
+                        key={v.id || i} 
+                        onClick={() => setSelectedVehicle(v)}
+                        className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/50 p-3 rounded shadow-sm text-sm cursor-pointer hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-md transition-all group"
+                      >
                         <div className="font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
-                           <span>{v.make} {v.model}</span>
+                           <span className="flex items-center gap-1.5 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                             {v.make} {v.model}
+                             <ExternalLink className="w-3.5 h-3.5 text-amber-500 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
+                           </span>
                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{v.year}</span>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{v.vin || 'Sin VIN'}</p>
-                        <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 p-1.5 rounded">
-                          Faltan: {v.missingItems.join(', ')}
-                        </p>
+                        <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/30 p-2 rounded flex items-center justify-between gap-1">
+                          <span className="truncate">Faltan: {v.missingItems.join(', ')}</span>
+                          <span className="text-[10px] font-bold underline text-amber-800 dark:text-amber-300 shrink-0 group-hover:text-amber-900 dark:group-hover:text-amber-200">
+                            Ver Vehículo →
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1188,14 +1200,33 @@ export function Dashboard() {
                     <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
                       {inactiveAlerts.map((alert, index) => {
                         const sellerObj = allSellersAndAdmins.find(u => u.id === alert.task.sellerId);
+                        const targetClient = alert.client || clients.find(c => c.id === alert.task.clientId);
                         return (
                           <div 
                             key={`admin-alert-${alert.task.id}-${index}`}
-                            className="p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded"
+                            onClick={() => {
+                              if (targetClient) {
+                                setSelectedClient(targetClient);
+                              }
+                            }}
+                            className={`p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded transition-all group ${
+                              targetClient 
+                                ? "cursor-pointer hover:bg-red-100/70 dark:hover:bg-red-900/30 hover:border-red-300 dark:hover:border-red-700 shadow-2xs" 
+                                : ""
+                            }`}
                           >
-                            <p className="text-xs font-black text-slate-800 dark:text-slate-200 line-clamp-1">{alert.task.title}</p>
-                            <p className="text-[10px] text-slate-400 mt-1">
-                              Cliente: <span className="font-bold text-slate-600 dark:text-slate-300">{alert.client?.name || "N/A"}</span>
+                            <div className="flex justify-between items-start gap-2">
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-200 line-clamp-1 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors">
+                                {alert.task.title}
+                              </p>
+                              {targetClient && (
+                                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1 shrink-0 bg-red-100/80 dark:bg-red-900/40 px-1.5 py-0.5 rounded group-hover:bg-red-200 dark:group-hover:bg-red-800/60 transition-colors">
+                                  Ver Prospecto <ExternalLink className="w-3 h-3" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                              Cliente: <span className="font-bold text-slate-700 dark:text-slate-200">{targetClient?.name || "N/A"}</span>
                             </p>
                             <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-800 text-[9px] text-slate-400">
                               <span>Vencimiento: {alert.task.dueDate}</span>
@@ -1571,6 +1602,12 @@ export function Dashboard() {
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
           onUpdated={() => setRefreshKey(prev => prev + 1)}
+        />
+      )}
+      {selectedVehicle && (
+        <VehicleDetailModal
+          vehicle={selectedVehicle}
+          onClose={() => setSelectedVehicle(null)}
         />
       )}
       <AgencyRevenueModal 
