@@ -337,6 +337,31 @@ async function startServer() {
     }
   });
 
+  app.post("/api/delete-agency", async (req, res) => {
+    try {
+      const { agencyId } = req.body;
+      if (!agencyId) {
+        return res.status(400).json({ error: "Falta el parámetro agencyId" });
+      }
+
+      const db = getClientDb();
+      
+      // Unassign users belonging to this agency
+      const usersSnap = await getDocs(query(collection(db, "users"), where("agencyId", "==", agencyId)));
+      for (const uDoc of usersSnap.docs) {
+        await updateDoc(doc(db, "users", uDoc.id), { agencyId: "unassigned" });
+      }
+
+      // Delete agency document
+      await deleteDoc(doc(db, "agencies", agencyId));
+
+      res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("Delete Agency Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {
     try {

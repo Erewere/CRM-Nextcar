@@ -1,189 +1,135 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    function isUserDoc(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function userExists() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    
-    function isMaster() {
-      return isAuthenticated() && getUserData() != null && getUserData().role == 'master';
-    }
-    
-    function isAdmin() {
-      return isAuthenticated() && getUserData() != null && getUserData().role == 'admin';
-    }
-    
-    function isSeller() {
-      return isAuthenticated() && getUserData() != null && getUserData().role == 'seller';
-    }
-    
+
     function getUserAgencyId() {
-      let data = getUserData();
-      return data == null ? null : data.agencyId;
+      return userExists() ? getUserData().agencyId : null;
     }
-    
+
+    function isMaster() {
+      return isAuthenticated() && (
+        (request.auth.token.email != null && request.auth.token.email == 'luisfj@gmail.com') ||
+        (userExists() && getUserData().role == 'master')
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        isMaster() ||
+        (userExists() && getUserData().role == 'admin')
+      );
+    }
+
     function isSameAgency(agencyId) {
-      return isMaster() || (isAuthenticated() && getUserAgencyId() == agencyId);
+      return isMaster() || (isAuthenticated() && agencyId != null && getUserAgencyId() == agencyId);
     }
-    
+
     // AGENCIES
     match /agencies/{agencyId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isMaster() || (isAdmin() && getUserAgencyId() == agencyId);
+      allow update: if isMaster() || (isAdmin() && isSameAgency(agencyId));
+      allow delete: if isMaster();
     }
-    
+
     // USERS
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isMaster() || (getUserData() != null && getUserAgencyId() == resource.data.agencyId));
-      
-      allow create: if isAuthenticated() && 
-                    request.auth.uid == userId && 
-                    (
-                      request.resource.data.role == 'seller' || 
-                      request.resource.data.role == 'unassigned' || 
-                      (
-                        request.resource.data.role == 'admin' && 
-                        get(/databases/$(database)/documents/agencies/$(request.resource.data.agencyId)).data.creatorId == userId
-                      ) ||
-                      (request.resource.data.role == 'master' && request.auth.token.email == 'luisfj@gmail.com')
-                    );
-                    
-      allow update: if isMaster() || 
-                    (isAdmin() && 
-                     getUserAgencyId() == resource.data.agencyId && 
-                     request.resource.data.agencyId == resource.data.agencyId &&
-                    request.auth.uid != userId &&
-                    request.resource.data.role != 'master') ||
-                  (isAuthenticated() && request.auth.uid == userId &&
-                    request.resource.data.role == resource.data.role && 
-                    request.resource.data.agencyId == resource.data.agencyId &&
-                   request.resource.data.createdAt == resource.data.createdAt);
-                   
-      allow delete: if isMaster() || (isAdmin() && getUserAgencyId() == resource.data.agencyId);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isUserDoc(userId);
+      allow update: if isAuthenticated() && (isUserDoc(userId) || isMaster() || isAdmin());
+      allow delete: if isMaster() || (isAdmin() && resource.data.agencyId == getUserAgencyId());
     }
-    
+
     // CLIENTS
     match /clients/{clientId} {
-      allow read: if isSameAgency(resource.data.agencyId) && 
-                   (isMaster() || isAdmin() || 
-                    resource.data.sellerId == request.auth.uid || 
-                    resource.data.visibility == 'all');
-                    
-      allow create: if true;
-      
-      allow update: if isSameAgency(resource.data.agencyId) && 
-                    request.resource.data.agencyId == resource.data.agencyId &&
-                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || resource.data.visibility == 'all');
-                   
-      allow delete: if isSameAgency(resource.data.agencyId) && 
-                    (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
+      allow read: if isAuthenticated();
+      allow create: if true; // Allow public leads / forms & authenticated users
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
-    
+
     // TASKS
     match /tasks/{taskId} {
-      allow read: if isSameAgency(resource.data.agencyId) && 
-                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
-                   
+      allow read: if isAuthenticated();
       allow create: if true;
-      
-      allow update: if isSameAgency(resource.data.agencyId) && 
-                    request.resource.data.agencyId == resource.data.agencyId &&
-                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
-                   
-      allow delete: if isSameAgency(resource.data.agencyId) && 
-                    (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
 
     // DEALS
     match /deals/{dealId} {
-      function getClientVisibility(clientId) {
-        return get(/databases/$(database)/documents/clients/$(clientId)).data.visibility;
-      }
-      allow read: if isSameAgency(resource.data.agencyId) && 
-                   (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || getClientVisibility(resource.data.clientId) == 'all');
-                   
+      allow read: if isAuthenticated();
       allow create: if true;
-      
-      allow update: if isSameAgency(resource.data.agencyId) && 
-                    request.resource.data.agencyId == resource.data.agencyId &&
-                    (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid || getClientVisibility(resource.data.clientId) == 'all');
-                   
-      allow delete: if isSameAgency(resource.data.agencyId) && 
-                    (isMaster() || isAdmin() || resource.data.sellerId == request.auth.uid);
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
-    
+
     // VEHICLES
     match /vehicles/{vehicleId} {
-      allow read: if isSameAgency(resource.data.agencyId) || 
-                     (resource.data.status == 'available' && 
-                      get(/databases/$(database)/documents/agencies/$(resource.data.agencyId)).data.shareInventory == true && 
-                     get(/databases/$(database)/documents/agencies/$(getUserAgencyId())).data.shareInventory == true);
-      allow create: if isSameAgency(request.resource.data.agencyId);
-      
-      allow update: if isSameAgency(resource.data.agencyId) && 
-                    request.resource.data.agencyId == resource.data.agencyId;
-      allow delete: if isSameAgency(resource.data.agencyId) && (isMaster() || isAdmin());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
-    
+
     // VEHICLE EXPENSES
     match /vehicleExpenses/{expenseId} {
-      function getVehicleAgencyId(vehicleId) {
-        return get(/databases/$(database)/documents/vehicles/$(vehicleId)).data.agencyId;
-      }
-      
-      allow read: if (resource.data != null && 'agencyId' in resource.data && isSameAgency(resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
-      
-      allow create: if (request.resource.data != null && 'agencyId' in request.resource.data && isSameAgency(request.resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(request.resource.data.vehicleId));
-      
-      allow update: if (isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId) || 
-                    (isSameAgency(getVehicleAgencyId(resource.data.vehicleId)) && request.resource.data.vehicleId == resource.data.vehicleId);
-                   
-      allow delete: if (resource.data != null && 'agencyId' in resource.data && isSameAgency(resource.data.agencyId)) || isSameAgency(getVehicleAgencyId(resource.data.vehicleId));
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
-    
+
     // NOTES
     match /notes/{noteId} {
-      allow read: if isSameAgency(resource.data.agencyId);
-      allow create: if isSameAgency(request.resource.data.agencyId);
-      allow update: if isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId;
-      allow delete: if isSameAgency(resource.data.agencyId);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
 
     // FILES
     match /files/{fileId} {
-      allow read: if isSameAgency(resource.data.agencyId);
-      allow create: if isSameAgency(request.resource.data.agencyId);
-      allow update: if isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId;
-      allow delete: if isSameAgency(resource.data.agencyId);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
-    
-    // AGENCY_TAGS
+
+    // AGENCY TAGS
     match /agency_tags/{tagId} {
-      allow read: if isSameAgency(resource.data.agencyId);
-      allow create: if isSameAgency(request.resource.data.agencyId);
-      allow update: if isSameAgency(resource.data.agencyId) && request.resource.data.agencyId == resource.data.agencyId;
-      allow delete: if isSameAgency(resource.data.agencyId);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
 
     // AGENCY CHATS
     match /agencyChats/{chatId} {
-      allow read, write: if isAuthenticated() && 
-                           (getUserAgencyId() in resource.data.participants);
-      allow create: if isAuthenticated() && 
-                     (getUserAgencyId() in request.resource.data.participants);
-      
+      allow read, write: if isAuthenticated();
+
       match /messages/{messageId} {
-        allow read, write: if isAuthenticated() && 
-                             (getUserAgencyId() in get(/databases/$(database)/documents/agencyChats/$(chatId)).data.participants);
+        allow read, write: if isAuthenticated();
       }
     }
 
-    // Default deny
+    // Default catch-all
     match /{document=**} {
       allow read, write: if false;
     }

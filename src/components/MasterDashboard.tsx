@@ -1,6 +1,6 @@
 import { getAuth } from "firebase/auth";
 import React, { useEffect, useState, useMemo } from 'react';
-import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { User, ClientFile, Agency, Client, Task } from '../types';
@@ -112,6 +112,51 @@ export function MasterDashboard() {
     } catch (e) {
       console.error(e);
       alert('Error al crear agencia.');
+    }
+  };
+
+  const handleDeleteAgency = async (agencyId: string, agencyName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (agencyId === 'unassigned') return;
+    if (!confirm(`¿Estás seguro de que deseas eliminar la agencia "${agencyName}"? Esta acción desasignará a los usuarios asociados y eliminará la agencia.`)) {
+      return;
+    }
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const token = currentUser ? await currentUser.getIdToken() : '';
+
+      const response = await fetch('/api/delete-agency', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ agencyId })
+      });
+
+      if (!response.ok) {
+        // Fallback directly to client Firestore if endpoint is unavailable
+        await deleteDoc(doc(db, 'agencies', agencyId));
+        const agencyUsers = users.filter(u => u.agencyId === agencyId);
+        for (const u of agencyUsers) {
+          await updateDoc(doc(db, 'users', u.id), { agencyId: 'unassigned' });
+        }
+      }
+
+      await fetchUsersAndFiles();
+      alert(`La agencia "${agencyName}" ha sido eliminada exitosamente.`);
+    } catch (err: any) {
+      console.error("Error deleting agency:", err);
+      // Final attempt fallback
+      try {
+        await deleteDoc(doc(db, 'agencies', agencyId));
+        await fetchUsersAndFiles();
+        alert(`La agencia "${agencyName}" ha sido eliminada exitosamente.`);
+      } catch (fallbackErr: any) {
+        alert(`Error al eliminar la agencia: ${err?.message || 'Error desconocido'}`);
+      }
     }
   };
 
@@ -276,8 +321,19 @@ export function MasterDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="p-2 text-slate-400">
-                  {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                <div className="flex items-center gap-2">
+                  {agency.id !== 'unassigned' && (
+                    <button
+                      onClick={(e) => handleDeleteAgency(agency.id, agency.name, e)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                      title="Eliminar Agencia"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className="p-2 text-slate-400">
+                    {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                  </div>
                 </div>
               </div>
               
