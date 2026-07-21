@@ -137,10 +137,13 @@ export function MasterDashboard() {
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     try {
+        const auth = getAuth();
+        const token = await auth.currentUser?.getIdToken();
         const res = await fetch('/api/delete-user', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
             body: JSON.stringify({ uid: userId })
         });

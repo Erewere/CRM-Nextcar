@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
-import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2 } from 'lucide-react';
+import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
 import { Task, Client } from '../types';
 import { deduplicateClients } from '../lib/clientUtils';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -225,6 +225,8 @@ export function AgencyUsers() {
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState('seller');
   const [createdUserPassword, setCreatedUserPassword] = useState('');
+  const [createdUserEmail, setCreatedUserEmail] = useState('');
+  const [copiedField, setCopiedField] = useState<'link' | 'password' | 'email' | 'all' | null>(null);
 
   const handleCreateUser = async () => {
     if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
@@ -238,9 +240,12 @@ export function AgencyUsers() {
     
     setInviting(true);
     setCreatedUserPassword('');
+    setCreatedUserEmail('');
+    setCopiedField(null);
     try {
         const targetAgencyId = inviteTargetAgencyId || userData?.agencyId;
         const tempPassword = Math.random().toString(36).slice(-8) + 'Aa1!'; // Generate a random password
+        const targetEmail = inviteEmail.trim();
 
         // Use Firebase Auth REST API directly to avoid signing out the current admin
         const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`, {
@@ -249,7 +254,7 @@ export function AgencyUsers() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                email: inviteEmail.trim(),
+                email: targetEmail,
                 password: tempPassword,
                 returnSecureToken: true
             })
@@ -266,7 +271,7 @@ export function AgencyUsers() {
 
         // Save user data to Firestore
         await setDoc(doc(db, 'users', newUserId), {
-            email: inviteEmail.trim(),
+            email: targetEmail,
             name: inviteName.trim(),
             role: inviteRole,
             agencyId: targetAgencyId,
@@ -285,6 +290,7 @@ export function AgencyUsers() {
 
         setInviteSuccessMsg(`¡Usuario creado con éxito!`);
         setCreatedUserPassword(tempPassword);
+        setCreatedUserEmail(targetEmail);
         setInviteEmail('');
         setInviteName('');
     } catch (e: any) {
@@ -398,6 +404,7 @@ export function AgencyUsers() {
   if (loading) return <div className="p-8">Cargando...</div>;
 
   const isMaster = userData?.role === 'master' ;
+  const loginUrl = typeof window !== 'undefined' ? `${window.location.origin}/login` : '';
 
   return (
     <div className="max-w-6xl mx-auto py-4 space-y-4">
@@ -542,14 +549,115 @@ export function AgencyUsers() {
               {inviteSuccessMsg}
             </div>
             {createdUserPassword && (
-              <div className="mt-2 bg-white dark:bg-slate-800 p-3 rounded border border-green-100 dark:border-green-900 select-all">
-                <p className="text-slate-600 dark:text-slate-300 mb-1">Contraseña temporal generada:</p>
-                <code className="text-lg font-mono font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">
-                  {createdUserPassword}
-                </code>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                  Copia esta contraseña y entrégasela al usuario. Podrá cambiarla una vez que inicie sesión.
+              <div className="mt-3 bg-white dark:bg-slate-800 p-4 rounded-lg border border-green-200 dark:border-green-800/60 shadow-sm flex flex-col gap-3 text-slate-800 dark:text-slate-200">
+                <p className="text-xs font-bold uppercase tracking-wider text-green-800 dark:text-green-300 flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-green-600 dark:text-green-400" />
+                  Datos de Acceso al CRM
                 </p>
+
+                {/* Liga de Acceso al CRM */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-900/80 rounded-md border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Liga de inicio de sesión (CRM Login):
+                    </span>
+                    <a
+                      href={loginUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400 hover:underline truncate flex items-center gap-1.5 mt-1"
+                    >
+                      <Link className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{loginUrl}</span>
+                      <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+                    </a>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(loginUrl);
+                      setCopiedField('link');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/70 rounded border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1.5 shrink-0 transition-colors shadow-xs"
+                  >
+                    {copiedField === 'link' ? <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedField === 'link' ? '¡Liga Copiada!' : 'Copiar Liga'}
+                  </button>
+                </div>
+
+                {/* Usuario y Contraseña Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/80 rounded-md border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <span className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Usuario / Correo:
+                      </span>
+                      <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 block truncate mt-1">
+                        {createdUserEmail}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdUserEmail);
+                        setCopiedField('email');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+                      title="Copiar correo"
+                    >
+                      {copiedField === 'email' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/80 rounded-md border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <span className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Contraseña temporal:
+                      </span>
+                      <code className="text-sm font-mono font-black text-slate-900 dark:text-white block mt-1">
+                        {createdUserPassword}
+                      </code>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdUserPassword);
+                        setCopiedField('password');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+                      title="Copiar contraseña"
+                    >
+                      {copiedField === 'password' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Botón para copiar el mensaje de acceso completo */}
+                <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-700/50 mt-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Puedes copiar los datos individuales o el mensaje completo para entregárselo al nuevo usuario.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const completeMsg = `¡Hola! Te compartimos tus datos de acceso al CRM:\n\n` +
+                        `• Liga de inicio de sesión: ${loginUrl}\n` +
+                        `• Usuario: ${createdUserEmail}\n` +
+                        `• Contraseña temporal: ${createdUserPassword}\n\n` +
+                        `Podrás cambiar tu contraseña una vez que inicies sesión.`;
+                      navigator.clipboard.writeText(completeMsg);
+                      setCopiedField('all');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold rounded flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0"
+                  >
+                    {copiedField === 'all' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                    {copiedField === 'all' ? '¡Mensaje Copiado!' : 'Copiar Mensaje Completo'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
