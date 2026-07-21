@@ -9,6 +9,7 @@ import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients } from '../lib/clientUtils';
+import { useSharedInventoryMatches } from '../hooks/useSharedInventoryMatches';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 import { useReadOnly } from '../hooks/useReadOnly';
@@ -150,6 +151,20 @@ export function Inventory() {
   const [filterBodyType, setFilterBodyType] = useState<string>('all');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  const { hasSharedMatches } = useSharedInventoryMatches();
+
+  const handleDismissMatch = async (client: Client, vehicleId: string, vehiclePrice: number) => {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const dismissed = client.dismissedMatches || [];
+      await updateDoc(doc(db, 'clients', client.id), {
+        dismissedMatches: [...dismissed, `${vehicleId}_${vehiclePrice || 0}`]
+      });
+    } catch (error) {
+      console.error('Error dismissing match:', error);
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'my' | 'shared'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -552,7 +567,7 @@ export function Inventory() {
     <div className="h-full flex flex-col">
       <div className="flex justify-end items-center mb-4">
         <div className="flex items-center gap-3">
-          {!isReadOnly && (
+          {!isReadOnly && userData?.role !== "seller" && (
             <>
               <label className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
                 <Download className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Importar Excel</span>
@@ -672,6 +687,9 @@ export function Inventory() {
                 Inventario Compartido
                 {!ownAgencySharing && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Inactivo (Actívalo en Agencias)"></span>
+                )}
+                {ownAgencySharing && hasSharedMatches && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Hay vehículos que coinciden con clientes activos"></span>
                 )}
               </button>
             </div>

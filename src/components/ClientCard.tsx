@@ -95,7 +95,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
           <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
             {client.dealTitle || (client.name ? `${client.name} deal` : 'Deal')}
             {disabled && (
-              <Lock className="w-3 h-3 text-slate-400 shrink-0" title="Solo lectura (Asignado a otro vendedor)" />
+              <span title="Solo lectura (Asignado a otro vendedor)"><Lock className="w-3 h-3 text-slate-400 shrink-0" /></span>
             )}
           </h4>
           {client.dealValue ? (

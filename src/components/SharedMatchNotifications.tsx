@@ -13,6 +13,22 @@ export function SharedMatchNotifications() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const isMobile = useIsMobile();
 
+  const handleDismissMatch = async (client: Client, vehicleId: string, vehiclePrice: number) => {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      const dismissed = client.dismissedMatches || [];
+      const dismissKey = `${vehicleId}_${vehiclePrice || 0}`;
+      if (!dismissed.includes(dismissKey)) {
+        await updateDoc(doc(db, 'clients', client.id), {
+          dismissedMatches: [...dismissed, dismissKey]
+        });
+      }
+    } catch (error) {
+      console.error('Error dismissing match:', error);
+    }
+  };
+
   // If mobile, or there are no matches, or we are loading, we don't render the notification widget
   if (isMobile || loading || matches.length === 0) return null;
 
@@ -69,9 +85,21 @@ export function SharedMatchNotifications() {
                       <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200/40">
                         {match.level === "exact" ? "Match Perfecto" : `Coincidencia ${percentage}%`}
                       </span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold truncate max-w-[120px]">
-                        {match.agencyName}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold truncate max-w-[120px]">
+                          {match.agencyName}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDismissMatch(match.client, match.vehicle.id, match.vehicle.price);
+                          }}
+                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                          title="Ocultar coincidencia"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-start gap-2.5">

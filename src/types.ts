@@ -23,6 +23,28 @@ export interface VehicleExpense {
   addedBy: string;
 }
 
+export interface VehicleChecklist {
+  originalInvoice?: boolean;
+  ineOrId?: boolean;
+  originInvoiceCopy?: boolean;
+  rebillings?: boolean;
+  taxes?: boolean;
+  deregistration?: boolean;
+  platesAndCard?: string;
+  platesState?: string;
+  ownersCount?: string;
+  
+  jack?: boolean;
+  securityLugNut?: boolean;
+  manuals?: boolean;
+  servicePolicy?: boolean;
+  duplicateKeys?: boolean;
+  smogCheck?: boolean;
+  tools?: boolean;
+
+  remindMissing?: boolean;
+}
+
 export interface Vehicle {
   id: string;
   agencyId: string;
@@ -51,6 +73,7 @@ export interface Vehicle {
   passengers?: number;
   soldAt?: string;
   saleDetails?: SaleDetails;
+  checklist?: VehicleChecklist;
 }
 
 export interface Agency {
@@ -62,6 +85,7 @@ export interface Agency {
   businessHours?: { start: string; end: string };
   createdAt: string | Date;
   hasFreeAccess?: boolean;
+  trialEndsAt?: string;
   subscriptionStatus?: string;
   aiCredits?: number;
   stripeCustomerId?: string;
@@ -137,6 +161,7 @@ export interface Client {
   saleDetails?: SaleDetails;
   origin: "manual" | "whatsapp" | "web" | "website" | "google_contacts" | "excel_import" | "facebook" | "instagram";
   tags?: string[];
+  dismissedMatches?: string[];
   wantedVehicle?: {
     make?: string;
     model?: string;

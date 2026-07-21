@@ -15,6 +15,7 @@ import { Client, Vehicle, Task, User } from "../types";
 import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { VehicleDetailModal } from "../components/VehicleDetailModal";
+import { AgencyRevenueModal } from "../components/AgencyRevenueModal";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { MobileHome } from "./mobile/MobileHome";
 import { MobileClientDetail } from "./mobile/MobileClientDetail";
@@ -46,7 +47,7 @@ import {
   TrendingUp,
   Calendar,
   Clock,
-  AlertCircle,
+  AlertCircle, AlertTriangle,
   Filter,
   Briefcase,
   Check,
@@ -151,6 +152,7 @@ export function Dashboard() {
   >([]);
   const [inactivityAlertDays, setInactivityAlertDays] = useState(14);
   const [agencyName, setAgencyName] = useState<string>("");
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
 
   useEffect(() => {
     if (userData?.agencyId) {
@@ -433,10 +435,7 @@ export function Dashboard() {
 
   if (loading) return <div>Cargando dashboard...</div>;
 
-  if (
-    userData?.role === "master" ||
-    userData?.role === 'master'
-  ) {
+  if (userData?.role === "master") {
     return <MasterDashboard />;
   }
 
@@ -473,13 +472,42 @@ export function Dashboard() {
     (v) => v.status === "available" || !v.status,
   );
 
+  const missingChecklistVehicles = vehicles.filter(v => v.checklist?.remindMissing && (
+      !v.checklist.originalInvoice ||
+      !v.checklist.taxes ||
+      !v.checklist.deregistration ||
+      !v.checklist.ineOrId ||
+      !v.checklist.duplicateKeys ||
+      !v.checklist.jack ||
+      !v.checklist.securityLugNut ||
+      !v.checklist.manuals ||
+      !v.checklist.servicePolicy ||
+      !v.checklist.smogCheck ||
+      !v.checklist.tools
+  )).map(v => {
+      const missing = [];
+      if (!v.checklist.originalInvoice) missing.push('Factura Original');
+      if (!v.checklist.taxes) missing.push('Tenencias');
+      if (!v.checklist.deregistration) missing.push('Baja');
+      if (!v.checklist.ineOrId) missing.push('INE/ID');
+      if (!v.checklist.duplicateKeys) missing.push('Llavero');
+      if (!v.checklist.jack) missing.push('Gato');
+      if (!v.checklist.securityLugNut) missing.push('Birlos');
+      if (!v.checklist.manuals) missing.push('Manuales');
+      if (!v.checklist.servicePolicy) missing.push('Póliza');
+      if (!v.checklist.smogCheck) missing.push('Verificación');
+      if (!v.checklist.tools) missing.push('Herramienta');
+      return { ...v, missingItems: missing };
+  });
+
   // Match Calculation
   let allClientMatches = 0;
   const uniqueActiveContacts = Array.from(new Map(activeContacts.map(c => [c.originalClientId || c.id, c])).values()) as Client[];
 
   uniqueActiveContacts.forEach((client) => {
     const matches = getClientMatches(client, availableVehicles);
-    allClientMatches += matches.length;
+    const validMatches = matches.filter(m => !client.dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`));
+    allClientMatches += validMatches.length;
   });
 
   const buscanAutoClients = uniqueActiveContacts.filter(c => 
@@ -889,9 +917,35 @@ export function Dashboard() {
               </div>
 
               {/* Admin KPIs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+              {missingChecklistVehicles.length > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-500 rounded p-4 shadow-sm mb-6 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+                    <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                      Alertas de Inventario (Checklist Faltantes)
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {missingChecklistVehicles.map((v, i) => (
+                      <div key={i} className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/50 p-3 rounded shadow-sm text-sm">
+                        <div className="font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
+                           <span>{v.make} {v.model}</span>
+                           <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{v.year}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{v.vin || 'Sin VIN'}</p>
+                        <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 p-1.5 rounded">
+                          Faltan: {v.missingItems.join(', ')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div 
+                  onClick={() => setIsRevenueModalOpen(true)}
+                  className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md cursor-pointer transition-all relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <DollarSign className="w-12 h-12 text-emerald-500" />
                   </div>
                   <div>
@@ -906,8 +960,10 @@ export function Dashboard() {
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                <div 
+                  onClick={() => setIsRevenueModalOpen(true)}
+                  className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md cursor-pointer transition-all relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <TrendingUp className="w-12 h-12 text-indigo-500" />
                   </div>
                   <div>
@@ -923,7 +979,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <Users className="w-12 h-12 text-blue-500" />
                   </div>
                   <div>
@@ -939,7 +995,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <Target className="w-12 h-12 text-orange-500" />
                   </div>
                   <div>
@@ -956,10 +1012,10 @@ export function Dashboard() {
               </div>
 
               {/* Admin Main Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              <div className="flex flex-col gap-6">
                 
                 {/* Left Column (8/12) */}
-                <div className="xl:col-span-8 space-y-6">
+                <div className="space-y-6">
                   {/* Advisor Performance Board */}
                   <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6 overflow-hidden">
                     <div className="flex justify-between items-center mb-6">
@@ -986,7 +1042,7 @@ export function Dashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
                           {sellerPerformance.map((seller) => (
-                            <tr key={seller.id} className="hover:bg-[#f4f5f5]/50 dark:hover:bg-slate-700/20 transition-colors">
+                            <tr key={seller.id} className="border-b border-gray-100 dark:border-slate-800 last:border-0">
                               <td className="py-4 px-2 flex items-center gap-3">
                                 {seller.photoURL ? (
                                   <img src={seller.photoURL} alt={seller.name} className="w-8 h-8 rounded-full object-cover border border-gray-200" referrerPolicy="no-referrer" />
@@ -1060,7 +1116,7 @@ export function Dashboard() {
                 </div>
 
                 {/* Right Column (4/12) */}
-                <div className="xl:col-span-4 space-y-6">
+                <div className="space-y-6">
                   
                   {/* Mayor Lead Score Panel for Admin */}
                   <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5 flex flex-col">
@@ -1191,7 +1247,7 @@ export function Dashboard() {
               {/* Seller KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <CheckCircle className="w-12 h-12 text-emerald-500" />
                   </div>
                   <div>
@@ -1207,7 +1263,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <DollarSign className="w-12 h-12 text-slate-500" />
                   </div>
                   <div>
@@ -1223,7 +1279,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <Target className="w-12 h-12 text-indigo-500" />
                   </div>
                   <div>
@@ -1239,7 +1295,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                     <Award className="w-12 h-12 text-orange-500" />
                   </div>
                   <div>
@@ -1256,10 +1312,10 @@ export function Dashboard() {
               </div>
 
               {/* Seller Main Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              <div className="flex flex-col gap-6">
                 
                 {/* Left Column (8/12) */}
-                <div className="xl:col-span-8 space-y-6">
+                <div className="space-y-6">
                   
                   {/* Mayor Lead Score Detailed Board */}
                   <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
@@ -1362,71 +1418,9 @@ export function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Top Inventory Matches */}
-                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
-                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-2">
-                      <Target className="w-5 h-5 text-indigo-500" />
-                      Coincidencias de Inventario de Alta Prioridad
-                    </h3>
-                    <p className="text-xs text-slate-400 mb-6">Autos disponibles que se adaptan con excelente afinidad a las preferencias de tus prospectos.</p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {clientsWithScores.slice(0, 4).filter(c => c.leadScore >= 45).map((client) => {
-                        const matchedVehicles = getClientMatches(client as Client, availableVehicles);
-                        if (matchedVehicles.length === 0) return null;
-                        
-                        return (
-                          <div 
-                            key={`match-box-${client.id}`}
-                            className="bg-[#f4f5f5] dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800/80 rounded p-4 flex flex-col justify-between"
-                          >
-                            <div>
-                              <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">
-                                  Match Detectado
-                                </span>
-                                <span className="text-[11px] font-extrabold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-400 px-2 py-0.5 rounded">
-                                  Score {client.leadScore}
-                                </span>
-                              </div>
-                              <h4 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-2">
-                                {client.name}
-                              </h4>
-                              <p className="text-xs text-slate-400 mt-1">
-                                Busca: {getWantedTitle(client as Client)}
-                              </p>
-                              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-800">
-                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                                  Auto Compatible Disponible:
-                                </p>
-                                <p className="text-xs font-black text-slate-800 dark:text-slate-200 mt-1">
-                                  {matchedVehicles[0].vehicle.make} {matchedVehicles[0].vehicle.model} ({matchedVehicles[0].vehicle.year})
-                                </p>
-                                <p className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">
-                                  ${matchedVehicles[0].vehicle.price.toLocaleString()}
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => setSelectedClient(client as Client)}
-                              className="mt-4 w-full py-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 text-xs font-extrabold rounded border border-gray-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5"
-                            >
-                              Ver Ficha de Cliente
-                            </button>
-                          </div>
-                        );
-                      })}
-                      {clientsWithScores.slice(0, 4).filter(c => c.leadScore >= 45).length === 0 && (
-                        <div className="col-span-2 py-8 text-center text-slate-400 italic text-xs">
-                          No hay coincidencias automáticas de alto score en este momento.
-                        </div>
-                      )}
-                    </div>
                   </div>
-                </div>
-
-                {/* Right Column (4/12) */}
-                <div className="xl:col-span-4 space-y-6">
+                  {/* Right Column (4/12) */}
+                <div className="space-y-6">
                   
                   {/* Advisor Activity Center (Tasks) */}
                   <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
@@ -1500,13 +1494,77 @@ export function Dashboard() {
                         ))}
                       </div>
                     </div>
+
                   )}
+                </div> 
+{/* Top Inventory Matches */}
+                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
+                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-2">
+                      <Target className="w-5 h-5 text-indigo-500" />
+                      Coincidencias de Inventario de Alta Prioridad
+                    </h3>
+                    <p className="text-xs text-slate-400 mb-6">Autos disponibles que se adaptan con excelente afinidad a las preferencias de tus prospectos.</p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {clientsWithScores.slice(0, 4).filter(c => c.leadScore >= 45).map((client) => {
+                        const rawMatches = getClientMatches(client as Client, availableVehicles);
+                        const matchedVehicles = rawMatches.filter(m => !(client as Client).dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`));
+                        if (matchedVehicles.length === 0) return null;
+                        
+                        return (
+                          <div 
+                            key={`match-box-${client.id}`}
+                            className="bg-[#f4f5f5] dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800/80 rounded p-4 flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">
+                                  Match Detectado
+                                </span>
+                                <span className="text-[11px] font-extrabold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-400 px-2 py-0.5 rounded">
+                                  Score {client.leadScore}
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-2">
+                                {client.name}
+                              </h4>
+                              <p className="text-xs text-slate-400 mt-1">
+                                Busca: {getWantedTitle(client as Client)}
+                              </p>
+                              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-800">
+                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                                  Auto Compatible Disponible:
+                                </p>
+                                <p className="text-xs font-black text-slate-800 dark:text-slate-200 mt-1">
+                                  {matchedVehicles[0].vehicle.make} {matchedVehicles[0].vehicle.model} ({matchedVehicles[0].vehicle.year})
+                                </p>
+                                <p className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                                  ${matchedVehicles[0].vehicle.price.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setSelectedClient(client as Client)}
+                              className="mt-4 w-full py-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 text-xs font-extrabold rounded border border-gray-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5"
+                            >
+                              Ver Ficha de Cliente
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {clientsWithScores.slice(0, 4).filter(c => c.leadScore >= 45).length === 0 && (
+                        <div className="col-span-2 py-8 text-center text-slate-400 italic text-xs">
+                          No hay coincidencias automáticas de alto score en este momento.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
 
       {selectedClient && (
         <ClientDetailModal
@@ -1515,7 +1573,12 @@ export function Dashboard() {
           onUpdated={() => setRefreshKey(prev => prev + 1)}
         />
       )}
-    </div>
+      <AgencyRevenueModal 
+        isOpen={isRevenueModalOpen} 
+        onClose={() => setIsRevenueModalOpen(false)} 
+        wonContacts={wonContacts} 
+        vehicles={vehicles} 
+      />
     </div>
   );
 }

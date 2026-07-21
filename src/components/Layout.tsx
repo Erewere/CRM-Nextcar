@@ -228,7 +228,7 @@ export function Layout() {
       name: "Chat Interagencias",
       path: "/chats",
       icon: MessageSquare,
-      roles: ["master", "admin", "seller"],
+      roles: ["master", "admin"],
       badge: unreadChatsCount > 0 ? unreadChatsCount : undefined,
     },
   ].filter((item) => {
@@ -247,8 +247,8 @@ export function Layout() {
     if (finalItem.name === "Inventario") {
       finalItem = {
         ...finalItem,
-        path: hasSharedMatches ? "/inventory?tab=shared" : "/inventory",
-        badge: hasSharedMatches ? sharedMatches.length : undefined
+        path: "/inventory",
+        badge: (hasSharedMatches && location.pathname !== "/inventory") ? sharedMatches.length : undefined
       };
     }
     
@@ -526,10 +526,13 @@ export function Layout() {
           {[
             { name: "Inicio", path: "/", icon: LayoutDashboard },
             { name: "Contactos", path: "/persons", icon: Users },
-            { name: "Inventario", path: (ownAgencySharing && sharedMatches.length > 0) ? "/inventory?tab=shared" : "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0) ? sharedMatches.length : undefined },
+            { name: "Inventario", path: "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0 && location.pathname !== "/inventory") ? sharedMatches.length : undefined },
             { name: "Chats", path: "/chats", icon: MessageSquare, badge: unreadChatsCount > 0 ? unreadChatsCount : undefined },
             { name: "Citas", path: "/tasks", icon: CheckSquare },
-          ].map(item => {
+          ].filter(item => {
+            if (item.name === "Chats" && userData?.role === "seller") return false;
+            return true;
+          }).map(item => {
             const finalItem = { ...item };
             if (isGlobalReadOnly && finalItem.path !== '/' && finalItem.path !== '/billing') {
               (finalItem as any).disabled = true;

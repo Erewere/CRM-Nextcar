@@ -169,7 +169,7 @@ export function Chats() {
     try {
       const messagesRef = collection(db, 'agencyChats', activeChat.id, 'messages');
       await addDoc(messagesRef, {
-        senderId: userData.uid || userData.email || 'system',
+        senderId: userData.id || userData.email || 'system',
         senderAgencyId: userData.agencyId,
         text: messageText,
         createdAt: new Date().toISOString()

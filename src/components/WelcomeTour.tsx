@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Joyride, CallBackProps, STATUS, Step } from 'react-joyride';
+import { Joyride, STATUS, Step } from 'react-joyride';
 import { useAuth } from '../contexts/AuthContext';
 
 export function WelcomeTour() {
@@ -26,7 +26,7 @@ export function WelcomeTour() {
           createdDate = new Date(userData.createdAt);
         }
         
-        isNewUser = (new Date().getTime() - createdDate.getTime()) < 1000 * 60 * 60 * 24 * 7;
+        isNewUser = (new Date().getTime() - createdDate.getTime()) < 1000 * 60 * 5; // 5 minutes
       } catch (e) {
         console.error("Error parsing createdAt", e);
         isNewUser = false; // default to false if error
@@ -42,7 +42,7 @@ export function WelcomeTour() {
     }
   }, [userData?.createdAt]);
 
-  const handleJoyrideCallback = (data: CallBackProps) => {
+  const handleJoyrideCallback = (data: any) => {
     const { status } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
     
@@ -55,8 +55,7 @@ export function WelcomeTour() {
   const steps: Step[] = [
     {
       target: 'nav a[href="/"]',
-      content: 'Bienvenido a LUHO CRM. Este es tu Dashboard, donde podrás ver las estadísticas y métricas principales de tus ventas.',
-      disableBeacon: true,
+      content: 'Bienvenido a Nextcar CRM. Este es tu Dashboard, donde podrás ver las estadísticas y métricas principales de tus ventas.',
     },
     {
       target: 'nav a[href="/kanban"]',
@@ -89,12 +88,6 @@ export function WelcomeTour() {
       showSkipButton
       showProgress
       callback={handleJoyrideCallback}
-      styles={{
-        options: {
-          primaryColor: '#4F46E5', // Indigo-600
-          zIndex: 10000,
-        },
-      }}
       locale={{
         back: 'Atrás',
         close: 'Cerrar',

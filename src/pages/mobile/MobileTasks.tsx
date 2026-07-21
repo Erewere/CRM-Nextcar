@@ -94,8 +94,8 @@ export function MobileTasks() {
 
   const selectedTasks = useMemo(() => {
     return tasks.filter(t => {
-      if (!t.task.date) return false;
-      const tDate = parseISO(t.task.date);
+      if (!t.task.dueDate) return false;
+      const tDate = parseISO(t.task.dueDate);
       return isSameDay(tDate, selectedDate);
     });
   }, [tasks, selectedDate]);
@@ -144,8 +144,8 @@ export function MobileTasks() {
            
            // Check if there are tasks for this day
            const hasTasks = tasks.some(t => {
-             if (!t.task.date) return false;
-             return isSameDay(parseISO(t.task.date), day) && t.task.status === "pending";
+             if (!t.task.dueDate) return false;
+             return isSameDay(parseISO(t.task.dueDate), day) && !t.task.completed;
            });
 
            return (
@@ -210,8 +210,8 @@ export function MobileTasks() {
           {/* Tasks Overlay */}
           {selectedTasks.map(({ task, client }, idx) => {
              let top = 0;
-             if (task.time) {
-               const [h, m] = task.time.split(':').map(Number);
+             if (task.dueTime) {
+               const [h, m] = task.dueTime.split(':').map(Number);
                // pt-4 adds 16px offset. Each hour is 80px.
                top = 16 + (h * 80) + (m / 60) * 80;
              }
@@ -238,7 +238,7 @@ export function MobileTasks() {
                    </p>
                  )}
                  <p className={clsx("text-[10px] mt-1 font-medium", isCompleted ? "text-slate-500" : "text-blue-600 dark:text-blue-400")}>
-                   {task.time} {task.type}
+                   {task.dueTime} {task.type}
                  </p>
                </div>
              );

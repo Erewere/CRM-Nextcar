@@ -210,9 +210,7 @@ export function Kanban() {
   });
   const [showArchived, setShowArchived] = useState(false);
 
-  const [tasks, setTasks] = useState<
-    { clientId: string; dueDate: string; completed: boolean }[]
-  >([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
     if (!userData || userData.role === "master" || !userData.agencyId) return;
@@ -236,7 +234,7 @@ export function Kanban() {
     );
 
     let unsubscribeUsers = () => {};
-    if (userData.role === "admin" || userData.role === "master") {
+    if (userData.role === "admin") {
       const uq = query(
         collection(db, "users"),
         where("agencyId", "==", userData.agencyId),
@@ -405,7 +403,7 @@ export function Kanban() {
         originalClientId: deal.clientId,
         dealTitle: deal.title,
         dealValue: deal.value,
-        status: deal.status || deal.stageId || "open",
+        status: deal.status || "open",
         sellerId: deal.sellerId || person.sellerId,
         vehicle: deal.vehicle || person.vehicle,
       } as Client;

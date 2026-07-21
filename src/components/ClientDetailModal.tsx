@@ -1794,7 +1794,8 @@ export function ClientDetailModal({
                       
                       {(() => {
                         if (!formData.wantedVehicle) return null;
-                        const matches = getClientMatches(formData as Client, inventoryVehicles);
+                        const rawMatches = getClientMatches(formData as Client, inventoryVehicles);
+                        const matches = rawMatches.filter(m => !(formData as Client).dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`));
                         if (matches.length === 0) return null;
                         
                         return (

@@ -109,7 +109,7 @@ export default function App() {
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />
             <Route path="emails" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Emails /></ProtectedRoute>} />
-            <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><Chats /></ProtectedRoute>} />
+            <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin']}><Chats /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute requireRole={['master', 'admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />

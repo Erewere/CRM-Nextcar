@@ -39,7 +39,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     return `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
   };
 
-  const [activeTab, setActiveTab] = useState<'info' | 'expenses'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'expenses' | 'checklist'>('info');
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [formData, setFormData] = useState<Partial<Vehicle>>(
@@ -463,8 +463,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   const isMaster = userData?.role === 'master';
   const isOwnVehicle = isNew || formData.agencyId === userData?.agencyId;
   const isGlobalReadOnly = useReadOnly();
-  const isReadOnly = isGlobalReadOnly || (!isOwnVehicle && !isMaster);
   const isAdmin = userData?.role === 'admin' || isMaster;
+  const isReadOnly = isGlobalReadOnly || (!isOwnVehicle && !isMaster) || !isAdmin;
 
   const handleStartChat = async () => {
     if (!userData?.agencyId || !formData.agencyId) return;
@@ -488,7 +488,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       const newMessageDoc = doc(messagesRef);
       await setDoc(newMessageDoc, {
         id: newMessageDoc.id,
-        senderId: userData.uid || userData.email || 'system',
+        senderId: userData.id || userData.email || 'system',
         senderAgencyId: userData.agencyId,
         text: `¡Hola! Estamos interesados en su vehículo de inventario compartido:\n🚙 *${formData.year} ${formData.make} ${formData.model}*\n💰 Precio: $${Number(formData.price || 0).toLocaleString()}\n📈 Km: ${Number(formData.km || 0).toLocaleString()} km\n🎨 Color: ${formData.color}\n⚙️ Transmisión: ${formData.transmission}`,
         createdAt: new Date().toISOString(),
@@ -527,6 +527,14 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
               >
                 Gastos
+              </button>
+            )}
+            {!isNew && (
+              <button 
+                 onClick={() => setActiveTab('checklist')}
+                 className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'checklist' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
+              >
+                Checklist
               </button>
             )}
           </div>
@@ -1153,13 +1161,201 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
               </div>
             </div>
           )}
+
+          
+          {activeTab === 'checklist' && !isNew && (
+            <div className="flex flex-col gap-6 p-6 bg-white dark:bg-slate-800 overflow-y-auto max-h-[70vh]">
+              
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800/50 mb-2">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <strong className="font-bold">Instrucciones:</strong> Marca las casillas de los documentos y accesorios que <span className="font-semibold">ya fueron entregados</span> o están en tu poder. Todo elemento que se deje sin marcar será registrado en el sistema como pendiente o faltante.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Documentos</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'originalInvoice', label: 'Factura Original' },
+                  { key: 'originInvoiceCopy', label: 'Copia Factura Origen' },
+                  { key: 'rebillings', label: 'Refacturas' },
+                  { key: 'taxes', label: 'Tenencias' },
+                  { key: 'deregistration', label: 'Baja' },
+                  { key: 'ineOrId', label: 'INE o ID' },
+                ].map(item => (
+                  <label key={item.key} className="flex items-start gap-3 p-3 border rounded border-gray-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/50 cursor-pointer transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      checked={!!formData.checklist?.[item.key]}
+                      disabled={isReadOnly}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        const newChecklist = { ...formData.checklist, [item.key]: checked };
+                        setFormData(prev => ({ ...prev, checklist: newChecklist }));
+                        if (!isReadOnly && vehicle.id) {
+                          try {
+                            const { doc, updateDoc } = await import('firebase/firestore');
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: newChecklist });
+                          } catch (err) {}
+                        }
+                      }}
+                    />
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-medium ${formData.checklist?.[item.key] ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
+                        {item.label}
+                      </span>
+                      
+                    </div>
+                  </label>
+                ))}
+                
+                <div className="flex flex-col gap-1 p-3 border rounded border-gray-200 dark:border-slate-700">
+                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Placas y tarjeta</label>
+                   <input 
+                     type="text" 
+                     placeholder="Escribe detalles..."
+                     className="mt-1 w-full p-2 border rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+                     value={formData.checklist?.platesAndCard || ''}
+                     disabled={isReadOnly}
+                     onChange={(e) => setFormData(prev => ({ ...prev, checklist: { ...prev.checklist, platesAndCard: e.target.value } }))}
+                     onBlur={async (e) => {
+                       if (!isReadOnly && vehicle.id) {
+                          try {
+                            const { doc, updateDoc } = await import('firebase/firestore');
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: { ...formData.checklist, platesAndCard: e.target.value } });
+                          } catch (err) {}
+                        }
+                     }}
+                   />
+                </div>
+                
+                <div className="flex flex-col gap-1 p-3 border rounded border-gray-200 dark:border-slate-700">
+                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estado de baja / placas</label>
+                   <select 
+                     className="mt-1 w-full p-2 border rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+                     value={formData.checklist?.platesState || ''}
+                     disabled={isReadOnly}
+                     onChange={async (e) => {
+                       const val = e.target.value;
+                       setFormData(prev => ({ ...prev, checklist: { ...prev.checklist, platesState: val } }));
+                       if (!isReadOnly && vehicle.id) {
+                          try {
+                            const { doc, updateDoc } = await import('firebase/firestore');
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: { ...formData.checklist, platesState: val } });
+                          } catch (err) {}
+                        }
+                     }}
+                   >
+                     <option value="">Seleccione Estado...</option>
+                     {["Aguascalientes","Baja California","Baja California Sur","Campeche","Chiapas","Chihuahua","Coahuila","Colima","Ciudad de México","Durango","Guanajuato","Guerrero","Hidalgo","Jalisco","Estado de México","Michoacán","Morelos","Nayarit","Nuevo León","Oaxaca","Puebla","Querétaro","Quintana Roo","San Luis Potosí","Sinaloa","Sonora","Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucatán","Zacatecas"].map(st => (
+                       <option key={st} value={st}>{st}</option>
+                     ))}
+                   </select>
+                </div>
+                
+                <div className="flex flex-col gap-1 p-3 border rounded border-gray-200 dark:border-slate-700">
+                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Número de dueños</label>
+                   <input 
+                     type="number" 
+                     placeholder="0"
+                     className="mt-1 w-full p-2 border rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+                     value={formData.checklist?.ownersCount || ''}
+                     disabled={isReadOnly}
+                     onChange={(e) => setFormData(prev => ({ ...prev, checklist: { ...prev.checklist, ownersCount: e.target.value } }))}
+                     onBlur={async (e) => {
+                       if (!isReadOnly && vehicle.id) {
+                          try {
+                            const { doc, updateDoc } = await import('firebase/firestore');
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: { ...formData.checklist, ownersCount: e.target.value } });
+                          } catch (err) {}
+                        }
+                     }}
+                   />
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 pb-2 mt-2">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Accesorios</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'jack', label: 'Gato' },
+                  { key: 'securityLugNut', label: 'Birlo de seguridad' },
+                  { key: 'manuals', label: 'Manuales' },
+                  { key: 'servicePolicy', label: 'Póliza de servicio' },
+                  { key: 'duplicateKeys', label: 'Duplicado de llaves' },
+                  { key: 'smogCheck', label: 'Verificación' },
+                  { key: 'tools', label: 'Herramienta' },
+                ].map(item => (
+                  <label key={item.key} className="flex items-start gap-3 p-3 border rounded border-gray-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/50 cursor-pointer transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      checked={!!formData.checklist?.[item.key]}
+                      disabled={isReadOnly}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        const newChecklist = { ...formData.checklist, [item.key]: checked };
+                        setFormData(prev => ({ ...prev, checklist: newChecklist }));
+                        if (!isReadOnly && vehicle.id) {
+                          try {
+                            const { doc, updateDoc } = await import('firebase/firestore');
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: newChecklist });
+                          } catch (err) {}
+                        }
+                      }}
+                    />
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-medium ${formData.checklist?.[item.key] ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
+                        {item.label}
+                      </span>
+                      
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded border border-indigo-100 dark:border-indigo-800">
+                 <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                      checked={!!formData.checklist?.remindMissing}
+                      disabled={isReadOnly}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        const newChecklist = { ...formData.checklist, remindMissing: checked };
+                        setFormData(prev => ({ ...prev, checklist: newChecklist }));
+                        if (!isReadOnly && vehicle.id) {
+                          try {
+                            const { doc, updateDoc } = await import('firebase/firestore');
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: newChecklist });
+                          } catch (err) {}
+                        }
+                      }}
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-indigo-900 dark:text-indigo-200">
+                        Recordarme sobre documentos o accesorios faltantes
+                      </span>
+                      <span className="text-xs text-indigo-700 dark:text-indigo-300">
+                        Se enviará una alerta a los recordatorios y se mostrará en el dashboard semanal.
+                      </span>
+                    </div>
+                 </label>
+              </div>
+
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         {activeTab === 'info' && (
           <div className="p-4 border-t bg-[#f4f5f5] dark:bg-slate-900 flex justify-end gap-3 shrink-0">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 rounded">Cancelar</button>
-            {isReadOnly ? (
+            {isReadOnly && isAdmin && (!isOwnVehicle || isMaster) && (
               <button
                 type="button"
                 onClick={handleStartChat}
@@ -1169,7 +1365,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 <MessageSquare className="w-4.5 h-4.5" />
                 {loading ? 'Iniciando...' : 'Iniciar Chat con Agencia'}
               </button>
-            ) : (
+            )}
+            {!isReadOnly && isAdmin && (
               <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded font-bold">
                 {loading ? 'Guardando...' : 'Guardar Vehículo'}
               </button>

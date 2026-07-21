@@ -13,6 +13,7 @@ import { getVehicleMatches } from '../Inventory';
 import { useSharedInventoryMatches } from '../../hooks/useSharedInventoryMatches';
 import { VehicleDetailModal } from '../../components/VehicleDetailModal';
 import { deduplicateClients } from '../../lib/clientUtils';
+import { motion, PanInfo } from "motion/react";
 
 export function MobileInventory() {
   const { userData } = useAuth();
@@ -23,6 +24,18 @@ export function MobileInventory() {
   const [vehicleToShare, setVehicleToShare] = useState<Vehicle | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   
+  const handleDismissMatch = async (client: Client, vehicleId: string, vehiclePrice: number) => {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const dismissed = client.dismissedMatches || [];
+      await updateDoc(doc(db, 'clients', client.id), {
+        dismissedMatches: [...dismissed, `${vehicleId}_${vehiclePrice || 0}`]
+      });
+    } catch (error) {
+      console.error('Error dismissing match:', error);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'my' | 'shared'>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('tab') === 'shared' ? 'shared' : 'my';
@@ -267,7 +280,7 @@ export function MobileInventory() {
                         {vehicle.make} {vehicle.model}
                       </h3>
                       <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
-                        {vehicle.version || vehicle.bodyType || 'Sin versión'}
+                        {vehicle.bodyType || vehicle.bodyType || 'Sin versión'}
                       </div>
                     </div>
 
@@ -419,14 +432,38 @@ export function MobileInventory() {
                   ) : (
                     <div className="space-y-4">
                       {filteredSharedMatches.map((match, idx) => (
-                        <div key={`shared-match-${idx}`} className="bg-white dark:bg-slate-800 rounded p-4 border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                        <motion.div 
+                          key={`shared-match-${idx}`}
+                          drag="x"
+                          dragConstraints={{ left: -100, right: 100 }}
+                          dragElastic={0.2}
+                          onDragEnd={(e, info: PanInfo) => {
+                            if (info.offset.x < -100 || info.offset.x > 100) {
+                               handleDismissMatch(match.client, match.vehicle.id, match.vehicle.price);
+                            }
+                          }}
+                          whileDrag={{ scale: 0.95 }}
+                          className="bg-white dark:bg-slate-800 rounded p-4 border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between relative z-10"
+                        >
                           <div className="flex justify-between items-start mb-3">
                             <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-200/20">
                               Match {match.score}%
                             </span>
-                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 max-w-[150px] truncate bg-slate-100 dark:bg-slate-900/60 px-2 py-0.5 rounded-md">
-                              {match.agencyName}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 max-w-[150px] truncate bg-slate-100 dark:bg-slate-900/60 px-2 py-0.5 rounded-md">
+                                {match.agencyName}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDismissMatch(match.client, match.vehicle.id, match.vehicle.price);
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                title="Ocultar coincidencia"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
 
                           <div className="flex items-center gap-3 bg-[#f4f5f5] dark:bg-slate-900/40 p-2.5 rounded border border-gray-200 dark:border-slate-800 mb-3.5">
@@ -485,7 +522,7 @@ export function MobileInventory() {
                               WhatsApp
                             </a>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   )
@@ -531,7 +568,7 @@ export function MobileInventory() {
                                   {vehicle.make} {vehicle.model}
                                 </h3>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
-                                  {vehicle.version || vehicle.bodyType || 'Sin versión'}
+                                  {vehicle.bodyType || vehicle.bodyType || 'Sin versión'}
                                 </div>
                               </div>
 

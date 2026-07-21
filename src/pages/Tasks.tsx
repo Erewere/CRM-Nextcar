@@ -307,7 +307,7 @@ export function Tasks() {
                    clientId: clientId || "",
                    clientName: completedTaskInfo.client?.name || "",
                    dealId: dealId || "",
-                   dealTitle: completedTaskInfo.deal?.title || ""
+                   dealTitle: completedTaskInfo.client?.dealTitle || ""
                 });
                 setShowNewTaskModal(true);
              }

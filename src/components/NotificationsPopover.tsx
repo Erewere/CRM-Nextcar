@@ -3,7 +3,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task } from "../types";
-import { Bell, Calendar, CreditCard, Mail, X } from "lucide-react";
+import { Vehicle } from "../types";
+import { Bell, Calendar, CreditCard, Mail, X, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router";
 import clsx from "clsx";
 import { isBefore, addDays, startOfDay, parseISO, isAfter } from "date-fns";
@@ -12,6 +13,7 @@ export function NotificationsPopover() {
   const { userData } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const popoverRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -38,11 +40,25 @@ export function NotificationsPopover() {
         (doc) => ({ ...doc.data(), id: doc.id } as Task)
       );
       setTasks(fetchedTasks);
-    }, (error) => {
-      console.error("Error listening to notification tasks:", error);
+    });
+    
+    // Vehicles
+    const vq = query(
+      collection(db, "vehicles"),
+      where("agencyId", "==", userData.agencyId),
+      where("status", "==", "available")
+    );
+    const unsubscribeV = onSnapshot(vq, (snapshot) => {
+      const fetchedVehicles = snapshot.docs.map(
+        (doc) => ({ ...doc.data(), id: doc.id } as Vehicle)
+      );
+      setVehicles(fetchedVehicles);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeV();
+    };
   }, [userData]);
 
   useEffect(() => {
@@ -122,7 +138,7 @@ export function NotificationsPopover() {
   // 2. Billing Notification (mock based on user creation date for trial)
   const today = startOfDay(new Date());
   if (userData && (userData.role === "master" || userData.role === "admin")) {
-    const createdAt = userData.createdAt instanceof Date ? userData.createdAt : (userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt || Date.now()));
+    const createdAt = userData.createdAt instanceof Date ? userData.createdAt : ((userData.createdAt as any)?.toDate ? (userData.createdAt as any).toDate() : new Date(userData.createdAt || Date.now()));
     const trialEnd = addDays(createdAt, 30);
     const billingWarningDate = addDays(today, 5); // 5 days warning
 
@@ -150,7 +166,44 @@ export function NotificationsPopover() {
   }
 
   // Sort by date (most urgent first)
-  notifications.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // 3. Vehicles Checklist
+  vehicles.forEach(v => {
+    if (v.checklist?.remindMissing) {
+      const missing = [];
+      if (!v.checklist.originalInvoice) missing.push('Factura Original');
+      if (!v.checklist.taxes) missing.push('Tenencias');
+      if (!v.checklist.deregistration) missing.push('Baja');
+      if (!v.checklist.ineOrId) missing.push('INE o ID');
+      if (!v.checklist.duplicateKeys) missing.push('Duplicado de llaves');
+      
+      if (!v.checklist.jack) missing.push('Gato');
+      if (!v.checklist.securityLugNut) missing.push('Birlos');
+      if (!v.checklist.manuals) missing.push('Manuales');
+      if (!v.checklist.servicePolicy) missing.push('Póliza');
+      if (!v.checklist.smogCheck) missing.push('Verificación');
+      if (!v.checklist.tools) missing.push('Herramienta');
+      
+      if (missing.length > 0) {
+        // Show notification once per week? For simplicity, we just show it if it's missing.
+        // It's a persistent notification while it's missing and the toggle is ON.
+        notifications.push({
+          id: `vehicle-checklist-${v.id}`,
+          type: "vehicle-checklist",
+          title: `Documentos Faltantes (${v.make} ${v.model})`,
+          message: `Falta: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}`,
+          date: new Date().toISOString(),
+          icon: <AlertTriangle className="w-5 h-5 text-amber-500" />,
+          onClick: () => {
+            navigate("/inventory", { state: { vehicleId: v.id } });
+          },
+        });
+      }
+    }
+  });
+
+  notifications.sort(
+(a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return (
     <div className="relative" ref={popoverRef}>

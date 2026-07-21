@@ -149,6 +149,8 @@ export function useSharedInventoryMatches() {
     clients.forEach((client) => {
       const clientMatches = getClientMatches(client, otherVehicles);
       clientMatches.forEach((m) => {
+        const isDismissed = client.dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`);
+        if (isDismissed) return;
         calculated.push({
           client,
           vehicle: m.vehicle,

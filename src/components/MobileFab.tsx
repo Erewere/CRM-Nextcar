@@ -111,12 +111,14 @@ export function MobileFab() {
               >
                 <CheckSquare className="w-5 h-5" />
               </button>
+              {userData?.role !== "seller" && (
               <button 
                 onClick={() => { setIsOpen(false); setShowVehicleModal(true); }}
                 className="w-12 h-12 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
               >
                 <Car className="w-5 h-5" />
               </button>
+              )}
               <button 
                 onClick={() => { setIsOpen(false); setShowClientModal(true); }}
                 className="w-12 h-12 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
