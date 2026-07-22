@@ -512,7 +512,10 @@ export function Dashboard() {
   });
 
   const buscanAutoClients = uniqueActiveContacts.filter(c => 
-    c.tags && c.tags.some(t => t.toLowerCase().includes('busca de auto') || t.toLowerCase().includes('busca auto') || t.toLowerCase() === 'compra')
+    c.tags && c.tags.some(t => {
+      const lower = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return lower.includes('busca de auto') || lower.includes('busca auto') || lower.includes('buscan auto') || lower.includes('busqueda');
+    })
   );
   const buscanAutoCount = buscanAutoClients.length;
 

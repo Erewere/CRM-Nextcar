@@ -539,6 +539,12 @@ export function ClientDetailModal({
         }, { merge: true });
         
         if (formData.vehicleId) {
+          const currentVehicle = vehicles.find(v => v.id === formData.vehicleId);
+          const originalPrice = currentVehicle?.price || client.dealValue || 0;
+          const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
+          const purchasePrice = currentVehicle?.purchasePrice || 0;
+          const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
+
           await updateDoc(doc(db, "vehicles", formData.vehicleId), {
             pendingValidation: {
               type: "sold",
@@ -546,6 +552,11 @@ export function ClientDetailModal({
               requestedByName: userData?.name || userData?.email,
               clientId: client.id,
               clientName: client.name || formData.name,
+              originalPrice,
+              proposedPrice,
+              purchasePrice,
+              hasPriceChange,
+              saleDetails,
               requestedAt: new Date().toISOString(),
             },
           });
@@ -605,12 +616,13 @@ export function ClientDetailModal({
       return;
     }
 
-    const hasBuscaAutoTag = formData.tags?.some(t => 
-      t.toLowerCase().includes('busca de auto') || 
-      t.toLowerCase().includes('busca auto') ||
-      t.toLowerCase().includes('buscan auto') ||
-      t.toLowerCase().includes('compra')
-    );
+    const hasBuscaAutoTag = formData.tags?.some(t => {
+      const lower = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return lower.includes('busca de auto') || 
+             lower.includes('busca auto') ||
+             lower.includes('buscan auto') ||
+             lower.includes('busqueda');
+    });
 
     // Intercept to show the Wanted Vehicle form if needed
     if (hasBuscaAutoTag && !showWantedVehicleMenu && (!formData.wantedVehicle || !formData.wantedVehicle.make)) {
@@ -1782,7 +1794,10 @@ export function ClientDetailModal({
                     </p>
                   )}
 
-                  {(formData.wantedVehicle?.make || formData.tags?.some(t => t.toLowerCase().includes('busca de auto') || t.toLowerCase().includes('compra'))) && (
+                  {(formData.wantedVehicle?.make || formData.tags?.some(t => {
+                    const lower = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    return lower.includes('busca de auto') || lower.includes('busca auto') || lower.includes('buscan auto') || lower.includes('busqueda');
+                  })) && (
                     <div className="mt-3 flex flex-col gap-2">
                       <button
                         type="button"

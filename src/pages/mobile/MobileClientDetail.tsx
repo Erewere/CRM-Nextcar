@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic } from 'lucide-react';
-import { Client } from '../../types';
+import { Client, Vehicle } from '../../types';
 import { db } from '../../lib/firebase';
 import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,6 +24,17 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const [showDealWonModal, setShowDealWonModal] = useState(false);
   const [showLostReasonModal, setShowLostReasonModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [assignedVehicle, setAssignedVehicle] = useState<Vehicle | null>(null);
+
+  useEffect(() => {
+    if (client.vehicleId) {
+      getDoc(doc(db, 'vehicles', client.vehicleId)).then(snap => {
+        if (snap.exists()) {
+          setAssignedVehicle({ id: snap.id, ...snap.data() } as Vehicle);
+        }
+      });
+    }
+  }, [client.vehicleId]);
   
   // Quick note state
   const [quickNote, setQuickNote] = useState('');
@@ -301,6 +312,34 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           });
         }
       }
+
+      if (client.vehicleId) {
+        const vDoc = await getDoc(doc(db, 'vehicles', client.vehicleId));
+        if (vDoc.exists()) {
+          const vData = vDoc.data() as Vehicle;
+          const originalPrice = vData.price || client.dealValue || 0;
+          const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
+          const purchasePrice = vData.purchasePrice || 0;
+          const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
+
+          await updateDoc(doc(db, 'vehicles', client.vehicleId), {
+            pendingValidation: {
+              type: 'sold',
+              requestedBy: userData?.id,
+              requestedByName: userData?.name || userData?.email,
+              clientId: client.id,
+              clientName: client.name,
+              originalPrice,
+              proposedPrice,
+              purchasePrice,
+              hasPriceChange,
+              saleDetails,
+              requestedAt: new Date().toISOString(),
+            },
+          });
+        }
+      }
+
       onUpdated();
     } catch (err) {
       console.error("Error updating status:", err);
@@ -520,6 +559,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       {showDealWonModal && (
         <DealWonModal
           client={client}
+          vehicle={assignedVehicle}
           onConfirm={handleDealWonConfirm}
           onCancel={() => setShowDealWonModal(false)}
         />

@@ -1,17 +1,20 @@
 import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
-import { X, Calculator } from 'lucide-react';
-import { Client, SaleDetails } from '../types';
+import { X, Calculator, AlertTriangle } from 'lucide-react';
+import { Client, SaleDetails, Vehicle } from '../types';
 
 interface Props {
   client: Client;
+  vehicle?: Vehicle | null;
   onConfirm: (details: SaleDetails) => void;
   onCancel: () => void;
 }
 
-export function DealWonModal({ client, onConfirm, onCancel }: Props) {
+export function DealWonModal({ client, vehicle, onConfirm, onCancel }: Props) {
   const [method, setMethod] = useState<'contado' | 'credito' | 'credito_bancario'>('contado');
-  const [price, setPrice] = useState<string>(client.dealValue ? String(client.dealValue) : '');
+  const [price, setPrice] = useState<string>(
+    client.dealValue ? String(client.dealValue) : vehicle?.price ? String(vehicle.price) : ''
+  );
   const [downPayment, setDownPayment] = useState<string>('');
   const [termMonths, setTermMonths] = useState<string>('24');
   const [interestRate, setInterestRate] = useState<string>('1.5');
@@ -19,6 +22,10 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
   const [firstPaymentDate, setFirstPaymentDate] = useState<string>(
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
+
+  const originalPrice = vehicle?.price || (client.dealValue ? Number(client.dealValue) : 0);
+  const currentPriceNum = parseFloat(price) || 0;
+  const isPriceModified = originalPrice > 0 && currentPriceNum !== originalPrice;
 
   const [summary, setSummary] = useState<SaleDetails | null>(null);
 
@@ -118,9 +125,16 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Precio de Venta ($)
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Precio de Venta ($)
+                </label>
+                {originalPrice > 0 && (
+                  <span className="text-xs text-slate-500 font-normal">
+                    Precio Lista: ${originalPrice.toLocaleString('es-MX')}
+                  </span>
+                )}
+              </div>
               <input
                 type="number" inputMode="numeric" pattern="[0-9]*"
                 required
@@ -131,6 +145,20 @@ export function DealWonModal({ client, onConfirm, onCancel }: Props) {
                 className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                 placeholder="Ej. 150000"
               />
+              {isPriceModified && (
+                <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded-lg text-xs space-y-1">
+                  <div className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Modificación de Precio Solicitada</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Has modificado el precio de lista de <strong>${originalPrice.toLocaleString('es-MX')}</strong> a <strong>${currentPriceNum.toLocaleString('es-MX')}</strong>.
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-400 font-semibold">
+                    Diferencia: ${(currentPriceNum - originalPrice).toLocaleString('es-MX')} MXN. Esta venta requerirá aprobación del Administrador.
+                  </p>
+                </div>
+              )}
             </div>
 
             {method === 'credito' && (

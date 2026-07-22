@@ -580,6 +580,12 @@ export function Kanban() {
       }
 
       if (client.vehicleId) {
+        const currentVehicle = vehicles.find(v => v.id === client.vehicleId);
+        const originalPrice = currentVehicle?.price || client.dealValue || 0;
+        const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
+        const purchasePrice = currentVehicle?.purchasePrice || 0;
+        const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
+
         await updateDoc(doc(db, "vehicles", client.vehicleId), {
           pendingValidation: {
             type: "sold",
@@ -587,6 +593,11 @@ export function Kanban() {
             requestedByName: userData?.name || userData?.email,
             clientId: client.id,
             clientName: client.name,
+            originalPrice,
+            proposedPrice,
+            purchasePrice,
+            hasPriceChange,
+            saleDetails,
             requestedAt: new Date().toISOString(),
           },
         });
@@ -853,6 +864,7 @@ export function Kanban() {
       {clientToMarkWon && (
         <DealWonModal
           client={clientToMarkWon.client}
+          vehicle={vehicles.find(v => v.id === clientToMarkWon.client.vehicleId)}
           onConfirm={handleDealWonConfirm}
           onCancel={handleDealWonCancel}
         />

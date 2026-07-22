@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDocs } from 'firebase/firestore';
 import { Vehicle, Client, VehicleExpense } from '../types';
 import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
@@ -496,14 +496,81 @@ export function Inventory() {
 
   const handleValidateStatus = async (vehicleId: string, approve: boolean, newStatus?: string) => {
     try {
-      const payload: any = { pendingValidation: null };
-      if (approve && newStatus) {
-        payload.status = newStatus;
-        if (newStatus === 'sold') {
-          payload.soldAt = new Date().toISOString().split('T')[0];
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      const pv = (vehicle as any)?.pendingValidation;
+
+      if (!approve) {
+        await updateDoc(doc(db, 'vehicles', vehicleId), {
+          pendingValidation: null,
+          updatedAt: new Date().toISOString()
+        });
+        return;
+      }
+
+      if (approve && pv) {
+        const targetStatus = newStatus || pv.type || 'sold';
+        const approvedPrice = pv.proposedPrice || vehicle?.price || 0;
+        const soldDate = new Date().toISOString().split('T')[0];
+
+        const payload: any = {
+          pendingValidation: null,
+          status: targetStatus,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (pv.hasPriceChange || pv.proposedPrice) {
+          payload.price = approvedPrice;
+        }
+
+        if (targetStatus === 'sold') {
+          payload.soldAt = soldDate;
+          if (pv.saleDetails) {
+            payload.saleDetails = {
+              ...pv.saleDetails,
+              price: approvedPrice
+            };
+          }
+        }
+
+        // 1. Update vehicle document
+        await updateDoc(doc(db, 'vehicles', vehicleId), payload);
+
+        // 2. Update client if associated
+        if (pv.clientId) {
+          const clientUpdates: any = {
+            status: targetStatus === 'sold' ? 'won' : 'open',
+            dealValue: approvedPrice,
+            updatedAt: new Date().toISOString()
+          };
+          if (targetStatus === 'sold') {
+            clientUpdates.soldAt = soldDate;
+            if (pv.saleDetails) {
+              clientUpdates.saleDetails = {
+                ...pv.saleDetails,
+                price: approvedPrice
+              };
+            }
+          }
+          await updateDoc(doc(db, 'clients', pv.clientId), clientUpdates).catch(() => {});
+
+          // 3. Update associated deal if exists
+          try {
+            const dealsQ = query(collection(db, 'deals'), where('clientId', '==', pv.clientId));
+            const dealsSnap = await getDocs(dealsQ);
+            for (const dDoc of dealsSnap.docs) {
+              await updateDoc(doc(db, 'deals', dDoc.id), {
+                status: targetStatus === 'sold' ? 'won' : 'open',
+                value: approvedPrice,
+                soldAt: targetStatus === 'sold' ? soldDate : null,
+                saleDetails: pv.saleDetails ? { ...pv.saleDetails, price: approvedPrice } : null,
+                updatedAt: new Date().toISOString()
+              });
+            }
+          } catch (e) {
+            console.error('Error updating deal:', e);
+          }
         }
       }
-      await updateDoc(doc(db, 'vehicles', vehicleId), payload);
     } catch (error) {
       console.error("Error validating status:", error);
     }
@@ -587,44 +654,114 @@ export function Inventory() {
       </div>
 
       {(userData?.role === 'admin' || userData?.role === 'master') && pendingVehicles.length > 0 && (
-        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded">
-          <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-            Validaciones Pendientes
+        <div className="mb-6 p-4 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-2xl shadow-sm">
+          <h3 className="font-bold text-amber-900 dark:text-amber-300 mb-3 flex items-center gap-2 text-sm uppercase tracking-wider">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            Validaciones y Cambios de Precio Pendientes ({pendingVehicles.length})
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {pendingVehicles.map(v => (
-              <div 
-                key={`pending-${v.id}`} 
-                className="flex items-center justify-between bg-white dark:bg-slate-800 px-4 py-3 rounded border border-amber-100 shadow-sm cursor-pointer hover:bg-amber-50/50 transition-colors"
-                onClick={() => setSelectedVehicle(v)}
-              >
-                <div>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">{v.year} {v.make} {v.model}</div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Cambiar a: <strong className="uppercase text-amber-700">{(v as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}</strong>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {pendingVehicles.map(v => {
+              const pv = (v as any).pendingValidation || {};
+              const vehicleExpenses = expenses.filter(e => e.vehicleId === v.id);
+              const totalExpenses = vehicleExpenses.reduce((sum, e) => sum + e.amount, 0);
+              const purchasePrice = v.purchasePrice || pv.purchasePrice || 0;
+              const costoTotal = purchasePrice + totalExpenses;
+              const originalPrice = pv.originalPrice ?? v.price ?? 0;
+              const proposedPrice = pv.proposedPrice ?? pv.saleDetails?.price ?? v.price ?? 0;
+              const hasPriceChange = pv.hasPriceChange || (originalPrice > 0 && proposedPrice !== originalPrice);
+              const utilidadEstimada = proposedPrice - costoTotal;
+              const margenUtilidad = proposedPrice > 0 ? ((utilidadEstimada / proposedPrice) * 100) : 0;
+
+              return (
+                <div 
+                  key={`pending-${v.id}`} 
+                  className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-amber-200 dark:border-amber-800/60 shadow-sm flex flex-col justify-between gap-3 hover:border-amber-300 transition-colors cursor-pointer"
+                  onClick={() => setSelectedVehicle(v)}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-base">{v.year} {v.make} {v.model}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">VIN: {v.vin || 'N/A'}</div>
+                      </div>
+                      <span className={clsx(
+                        "px-2.5 py-1 text-xs font-bold rounded-full uppercase tracking-wider shrink-0",
+                        hasPriceChange ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300"
+                      )}>
+                        {hasPriceChange ? '⚡ Cambio de Precio' : pv.type === 'sold' ? 'Venta' : 'Reserva'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-600 dark:text-slate-300 mt-2 space-y-1 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p><span className="font-semibold text-slate-500">Vendedor:</span> <strong className="text-slate-800 dark:text-slate-200">{pv.requestedByName || 'Desconocido'}</strong></p>
+                      <p><span className="font-semibold text-slate-500">Cliente:</span> <strong className="text-slate-800 dark:text-slate-200">{pv.clientName || 'Desconocido'}</strong></p>
+                      
+                      {hasPriceChange && (
+                        <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/60 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Precio Lista Original:</span>
+                            <span className="line-through text-slate-400 font-medium">${originalPrice.toLocaleString('es-MX')}</span>
+                          </div>
+                          <div className="flex justify-between text-xs font-bold">
+                            <span className="text-amber-700 dark:text-amber-400">Precio Venta Solicitado:</span>
+                            <span className="text-amber-700 dark:text-amber-400">${proposedPrice.toLocaleString('es-MX')}</span>
+                          </div>
+                          <div className="flex justify-between text-xs text-amber-800 dark:text-amber-300 font-medium">
+                            <span>Diferencia:</span>
+                            <span>${(proposedPrice - originalPrice).toLocaleString('es-MX')} MXN</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Desglose de Utilidad / Calculadora */}
+                    <div className="mt-3 p-3 bg-slate-100/80 dark:bg-slate-900/80 rounded-lg border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-xs">
+                      <div className="font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700/80 pb-1 flex justify-between items-center">
+                        <span>📊 Análisis de Rentabilidad</span>
+                        <span className={clsx("font-extrabold px-2 py-0.5 rounded text-[10px]", utilidadEstimada >= 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300")}>
+                          Margen: {margenUtilidad.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-slate-600 dark:text-slate-400 pt-1">
+                        <div>
+                          <span className="block text-[11px] text-slate-400">Costo de Compra:</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">${purchasePrice.toLocaleString('es-MX')}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] text-slate-400">Gastos Registrados:</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">${totalExpenses.toLocaleString('es-MX')}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] text-slate-400">Costo Total:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">${costoTotal.toLocaleString('es-MX')}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] text-slate-400">Utilidad Bruta:</span>
+                          <span className={clsx("font-extrabold text-sm", utilidadEstimada >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                            ${utilidadEstimada.toLocaleString('es-MX')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 space-y-0.5">
-                    <p><span className="font-medium">Vendedor:</span> {(v as any).pendingValidation.requestedByName || 'Desconocido'}</p>
-                    <p><span className="font-medium">Cliente:</span> {(v as any).pendingValidation.clientName || 'Desconocido'}</p>
+
+                  <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                    <button 
+                      onClick={() => handleValidateStatus(v.id, false)}
+                      className="flex-1 py-2 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      Rechazar
+                    </button>
+                    <button 
+                      onClick={() => handleValidateStatus(v.id, true, pv.type || 'sold')}
+                      className="flex-1 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-colors"
+                    >
+                      {hasPriceChange ? 'Aprobar Venta y Precio' : 'Aprobar Venta'}
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                  <button 
-                    onClick={() => handleValidateStatus(v.id, false)}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors"
-                  >
-                    Rechazar
-                  </button>
-                  <button 
-                    onClick={() => handleValidateStatus(v.id, true, (v as any).pendingValidation.type)}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                  >
-                    Aprobar
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
