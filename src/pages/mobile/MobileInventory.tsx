@@ -198,7 +198,7 @@ export function MobileInventory() {
             )}
           >
             <Sparkles className={clsx("w-3.5 h-3.5", activeTab === 'shared' ? "text-amber-500" : "text-slate-400")} />
-            <span>Red LUHO</span>
+            <span>Red Nextcar</span>
             {ownAgencySharing && sharedMatches.length > 0 && (
               <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
                 {sharedMatches.length}
@@ -375,7 +375,7 @@ export function MobileInventory() {
             )}
           </div>
         ) : (
-          /* Red LUHO Tab */
+          /* Red NEXTCAR Tab */
           <div className="space-y-4">
             {!ownAgencySharing ? (
               <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200 dark:border-amber-900/60 flex items-start gap-3">
@@ -383,7 +383,7 @@ export function MobileInventory() {
                 <div className="space-y-1">
                   <h4 className="text-xs font-extrabold text-amber-800 dark:text-amber-400">Acceso a Red Inactivo</h4>
                   <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                    Para visualizar y compartir las coincidencias con autos de otras agencias LUHO, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
+                    Para visualizar y compartir las coincidencias con autos de otras agencias Nextcar, debes activar <strong>Compartir mi Inventario</strong> en la configuración de la Agencia.
                   </p>
                 </div>
               </div>

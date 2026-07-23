@@ -5,7 +5,7 @@ import { MatchScore } from "../types";
  * Matching Engine
  * 
  * Calcula coincidencias entre las preferencias de un cliente (Lead) 
- * y las especificaciones de un vehículo del inventario de LUHO.
+ * y las especificaciones de un vehículo del inventario de NEXTCAR.
  */
 export class MatchingEngine {
   /**

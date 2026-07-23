@@ -229,7 +229,7 @@ export function MasterDashboard() {
         </span>
       </div>
       <div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Estadísticas y gestión global del sistema LUHO CRM.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Estadísticas y gestión global del sistema Nextcar CRM.</p>
       </div>
 
       {/* Global Stats Overview */}

@@ -8,7 +8,7 @@ export function WelcomeTour() {
 
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
-    const hasCompleted = localStorage.getItem('luho_tour_completed') || localStorage.getItem('nextcar_tour_completed');
+    const hasCompleted = localStorage.getItem('nextcar_tour_completed');
     
     let isNewUser = false;
     if (userData?.createdAt) {
@@ -48,7 +48,7 @@ export function WelcomeTour() {
     
     if (finishedStatuses.includes(status)) {
       setRun(false);
-      localStorage.setItem('luho_tour_completed', 'true');
+      localStorage.setItem('nextcar_tour_completed', 'true');
     }
   };
 

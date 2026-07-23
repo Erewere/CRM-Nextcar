@@ -1031,7 +1031,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   {/* Document Header */}
                   <div className="flex justify-between items-start mb-3 mt-1">
                     <div>
-                      <h3 className="text-md font-black tracking-tight text-slate-900 uppercase">CRM LUHO</h3>
+                      <h3 className="text-md font-black tracking-tight text-slate-900 uppercase">Nextcar CRM</h3>
                       <p className="text-[9px] text-slate-500 tracking-wider font-bold uppercase">
                         {agencies.find(a => a.id === formData.agencyId)?.name || 'REPORTE FINANCIERO DE SOCIOS'}
                       </p>
@@ -1508,7 +1508,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             {/* Logo and report header */}
             <div className="flex justify-between items-start mb-8 mt-4">
               <div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none uppercase">CRM LUHO</h1>
+                <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none uppercase">Nextcar CRM</h1>
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-2">
                   {agencies.find(a => a.id === formData.agencyId)?.name || 'REPORTE FINANCIERO DE SOCIOS'}
                 </p>

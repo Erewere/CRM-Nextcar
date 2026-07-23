@@ -144,7 +144,7 @@ export function AgencyRevenueModal({ isOpen, onClose, wonContacts, vehicles }: A
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ingresos");
-    XLSX.writeFile(wb, `Reporte_Ingresos_LUHO_${format(new Date(), 'dd-MM-yyyy')}.xlsx`);
+    XLSX.writeFile(wb, `Reporte_Ingresos_Nextcar_${format(new Date(), 'dd-MM-yyyy')}.xlsx`);
   };
 
   if (!isOpen) return null;

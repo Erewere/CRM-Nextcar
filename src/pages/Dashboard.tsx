@@ -905,7 +905,7 @@ export function Dashboard() {
                       Panel de Control General
                     </span>
                     <h1 className="text-2xl font-black tracking-tight text-white mt-3">
-                      Consola de Administración: {agencyName || "LUHO Agency"}
+                      Consola de Administración: {agencyName || "Nextcar Agency"}
                     </h1>
                     <p className="text-slate-400 text-xs mt-1">
                       Monitoreo en tiempo real de ingresos, rendimiento de asesores e inteligencia comercial.

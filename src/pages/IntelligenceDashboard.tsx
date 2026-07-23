@@ -198,7 +198,7 @@ export function IntelligenceDashboard() {
               <div>
                 <h4 className="font-bold text-sm text-amber-850">Compartir Inventario Desactivado</h4>
                 <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Para poder ver y aprovechar los matches con los vehículos compartidos de otras agencias de la red LUHO, debes activar <strong>Compartir mi Inventario</strong> en la sección de tu Agencia (Usuarios y Agencia).
+                  Para poder ver y aprovechar los matches con los vehículos compartidos de otras agencias de la red Nextcar, debes activar <strong>Compartir mi Inventario</strong> en la sección de tu Agencia (Usuarios y Agencia).
                 </p>
               </div>
             </div>

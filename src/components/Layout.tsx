@@ -38,7 +38,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
-import { LuhoLogo } from "./LuhoLogo";
+import { NextcarLogo } from "./NextcarLogo";
 
 const safeDate = (val: any) => {
   if (!val) return new Date();
@@ -291,11 +291,11 @@ export function Layout() {
         >
           {isSidebarCollapsed ? (
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded p-1.5">
-              <LuhoLogo variant="icon" />
+              <NextcarLogo variant="icon" />
             </div>
           ) : (
             <div className="flex h-12 w-32 items-center justify-start">
-              <LuhoLogo variant="full" className="ml-[-8px]" />
+              <NextcarLogo variant="full" className="ml-[-8px]" />
             </div>
           )}
         </div>

@@ -62,6 +62,7 @@ export function ClientDetailModal({
   const isReadOnly = useReadOnly();
   const isNew = !client.id;
   const canModify = !isReadOnly && (isNew ||
+    (userData?.role === "admin" || userData?.role === "master") ||
     (client.creatorId === userData?.id) ||
     (client.createdByAdmin === true) ||
     (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId)));
@@ -94,17 +95,27 @@ export function ClientDetailModal({
   const [agencyUsers, setAgencyUsers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!userData?.agencyId) return;
     const loadUsers = async () => {
-      const q = query(
-        collection(db, "users"),
-        where("agencyId", "==", userData.agencyId),
-      );
-      const s = await getDocs(q);
-      setAgencyUsers(s.docs.map((d) => ({ ...d.data(), id: d.id })));
+      try {
+        let q;
+        if (userData?.role === 'master') {
+          q = query(collection(db, "users"));
+        } else if (userData?.agencyId) {
+          q = query(
+            collection(db, "users"),
+            where("agencyId", "==", userData.agencyId),
+          );
+        } else {
+          return;
+        }
+        const s = await getDocs(q);
+        setAgencyUsers(s.docs.map((d) => ({ ...d.data(), id: d.id })));
+      } catch (err) {
+        console.error("Error loading users:", err);
+      }
     };
     loadUsers();
-  }, [userData?.agencyId]);
+  }, [userData?.agencyId, userData?.role]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
   useEffect(() => {
@@ -718,6 +729,9 @@ export function ClientDetailModal({
         }
         if ('status' in dataToUpdate) {
           dealDataToUpdate.status = dataToUpdate.status;
+        }
+        if ('sellerId' in dataToUpdate) {
+          dealDataToUpdate.sellerId = dataToUpdate.sellerId;
         }
         if ('lostReason' in dataToUpdate) {
           dealDataToUpdate.lostReason = dataToUpdate.lostReason;
@@ -1553,27 +1567,35 @@ export function ClientDetailModal({
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <select
-                      name="sellerId"
-                      value={formData.sellerId || ""}
-                      onChange={handleChange}
-                      className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
-                    >
-                      <option value="" disabled>
-                        Seleccionar Asignado...
-                      </option>
-                      {agencyUsers
-                        .filter((u) => u.role !== "unassigned")
-                        .map((u) => (
-                          <option key={`user-${u.id}`} value={u.id}>
-                            {(!u.name || u.name === 'Usuario Pendiente')
-                              ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
-                              : u.name}
-                          </option>
-                        ))}
-                    </select>
+                  <div className="flex flex-col gap-1 mt-2">
+                    {(userData?.role === 'admin' || userData?.role === 'master') && (
+                      <span className="text-[10px] uppercase font-extrabold tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Reasignación de Trato / Vendedor
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-gray-400 shrink-0" />
+                      <select
+                        id="sellerId-select"
+                        name="sellerId"
+                        value={formData.sellerId || ""}
+                        onChange={handleChange}
+                        className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-gray-200 dark:border-slate-700 hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                      >
+                        <option value="" disabled>
+                          Seleccionar Asignado...
+                        </option>
+                        {agencyUsers
+                          .filter((u) => u.role !== "unassigned")
+                          .map((u) => (
+                            <option key={`user-${u.id}`} value={u.id}>
+                              {(!u.name || u.name === 'Usuario Pendiente')
+                                ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
+                                : u.name} {u.role === 'admin' ? '(Admin)' : u.role === 'master' ? '(Master)' : '(Vendedor)'}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     <Eye className="w-4 h-4 text-gray-400" />

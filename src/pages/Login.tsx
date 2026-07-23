@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { Navigate, useLocation } from 'react-router';
-import { LuhoLogo } from '../components/LuhoLogo';
+import { NextcarLogo } from '../components/NextcarLogo';
 
 export function Login() {
   const { currentUser, loading, connectGoogleServices } = useAuth();
@@ -52,7 +52,7 @@ export function Login() {
       <div className="z-10 w-full max-w-sm bg-white dark:bg-slate-800 p-10 rounded shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col items-center">
         <div className="flex items-center justify-center mb-8 border-b border-gray-200 dark:border-slate-700 pb-6 w-full">
           <div className="flex h-16 w-40 items-center justify-center">
-            <LuhoLogo variant="full" />
+            <NextcarLogo variant="full" />
           </div>
         </div>
         
@@ -113,13 +113,23 @@ export function Login() {
         <div className="w-full border-t border-gray-200 dark:border-slate-700 pt-6">
           <button
             onClick={async () => {
+              setError('');
               try {
-                const token = await connectGoogleServices();
-                if (!token) {
-                  // User closed popup or failed. connectGoogleServices handles logs
-                }
+                await signInWithGoogle();
               } catch (err: any) {
-                setError('Error al iniciar sesión con Google. Verifica tu conexión o intenta con correo.');
+                if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+                  return;
+                }
+                console.error("Google Sign In Error:", err);
+                if (err.code === 'auth/popup-blocked') {
+                  setError('El navegador bloqueó la ventana emergente de Google. Por favor, permite ventanas emergentes en tu navegador o vuelve a intentarlo.');
+                } else if (err.code === 'auth/account-exists-with-different-credential') {
+                  setError('Ya existe una cuenta con este email usando otro método de acceso.');
+                } else if (err.code === 'auth/unauthorized-domain') {
+                  setError('El dominio actual no está autorizado en Firebase Authentication.');
+                } else {
+                  setError('Error al iniciar sesión con Google. ' + (err.message || 'Intenta de nuevo.'));
+                }
               }
             }}
             type="button"
@@ -138,7 +148,7 @@ export function Login() {
         </button>
         
         <p className="mt-8 text-[10px] text-center text-slate-400">
-          Uso exclusivo para personal autorizado de agencias LUHO.
+          Uso exclusivo para personal autorizado de agencias Nextcar.
         </p>
       </div>
     </div>

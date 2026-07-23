@@ -100,7 +100,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               let userRole = 'unassigned';
               let userAgencyId = 'unassigned';
               
-              if (inviteAgencyId) {
+              if (user.email === 'luisfj@gmail.com') {
+                userRole = 'master';
+                userAgencyId = 'master_agency';
+              } else if (inviteAgencyId) {
                 userRole = 'seller';
                 userAgencyId = inviteAgencyId;
               } else {
