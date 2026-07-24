@@ -1,5 +1,6 @@
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import express from "express";
+import cors from "cors";
 import { GoogleGenAI, Type } from "@google/genai";
 
 
@@ -81,6 +82,8 @@ function getStripe(): Stripe {
 
 async function startServer() {
   const app = express();
+  app.use(cors());
+  app.options("*", cors());
   // Authenticate server app with email/password purely via client-side SDK to avoid GCP IAM restrictions
   try {
     const cDb = getClientDb();
@@ -213,6 +216,10 @@ async function startServer() {
       }
       
       const token = authHeader.split("Bearer ")[1];
+      if (!token || token === "undefined" || token === "null") {
+        return res.status(401).json({ error: "Sesión no válida o expirada. Por favor, vuelve a iniciar sesión." });
+      }
+
       let decodedToken: any = null;
       try {
         const auth = getAuth(getAdminApp()!);

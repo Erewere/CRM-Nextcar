@@ -60,11 +60,15 @@ export function Billing() {
     try {
       const priceId = import.meta.env.VITE_STRIPE_PRICE_ID || 'price_...';
       const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error('No hay una sesión activa de usuario. Por favor, vuelve a iniciar sesión.');
+      }
       
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
@@ -114,10 +118,15 @@ export function Billing() {
     
     try {
       const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error('No hay una sesión activa de usuario. Por favor, vuelve a iniciar sesión.');
+      }
+
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
