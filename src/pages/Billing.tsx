@@ -122,7 +122,11 @@ export function Billing() {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Error procesando la suscripción.');
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        setError('No se pudo conectar con el servidor backend (Failed to fetch). Verifica que la URL del backend sea válida y use HTTPS.');
+      } else {
+        setError(err.message || 'Error procesando la suscripción.');
+      }
     } finally {
       setLoading(false);
     }
@@ -190,7 +194,11 @@ export function Billing() {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Error procesando la compra.');
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        setError('No se pudo conectar con el servidor backend (Failed to fetch). Verifica que la URL del backend sea válida y use HTTPS.');
+      } else {
+        setError(err.message || 'Error procesando la compra.');
+      }
     } finally {
       setLoadingCredits(false);
     }
@@ -220,31 +228,42 @@ export function Billing() {
             <p className="text-sm font-medium">{error}</p>
           </div>
 
-          {(error.includes("HTML") || error.includes("backend") || showApiInput) && (
-            <div className="mt-2 p-3 bg-white dark:bg-slate-800 rounded border border-red-200 dark:border-red-800/50 text-slate-800 dark:text-slate-200 text-xs flex flex-col gap-2">
-              <p className="font-semibold text-slate-900 dark:text-white">
-                Solución rápida: Configurar URL del Servidor Backend
-              </p>
-              <p className="text-slate-600 dark:text-slate-400">
-                Si <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">crm.erewere.com</code> no está reenviando <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">/api/*</code> a tu servidor backend, ingresa aquí la URL directa de tu backend (por ejemplo: <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">https://ais-dev-i4c3rqv55o5jzhkjgqnmiw-171595729037.us-west2.run.app</code>):
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                <input
-                  type="text"
-                  placeholder="https://tu-servidor-backend.run.app"
-                  value={apiUrlInput}
-                  onChange={(e) => setApiUrlInput(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleSaveApiUrl}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-xs transition-colors"
-                >
-                  Guardar y Probar
-                </button>
-              </div>
+          <div className="mt-2 p-3 bg-white dark:bg-slate-800 rounded border border-red-200 dark:border-red-800/50 text-slate-800 dark:text-slate-200 text-xs flex flex-col gap-2">
+            <p className="font-semibold text-slate-900 dark:text-white">
+              Configuración de la URL del Servidor Backend
+            </p>
+            <p className="text-slate-600 dark:text-slate-400">
+              Si tu sitio en <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">crm.erewere.com</code> no reenvía las peticiones <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">/api/*</code> a tu backend Express, ingresa aquí la URL directa de tu backend (debe iniciar con <strong>https://</strong>):
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-1">
+              <input
+                type="text"
+                placeholder="https://ais-dev-i4c3rqv55o5jzhkjgqnmiw-171595729037.us-west2.run.app"
+                value={apiUrlInput}
+                onChange={(e) => setApiUrlInput(e.target.value)}
+                className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <button
+                onClick={handleSaveApiUrl}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-xs transition-colors"
+              >
+                Guardar y Probar
+              </button>
             </div>
-          )}
+            {apiUrlInput && (
+              <button
+                onClick={() => {
+                  setApiUrlInput('');
+                  localStorage.removeItem('custom_api_url');
+                  setError('');
+                  setSuccess('URL de Backend reseteada a ruta relativa (/api).');
+                }}
+                className="text-left text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+              >
+                Limpiar y volver a la ruta relativa por defecto (/api)
+              </button>
+            )}
+          </div>
         </div>
       )}
 

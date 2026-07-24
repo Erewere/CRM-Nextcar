@@ -82,7 +82,12 @@ function getStripe(): Stripe {
 
 async function startServer() {
   const app = express();
-  app.use(cors());
+  app.use(cors({
+    origin: true,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  }));
   app.options("*", cors());
   // Authenticate server app with email/password purely via client-side SDK to avoid GCP IAM restrictions
   try {
