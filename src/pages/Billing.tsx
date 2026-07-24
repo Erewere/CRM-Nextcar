@@ -228,41 +228,49 @@ export function Billing() {
             <p className="text-sm font-medium">{error}</p>
           </div>
 
-          <div className="mt-2 p-3 bg-white dark:bg-slate-800 rounded border border-red-200 dark:border-red-800/50 text-slate-800 dark:text-slate-200 text-xs flex flex-col gap-2">
-            <p className="font-semibold text-slate-900 dark:text-white">
-              Configuración de la URL del Servidor Backend
+          <div className="mt-2 p-3.5 bg-white dark:bg-slate-800 rounded-lg border border-red-200 dark:border-red-800/50 text-slate-800 dark:text-slate-200 text-xs flex flex-col gap-2.5 shadow-sm">
+            <p className="font-semibold text-slate-900 dark:text-white text-sm">
+              ¿Cómo resolver este problema?
             </p>
-            <p className="text-slate-600 dark:text-slate-400">
-              Si tu sitio en <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">crm.erewere.com</code> no reenvía las peticiones <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">/api/*</code> a tu backend Express, ingresa aquí la URL directa de tu backend (debe iniciar con <strong>https://</strong>):
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 mt-1">
-              <input
-                type="text"
-                placeholder="https://ais-dev-i4c3rqv55o5jzhkjgqnmiw-171595729037.us-west2.run.app"
-                value={apiUrlInput}
-                onChange={(e) => setApiUrlInput(e.target.value)}
-                className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-              <button
-                onClick={handleSaveApiUrl}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-xs transition-colors"
-              >
-                Guardar y Probar
-              </button>
-            </div>
-            {apiUrlInput && (
+            
+            <div className="bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded border border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 space-y-1">
+              <p className="font-medium">Si configuraste la Regla Proxy en Nginx (Recomendado):</p>
+              <p>
+                Como configuraste el Proxy de Nginx en <code>crm.erewere.com</code>, las peticiones deben usar la ruta relativa <code>/api</code>. <strong>Debes limpiar la URL personalizada abajo</strong> para que Nginx reenvíe los pagos correctamente.
+              </p>
               <button
                 onClick={() => {
                   setApiUrlInput('');
                   localStorage.removeItem('custom_api_url');
                   setError('');
-                  setSuccess('URL de Backend reseteada a ruta relativa (/api).');
+                  setSuccess('URL reseteada a /api. Ya puedes hacer clic en "Actualizar Suscripción" nuevamente.');
                 }}
-                className="text-left text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                className="mt-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-xs transition-colors flex items-center gap-1.5 shadow-sm"
               >
-                Limpiar y volver a la ruta relativa por defecto (/api)
+                <span>✨ Limpiar y usar Proxy Nginx (/api)</span>
               </button>
-            )}
+            </div>
+
+            <div className="pt-1">
+              <p className="text-slate-600 dark:text-slate-400 mb-1.5">
+                Si deseas forzar una URL externa de backend (debe soportar CORS y tener SSL HTTPS activo):
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="https://tu-servidor-backend.com"
+                  value={apiUrlInput}
+                  onChange={(e) => setApiUrlInput(e.target.value)}
+                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={handleSaveApiUrl}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-xs transition-colors"
+                >
+                  Guardar y Probar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
