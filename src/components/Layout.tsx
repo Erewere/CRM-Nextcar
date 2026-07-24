@@ -29,8 +29,6 @@ import clsx from "clsx";
 import { useReadOnly } from "../hooks/useReadOnly";
 import { WelcomeTour } from "./WelcomeTour";
 
-import { TaskReminders } from "./TaskReminders";
-import { SharedMatchNotifications } from "./SharedMatchNotifications";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
@@ -263,8 +261,6 @@ export function Layout() {
       "bg-gray-50 dark:bg-slate-900 flex w-full h-screen overflow-hidden",
       isMobile ? "flex-col" : "flex-row"
     )}>
-      <TaskReminders />
-      <SharedMatchNotifications />
       {/* Sidebar */}
       <aside
         className={clsx(
@@ -427,28 +423,28 @@ export function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden bg-[#f4f5f5] dark:bg-slate-900 font-sans w-full relative transition-colors">
-        {!isMobile && <header className="flex min-h-[72px] py-3 items-center justify-between border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 shrink-0 transition-colors">
+        <header className="flex min-h-[56px] md:min-h-[72px] py-2 md:py-3 items-center justify-between border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 md:px-8 shrink-0 transition-colors z-20">
           <div className="flex flex-col justify-center overflow-hidden">
             <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-              <h1 className="text-[30px] font-bold text-slate-800 dark:text-white hidden sm:block shrink-0 transition-colors leading-none">
+              <h1 className="text-lg md:text-[30px] font-bold text-slate-800 dark:text-white shrink-0 transition-colors leading-none truncate max-w-[140px] sm:max-w-none">
                 {navItems.find(item => item.path === location.pathname)?.name || "Panel de Control"}
               </h1>
               {agencyName && (
                 <div className="flex items-center gap-1 md:gap-2 rounded-full bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800/50 px-2 py-0.5 truncate shrink-0 transition-colors">
                   <Building className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <span className="text-[10px] md:text-[11px] font-medium text-blue-700 dark:text-blue-300 truncate">
+                  <span className="text-[10px] md:text-[11px] font-medium text-blue-700 dark:text-blue-300 truncate max-w-[100px] sm:max-w-none">
                     {agencyName}
                   </span>
                 </div>
               )}
-              <div className="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 shrink-0 transition-colors">
+              <div className="hidden sm:flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 shrink-0 transition-colors">
                 <span className="text-[10px] md:text-[11px] font-medium text-slate-600 dark:text-slate-400 capitalize">
                   {userData?.role === 'master' ? 'Master' : 
                    userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
                 </span>
               </div>
               {trialDaysLeft !== null && (
-                <div className="flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800/50 px-2 py-0.5 shrink-0 transition-colors">
+                <div className="hidden sm:flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800/50 px-2 py-0.5 shrink-0 transition-colors">
                   <span className="text-[10px] md:text-[11px] font-medium text-orange-700 dark:text-orange-300">
                     Prueba: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
                   </span>
@@ -468,7 +464,7 @@ export function Layout() {
                'Administra y controla las actividades del CRM'}
             </p>
           </div>
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-2 md:gap-4 shrink-0">
             <NotificationsPopover />
 
             {/* Simulating "Integration with website" CTA just conceptually or link out */}
@@ -482,7 +478,7 @@ export function Layout() {
               Ir a Nextcar
             </a>
           </div>
-        </header>}
+        </header>
 
         {(isGlobalReadOnly && userData?.role !== 'master' && userData?.agencyId !== 'unassigned') && (
           <div className="bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 p-3 sm:p-4 px-4 sm:px-6 flex items-center justify-between z-10 relative">

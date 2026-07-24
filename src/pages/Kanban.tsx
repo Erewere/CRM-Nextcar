@@ -12,7 +12,7 @@ import {
   getDoc, setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Client, PipelineStage, Task, Deal } from "../types";
+import { Client, PipelineStage, Task, Deal, Vehicle } from "../types";
 import { deduplicateClients } from "../lib/clientUtils";
 import confetti from "canvas-confetti";
 import {
@@ -211,6 +211,7 @@ export function Kanban() {
   const [showArchived, setShowArchived] = useState(false);
 
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
   useEffect(() => {
     if (!userData || userData.role === "master" || !userData.agencyId) return;
@@ -299,11 +300,21 @@ export function Kanban() {
       setTasks(data);
     });
 
+    const vq = query(
+      collection(db, "vehicles"),
+      where("agencyId", "==", userData.agencyId)
+    );
+    const unsubscribeVehicles = onSnapshot(vq, (snapshot) => {
+      const vData = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Vehicle));
+      setVehicles(vData);
+    });
+
     return () => {
       unsubscribeAgency();
       unsubscribeClients();
       unsubscribeTasks();
       unsubscribeUsers();
+      unsubscribeVehicles();
     };
   }, [userData]);
 

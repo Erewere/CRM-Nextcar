@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { AnimatePresence } from "motion/react";
 import { onSnapshot } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
@@ -76,7 +76,8 @@ import { es } from "date-fns/locale";
 
 export function Tasks() {
   const { userData, connectGoogleServices, googleToken } = useAuth();
-    const location = useLocation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<{ task: Task; client: Client | null }[]>(
     [],
   );
@@ -181,18 +182,21 @@ export function Tasks() {
   useEffect(() => {
     if (!userData || userData.role === "master") return;
     const urlParams = new URLSearchParams(window.location.search);
-    const taskIdParam = urlParams.get('taskId');
+    const taskIdParam = urlParams.get('taskId') || (location.state as any)?.taskId;
     if (taskIdParam && tasks.length > 0) {
       const taskObj = tasks.find((t) => t.task.id === taskIdParam);
-      if (taskObj && !editingTask) {
+      if (taskObj) {
         setEditingTask(taskObj.task);
         
-        // Remove param from url to prevent reopening on reload
+        // Remove param from url & clear state to avoid reopening on reload
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
+        if ((location.state as any)?.taskId) {
+          navigate(location.pathname, { replace: true, state: {} });
+        }
       }
     }
-  }, [tasks, userData, editingTask]);
+  }, [tasks, userData, location.state, location.search]);
 
   useEffect(() => {
     if (!userData || userData.role === "master") return;

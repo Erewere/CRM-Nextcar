@@ -109,7 +109,7 @@ export function ClientDetailModal({
           return;
         }
         const s = await getDocs(q);
-        setAgencyUsers(s.docs.map((d) => ({ ...d.data(), id: d.id })));
+        setAgencyUsers(s.docs.map((d) => ({ ...(d.data() as object), id: d.id })));
       } catch (err) {
         console.error("Error loading users:", err);
       }
@@ -550,7 +550,7 @@ export function ClientDetailModal({
         }, { merge: true });
         
         if (formData.vehicleId) {
-          const currentVehicle = vehicles.find(v => v.id === formData.vehicleId);
+          const currentVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
           const originalPrice = currentVehicle?.price || client.dealValue || 0;
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
           const purchasePrice = currentVehicle?.purchasePrice || 0;
