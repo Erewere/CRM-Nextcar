@@ -1,5 +1,6 @@
 import { getAuth } from "firebase/auth";
 import React, { useState, useEffect, useMemo } from 'react';
+import { getApiUrl } from '../lib/api';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -311,7 +312,7 @@ export function AgencyUsers() {
     try {
         const auth = getAuth();
         const token = await auth.currentUser?.getIdToken();
-        const res = await fetch('/api/delete-user', {
+        const res = await fetch(getApiUrl('/api/delete-user'), {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',

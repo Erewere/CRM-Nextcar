@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
+import { getApiUrl } from '../lib/api';
 import { X, Search, Check, Send, AlertCircle, Car } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -65,7 +66,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
       if (phone.length === 10) phone = '52' + phone;
 
       // Send Template
-      const res = await fetch('/api/meta/send-template', {
+      const res = await fetch(getApiUrl('/api/meta/send-template'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

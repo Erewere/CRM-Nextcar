@@ -1,5 +1,6 @@
 import { getAuth } from "firebase/auth";
 import React, { useEffect, useState, useMemo } from 'react';
+import { getApiUrl } from '../lib/api';
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -127,7 +128,7 @@ export function MasterDashboard() {
       const currentUser = auth.currentUser;
       const token = currentUser ? await currentUser.getIdToken() : '';
 
-      const response = await fetch('/api/delete-agency', {
+      const response = await fetch(getApiUrl('/api/delete-agency'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,7 +185,7 @@ export function MasterDashboard() {
     try {
         const auth = getAuth();
         const token = await auth.currentUser?.getIdToken();
-        const res = await fetch('/api/delete-user', {
+        const res = await fetch(getApiUrl('/api/delete-user'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

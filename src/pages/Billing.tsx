@@ -4,6 +4,7 @@ import { CreditCard, Check, AlertCircle, Users, Bot, Zap } from 'lucide-react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Agency } from '../types';
+import { getApiUrl } from '../lib/api';
 
 export function Billing() {
   const { userData } = useAuth();
@@ -64,7 +65,7 @@ export function Billing() {
         throw new Error('No hay una sesión activa de usuario. Por favor, vuelve a iniciar sesión.');
       }
       
-      const response = await fetch('/api/create-checkout-session', {
+      const response = await fetch(getApiUrl('/api/create-checkout-session'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,6 +87,13 @@ export function Billing() {
         data = await response.json();
       } else {
         const text = await response.text();
+        if (text.trim().toLowerCase().startsWith("<!doctype") || text.trim().toLowerCase().startsWith("<html")) {
+          throw new Error(
+            "El servidor web devolvió HTML en lugar de conectar con el backend de pagos. " +
+            "Si estás usando un dominio personalizado (como crm.erewere.com) o hosting estático (Vercel/Firebase/Nginx), " +
+            "asegúrate de redirigir la ruta '/api/*' hacia el servidor backend Express o configurar la variable 'VITE_API_URL'."
+          );
+        }
         throw new Error(`Respuesta no esperada del servidor (${response.status}): ${text.substring(0, 100)}`);
       }
       
@@ -122,7 +130,7 @@ export function Billing() {
         throw new Error('No hay una sesión activa de usuario. Por favor, vuelve a iniciar sesión.');
       }
 
-      const response = await fetch('/api/create-checkout-session', {
+      const response = await fetch(getApiUrl('/api/create-checkout-session'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,6 +155,13 @@ export function Billing() {
         data = await response.json();
       } else {
         const text = await response.text();
+        if (text.trim().toLowerCase().startsWith("<!doctype") || text.trim().toLowerCase().startsWith("<html")) {
+          throw new Error(
+            "El servidor web devolvió HTML en lugar de conectar con el backend de pagos. " +
+            "Si estás usando un dominio personalizado (como crm.erewere.com) o hosting estático (Vercel/Firebase/Nginx), " +
+            "asegúrate de redirigir la ruta '/api/*' hacia el servidor backend Express o configurar la variable 'VITE_API_URL'."
+          );
+        }
         throw new Error(`Respuesta no esperada del servidor (${response.status}): ${text.substring(0, 100)}`);
       }
       
