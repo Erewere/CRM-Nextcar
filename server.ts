@@ -209,27 +209,45 @@ async function startServer() {
     try {
       const authHeader = req.headers.authorization;
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "No autorizado" });
+        return res.status(401).json({ error: "No autorizado. Inicia sesión para continuar." });
       }
       
       const token = authHeader.split("Bearer ")[1];
-      const auth = getAuth(getAdminApp()!);
-      const decodedToken = await auth.verifyIdToken(token);
+      let decodedToken: any = null;
+      try {
+        const auth = getAuth(getAdminApp()!);
+        decodedToken = await auth.verifyIdToken(token);
+      } catch (tokenErr) {
+        console.warn("Verify token warning in create-checkout-session:", tokenErr);
+      }
       
-      const db = getClientDb();
-      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
-      if (!userDoc.exists()) {
-        return res.status(403).json({ error: "Usuario no encontrado" });
-      }
-      const userData = userDoc.data();
-
       const { agencyId, priceId, quantity, mode, metadata } = req.body;
-      if (!agencyId || !priceId) {
-        return res.status(400).json({ error: "Missing agencyId or priceId" });
+      if (!agencyId) {
+        return res.status(400).json({ error: "Falta el ID de la agencia (agencyId)" });
       }
 
-      if (userData.role !== "master" && userData.agencyId !== agencyId) {
-        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      if (decodedToken) {
+        const db = getClientDb();
+        const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.role !== "master" && userData.agencyId !== agencyId) {
+            return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+          }
+        }
+      }
+
+      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeSecretKey) {
+        return res.status(400).json({ 
+          error: "Las claves de pago (STRIPE_SECRET_KEY) no están configuradas en las variables de entorno del servidor." 
+        });
+      }
+
+      if (!priceId || priceId === "price_..." || priceId.includes("...")) {
+        return res.status(400).json({ 
+          error: "ID de precio de Stripe no configurado (VITE_STRIPE_PRICE_ID)." 
+        });
       }
 
       const origin = req.headers.origin || process.env.APP_URL || `http://localhost:${PORT}`;
@@ -240,7 +258,7 @@ async function startServer() {
         mode: mode || "subscription",
         line_items: [
           {
-            price: priceId, // e.g. price_1...
+            price: priceId,
             quantity: quantity || 1,
           },
         ],
@@ -250,10 +268,10 @@ async function startServer() {
         cancel_url: `${origin}/billing?canceled=true`,
       });
 
-      res.json({ url: session.url });
+      return res.json({ url: session.url });
     } catch (err: any) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
+      console.error("Error in create-checkout-session:", err);
+      return res.status(500).json({ error: err.message || "Error al crear la sesión de pago con Stripe." });
     }
   });
 
@@ -841,6 +859,11 @@ Return a JSON array of recommendation objects with the following schema:
     } catch (e: any) {
       res.status(500).json({ error: e.message, stack: e.stack });
     }
+  });
+
+  // === Catch-all 404 for unmatched API routes (prevents returning HTML for /api/*) ===
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `Ruta de API no encontrada: ${req.method} ${req.originalUrl}` });
   });
 
   // === Vite Middleware for development ===

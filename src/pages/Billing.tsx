@@ -50,7 +50,7 @@ export function Billing() {
 
   const handleSubscribe = async () => {
     if (!userData?.agencyId) {
-      setError('No agency ID found.');
+      setError('No se encontró el ID de la agencia.');
       return;
     }
 
@@ -75,18 +75,29 @@ export function Billing() {
         }),
       });
 
-      const { url, error: apiError } = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(`Respuesta no esperada del servidor (${response.status}): ${text.substring(0, 100)}`);
+      }
       
-      if (apiError) throw new Error(apiError);
-      if (url) {
+      if (!response.ok || data.error) {
+        throw new Error(data.error || `Error (${response.status}) procesando la suscripción.`);
+      }
+
+      if (data.url) {
         if (window !== window.top) {
-          window.open(url, '_blank');
+          window.open(data.url, '_blank');
         } else {
-          window.location.href = url;
+          window.location.href = data.url;
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Error processing subscription.');
+      setError(err.message || 'Error procesando la suscripción.');
     } finally {
       setLoading(false);
     }
@@ -94,12 +105,10 @@ export function Billing() {
 
   const handleBuyCredits = async (amount: number, priceId: string) => {
     if (!userData?.agencyId) {
-      setError('No agency ID found.');
+      setError('No se encontró el ID de la agencia.');
       return;
     }
     
-    // As a simple demo, we will simulate purchasing by calling an internal API or 
-    // just redirecting to a Checkout session for a one-time purchase.
     setLoadingCredits(true);
     setError('');
     
@@ -113,7 +122,7 @@ export function Billing() {
         },
         body: JSON.stringify({
           agencyId: userData.agencyId,
-          priceId: priceId, // e.g. price_123_100_credits
+          priceId: priceId,
           quantity: 1,
           mode: 'payment',
           metadata: {
@@ -122,18 +131,29 @@ export function Billing() {
         }),
       });
 
-      const { url, error: apiError } = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(`Respuesta no esperada del servidor (${response.status}): ${text.substring(0, 100)}`);
+      }
       
-      if (apiError) throw new Error(apiError);
-      if (url) {
+      if (!response.ok || data.error) {
+        throw new Error(data.error || `Error (${response.status}) procesando la compra.`);
+      }
+
+      if (data.url) {
         if (window !== window.top) {
-          window.open(url, '_blank');
+          window.open(data.url, '_blank');
         } else {
-          window.location.href = url;
+          window.location.href = data.url;
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Error processing purchase.');
+      setError(err.message || 'Error procesando la compra.');
     } finally {
       setLoadingCredits(false);
     }
