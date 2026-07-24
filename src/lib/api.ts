@@ -1,8 +1,5 @@
 export function getApiUrl(path: string): string {
-  const envUrl = (import.meta.env.VITE_API_URL as string) || '';
-  const localUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('custom_api_url') || '' : '';
-  const baseUrl = envUrl || localUrl;
-
+  const baseUrl = (import.meta.env.VITE_API_URL as string) || '';
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   
   if (baseUrl) {
@@ -12,4 +9,5 @@ export function getApiUrl(path: string): string {
   
   return cleanPath;
 }
+
 

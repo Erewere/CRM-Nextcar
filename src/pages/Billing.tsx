@@ -14,23 +14,15 @@ export function Billing() {
   const [success, setSuccess] = useState('');
   const [userCount, setUserCount] = useState(0);
   const [agency, setAgency] = useState<Agency | null>(null);
-  const [apiUrlInput, setApiUrlInput] = useState(() => localStorage.getItem('custom_api_url') || '');
-  const [showApiInput, setShowApiInput] = useState(false);
   
   const PRICE_PER_USER = 9.99;
 
-  const handleSaveApiUrl = () => {
-    if (apiUrlInput.trim()) {
-      localStorage.setItem('custom_api_url', apiUrlInput.trim());
-    } else {
+  useEffect(() => {
+    // Clean up any legacy localStorage override
+    if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('custom_api_url');
     }
-    setError('');
-    setSuccess('URL de Backend guardada. Vuelve a intentar el pago.');
-    setShowApiInput(false);
-  };
 
-  useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get("success")) {
       setSuccess("¡Suscripción o compra completada con éxito!");
@@ -99,15 +91,7 @@ export function Billing() {
       if (contentType.includes("application/json")) {
         data = await response.json();
       } else {
-        const text = await response.text();
-        if (text.trim().toLowerCase().startsWith("<!doctype") || text.trim().toLowerCase().startsWith("<html")) {
-          throw new Error(
-            "El servidor web devolvió HTML en lugar de conectar con el backend de pagos. " +
-            "Si estás usando un dominio personalizado (como crm.erewere.com) o hosting estático (Vercel/Firebase/Nginx), " +
-            "asegúrate de redirigir la ruta '/api/*' hacia el servidor backend Express o configurar la variable 'VITE_API_URL'."
-          );
-        }
-        throw new Error(`Respuesta no esperada del servidor (${response.status}): ${text.substring(0, 100)}`);
+        throw new Error('No se pudo establecer comunicación con el servidor de pagos. Por favor, intenta más tarde.');
       }
       
       if (!response.ok || data.error) {
@@ -123,7 +107,7 @@ export function Billing() {
       }
     } catch (err: any) {
       if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-        setError('No se pudo conectar con el servidor backend (Failed to fetch). Verifica que la URL del backend sea válida y use HTTPS.');
+        setError('No se pudo conectar con el servidor de pagos. Por favor, intenta de nuevo.');
       } else {
         setError(err.message || 'Error procesando la suscripción.');
       }
@@ -171,15 +155,7 @@ export function Billing() {
       if (contentType.includes("application/json")) {
         data = await response.json();
       } else {
-        const text = await response.text();
-        if (text.trim().toLowerCase().startsWith("<!doctype") || text.trim().toLowerCase().startsWith("<html")) {
-          throw new Error(
-            "El servidor web devolvió HTML en lugar de conectar con el backend de pagos. " +
-            "Si estás usando un dominio personalizado (como crm.erewere.com) o hosting estático (Vercel/Firebase/Nginx), " +
-            "asegúrate de redirigir la ruta '/api/*' hacia el servidor backend Express o configurar la variable 'VITE_API_URL'."
-          );
-        }
-        throw new Error(`Respuesta no esperada del servidor (${response.status}): ${text.substring(0, 100)}`);
+        throw new Error('No se pudo establecer comunicación con el servidor de pagos. Por favor, intenta más tarde.');
       }
       
       if (!response.ok || data.error) {
@@ -195,7 +171,7 @@ export function Billing() {
       }
     } catch (err: any) {
       if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-        setError('No se pudo conectar con el servidor backend (Failed to fetch). Verifica que la URL del backend sea válida y use HTTPS.');
+        setError('No se pudo conectar con el servidor de pagos. Por favor, intenta de nuevo.');
       } else {
         setError(err.message || 'Error procesando la compra.');
       }
@@ -222,56 +198,9 @@ export function Billing() {
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded flex flex-col gap-3 border border-red-100 dark:border-red-900/50">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <p className="text-sm font-medium">{error}</p>
-          </div>
-
-          <div className="mt-2 p-3.5 bg-white dark:bg-slate-800 rounded-lg border border-red-200 dark:border-red-800/50 text-slate-800 dark:text-slate-200 text-xs flex flex-col gap-2.5 shadow-sm">
-            <p className="font-semibold text-slate-900 dark:text-white text-sm">
-              ¿Cómo resolver este problema?
-            </p>
-            
-            <div className="bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded border border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 space-y-1">
-              <p className="font-medium">Si configuraste la Regla Proxy en Nginx (Recomendado):</p>
-              <p>
-                Como configuraste el Proxy de Nginx en <code>crm.erewere.com</code>, las peticiones deben usar la ruta relativa <code>/api</code>. <strong>Debes limpiar la URL personalizada abajo</strong> para que Nginx reenvíe los pagos correctamente.
-              </p>
-              <button
-                onClick={() => {
-                  setApiUrlInput('');
-                  localStorage.removeItem('custom_api_url');
-                  setError('');
-                  setSuccess('URL reseteada a /api. Ya puedes hacer clic en "Actualizar Suscripción" nuevamente.');
-                }}
-                className="mt-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-xs transition-colors flex items-center gap-1.5 shadow-sm"
-              >
-                <span>✨ Limpiar y usar Proxy Nginx (/api)</span>
-              </button>
-            </div>
-
-            <div className="pt-1">
-              <p className="text-slate-600 dark:text-slate-400 mb-1.5">
-                Si deseas forzar una URL externa de backend (debe soportar CORS y tener SSL HTTPS activo):
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  placeholder="https://tu-servidor-backend.com"
-                  value={apiUrlInput}
-                  onChange={(e) => setApiUrlInput(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleSaveApiUrl}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-xs transition-colors"
-                >
-                  Guardar y Probar
-                </button>
-              </div>
-            </div>
-          </div>
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded flex items-start gap-2 border border-red-100 dark:border-red-900/50">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
