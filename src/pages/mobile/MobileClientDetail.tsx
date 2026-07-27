@@ -112,13 +112,37 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   useEffect(() => {
     const loadNotes = async () => {
       try {
-        const q = query(
-          collection(db, "notes"),
-          where("agencyId", "==", client.agencyId),
-          where("clientId", "==", client.id)
-        );
-        const s = await getDocs(q);
-        const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
+        const actualClientId = client.originalClientId || client.id;
+        const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+        const actualDealId = isDeal ? (client.id as string) : null;
+
+        const idsToQuery = Array.from(new Set([actualClientId, client.id].filter(Boolean) as string[]));
+        const notesMap = new Map<string, any>();
+
+        for (const cId of idsToQuery) {
+          const q = query(
+            collection(db, "notes"),
+            where("clientId", "==", cId)
+          );
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            notesMap.set(d.id, { ...d.data(), id: d.id });
+          });
+        }
+
+        const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
+        for (const dId of dealIdsToQuery) {
+          const q = query(
+            collection(db, "notes"),
+            where("dealId", "==", dId)
+          );
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            notesMap.set(d.id, { ...d.data(), id: d.id });
+          });
+        }
+
+        const n = Array.from(notesMap.values());
         n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotes(n);
       } catch (error) {
@@ -126,7 +150,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       }
     };
     loadNotes();
-  }, [client.id]);
+  }, [client.id, client.originalClientId]);
 
   useEffect(() => {
     if (!userData?.agencyId) return;
@@ -362,9 +386,14 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         return;
       }
 
+      const actualClientId = client.originalClientId || client.id;
+      const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+      const actualDealId = isDeal ? (client.id as string) : null;
+
       await addDoc(collection(db, 'notes'), {
-        clientId: client.id,
-        agencyId: userData?.agencyId,
+        clientId: actualClientId,
+        dealId: actualDealId || undefined,
+        agencyId: userData?.agencyId || client.agencyId,
         content: content.trim(),
         type: type,
         createdAt: new Date().toISOString(),
@@ -378,13 +407,33 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       onUpdated();
       
       // refresh notes
-      const q = query(
-        collection(db, "notes"),
-        where("agencyId", "==", client.agencyId),
-        where("clientId", "==", client.id)
-      );
-      const s = await getDocs(q);
-      const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
+      const idsToQuery = Array.from(new Set([actualClientId, client.id].filter(Boolean) as string[]));
+      const notesMap = new Map<string, any>();
+
+      for (const cId of idsToQuery) {
+        const q = query(
+          collection(db, "notes"),
+          where("clientId", "==", cId)
+        );
+        const s = await getDocs(q);
+        s.docs.forEach((d) => {
+          notesMap.set(d.id, { ...d.data(), id: d.id });
+        });
+      }
+
+      const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
+      for (const dId of dealIdsToQuery) {
+        const q = query(
+          collection(db, "notes"),
+          where("dealId", "==", dId)
+        );
+        const s = await getDocs(q);
+        s.docs.forEach((d) => {
+          notesMap.set(d.id, { ...d.data(), id: d.id });
+        });
+      }
+
+      const n = Array.from(notesMap.values());
       n.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotes(n);
     } catch (err) {

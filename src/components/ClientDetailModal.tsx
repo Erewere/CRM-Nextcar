@@ -263,63 +263,152 @@ export function ClientDetailModal({
 
   useEffect(() => {
     if (isNew) return;
+
+    const actualClientId = client.originalClientId || client.id;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const actualDealId = isDeal ? (client.id as string) : null;
+
     // Load tasks
     const loadTasks = async () => {
-      let q = query(
-        collection(db, "tasks"),
-        where("clientId", "==", client.id),
-      );
-      if (userData?.role === "seller") {
-        q = query(
-          collection(db, "tasks"),
-          where("clientId", "==", client.id),
-          where("sellerId", "==", userData.id),
+      try {
+        const idsToQuery = Array.from(new Set([actualClientId, client.id].filter(Boolean) as string[]));
+        const tasksMap = new Map<string, Task>();
+
+        for (const cId of idsToQuery) {
+          let q = query(
+            collection(db, "tasks"),
+            where("clientId", "==", cId),
+          );
+          if (userData?.role === "seller") {
+            q = query(
+              collection(db, "tasks"),
+              where("clientId", "==", cId),
+              where("sellerId", "==", userData.id),
+            );
+          }
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            tasksMap.set(d.id, { ...d.data(), id: d.id } as Task);
+          });
+        }
+
+        const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
+        for (const dId of dealIdsToQuery) {
+          let q = query(
+            collection(db, "tasks"),
+            where("dealId", "==", dId),
+          );
+          if (userData?.role === "seller") {
+            q = query(
+              collection(db, "tasks"),
+              where("dealId", "==", dId),
+              where("sellerId", "==", userData.id),
+            );
+          }
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            tasksMap.set(d.id, { ...d.data(), id: d.id } as Task);
+          });
+        }
+
+        const t = Array.from(tasksMap.values());
+        t.sort(
+          (a, b) =>
+            new Date(b.createdAt as string).getTime() -
+            new Date(a.createdAt as string).getTime(),
         );
+        setTasks(t);
+      } catch (err) {
+        console.error("Error loading tasks:", err);
       }
-      const s = await getDocs(q);
-      const t = s.docs.map((d) => ({ ...d.data(), id: d.id }) as Task);
-      t.sort(
-        (a, b) =>
-          new Date(b.createdAt as string).getTime() -
-          new Date(a.createdAt as string).getTime(),
-      );
-      setTasks(t);
     };
+
     // Load files
     const loadFiles = async () => {
-      const q = query(
-        collection(db, "files"),
-        where("clientId", "==", client.id),
-      );
-      const s = await getDocs(q);
-      const f = s.docs.map((d) => ({ ...d.data(), id: d.id }) as ClientFile);
-      f.sort(
-        (a, b) =>
-          new Date(b.uploadedAt as string).getTime() -
-          new Date(a.uploadedAt as string).getTime(),
-      );
-      setFiles(f);
+      try {
+        const idsToQuery = Array.from(new Set([actualClientId, client.id].filter(Boolean) as string[]));
+        const filesMap = new Map<string, ClientFile>();
+
+        for (const cId of idsToQuery) {
+          const q = query(
+            collection(db, "files"),
+            where("clientId", "==", cId),
+          );
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            filesMap.set(d.id, { ...d.data(), id: d.id } as ClientFile);
+          });
+        }
+
+        const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
+        for (const dId of dealIdsToQuery) {
+          const q = query(
+            collection(db, "files"),
+            where("dealId", "==", dId),
+          );
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            filesMap.set(d.id, { ...d.data(), id: d.id } as ClientFile);
+          });
+        }
+
+        const f = Array.from(filesMap.values());
+        f.sort(
+          (a, b) =>
+            new Date(b.uploadedAt as string).getTime() -
+            new Date(a.uploadedAt as string).getTime(),
+        );
+        setFiles(f);
+      } catch (err) {
+        console.error("Error loading files:", err);
+      }
     };
+
     // Load notes
     const loadNotes = async () => {
-      const q = query(
-        collection(db, "notes"),
-        where("agencyId", "==", client.agencyId),
-        where("clientId", "==", client.id),
-      );
-      const s = await getDocs(q);
-      const n = s.docs.map((d) => ({ ...d.data(), id: d.id }) as any);
-      n.sort(
-        (a, b) =>
-          new Date(b.createdAt as string).getTime() -
-          new Date(a.createdAt as string).getTime(),
-      );
-      setNotes(n);
+      try {
+        const idsToQuery = Array.from(new Set([actualClientId, client.id].filter(Boolean) as string[]));
+        const notesMap = new Map<string, any>();
+
+        for (const cId of idsToQuery) {
+          const q = query(
+            collection(db, "notes"),
+            where("clientId", "==", cId),
+          );
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            notesMap.set(d.id, { ...d.data(), id: d.id });
+          });
+        }
+
+        const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
+        for (const dId of dealIdsToQuery) {
+          const q = query(
+            collection(db, "notes"),
+            where("dealId", "==", dId),
+          );
+          const s = await getDocs(q);
+          s.docs.forEach((d) => {
+            notesMap.set(d.id, { ...d.data(), id: d.id });
+          });
+        }
+
+        const n = Array.from(notesMap.values());
+        n.sort(
+          (a, b) =>
+            new Date(b.createdAt as string).getTime() -
+            new Date(a.createdAt as string).getTime(),
+        );
+        setNotes(n);
+      } catch (err) {
+        console.error("Error loading notes:", err);
+      }
     };
+
     loadTasks();
     loadFiles();
     loadNotes();
-  }, [client.id, isNew]);
+  }, [client.id, client.originalClientId, isNew, userData]);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [existingPersons, setExistingPersons] = useState<Client[]>([]);
@@ -797,11 +886,16 @@ export function ClientDetailModal({
       setTasks(prev => prev.map(t => t.id === editingTaskId ? { ...t, ...updates } : t));
       setEditingTaskId(null);
     } else {
+      const actualClientId = client.originalClientId || client.id;
+      const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+      const actualDealId = isDeal ? (client.id as string) : null;
+
       const newRef = doc(collection(db, "tasks"));
       const t: Partial<Task> = {
         agencyId: userData?.agencyId,
         sellerId: userData?.id,
-        clientId: client.id,
+        clientId: actualClientId,
+        dealId: actualDealId || undefined,
         title: newTaskTitle,
         dueDate: newTaskDate,
         completed: false,
@@ -860,11 +954,17 @@ export function ClientDetailModal({
       return;
     }
     if (!newNoteContent || isNew) return;
+
+    const actualClientId = client.originalClientId || client.id;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const actualDealId = isDeal ? (client.id as string) : null;
+
     const newRef = doc(collection(db, "notes"));
     const n = {
-      agencyId: userData?.agencyId,
+      agencyId: userData?.agencyId || client.agencyId,
       sellerId: userData?.id,
-      clientId: client.id,
+      clientId: actualClientId,
+      dealId: actualDealId || undefined,
       content: newNoteContent,
       createdAt: new Date().toISOString(),
     };
@@ -892,10 +992,11 @@ export function ClientDetailModal({
       if (!task.completed) {
         const hasPending = updatedTasks.some(t => !t.completed && t.id !== task.id);
         if (!hasPending) {
+           const actualClientId = client.originalClientId || client.id;
            setNewTaskPrefill({
-              clientId: client.id || "",
+              clientId: actualClientId || "",
               clientName: formData.name || "",
-              dealId: formData.originalClientId ? client.id : "",
+              dealId: client.originalClientId ? client.id : "",
               dealTitle: formData.dealTitle || ""
            });
            setShowNewTaskModal(true);
@@ -928,16 +1029,21 @@ export function ClientDetailModal({
       fileToUpload = await imageCompression(file, options);
     }
 
+    const actualClientId = client.originalClientId || client.id;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const actualDealId = isDeal ? (client.id as string) : null;
+
     const newRef = doc(collection(db, "files"));
     const storageRef = ref(
       storage,
-      `users/${userData?.id}/clients/${client.id}/${fileToUpload.name}`,
+      `users/${userData?.id}/clients/${actualClientId}/${fileToUpload.name}`,
     );
     await uploadBytes(storageRef, fileToUpload);
     const url = await getDownloadURL(storageRef);
     const f: Partial<ClientFile> = {
-      agencyId: userData?.agencyId,
-      clientId: client.id,
+      agencyId: userData?.agencyId || client.agencyId,
+      clientId: actualClientId,
+      dealId: actualDealId || undefined,
       userId: userData?.id,
       filename: fileToUpload.name,
       url,
@@ -2325,13 +2431,20 @@ export function ClientDetailModal({
               return;
             }
             try {
-              const { doc, collection, setDoc } = await import("firebase/firestore");
+              const actualClientId = client.originalClientId || client.id;
+              const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+              const actualDealId = isDeal ? (client.id as string) : null;
+
+              const targetClientId = (taskData.clientId && taskData.clientId !== client.id) ? taskData.clientId : actualClientId;
+              const targetDealId = taskData.dealId || actualDealId || "";
+
+              const { doc, collection, setDoc, query, where, getDocs } = await import("firebase/firestore");
               const newRef = doc(collection(db, "tasks"));
               const tempTask = {
                 agencyId: userData.agencyId || "",
                 sellerId: userData.id || "",
-                clientId: taskData.clientId || client.id || "",
-                dealId: taskData.dealId || "",
+                clientId: targetClientId,
+                dealId: targetDealId,
                 title: taskData.title,
                 type: taskData.type || "call",
                 notes: taskData.notes || "",
@@ -2351,12 +2464,43 @@ export function ClientDetailModal({
               );
               
               await setDoc(newRef, tempTask);
-              
-              // Optimistically update tasks array
-              setTasks(prev => [{ id: newRef.id, ...tempTask } as Task, ...prev]);
-              
+
+              if (taskData.notes && taskData.notes.trim()) {
+                const noteRef = doc(collection(db, "notes"));
+                await setDoc(noteRef, {
+                  agencyId: userData.agencyId || "",
+                  sellerId: userData.id || "",
+                  clientId: targetClientId,
+                  dealId: targetDealId || undefined,
+                  content: taskData.notes.trim(),
+                  createdAt: new Date().toISOString(),
+                });
+              }
+
               setShowNewTaskModal(false);
               setNewTaskPrefill(null);
+
+              // Reload tasks and notes
+              const idsToQuery = Array.from(new Set([targetClientId, client.id].filter(Boolean) as string[]));
+              const tasksMap = new Map<string, Task>();
+              for (const cId of idsToQuery) {
+                let q = query(collection(db, "tasks"), where("clientId", "==", cId));
+                const s = await getDocs(q);
+                s.docs.forEach((d) => tasksMap.set(d.id, { ...d.data(), id: d.id } as Task));
+              }
+              const t = Array.from(tasksMap.values());
+              t.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
+              setTasks(t);
+
+              const notesMap = new Map<string, any>();
+              for (const cId of idsToQuery) {
+                const q = query(collection(db, "notes"), where("clientId", "==", cId));
+                const s = await getDocs(q);
+                s.docs.forEach((d) => notesMap.set(d.id, { ...d.data(), id: d.id }));
+              }
+              const n = Array.from(notesMap.values());
+              n.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
+              setNotes(n);
             } catch (err) {
               console.error("Error creating task:", err);
             }

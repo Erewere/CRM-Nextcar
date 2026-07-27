@@ -201,6 +201,7 @@ export interface ClientFile {
   id: string;
   agencyId: string;
   clientId: string;
+  dealId?: string;
   userId?: string;
   filename: string;
   url: string;
