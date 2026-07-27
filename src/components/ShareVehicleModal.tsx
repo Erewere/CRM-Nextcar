@@ -84,15 +84,18 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
       if (!res.ok) throw new Error(data.error || 'Error sending message');
       
       // Save interaction note
-      await addDoc(collection(db, 'notes'), {
+      const notePayload: Record<string, any> = {
         clientId: selectedClient.id,
-        agencyId: userData?.agencyId,
+        agencyId: userData?.agencyId || "",
         content: `Compartido vía WhatsApp: ${vehicle.make} ${vehicle.model} ${vehicle.year} - $${vehicle.price?.toLocaleString()}`,
         type: 'whatsapp',
         createdAt: new Date().toISOString(),
-        createdBy: userData?.id,
-        createdByName: userData?.name
-      });
+      };
+      if (userData?.id) notePayload.createdBy = userData.id;
+      if (userData?.name) notePayload.createdByName = userData.name;
+      Object.keys(notePayload).forEach((k) => notePayload[k] === undefined && delete notePayload[k]);
+
+      await addDoc(collection(db, 'notes'), notePayload);
 
       setSuccess(true);
       setTimeout(() => {

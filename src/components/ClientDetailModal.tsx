@@ -888,22 +888,25 @@ export function ClientDetailModal({
     } else {
       const actualClientId = client.originalClientId || client.id;
       const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
-      const actualDealId = isDeal ? (client.id as string) : null;
+      const actualDealId = isDeal ? (client.id as string) : "";
 
       const newRef = doc(collection(db, "tasks"));
-      const t: Partial<Task> = {
-        agencyId: userData?.agencyId,
-        sellerId: userData?.id,
+      const t: Record<string, any> = {
+        agencyId: userData?.agencyId || client.agencyId || "",
+        sellerId: userData?.id || "",
         clientId: actualClientId,
-        dealId: actualDealId || undefined,
         title: newTaskTitle,
-        dueDate: newTaskDate,
+        dueDate: newTaskDate || "",
         completed: false,
         createdAt: new Date().toISOString(),
       };
+      if (actualDealId) {
+        t.dealId = actualDealId;
+      }
       if (formattedTime) {
         t.startTime = formattedTime;
       }
+      Object.keys(t).forEach((k) => t[k] === undefined && delete t[k]);
       await setDoc(newRef, t);
       setTasks((prev) => [{ id: newRef.id, ...t } as Task, ...prev]);
     }
@@ -957,17 +960,20 @@ export function ClientDetailModal({
 
     const actualClientId = client.originalClientId || client.id;
     const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
-    const actualDealId = isDeal ? (client.id as string) : null;
+    const actualDealId = isDeal ? (client.id as string) : "";
 
     const newRef = doc(collection(db, "notes"));
-    const n = {
-      agencyId: userData?.agencyId || client.agencyId,
-      sellerId: userData?.id,
+    const n: Record<string, any> = {
+      agencyId: userData?.agencyId || client.agencyId || "",
+      sellerId: userData?.id || "",
       clientId: actualClientId,
-      dealId: actualDealId || undefined,
       content: newNoteContent,
       createdAt: new Date().toISOString(),
     };
+    if (actualDealId) {
+      n.dealId = actualDealId;
+    }
+    Object.keys(n).forEach((k) => n[k] === undefined && delete n[k]);
     await setDoc(newRef, n);
     setNotes((prev) => [{ id: newRef.id, ...n }, ...prev]);
     setNewNoteContent("");
@@ -1031,7 +1037,7 @@ export function ClientDetailModal({
 
     const actualClientId = client.originalClientId || client.id;
     const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
-    const actualDealId = isDeal ? (client.id as string) : null;
+    const actualDealId = isDeal ? (client.id as string) : "";
 
     const newRef = doc(collection(db, "files"));
     const storageRef = ref(
@@ -1040,15 +1046,18 @@ export function ClientDetailModal({
     );
     await uploadBytes(storageRef, fileToUpload);
     const url = await getDownloadURL(storageRef);
-    const f: Partial<ClientFile> = {
-      agencyId: userData?.agencyId || client.agencyId,
+    const f: Record<string, any> = {
+      agencyId: userData?.agencyId || client.agencyId || "",
       clientId: actualClientId,
-      dealId: actualDealId || undefined,
-      userId: userData?.id,
+      userId: userData?.id || "",
       filename: fileToUpload.name,
       url,
       uploadedAt: new Date().toISOString(),
     };
+    if (actualDealId) {
+      f.dealId = actualDealId;
+    }
+    Object.keys(f).forEach((k) => f[k] === undefined && delete f[k]);
     await setDoc(newRef, f);
     setFiles((prev) => [{ id: newRef.id, ...f } as ClientFile, ...prev]);
   };
@@ -2467,14 +2476,20 @@ export function ClientDetailModal({
 
               if (taskData.notes && taskData.notes.trim()) {
                 const noteRef = doc(collection(db, "notes"));
-                await setDoc(noteRef, {
+                const noteData: Record<string, any> = {
                   agencyId: userData.agencyId || "",
                   sellerId: userData.id || "",
                   clientId: targetClientId,
-                  dealId: targetDealId || undefined,
                   content: taskData.notes.trim(),
                   createdAt: new Date().toISOString(),
-                });
+                };
+                if (targetDealId) {
+                  noteData.dealId = targetDealId;
+                }
+                Object.keys(noteData).forEach(
+                  (k) => noteData[k] === undefined && delete noteData[k]
+                );
+                await setDoc(noteRef, noteData);
               }
 
               setShowNewTaskModal(false);

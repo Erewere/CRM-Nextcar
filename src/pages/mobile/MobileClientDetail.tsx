@@ -388,18 +388,29 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
       const actualClientId = client.originalClientId || client.id;
       const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
-      const actualDealId = isDeal ? (client.id as string) : null;
+      const actualDealId = isDeal ? (client.id as string) : "";
 
-      await addDoc(collection(db, 'notes'), {
+      const noteData: Record<string, any> = {
         clientId: actualClientId,
-        dealId: actualDealId || undefined,
-        agencyId: userData?.agencyId || client.agencyId,
+        agencyId: userData?.agencyId || client.agencyId || "",
         content: content.trim(),
         type: type,
         createdAt: new Date().toISOString(),
-        createdBy: userData?.id,
-        createdByName: userData?.name
-      });
+      };
+      if (actualDealId) {
+        noteData.dealId = actualDealId;
+      }
+      if (userData?.id) {
+        noteData.createdBy = userData.id;
+      }
+      if (userData?.name) {
+        noteData.createdByName = userData.name;
+      }
+      Object.keys(noteData).forEach(
+        (k) => noteData[k] === undefined && delete noteData[k]
+      );
+
+      await addDoc(collection(db, 'notes'), noteData);
       
       setQuickNote('');
       setNoteSuccess(true);
