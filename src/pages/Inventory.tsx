@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDocs, getDoc } from 'firebase/firestore';
 import { Vehicle, Client, VehicleExpense } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X } from 'lucide-react';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -149,8 +149,10 @@ export function Inventory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOwnership, setFilterOwnership] = useState<string>('all');
   const [filterBodyType, setFilterBodyType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isPendingMinimized, setIsPendingMinimized] = useState(false);
 
   const { matches } = useSharedInventoryMatches();
   const hasSharedMatches = matches.length > 0;
@@ -171,6 +173,18 @@ export function Inventory() {
     const params = new URLSearchParams(window.location.search);
     return params.get('tab') === 'shared' ? 'shared' : 'my';
   });
+
+  const location = useLocation();
+
+  useEffect(() => {
+    const targetId = location.state?.vehicleId || location.state?.pendingVehicleId;
+    if (targetId && vehicles.length > 0) {
+      const found = vehicles.find((v) => v.id === targetId);
+      if (found) {
+        setSelectedVehicle(found);
+      }
+    }
+  }, [location.state, vehicles]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -393,7 +407,7 @@ export function Inventory() {
     if (userData?.role !== 'master') {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
       clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
-      expensesQ = query(collection(db, 'vehicleExpenses'), where('agencyId', '==', userData.agencyId));
+      expensesQ = query(collection(db, 'vehicleExpenses'));
     }
 
     const unsubscribeVehicles = onSnapshot(q, (snapshot) => {
@@ -509,8 +523,16 @@ export function Inventory() {
 
       if (approve && pv) {
         const targetStatus = newStatus || pv.type || 'sold';
-        const approvedPrice = pv.proposedPrice || vehicle?.price || 0;
+        const approvedPrice = pv.saleDetails?.price || pv.proposedPrice || vehicle?.price || 0;
         const soldDate = new Date().toISOString().split('T')[0];
+
+        const approvedSaleDetails = pv.saleDetails ? {
+          ...pv.saleDetails,
+          price: approvedPrice
+        } : {
+          price: approvedPrice,
+          method: 'contado'
+        };
 
         const payload: any = {
           pendingValidation: null,
@@ -518,56 +540,86 @@ export function Inventory() {
           updatedAt: new Date().toISOString()
         };
 
-        if (pv.hasPriceChange || pv.proposedPrice) {
+        // Always update the vehicle's price if the validation has a new price or if it's sold
+        if (pv.hasPriceChange || pv.proposedPrice || pv.saleDetails?.price || targetStatus === 'sold') {
           payload.price = approvedPrice;
         }
 
         if (targetStatus === 'sold') {
           payload.soldAt = soldDate;
-          if (pv.saleDetails) {
-            payload.saleDetails = {
-              ...pv.saleDetails,
-              price: approvedPrice
-            };
-          }
+          payload.saleDetails = approvedSaleDetails;
         }
 
         // 1. Update vehicle document
         await updateDoc(doc(db, 'vehicles', vehicleId), payload);
 
-        // 2. Update client if associated
-        if (pv.clientId) {
-          const clientUpdates: any = {
-            status: targetStatus === 'sold' ? 'won' : 'open',
-            dealValue: approvedPrice,
-            updatedAt: new Date().toISOString()
-          };
-          if (targetStatus === 'sold') {
-            clientUpdates.soldAt = soldDate;
-            if (pv.saleDetails) {
-              clientUpdates.saleDetails = {
-                ...pv.saleDetails,
-                price: approvedPrice
-              };
-            }
-          }
-          await updateDoc(doc(db, 'clients', pv.clientId), clientUpdates).catch(() => {});
+        // 2. Identify target Client ID and Deal ID
+        const targetClientId = pv.clientId || pv.originalClientId;
+        const targetDealId = pv.dealId;
+        const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : undefined;
 
-          // 3. Update associated deal if exists
+        const commonUpdates: any = {
+          status: targetStatus === 'sold' ? 'won' : 'open',
+          dealValue: approvedPrice,
+          vehicleId: vehicleId,
+          vehicle: vehicleName || pv.vehicle || undefined,
+          updatedAt: new Date().toISOString()
+        };
+        if (targetStatus === 'sold') {
+          commonUpdates.soldAt = soldDate;
+          commonUpdates.saleDetails = approvedSaleDetails;
+        }
+
+        // A) Update clients collection if targetClientId provided
+        if (targetClientId) {
           try {
-            const dealsQ = query(collection(db, 'deals'), where('clientId', '==', pv.clientId));
+            const clientRef = doc(db, 'clients', targetClientId);
+            const clientSnap = await getDoc(clientRef);
+            if (clientSnap.exists()) {
+              await updateDoc(clientRef, commonUpdates);
+            } else {
+              // If not found in clients, targetClientId might actually be a deal ID!
+              const dealRef = doc(db, 'deals', targetClientId);
+              const dealSnap = await getDoc(dealRef);
+              if (dealSnap.exists()) {
+                const dData = dealSnap.data();
+                await updateDoc(dealRef, {
+                  ...commonUpdates,
+                  value: approvedPrice
+                });
+                if (dData.clientId) {
+                  await updateDoc(doc(db, 'clients', dData.clientId), commonUpdates).catch(() => {});
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error updating client in validation:', err);
+          }
+
+          // B) Update deals associated with targetClientId
+          try {
+            const dealsQ = query(collection(db, 'deals'), where('clientId', '==', targetClientId));
             const dealsSnap = await getDocs(dealsQ);
             for (const dDoc of dealsSnap.docs) {
               await updateDoc(doc(db, 'deals', dDoc.id), {
-                status: targetStatus === 'sold' ? 'won' : 'open',
-                value: approvedPrice,
-                soldAt: targetStatus === 'sold' ? soldDate : null,
-                saleDetails: pv.saleDetails ? { ...pv.saleDetails, price: approvedPrice } : null,
-                updatedAt: new Date().toISOString()
+                ...commonUpdates,
+                value: approvedPrice
               });
             }
           } catch (e) {
-            console.error('Error updating deal:', e);
+            console.error('Error updating associated deals:', e);
+          }
+        }
+
+        // C) Update deal directly if targetDealId provided
+        if (targetDealId) {
+          try {
+            await updateDoc(doc(db, 'deals', targetDealId), {
+              ...commonUpdates,
+              value: approvedPrice
+            });
+          } catch (e) {
+            console.error('Error updating target deal:', e);
           }
         }
       }
@@ -598,6 +650,14 @@ export function Inventory() {
       result = result.filter(v => v.bodyType?.toLowerCase() === filterBodyType.toLowerCase());
     }
 
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'pending') {
+        result = result.filter(v => !!(v as any).pendingValidation);
+      } else {
+        result = result.filter(v => (v.status || 'available') === filterStatus && !(v as any).pendingValidation);
+      }
+    }
+
     if (sortConfig) {
       result.sort((a, b) => {
         let aVal: any = a[sortConfig.key as keyof Vehicle] || '';
@@ -623,7 +683,7 @@ export function Inventory() {
     }
 
     return result;
-  }, [vehicles, sharedVehicles, activeTab, searchTerm, filterOwnership, filterBodyType, sortConfig, expenses]);
+  }, [vehicles, sharedVehicles, activeTab, searchTerm, filterOwnership, filterBodyType, filterStatus, sortConfig, expenses]);
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
 
@@ -654,12 +714,33 @@ export function Inventory() {
       </div>
 
       {(userData?.role === 'admin' || userData?.role === 'master') && pendingVehicles.length > 0 && (
-        <div className="mb-6 p-4 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-2xl shadow-sm">
-          <h3 className="font-bold text-amber-900 dark:text-amber-300 mb-3 flex items-center gap-2 text-sm uppercase tracking-wider">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-            Validaciones y Cambios de Precio Pendientes ({pendingVehicles.length})
-          </h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="mb-6 p-4 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-2xl shadow-sm transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-amber-900 dark:text-amber-300 flex items-center gap-2 text-sm uppercase tracking-wider">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+              Validaciones y Cambios de Precio Pendientes ({pendingVehicles.length})
+            </h3>
+            <button
+              onClick={() => setIsPendingMinimized(prev => !prev)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-100/80 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-800/60 text-amber-800 dark:text-amber-200 transition-colors"
+              title={isPendingMinimized ? "Mostrar section" : "Minimizar sección"}
+            >
+              {isPendingMinimized ? (
+                <>
+                  <ChevronDown className="w-4 h-4" />
+                  <span>Mostrar</span>
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="w-4 h-4" />
+                  <span>Minimizar</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {!isPendingMinimized && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {pendingVehicles.map(v => {
               const pv = (v as any).pendingValidation || {};
               const vehicleExpenses = expenses.filter(e => e.vehicleId === v.id);
@@ -763,6 +844,7 @@ export function Inventory() {
               );
             })}
           </div>
+          )}
         </div>
       )}
 
@@ -788,6 +870,17 @@ export function Inventory() {
               {uniqueBodyTypes.map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="available">Disponibles</option>
+              <option value="reserved">Reservados</option>
+              <option value="sold">Vendidos</option>
+              <option value="pending">Pendientes de Aprobación</option>
             </select>
           </div>
 
@@ -822,13 +915,20 @@ export function Inventory() {
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
                 )}
               >
-                Inventario Compartido
+                Compartido
                 {!ownAgencySharing && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Inactivo (Actívalo en Agencias)"></span>
                 )}
                 {ownAgencySharing && hasSharedMatches && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Hay vehículos que coinciden con clientes activos"></span>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/payments')}
+                className="px-4 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+              >
+                Pagos
               </button>
             </div>
           )}

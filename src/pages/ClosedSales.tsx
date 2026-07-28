@@ -84,10 +84,18 @@ export function ClosedSales() {
 
   const displayClients = [
     ...deals.map(deal => {
-      const person = clients.find(c => c.id === deal.clientId) || {};
+      const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
+      const mergedSaleDetails = (deal.saleDetails && deal.saleDetails.price !== undefined)
+        ? deal.saleDetails
+        : (person.saleDetails && person.saleDetails.price !== undefined)
+          ? person.saleDetails
+          : deal.saleDetails || person.saleDetails;
+      const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? deal.value ?? deal.dealValue ?? person.dealValue;
       return {
         ...person,
         ...deal,
+        saleDetails: mergedSaleDetails,
+        dealValue: mergedDealValue,
         id: deal.id,
         originalClientId: deal.clientId,
       } as Client;

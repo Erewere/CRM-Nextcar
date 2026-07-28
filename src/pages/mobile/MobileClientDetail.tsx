@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic } from 'lucide-react';
+import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic, Calculator, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { Client, Vehicle } from '../../types';
 import { db } from '../../lib/firebase';
-import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { checkIsWon, checkIsLost } from '../../lib/clientUtils';
 import { DealWonModal } from '../../components/DealWonModal';
 import { LostReasonModal } from '../../components/LostReasonModal';
+import { PaymentModal } from '../../components/PaymentModal';
+import { VehicleDetailModal } from '../../components/VehicleDetailModal';
 
 interface Props {
   client: Client;
@@ -21,20 +23,154 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const { userData } = useAuth();
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [currentStatus, setCurrentStatus] = useState(client.status || 'new');
+  const [clientData, setClientData] = useState<Partial<Client>>(client);
   const [showDealWonModal, setShowDealWonModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLostReasonModal, setShowLostReasonModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [assignedVehicle, setAssignedVehicle] = useState<Vehicle | null>(null);
+  const [selectedVehicleForModal, setSelectedVehicleForModal] = useState<Vehicle | null>(null);
+
+  const handlePaymentConfirm = async (payment: any) => {
+    setShowPaymentModal(false);
+    
+    const baseDetails = clientData?.saleDetails || {
+      price: clientData?.dealValue || client.dealValue || 0,
+      method: 'contado',
+      payments: []
+    };
+    
+    const newPayment = {
+      ...payment,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString()
+    };
+    
+    const updatedSaleDetails = {
+      ...baseDetails,
+      payments: [...(baseDetails.payments || []), newPayment]
+    };
+    
+    setClientData(prev => ({
+      ...prev,
+      saleDetails: updatedSaleDetails
+    }));
+    
+    const finalClientId = (client.originalClientId || client.id) as string;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const finalDealId = isDeal ? (client.id as string) : null;
+
+    try {
+      const updateData = {
+        saleDetails: updatedSaleDetails,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (finalDealId) {
+        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
+      }
+      if (finalClientId) {
+        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+      }
+      if (clientData?.vehicleId || client.vehicleId) {
+        await setDoc(doc(db, "vehicles", (clientData?.vehicleId || client.vehicleId) as string), updateData, { merge: true });
+      }
+      onUpdated?.();
+    } catch (err) {
+      console.error("Error saving payment on mobile", err);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!clientData?.saleDetails?.payments) return;
+    if (!window.confirm("¿Eliminar este pago?")) return;
+
+    const updatedPayments = clientData.saleDetails.payments.filter((p: any) => p.id !== paymentId);
+    const updatedSaleDetails = {
+      ...clientData.saleDetails,
+      payments: updatedPayments
+    };
+
+    setClientData(prev => ({
+      ...prev,
+      saleDetails: updatedSaleDetails
+    }));
+
+    const finalClientId = (client.originalClientId || client.id) as string;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const finalDealId = isDeal ? (client.id as string) : null;
+
+    try {
+      const updateData = {
+        saleDetails: updatedSaleDetails,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (finalDealId) {
+        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
+      }
+      if (finalClientId) {
+        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+      }
+      if (clientData?.vehicleId || client.vehicleId) {
+        await setDoc(doc(db, "vehicles", (clientData?.vehicleId || client.vehicleId) as string), updateData, { merge: true });
+      }
+      onUpdated?.();
+    } catch (err) {
+      console.error("Error deleting payment on mobile", err);
+    }
+  };
 
   useEffect(() => {
-    if (client.vehicleId) {
-      getDoc(doc(db, 'vehicles', client.vehicleId)).then(snap => {
+    const actualClientId = client.originalClientId || client.id;
+    if (!actualClientId) return;
+
+    const unsubClient = onSnapshot(doc(db, "clients", actualClientId), (snap) => {
+      if (snap.exists()) {
+        const cData = snap.data() as Client;
+        setClientData(prev => ({ ...prev, ...cData }));
+        if (cData.status) setCurrentStatus(cData.status);
+      }
+    });
+
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const dealIdToListen = isDeal ? client.id : null;
+
+    let unsubDeal: (() => void) | null = null;
+    if (dealIdToListen) {
+      unsubDeal = onSnapshot(doc(db, "deals", dealIdToListen), (snap) => {
+        if (snap.exists()) {
+          const dData = snap.data();
+          setClientData(prev => ({
+            ...prev,
+            dealValue: dData.value !== undefined ? dData.value : (dData.saleDetails?.price || prev.dealValue),
+            saleDetails: dData.saleDetails || prev.saleDetails,
+            soldAt: dData.soldAt || prev.soldAt,
+            status: dData.status || prev.status,
+            vehicle: dData.vehicle || prev.vehicle,
+            vehicleId: dData.vehicleId || prev.vehicleId,
+          }));
+          if (dData.status) setCurrentStatus(dData.status);
+        }
+      });
+    }
+
+    return () => {
+      unsubClient();
+      if (unsubDeal) unsubDeal();
+    };
+  }, [client.id, client.originalClientId]);
+
+  useEffect(() => {
+    const vehId = clientData.vehicleId || client.vehicleId;
+    if (vehId) {
+      getDoc(doc(db, 'vehicles', vehId)).then(snap => {
         if (snap.exists()) {
           setAssignedVehicle({ id: snap.id, ...snap.data() } as Vehicle);
         }
       });
     }
-  }, [client.vehicleId]);
+  }, [clientData.vehicleId, client.vehicleId]);
   
   // Quick note state
   const [quickNote, setQuickNote] = useState('');
@@ -305,6 +441,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
           saleDetails,
+          value: saleDetails?.price || client.dealValue || 0,
           updatedAt: new Date().toISOString()
         });
         
@@ -313,6 +450,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
           saleDetails,
+          dealValue: saleDetails?.price || client.dealValue || 0,
           updatedAt: new Date().toISOString()
         });
       } else {
@@ -321,6 +459,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
           saleDetails,
+          dealValue: saleDetails?.price || client.dealValue || 0,
           updatedAt: new Date().toISOString()
         });
         
@@ -351,13 +490,15 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
               type: 'sold',
               requestedBy: userData?.id,
               requestedByName: userData?.name || userData?.email,
-              clientId: client.id,
+              clientId: actualClientId,
+              dealId: client.id,
               clientName: client.name,
               originalPrice,
               proposedPrice,
               purchasePrice,
               hasPriceChange,
-              saleDetails,
+              saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
+              vehicle: client.vehicle || (vData ? `${vData.year} ${vData.make} ${vData.model}` : null),
               requestedAt: new Date().toISOString(),
             },
           });
@@ -509,6 +650,213 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           </div>
         </div>
 
+        {/* Detalles de Venta si está ganado o tiene saleDetails */}
+        {(clientData?.saleDetails || currentStatus === 'won') && (() => {
+          const sDetails = clientData?.saleDetails || {
+            price: clientData?.dealValue || client.dealValue || assignedVehicle?.price || 0,
+            method: 'contado'
+          };
+          const actualPrice = sDetails.price || clientData?.dealValue || client.dealValue || assignedVehicle?.price || 0;
+          const vehicleName = assignedVehicle
+            ? `${assignedVehicle.year} ${assignedVehicle.make} ${assignedVehicle.model}`
+            : (clientData?.vehicle || client.vehicle || "Vehículo de la venta");
+
+          const paymentsList = sDetails.payments || [];
+          const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+          const remaining = Math.max(0, actualPrice - totalPaid);
+          const pct = actualPrice > 0 ? Math.min(100, Math.round((totalPaid / actualPrice) * 100)) : 100;
+
+          return (
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20 p-4 mb-2 shadow-sm border-y border-emerald-200/80 dark:border-emerald-800/60">
+              <div className="flex justify-between items-start mb-3 pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40 gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-600 text-white shrink-0">
+                    <Calculator className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5 flex-wrap">
+                      <span>Detalles de Venta</span>
+                      {remaining === 0 && actualPrice > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300/50">
+                          LIQUIDADO
+                        </span>
+                      ) : totalPaid > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300/50">
+                          PARCIAL ({pct}%)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300 border border-rose-300/50">
+                          PENDIENTE
+                        </span>
+                      )}
+                    </h3>
+                    {(clientData?.soldAt || client.soldAt) && (
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                        Fecha: {new Date((clientData?.soldAt || client.soldAt) + "T00:00:00").toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(true)}
+                  className="text-xs px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow transition-colors flex items-center gap-1 shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Pago</span>
+                </button>
+              </div>
+
+              <div 
+                onClick={() => {
+                  const vToOpen = assignedVehicle || (client.vehicleId ? { id: client.vehicleId, make: client.vehicle || 'Vehículo', model: '', price: actualPrice } : null);
+                  if (vToOpen) setSelectedVehicleForModal(vToOpen as Vehicle);
+                }}
+                className="p-3 bg-white dark:bg-slate-800/80 rounded-lg border border-emerald-100 dark:border-emerald-900/40 mb-3 flex items-center gap-3 cursor-pointer hover:bg-emerald-50/50 transition-colors group"
+                title="Ver ficha completa del auto"
+              >
+                {(assignedVehicle?.photoUrls?.[0] || assignedVehicle?.photoUrl || (assignedVehicle as any)?.images?.[0]) ? (
+                  <img src={assignedVehicle?.photoUrls?.[0] || assignedVehicle?.photoUrl || (assignedVehicle as any)?.images?.[0]} alt={vehicleName} className="w-14 h-11 object-cover rounded border border-gray-200 dark:border-slate-700 shrink-0 group-hover:scale-105 transition-transform" />
+                ) : (
+                  <div className="w-10 h-10 rounded bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold shrink-0">
+                    <Car className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase">Vehículo Vendido</p>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold group-hover:underline">Ver Auto</span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{vehicleName}</p>
+                  {assignedVehicle?.vin && (
+                    <p className="text-[10px] font-mono text-slate-500">VIN: {assignedVehicle.vin}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs bg-white dark:bg-slate-800/80 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/40 mb-3">
+                <div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Método de Pago</p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize mt-0.5">
+                    {sDetails.method === 'contado' ? 'Contado' : sDetails.method === 'credito_bancario' ? 'Crédito Bancario' : 'Crédito Propio'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Precio Final Acordado</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-bold text-xs">$</span>
+                    <input
+                      type="number"
+                      value={sDetails.price !== undefined && sDetails.price !== null ? sDetails.price : ''}
+                      onChange={(e) => {
+                        const newP = e.target.value === '' ? 0 : Number(e.target.value);
+                        setClientData((prev: any) => ({
+                          ...prev,
+                          dealValue: newP,
+                          saleDetails: {
+                            ...(prev?.saleDetails || { method: 'contado' }),
+                            price: newP
+                          }
+                        }));
+                      }}
+                      placeholder="0"
+                      className="w-28 px-1.5 py-0.5 font-bold text-xs text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                {sDetails.method === 'credito' && (
+                  <>
+                    <div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Enganche</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.downPayment || 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Plazo / Tasa</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                        {sDetails.termMonths} meses @ {sDetails.interestRate}%
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* PROGRESS BAR */}
+              <div className="bg-white dark:bg-slate-800/90 rounded-lg p-2.5 border border-emerald-100 dark:border-emerald-800/50 mb-3">
+                <div className="flex justify-between items-center text-[11px] font-semibold mb-1 text-slate-700 dark:text-slate-300">
+                  <span>Progreso de Pagos</span>
+                  <span>{pct}% ({new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalPaid)})</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden mb-1">
+                  <div 
+                    className={`h-full transition-all duration-300 ${remaining === 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+                    style={{ width: `${pct}%` }} 
+                  />
+                </div>
+              </div>
+
+              {/* PAYMENT HISTORY */}
+              <div className="bg-white dark:bg-slate-800/90 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800/50">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 border-b border-gray-100 dark:border-slate-700 pb-1 flex justify-between items-center">
+                  <span>Historial de Exhibiciones / Pagos</span>
+                  <span className="text-[10px] font-normal text-slate-400">
+                    {paymentsList.length} exhibición(es)
+                  </span>
+                </h4>
+
+                {paymentsList.length > 0 ? (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {paymentsList.map((payment: any, idx: number) => (
+                      <div key={`mob-pay-${payment.id || idx}`} className="flex justify-between items-center text-xs py-1 border-b border-gray-50 dark:border-slate-800/50 last:border-0">
+                        <div>
+                          <span className="font-bold text-slate-800 dark:text-slate-100">
+                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payment.amount)}
+                          </span>
+                          <span className="text-slate-500 dark:text-slate-400 ml-1.5">
+                            • {payment.date ? new Date(payment.date + "T00:00:00").toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }) : ''}
+                          </span>
+                          <span className="text-slate-400 ml-1 capitalize text-[11px]">
+                            ({payment.method || 'Efectivo'})
+                          </span>
+                        </div>
+                        {payment.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePayment(payment.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+
+                    <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-gray-200 dark:border-slate-700">
+                      <span className="text-slate-600 dark:text-slate-400">Saldo Restante</span>
+                      <span className={remaining > 0 ? "text-rose-500 font-extrabold" : "text-emerald-600 font-extrabold"}>
+                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(remaining)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 text-center py-2 italic flex flex-col items-center gap-1">
+                    <span>Sin exhibiciones registradas</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentModal(true)}
+                      className="text-emerald-600 font-semibold text-xs mt-0.5"
+                    >
+                      + Registrar pago
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Pipeline Stage */}
                 <div className="bg-white dark:bg-slate-800 p-4 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
           <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Etapa del Embudo</h3>
@@ -618,7 +966,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       
       {showDealWonModal && (
         <DealWonModal
-          client={client}
+          client={{ ...client, ...clientData } as Client}
           vehicle={assignedVehicle}
           onConfirm={handleDealWonConfirm}
           onCancel={() => setShowDealWonModal(false)}
@@ -630,6 +978,27 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           isOpen={showLostReasonModal}
           onClose={() => setShowLostReasonModal(false)}
           onConfirm={handleLostConfirm}
+        />
+      )}
+
+      {showPaymentModal && (
+        <PaymentModal
+          onConfirm={handlePaymentConfirm}
+          onCancel={() => setShowPaymentModal(false)}
+          maxAmount={(() => {
+            const actualPrice = clientData?.saleDetails?.price || clientData?.dealValue || client.dealValue || assignedVehicle?.price || 0;
+            const payments = clientData?.saleDetails?.payments || [];
+            const paid = payments.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+            return Math.max(0, actualPrice - paid);
+          })()}
+        />
+      )}
+
+      {selectedVehicleForModal && (
+        <VehicleDetailModal
+          vehicle={selectedVehicleForModal}
+          onClose={() => setSelectedVehicleForModal(null)}
+          clientContext={client}
         />
       )}
     </div>

@@ -23,6 +23,7 @@ import {
   Key,
   TrendingUp,
   MessageSquare,
+  DollarSign,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -178,6 +179,12 @@ export function Layout() {
       name: "Inventario",
       path: "/inventory",
       icon: Car,
+      roles: ["admin", "seller", "master"],
+    },
+    {
+      name: "Inv. de Pagos",
+      path: "/payments",
+      icon: DollarSign,
       roles: ["admin", "seller", "master"],
     },
     {

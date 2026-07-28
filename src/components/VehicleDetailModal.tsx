@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
-import { collection, doc, setDoc, onSnapshot, query, where, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -39,9 +39,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     return `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
   };
 
-  const [activeTab, setActiveTab] = useState<'info' | 'expenses' | 'checklist'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'expenses' | 'checklist' | 'payments'>('info');
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [buyerData, setBuyerData] = useState<any>(null);
   const [formData, setFormData] = useState<Partial<Vehicle>>(
     isNew ? { 
       status: 'available', 
@@ -288,13 +289,78 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   }, [userData]);
 
   useEffect(() => {
-    if (isNew || !vehicle.id) return;
-    const q = query(collection(db, 'vehicleExpenses'), where('vehicleId', '==', vehicle.id));
-    const unsub = onSnapshot(q, snap => {
-      setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }) as VehicleExpense));
+    if (!isNew && vehicle?.id && formData.status === 'sold') {
+      const fetchBuyer = async () => {
+        try {
+          const q = query(collection(db, 'clients'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            setBuyerData({ ...snap.docs[0].data(), id: snap.docs[0].id });
+          } else {
+             const dq = query(collection(db, 'deals'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']));
+             const dSnap = await getDocs(dq);
+             if (!dSnap.empty) {
+                 const dealData = dSnap.docs[0].data();
+                 if (dealData.clientId) {
+                     const clientDoc = await getDoc(doc(db, 'clients', dealData.clientId));
+                     if (clientDoc.exists()) {
+                         setBuyerData({ ...dealData, id: dSnap.docs[0].id, clientInfo: clientDoc.data() });
+                         return;
+                     }
+                 }
+                 setBuyerData({ ...dealData, id: dSnap.docs[0].id });
+             }
+          }
+        } catch (e) {
+          console.error("Error fetching buyer:", e);
+        }
+      };
+      fetchBuyer();
+    }
+  }, [isNew, vehicle?.id, formData.status]);
+
+  useEffect(() => {
+    if (!vehicle.id && !vehicle.vin) {
+      if ((vehicle as any)?.expenses && Array.isArray((vehicle as any).expenses)) {
+        setExpenses((vehicle as any).expenses);
+      }
+      return;
+    }
+
+    const targetIds = [vehicle.id, vehicle.vin, (vehicle as any)?.originalVehicleId].filter(Boolean) as string[];
+
+    const q = query(collection(db, 'vehicleExpenses'));
+    const unsub = onSnapshot(q, (snap) => {
+      const fetched = snap.docs
+        .map(d => ({ ...d.data(), id: d.id }) as VehicleExpense)
+        .filter(e => targetIds.includes(e.vehicleId));
+
+      const embedded = (vehicle as any)?.expenses || (vehicle as any)?.vehicleExpenses || [];
+      const map = new Map<string, VehicleExpense>();
+      
+      fetched.forEach(e => map.set(e.id, e));
+      if (Array.isArray(embedded)) {
+        embedded.forEach((e: any) => {
+          if (e && e.id && !map.has(e.id)) {
+            map.set(e.id, e);
+          }
+        });
+      }
+
+      setExpenses(prev => {
+        const tempLocal = prev.filter(e => e.id && e.id.startsWith('temp_'));
+        tempLocal.forEach(e => map.set(e.id, e));
+        return Array.from(map.values());
+      });
+    }, (err) => {
+      console.error("Error listening to vehicleExpenses:", err);
+      if ((vehicle as any)?.expenses && Array.isArray((vehicle as any).expenses)) {
+        setExpenses((vehicle as any).expenses);
+      }
     });
+
     return () => unsub();
-  }, [vehicle.id, isNew]);
+  }, [vehicle.id, vehicle.vin, (vehicle as any)?.originalVehicleId]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,6 +375,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       
       const payload: any = {
         ...formData,
+        expenses: expenses,
         createdAt: isNew ? new Date().toISOString() : formData.createdAt,
         updatedAt: new Date().toISOString()
       };
@@ -342,6 +409,62 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       }
 
       await setDoc(docRef, payload, { merge: true });
+
+      if (!isSeller && payload.status === 'sold' && payload.price) {
+        // If the admin is updating a sold vehicle, also sync the dealValue to any open/won client/deal associated with it
+        try {
+          const dealsQ = query(collection(db, 'deals'), where('vehicleId', '==', docRef.id));
+          const dealsSnap = await getDocs(dealsQ);
+          dealsSnap.forEach(async (dSnap) => {
+             const dData = dSnap.data();
+             const updates: any = { value: payload.price };
+             if (dData.saleDetails) {
+                 updates.saleDetails = { ...dData.saleDetails, price: payload.price };
+             }
+             await updateDoc(doc(db, 'deals', dSnap.id), updates).catch(() => {});
+             if (dData.clientId) {
+                const cUpdates: any = { dealValue: payload.price };
+                if (dData.saleDetails) {
+                   cUpdates.saleDetails = { ...dData.saleDetails, price: payload.price };
+                }
+                await updateDoc(doc(db, 'clients', dData.clientId), cUpdates).catch(() => {});
+             }
+          });
+
+          const clientsQ = query(collection(db, 'clients'), where('vehicleId', '==', docRef.id));
+          const clientsSnap = await getDocs(clientsQ);
+          clientsSnap.forEach(async (cSnap) => {
+             const cData = cSnap.data();
+             if (cData.status === 'won' || cData.status === 'open') {
+                 const updates: any = { dealValue: payload.price };
+                 if (cData.saleDetails) {
+                     updates.saleDetails = { ...cData.saleDetails, price: payload.price };
+                 }
+                 await updateDoc(doc(db, 'clients', cSnap.id), updates).catch(() => {});
+             }
+          });
+        } catch (syncErr) {
+          console.error("Error syncing vehicle price to clients/deals:", syncErr);
+        }
+      }
+
+      // Save any temporary expenses created locally
+      if (expenses.length > 0) {
+        for (const exp of expenses) {
+          if (!exp.id || exp.id.startsWith('temp_')) {
+            const expRef = doc(collection(db, 'vehicleExpenses'));
+            await setDoc(expRef, {
+              vehicleId: docRef.id,
+              description: exp.description,
+              amount: exp.amount,
+              date: exp.date || getLocalDateString(),
+              addedBy: userData?.id || '',
+              agencyId: payload.agencyId || userData?.agencyId || 'unassigned'
+            });
+          }
+        }
+      }
+
       onClose();
     } catch (err) {
       console.error(err);
@@ -410,8 +533,33 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   };
 
   const handleAddOrEditExpense = async () => {
-    if (!expDesc || !expAmount || !vehicle.id) return;
+    if (!expDesc || !expAmount) return;
+    const amountNum = Number(expAmount);
+    if (isNaN(amountNum)) return;
     
+    if (!vehicle.id) {
+      const newLocal: VehicleExpense = {
+        id: editingExpenseId || 'temp_' + Date.now(),
+        vehicleId: '',
+        description: expDesc,
+        amount: amountNum,
+        date: expDate || getLocalDateString(),
+        addedBy: userData?.id || '',
+        agencyId: formData.agencyId || userData?.agencyId || 'unassigned'
+      };
+
+      if (editingExpenseId) {
+        setExpenses(prev => prev.map(e => e.id === editingExpenseId ? newLocal : e));
+      } else {
+        setExpenses(prev => [...prev, newLocal]);
+      }
+
+      setExpDesc('');
+      setExpAmount('');
+      setEditingExpenseId(null);
+      return;
+    }
+
     try {
       const expRef = editingExpenseId 
         ? doc(db, 'vehicleExpenses', editingExpenseId) 
@@ -420,10 +568,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       await setDoc(expRef, {
         vehicleId: vehicle.id,
         description: expDesc,
-        amount: Number(expAmount),
-        date: expDate,
-        addedBy: userData?.id,
-        agencyId: vehicle.agencyId || userData?.agencyId || 'unassigned'
+        amount: amountNum,
+        date: expDate || getLocalDateString(),
+        addedBy: userData?.id || '',
+        agencyId: vehicle.agencyId || formData.agencyId || userData?.agencyId || 'unassigned'
       }, { merge: true });
       
       setExpDesc('');
@@ -449,9 +597,15 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   };
 
   const handleDeleteExpense = async (id: string) => {
-    // Avoid window.confirm as it blocks execution in some iframes
+    if (id.startsWith('temp_')) {
+      setExpenses(prev => prev.filter(e => e.id !== id));
+      if (editingExpenseId === id) cancelEdit();
+      return;
+    }
+
     try {
       await deleteDoc(doc(db, 'vehicleExpenses', id));
+      setExpenses(prev => prev.filter(e => e.id !== id));
       if (editingExpenseId === id) {
         cancelEdit();
       }
@@ -506,7 +660,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   };
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const utility = (formData.price || 0) - (formData.purchasePrice || 0) - totalExpenses;
+  const finalSalePrice = (formData.status === 'sold' && formData.saleDetails?.price) ? formData.saleDetails.price : (formData.price || 0);
+  const utility = finalSalePrice - (formData.purchasePrice || 0) - totalExpenses;
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -521,7 +676,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             >
               Info del Vehículo
             </button>
-            {!isNew && userData?.role !== 'seller' && (isOwnVehicle || isMaster) && (
+            {(isOwnVehicle || isMaster || isAdmin || userData?.role === 'seller') && (
               <button 
                  onClick={() => setActiveTab('expenses')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -535,6 +690,14 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'checklist' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
               >
                 Checklist
+              </button>
+            )}
+            {!isNew && formData.status === 'sold' && (
+              <button 
+                 onClick={() => setActiveTab('payments')}
+                 className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'payments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
+              >
+                Venta / Pagos
               </button>
             )}
           </div>
@@ -722,8 +885,15 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="number" inputMode="numeric" pattern="[0-9]*" required
-                        value={formData.price || ''}
-                        onChange={e => setFormData({...formData, price: Number(e.target.value)})}
+                        value={finalSalePrice || ''}
+                        onChange={e => {
+                          const newPrice = Number(e.target.value);
+                          setFormData({
+                            ...formData, 
+                            price: newPrice,
+                            ...(formData.saleDetails ? { saleDetails: { ...formData.saleDetails, price: newPrice } } : {})
+                          });
+                        }}
                         readOnly={userData?.role === 'seller' && !isNew}
                         className={`w-full pl-9 pr-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300 ${userData?.role === 'seller' && !isNew ? 'bg-slate-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`} 
                       />
@@ -895,7 +1065,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           </>
           )}
 
-          {activeTab === 'expenses' && !isNew && userData?.role !== 'seller' && (
+          {activeTab === 'expenses' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: Register Gasto and Table of Gastos */}
               <div className="lg:col-span-5 flex flex-col gap-4 h-full overflow-y-auto pr-1">
@@ -1079,7 +1249,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                       </div>
                       <div className="p-2.5 rounded border border-gray-200 bg-white">
                         <span className="text-[9px] font-bold text-slate-500 uppercase block mb-0.5">Precio de Venta</span>
-                        <span className="text-sm font-extrabold text-slate-900">${Number(formData.price || 0).toLocaleString()}</span>
+                        <span className="text-sm font-extrabold text-slate-900">${Number(finalSalePrice).toLocaleString()}</span>
                       </div>
                       <div className="p-2.5 rounded border border-gray-200 bg-white">
                         <span className="text-[9px] font-bold text-slate-500 uppercase block mb-0.5">Gastos de Preparación</span>
@@ -1349,6 +1519,147 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
             </div>
           )}
+
+          {activeTab === 'payments' && !isNew && formData.status === 'sold' && (
+            <div className="flex flex-col p-6 bg-white dark:bg-slate-800 overflow-y-auto max-h-[70vh]">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">Detalles de la Venta Realizada</h3>
+                  {buyerData && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                      Vendido a: <span className="font-semibold text-slate-700 dark:text-slate-300">{buyerData.name || buyerData.title || buyerData.clientInfo?.name || 'Desconocido'}</span>
+                      {(buyerData.phone || buyerData.clientInfo?.phone) && ` • ${(buyerData.phone || buyerData.clientInfo?.phone)}`}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Fecha de venta</p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">
+                    {formData.soldAt 
+                      ? new Date(formData.soldAt + "T00:00:00").toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })
+                      : 'N/A'
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {(() => {
+                const sDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0, method: 'contado' };
+                const actualPrice = sDetails.price || buyerData?.dealValue || buyerData?.value || formData.price || 0;
+                const paymentsList = sDetails.payments || [];
+                const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+                const remaining = Math.max(0, actualPrice - totalPaid);
+                const pct = actualPrice > 0 ? Math.min(100, Math.round((totalPaid / actualPrice) * 100)) : 100;
+
+                return (
+                  <div className="bg-emerald-50/50 dark:bg-emerald-950/10 p-5 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Método de Pago</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize flex items-center gap-1.5 mt-0.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                          {sDetails.method === 'contado' ? 'Contado' : sDetails.method === 'credito_bancario' ? 'Crédito Bancario' : 'Crédito Propio'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Precio Final Acordado</p>
+                        <p className="font-bold text-lg text-emerald-700 dark:text-emerald-400 mt-0.5">
+                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(actualPrice)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-800/90 rounded-lg p-4 border border-emerald-100 dark:border-emerald-800/50 mb-4 shadow-sm">
+                      <div className="flex justify-between items-center text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">
+                        <span>Progreso de Pagos</span>
+                        <span>{pct}% ({new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalPaid)} de {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(actualPrice)})</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden mb-1">
+                        <div 
+                          className={`h-full transition-all duration-300 ${remaining === 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+                          style={{ width: `${pct}%` }} 
+                        />
+                      </div>
+                    </div>
+
+                    {sDetails.method !== 'contado' && sDetails.downPayment && (
+                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4 bg-white dark:bg-slate-800/80 p-4 rounded-lg border border-emerald-100 dark:border-emerald-900/40 shadow-sm">
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Enganche</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.downPayment || 0)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Plazo / Tasa</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                              {sDetails.termMonths} meses @ {sDetails.interestRate}% ({sDetails.interestType})
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium font-bold text-emerald-700 dark:text-emerald-400">Total con Financiamiento</p>
+                            <p className="font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.calculatedTotalAmount || actualPrice)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium font-bold text-emerald-700 dark:text-emerald-400">Pago Mensual</p>
+                            <p className="font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.calculatedMonthlyPayment || 0)}
+                            </p>
+                          </div>
+                       </div>
+                    )}
+
+                    <div className="bg-white dark:bg-slate-800/90 rounded-lg p-4 border border-emerald-100 dark:border-emerald-800/50 shadow-sm">
+                      <h5 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 border-b border-gray-100 dark:border-slate-700 pb-2 flex justify-between items-center">
+                        <span>Historial de Exhibiciones / Pagos</span>
+                        <span className="text-xs font-normal text-slate-400">
+                          {paymentsList.length} exhibición(es)
+                        </span>
+                      </h5>
+
+                      {paymentsList.length > 0 ? (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {paymentsList.map((payment: any, idx: number) => (
+                            <div key={`payment-${payment.id || idx}`} className="flex justify-between items-center text-sm py-2 border-b border-gray-50 dark:border-slate-800/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 px-2 rounded transition-colors">
+                              <div>
+                                <span className="font-bold text-slate-800 dark:text-slate-100">
+                                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payment.amount)}
+                                </span>
+                                <span className="text-slate-500 dark:text-slate-400 ml-2">
+                                  • {payment.date ? new Date(payment.date + "T00:00:00").toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Sin fecha'}
+                                </span>
+                                <span className="text-slate-400 ml-2 capitalize font-medium">
+                                  ({payment.method || 'Efectivo'})
+                                </span>
+                                {payment.notes && (
+                                  <span className="block text-xs text-slate-500 italic mt-0.5">
+                                    "{payment.notes}"
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <p className="text-sm text-slate-400">No hay pagos registrados aún.</p>
+                        </div>
+                      )}
+
+                      <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex justify-between items-center px-1">
+                        <span className="font-bold text-slate-700 dark:text-slate-300">Saldo Restante por Cobrar</span>
+                        <span className={`font-black text-lg ${remaining > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(remaining)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1418,10 +1729,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                     {formData.model || ''} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{formData.year || ''}</span>
                   </h2>
                   
-                  {formData.price && formData.price > 0 && (
+                  {finalSalePrice > 0 && (
                     <div className="w-full rounded-[24px] py-4 px-6 flex flex-col justify-center shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
                       <span className="text-lg font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
-                      <span className="text-[40px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(formData.price).toLocaleString()}</span>
+                      <span className="text-[40px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(finalSalePrice).toLocaleString()}</span>
                     </div>
                   )}
                </div>
@@ -1557,7 +1868,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 </div>
                 <div className="p-4 rounded border border-gray-200 bg-white shadow-sm">
                   <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Precio de Venta</span>
-                  <span className="text-2xl font-black text-slate-900">${Number(formData.price || 0).toLocaleString()}</span>
+                  <span className="text-2xl font-black text-slate-900">${Number(finalSalePrice).toLocaleString()}</span>
                 </div>
                 <div className="p-4 rounded border border-gray-200 bg-white shadow-sm">
                   <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Gastos de Preparación</span>

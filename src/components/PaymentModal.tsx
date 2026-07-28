@@ -5,22 +5,27 @@ import { X } from 'lucide-react';
 interface Props {
   onConfirm: (payment: { amount: number; date: string; method: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'; notes?: string }) => void;
   onCancel: () => void;
-  maxAmount: number;
+  maxAmount?: number;
 }
 
 export function PaymentModal({ onConfirm, onCancel, maxAmount }: Props) {
-  const [amount, setAmount] = useState<string>(String(maxAmount));
+  const [amount, setAmount] = useState<string>(maxAmount && maxAmount > 0 ? String(maxAmount) : '');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [method, setMethod] = useState<'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'>('efectivo');
+  const [method, setMethod] = useState<'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'>('transferencia');
   const [notes, setNotes] = useState<string>('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const parsed = parseFloat(amount);
+    if (!parsed || parsed <= 0) {
+      alert("Por favor ingresa un monto válido mayor a 0");
+      return;
+    }
     onConfirm({
-      amount: parseFloat(amount) || 0,
+      amount: parsed,
       date,
       method,
-      notes
+      notes: notes.trim()
     });
   };
 
@@ -51,14 +56,26 @@ export function PaymentModal({ onConfirm, onCancel, maxAmount }: Props) {
             </label>
             <input
               type="number"
+              inputMode="numeric"
               required
               min="0.01"
-              step="0.01"
-              max={maxAmount}
+              step="any"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="w-full border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
             />
+            {maxAmount && maxAmount > 0 && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex justify-between">
+                <span>Saldo pendiente: ${maxAmount.toLocaleString('es-MX')}</span>
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(maxAmount))}
+                  className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                >
+                  Usar saldo restante
+                </button>
+              </p>
+            )}
           </div>
 
           <div>

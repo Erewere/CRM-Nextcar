@@ -688,8 +688,9 @@ export function Persons() {
       }
     }
 
+    const personDealIds = new Set(deals.filter((d) => d.clientId === personId).map((d) => d.id));
     const personTasks = tasks.filter(
-      (t) => t.clientId === personId && !t.completed,
+      (t) => (t.clientId === personId || (t.dealId && personDealIds.has(t.dealId))) && !t.completed,
     );
     personTasks.sort((a, b) => {
       const da = new Date(

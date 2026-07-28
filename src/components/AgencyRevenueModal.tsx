@@ -92,7 +92,7 @@ export function AgencyRevenueModal({ isOpen, onClose, wonContacts, vehicles }: A
       const vehicleExpenses = vehicle ? expenses.filter(e => e.vehicleId === vehicle.id) : [];
       const totalExpenses = vehicleExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
       
-      const salePrice = contact.dealValue || vehicle?.price || 0;
+      const salePrice = contact.saleDetails?.price || contact.dealValue || vehicle?.price || 0;
       const purchasePrice = vehicle?.purchasePrice || 0;
       const profit = salePrice - purchasePrice - totalExpenses;
 

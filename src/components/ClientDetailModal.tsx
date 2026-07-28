@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useRef } from "react";
 import imageCompression from "browser-image-compression";
 import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
@@ -34,13 +34,14 @@ import {
   Building2,
   Eye,
   Users,
-  Edit2, Target, Calculator, Lock,
+  Edit2, Target, Calculator, Lock, Car, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
 } from "lucide-react";
 import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
 import { DealWonModal } from "./DealWonModal";
 import { LostReasonModal } from "./LostReasonModal";
 import { PaymentModal } from "./PaymentModal";
+import { VehicleDetailModal } from "./VehicleDetailModal";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
@@ -73,6 +74,8 @@ export function ClientDetailModal({
   const [showLostReasonModal, setShowLostReasonModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
+  const [selectedVehicleForModal, setSelectedVehicleForModal] = useState<Vehicle | null>(null);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [newTaskPrefill, setNewTaskPrefill] = useState<any>(null);
   const [formData, setFormData] = useState<Partial<Client>>(
@@ -237,7 +240,6 @@ export function ClientDetailModal({
       const q = query(
         collection(db, "vehicles"),
         where("agencyId", "==", userData.agencyId),
-        where("status", "==", "available"),
       );
       getDocs(q)
         .then((snap) => {
@@ -249,7 +251,6 @@ export function ClientDetailModal({
     } else if (userData?.role === "master") {
       const q = query(
         collection(db, "vehicles"),
-        where("status", "==", "available"),
       );
       getDocs(q)
         .then((snap) => {
@@ -260,6 +261,54 @@ export function ClientDetailModal({
         .catch(console.error);
     }
   }, [userData]);
+
+  useEffect(() => {
+    if (isNew) return;
+    const actualClientId = client.originalClientId || client.id;
+    if (!actualClientId) return;
+
+    const unsubClient = onSnapshot(doc(db, "clients", actualClientId), (snap) => {
+      if (snap.exists()) {
+        const cData = snap.data() as Client;
+        setFormData((prev) => ({
+          ...prev,
+          ...cData,
+          dealValue: cData.saleDetails?.price !== undefined ? cData.saleDetails.price : (cData.dealValue !== undefined ? cData.dealValue : prev.dealValue),
+          saleDetails: cData.saleDetails || prev.saleDetails,
+          soldAt: cData.soldAt || prev.soldAt,
+          status: cData.status || prev.status,
+          vehicle: cData.vehicle || prev.vehicle,
+          vehicleId: cData.vehicleId || prev.vehicleId,
+        }));
+      }
+    });
+
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const dealIdToListen = isDeal ? client.id : null;
+
+    let unsubDeal: (() => void) | null = null;
+    if (dealIdToListen) {
+      unsubDeal = onSnapshot(doc(db, "deals", dealIdToListen), (snap) => {
+        if (snap.exists()) {
+          const dData = snap.data();
+          setFormData((prev) => ({
+            ...prev,
+            dealValue: dData.saleDetails?.price !== undefined ? dData.saleDetails.price : (dData.value !== undefined ? dData.value : (dData.dealValue !== undefined ? dData.dealValue : prev.dealValue)),
+            saleDetails: dData.saleDetails || prev.saleDetails,
+            soldAt: dData.soldAt || prev.soldAt,
+            status: dData.status || prev.status,
+            vehicle: dData.vehicle || prev.vehicle,
+            vehicleId: dData.vehicleId || prev.vehicleId,
+          }));
+        }
+      });
+    }
+
+    return () => {
+      unsubClient();
+      if (unsubDeal) unsubDeal();
+    };
+  }, [client.id, client.originalClientId, isNew]);
 
   useEffect(() => {
     if (isNew) return;
@@ -596,23 +645,34 @@ export function ClientDetailModal({
 
   const handleDealWonConfirm = async (saleDetails: any) => {
     setShowDealWonModal(false);
+    setShowPaymentDrawer(true);
     const targetStatus = pendingStatus || "won";
     
     setFormData((prev) => {
       const updates: Partial<Client> = { 
         status: targetStatus,
         soldAt: new Date().toISOString().split('T')[0],
-        saleDetails 
+        saleDetails,
+        dealValue: saleDetails?.price || prev.dealValue
       };
       return { ...prev, ...updates };
     });
 
     if (!isNew && client.id) {
       try {
-        const updates: any = {
+        const dealUpdates: any = {
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
           saleDetails,
+          value: saleDetails?.price || formData.dealValue || 0,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const clientUpdates: any = {
+          status: targetStatus,
+          soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          dealValue: saleDetails?.price || formData.dealValue || 0,
           updatedAt: new Date().toISOString(),
         };
 
@@ -628,15 +688,10 @@ export function ClientDetailModal({
         }
 
         if (finalDealId) {
-          await setDoc(doc(db, "deals", finalDealId), updates, { merge: true });
+          await setDoc(doc(db, "deals", finalDealId), dealUpdates, { merge: true });
         }
 
-        await setDoc(doc(db, "clients", finalClientId), {
-          status: targetStatus,
-          soldAt: new Date().toISOString().split('T')[0],
-          saleDetails,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        await setDoc(doc(db, "clients", finalClientId), clientUpdates, { merge: true });
         
         if (formData.vehicleId) {
           const currentVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
@@ -650,13 +705,15 @@ export function ClientDetailModal({
               type: "sold",
               requestedBy: userData?.id,
               requestedByName: userData?.name || userData?.email,
-              clientId: client.id,
+              clientId: finalClientId,
+              dealId: finalDealId,
               clientName: client.name || formData.name,
               originalPrice,
               proposedPrice,
               purchasePrice,
               hasPriceChange,
-              saleDetails,
+              saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
+              vehicle: formData.vehicle || (currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : null),
               requestedAt: new Date().toISOString(),
             },
           });
@@ -673,16 +730,22 @@ export function ClientDetailModal({
   
   const handlePaymentConfirm = async (payment: any) => {
     setShowPaymentModal(false);
-    if (!formData.saleDetails) return;
+    
+    const baseDetails = formData.saleDetails || {
+      price: formData.dealValue || 0,
+      method: 'contado',
+      payments: []
+    };
     
     const newPayment = {
       ...payment,
-      id: Math.random().toString(36).substr(2, 9)
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString()
     };
     
     const updatedSaleDetails = {
-      ...formData.saleDetails,
-      payments: [...(formData.saleDetails.payments || []), newPayment]
+      ...baseDetails,
+      payments: [...(baseDetails.payments || []), newPayment]
     };
     
     setFormData(prev => ({
@@ -690,20 +753,68 @@ export function ClientDetailModal({
       saleDetails: updatedSaleDetails
     }));
     
-    if (!isNew && client.id) {
-      try {
-        const updateData = {
-          saleDetails: updatedSaleDetails,
-          updatedAt: new Date().toISOString()
-        };
-        if (client.originalClientId && client.originalClientId !== client.id) {
-          await setDoc(doc(db, "deals", client.id as string), updateData, { merge: true });
-        } else {
-          await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), updateData, { merge: true });
-        }
-      } catch (err) {
-        console.error("Error saving payment", err);
+    const finalClientId = (client.originalClientId || client.id) as string;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const finalDealId = isDeal ? (client.id as string) : null;
+
+    try {
+      const updateData = {
+        saleDetails: updatedSaleDetails,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (finalDealId) {
+        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
       }
+      if (finalClientId) {
+        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+      }
+      if (formData.vehicleId) {
+        await setDoc(doc(db, "vehicles", formData.vehicleId), updateData, { merge: true });
+      }
+      onUpdated?.();
+    } catch (err) {
+      console.error("Error saving payment", err);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!formData.saleDetails?.payments) return;
+    if (!window.confirm("¿Seguro que deseas eliminar este pago del historial?")) return;
+
+    const updatedPayments = formData.saleDetails.payments.filter((p: any) => p.id !== paymentId);
+    const updatedSaleDetails = {
+      ...formData.saleDetails,
+      payments: updatedPayments
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      saleDetails: updatedSaleDetails
+    }));
+
+    const finalClientId = (client.originalClientId || client.id) as string;
+    const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    const finalDealId = isDeal ? (client.id as string) : null;
+
+    try {
+      const updateData = {
+        saleDetails: updatedSaleDetails,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (finalDealId) {
+        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
+      }
+      if (finalClientId) {
+        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+      }
+      if (formData.vehicleId) {
+        await setDoc(doc(db, "vehicles", formData.vehicleId), updateData, { merge: true });
+      }
+      onUpdated?.();
+    } catch (err) {
+      console.error("Error deleting payment", err);
     }
   };
 
@@ -802,19 +913,15 @@ export function ClientDetailModal({
         const dealDataToUpdate: any = {};
         if ('dealTitle' in dataToUpdate) {
           dealDataToUpdate.title = dataToUpdate.dealTitle;
-          delete dataToUpdate.dealTitle;
         }
         if ('dealValue' in dataToUpdate) {
           dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
-          delete dataToUpdate.dealValue;
         }
         if ('vehicleId' in dataToUpdate) {
           dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
-          delete dataToUpdate.vehicleId;
         }
         if ('vehicle' in dataToUpdate) {
           dealDataToUpdate.vehicle = dataToUpdate.vehicle;
-          delete dataToUpdate.vehicle;
         }
         if ('status' in dataToUpdate) {
           dealDataToUpdate.status = dataToUpdate.status;
@@ -831,8 +938,18 @@ export function ClientDetailModal({
         if ('soldAt' in dataToUpdate) {
           dealDataToUpdate.soldAt = dataToUpdate.soldAt;
         }
-        if ('saleDetails' in dataToUpdate) {
-          dealDataToUpdate.saleDetails = dataToUpdate.saleDetails;
+        if ('saleDetails' in dataToUpdate || formData.saleDetails) {
+          const sDet = dataToUpdate.saleDetails || formData.saleDetails;
+          dealDataToUpdate.saleDetails = sDet;
+          dataToUpdate.saleDetails = sDet;
+        }
+        if ('dealValue' in dataToUpdate || formData.dealValue !== undefined || formData.saleDetails?.price !== undefined) {
+          const priceVal = dataToUpdate.saleDetails?.price ?? dataToUpdate.dealValue ?? formData.dealValue;
+          if (priceVal !== undefined) {
+            dealDataToUpdate.value = priceVal;
+            dealDataToUpdate.dealValue = priceVal;
+            dataToUpdate.dealValue = priceVal;
+          }
         }
         if (finalDealId && Object.keys(dealDataToUpdate).length > 0) {
           dealDataToUpdate.updatedAt = new Date().toISOString();
@@ -845,6 +962,21 @@ export function ClientDetailModal({
             delete dataToUpdate[k as keyof typeof dataToUpdate],
         );
         await setDoc(doc(db, "clients", finalClientId as string), dataToUpdate, { merge: true });
+
+        // Sync vehicle price if it's a won deal
+        const finalStatus = dataToUpdate.status || dealDataToUpdate.status || client.status;
+        const finalVehicleId = dealDataToUpdate.vehicleId || dataToUpdate.vehicleId || client.vehicleId;
+        if ((finalStatus === 'won' || finalStatus === 'sold') && finalVehicleId) {
+           const finalPrice = dealDataToUpdate.saleDetails?.price || dataToUpdate.saleDetails?.price || dealDataToUpdate.value || 0;
+           if (finalPrice > 0) {
+              const vUpdate: any = { price: finalPrice };
+              if (dealDataToUpdate.saleDetails || dataToUpdate.saleDetails) {
+                 vUpdate.saleDetails = dealDataToUpdate.saleDetails || dataToUpdate.saleDetails;
+              }
+              await updateDoc(doc(db, "vehicles", finalVehicleId), vUpdate).catch(() => {});
+           }
+        }
+
       }
       onUpdated?.();
       onClose();
@@ -1113,7 +1245,16 @@ export function ClientDetailModal({
                     type="number"
                     name="dealValue"
                     value={formData.dealValue !== undefined ? formData.dealValue : ""}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                       const val = e.target.value;
+                       setFormData(prev => {
+                          const updated = { ...prev, dealValue: val ? Number(val) : 0 };
+                          if (updated.saleDetails) {
+                             updated.saleDetails = { ...updated.saleDetails, price: val ? Number(val) : 0 };
+                          }
+                          return updated;
+                       });
+                    }}
                     placeholder="Monto"
                     className="w-24 text-sm bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none text-gray-700 dark:text-slate-300"
                   />
@@ -1174,107 +1315,59 @@ export function ClientDetailModal({
           </div>
           
           
-              {formData.saleDetails && (
-                <div className="mt-6 p-4 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
+              {(formData.saleDetails || formData.status === 'won') && (() => {
+                const soldVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
+                const sDetails = formData.saleDetails || {
+                  price: formData.dealValue || soldVehicle?.price || 0,
+                  method: 'contado'
+                };
+                const actualPrice = sDetails.price || formData.dealValue || soldVehicle?.price || 0;
+                const paymentsList = sDetails.payments || [];
+                const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+                const remaining = Math.max(0, actualPrice - totalPaid);
+                const pct = actualPrice > 0 ? Math.min(100, Math.round((totalPaid / actualPrice) * 100)) : 100;
+
+                return (
+                  <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-teal-50/90 dark:from-emerald-950/40 dark:to-teal-950/30 p-2 px-3 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-sm mx-2 shrink-0">
+                    <div className="p-1.5 rounded-lg bg-emerald-600 text-white shrink-0">
                       <Calculator className="w-4 h-4" />
-                      Detalles de Venta
-                    </h4>
-                    {formData.saleDetails.method === 'contado' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowPaymentModal(true)}
-                        className="text-xs px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded shadow-sm"
-                      >
-                        + Registrar Pago
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                    <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Método</p>
-                      <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize">
-                        {formData.saleDetails.method.replace('_', ' ')}
+                    </div>
+                    <div className="hidden sm:block text-left min-w-[150px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalPaid)} / {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(actualPrice)}
+                        </span>
+                        {remaining === 0 && actualPrice > 0 ? (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300/50">
+                            LIQUIDADO
+                          </span>
+                        ) : totalPaid > 0 ? (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300/50">
+                            {pct}%
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300 border border-rose-300/50">
+                            PENDIENTE
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium truncate">
+                        {paymentsList.length} pago(s) • Saldo: {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(remaining)}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Precio de Venta</p>
-                      <p className="font-semibold text-slate-800 dark:text-slate-200">
-                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.price)}
-                      </p>
-                    </div>
-                    {formData.saleDetails.method === 'credito' && (
-                      <>
-                        <div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Enganche</p>
-                          <p className="font-semibold text-slate-800 dark:text-slate-200">
-                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.downPayment || 0)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Plazo / Tasa</p>
-                          <p className="font-semibold text-slate-800 dark:text-slate-200">
-                            {formData.saleDetails.termMonths} meses @ {formData.saleDetails.interestRate}% ({formData.saleDetails.interestType})
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Total a Pagar</p>
-                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">
-                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.calculatedTotalAmount || 0)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Mensualidad</p>
-                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">
-                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(formData.saleDetails.calculatedMonthlyPayment || 0)}
-                          </p>
-                        </div>
-                      </>
-                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentDrawer(true)}
+                      className="text-xs px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 shrink-0"
+                      title="Abrir panel lateral de detalle de venta y pagos"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Ver Venta / Pagos</span>
+                    </button>
                   </div>
-                  
-                  {formData.saleDetails.method === 'contado' && (
-                    <div className="bg-white dark:bg-slate-800 rounded p-3 border border-emerald-100 dark:border-emerald-800/50">
-                      <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 border-b border-gray-200 dark:border-slate-700 pb-1">
-                        Historial de Pagos
-                      </h5>
-                      {formData.saleDetails.payments && formData.saleDetails.payments.length > 0 ? (
-                        <div className="space-y-2">
-                          {formData.saleDetails.payments.map(payment => (
-                            <div key={`payment-${payment.id}`} className="flex justify-between items-center text-xs">
-                              <div>
-                                <span className="font-semibold text-slate-800 dark:text-slate-200">
-                                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payment.amount)}
-                                </span>
-                                <span className="text-slate-500 dark:text-slate-400 ml-2">
-                                  • {new Date(payment.date + "T00:00:00").toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </span>
-                                <span className="text-slate-400 ml-2 capitalize">
-                                  ({payment.method})
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                          <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-gray-200 dark:border-slate-700">
-                            <span className="text-slate-600 dark:text-slate-400">Restante</span>
-                            <span className={formData.saleDetails.price - formData.saleDetails.payments.reduce((a, p) => a + p.amount, 0) > 0 ? "text-rose-500" : "text-emerald-600"}>
-                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(
-                                Math.max(0, formData.saleDetails.price - formData.saleDetails.payments.reduce((a, p) => a + p.amount, 0))
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
-                          No hay pagos registrados
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
 
           <div className="flex items-center gap-3">
             {!isNew &&
@@ -1458,19 +1551,15 @@ export function ClientDetailModal({
                           const dealDataToUpdate: any = {};
                           if ('dealTitle' in dataToUpdate) {
                             dealDataToUpdate.title = dataToUpdate.dealTitle;
-                            delete dataToUpdate.dealTitle;
                           }
                           if ('dealValue' in dataToUpdate) {
             dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
-            delete dataToUpdate.dealValue;
           }
           if ('vehicleId' in dataToUpdate) {
             dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
-            delete dataToUpdate.vehicleId;
           }
           if ('vehicle' in dataToUpdate) {
             dealDataToUpdate.vehicle = dataToUpdate.vehicle;
-            delete dataToUpdate.vehicle;
           }
                           
                           if (Object.keys(dealDataToUpdate).length > 0) {
@@ -1567,6 +1656,37 @@ export function ClientDetailModal({
                       )}
                   </select>
                 </div>
+
+                {(formData.saleDetails || formData.status === 'won') && (() => {
+                  const soldV = inventoryVehicles.find(v => v.id === formData.vehicleId);
+                  const actualPrice = formData.saleDetails?.price || formData.dealValue || soldV?.price || 0;
+                  const payments = formData.saleDetails?.payments || [];
+                  const paid = payments.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+                  const remaining = Math.max(0, actualPrice - paid);
+
+                  return (
+                    <div className="p-2.5 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs my-2 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                          <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Venta & Pagos</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowPaymentDrawer(true)}
+                          className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold hover:underline flex items-center gap-0.5"
+                        >
+                          <span>Ver detalle</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300">
+                        <span>Pagado: <strong className="text-emerald-700 dark:text-emerald-400">${new Intl.NumberFormat('es-MX').format(paid)}</strong></span>
+                        <span>Saldo: <strong className={remaining > 0 ? "text-rose-600 font-bold" : "text-emerald-600 font-bold"}>${new Intl.NumberFormat('es-MX').format(remaining)}</strong></span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className={`pt-2 border-t border-gray-100 dark:border-slate-700 space-y-1 ${isNew && currentStep !== 1 ? "hidden md:block" : ""}`}>
                   <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
@@ -2422,6 +2542,309 @@ export function ClientDetailModal({
           </div>
         </div>
         )}
+
+        {/* SLIDE-OVER DRAWER FOR SALE & PAYMENT DETAILS */}
+        <AnimatePresence>
+          {showPaymentDrawer && (formData.saleDetails || formData.status === 'won') && (() => {
+            const soldVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
+            const sDetails = formData.saleDetails || {
+              price: formData.dealValue || soldVehicle?.price || 0,
+              method: 'contado'
+            };
+            const actualPrice = sDetails.price || formData.dealValue || soldVehicle?.price || 0;
+            const vehicleName = soldVehicle 
+              ? `${soldVehicle.year} ${soldVehicle.make} ${soldVehicle.model}` 
+              : (formData.vehicle && formData.vehicle !== "Otro pendiente" ? formData.vehicle : "Vehículo de la venta");
+
+            const paymentsList = sDetails.payments || [];
+            const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+            const remaining = Math.max(0, actualPrice - totalPaid);
+            const pct = actualPrice > 0 ? Math.min(100, Math.round((totalPaid / actualPrice) * 100)) : 100;
+
+            return (
+              <>
+                {/* Backdrop overlay inside modal */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowPaymentDrawer(false)}
+                  className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] z-30"
+                />
+
+                {/* Sliding Drawer Panel */}
+                <motion.div
+                  initial={{ x: "100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: "100%", opacity: 0 }}
+                  transition={{ type: "spring", damping: 26, stiffness: 240 }}
+                  className="absolute inset-y-0 right-0 z-40 w-full md:w-[480px] lg:w-[540px] bg-white dark:bg-slate-900 shadow-2xl border-l border-emerald-200 dark:border-emerald-800/80 flex flex-col overflow-hidden"
+                >
+                  {/* DRAWER HEADER */}
+                  <div className="p-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white flex items-center justify-between shadow-md shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-white/20 backdrop-blur-md">
+                        <Calculator className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold flex items-center gap-2 leading-tight">
+                          Detalles de Venta & Pagos
+                          {remaining === 0 && actualPrice > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400/30 text-white border border-white/30">
+                              LIQUIDADO
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400/30 text-white border border-white/30">
+                              {pct}% PAGADO
+                            </span>
+                          )}
+                        </h3>
+                        {formData.soldAt && (
+                          <p className="text-xs text-emerald-100 opacity-90 mt-0.5">
+                            Fecha de venta: {new Date(formData.soldAt + "T00:00:00").toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {canModify && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPaymentModal(true)}
+                          className="text-xs px-3 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 active:scale-95 font-bold rounded-lg shadow transition-all flex items-center gap-1 shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Registrar Pago</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentDrawer(false)}
+                        className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                        title="Minimizar panel y ver perfil"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* DRAWER CONTENT */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    {/* VEHICLE CARD - CLICKABLE TO OPEN FULL VEHICLE PAGE */}
+                    <div 
+                      onClick={() => {
+                        const vToOpen = soldVehicle || (formData.vehicleId ? { id: formData.vehicleId, make: formData.vehicle || 'Vehículo', model: '', price: actualPrice } : null);
+                        if (vToOpen) setSelectedVehicleForModal(vToOpen as Vehicle);
+                      }}
+                      className="p-3 bg-emerald-50/70 dark:bg-slate-800/80 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 flex items-center gap-3 cursor-pointer hover:bg-emerald-100/80 dark:hover:bg-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 shadow-xs hover:shadow transition-all group"
+                      title="Haz clic para ver la página / ficha completa del vehículo"
+                    >
+                      {(soldVehicle?.photoUrls?.[0] || soldVehicle?.photoUrl || (soldVehicle as any)?.images?.[0]) ? (
+                        <img 
+                          src={soldVehicle?.photoUrls?.[0] || soldVehicle?.photoUrl || (soldVehicle as any)?.images?.[0]} 
+                          alt={vehicleName} 
+                          className="w-16 h-12 object-cover rounded-lg border border-gray-200 dark:border-slate-700 shrink-0 group-hover:scale-105 transition-transform" 
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold shrink-0 group-hover:bg-emerald-200 transition-colors">
+                          <Car className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                            Vehículo Vendido
+                          </p>
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold group-hover:underline flex items-center gap-0.5">
+                            <span>Ver Ficha Auto</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-emerald-800 dark:group-hover:text-emerald-200">
+                          {vehicleName}
+                        </p>
+                        {soldVehicle?.vin && (
+                          <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                            VIN: {soldVehicle.vin}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* PAYMENT METHOD & PRICING */}
+                    <div className="grid grid-cols-2 gap-3 text-sm bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Método de Pago</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize flex items-center gap-1.5 mt-0.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                          {sDetails.method === 'contado' ? 'Contado' : sDetails.method === 'credito_bancario' ? 'Crédito Bancario' : 'Crédito Propio'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Precio Final Acordado</p>
+                        {canModify ? (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-bold text-sm">$</span>
+                            <input
+                              type="number"
+                              value={sDetails.price !== undefined && sDetails.price !== null ? sDetails.price : ''}
+                              onChange={(e) => {
+                                const newP = e.target.value === '' ? 0 : Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  dealValue: newP,
+                                  saleDetails: {
+                                    ...(prev.saleDetails || { method: 'contado' }),
+                                    price: newP
+                                  }
+                                }));
+                              }}
+                              placeholder="0"
+                              className="w-32 px-2 py-0.5 font-bold text-sm text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+                            />
+                          </div>
+                        ) : (
+                          <p className="font-bold text-base text-emerald-700 dark:text-emerald-400 mt-0.5">
+                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(actualPrice)}
+                          </p>
+                        )}
+                      </div>
+
+                      {sDetails.method === 'credito' && (
+                        <>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Enganche</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.downPayment || 0)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Plazo / Tasa</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                              {sDetails.termMonths} meses @ {sDetails.interestRate}% ({sDetails.interestType})
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total con Financiamiento</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.calculatedTotalAmount || actualPrice)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium font-bold text-emerald-700 dark:text-emerald-400">Pago Mensual</p>
+                            <p className="font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(sDetails.calculatedMonthlyPayment || 0)}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* PAYMENT PROGRESS BAR */}
+                    <div className="bg-slate-50 dark:bg-slate-800/80 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
+                      <div className="flex justify-between items-center text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">
+                        <span>Progreso de Pagos</span>
+                        <span>{pct}% ({new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalPaid)} de {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(actualPrice)})</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-300 ${remaining === 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+                          style={{ width: `${pct}%` }} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* PAYMENTS HISTORY */}
+                    <div className="bg-slate-50 dark:bg-slate-800/80 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
+                      <div className="flex justify-between items-center mb-2.5 pb-1 border-b border-gray-200 dark:border-slate-700">
+                        <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          Historial de Exhibiciones / Pagos
+                        </h5>
+                        <span className="text-[10px] font-semibold text-slate-400 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                          {paymentsList.length} exhibición(es)
+                        </span>
+                      </div>
+
+                      {paymentsList.length > 0 ? (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {paymentsList.map((payment: any, idx: number) => (
+                            <div key={`payment-${payment.id || idx}`} className="flex justify-between items-center text-xs p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                                    {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(payment.amount)}
+                                  </span>
+                                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded font-medium capitalize">
+                                    {payment.method || 'Efectivo'}
+                                  </span>
+                                </div>
+                                <span className="text-slate-500 dark:text-slate-400 text-[11px] block mt-0.5">
+                                  {payment.date ? new Date(payment.date + "T00:00:00").toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Sin fecha'}
+                                </span>
+                                {payment.notes && (
+                                  <span className="block text-[11px] text-slate-500 dark:text-slate-400 italic mt-0.5">
+                                    "{payment.notes}"
+                                  </span>
+                                )}
+                              </div>
+                              {canModify && payment.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePayment(payment.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                  title="Eliminar pago"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-gray-200 dark:border-slate-700">
+                            <span className="text-slate-600 dark:text-slate-400">Saldo Restante por Cobrar</span>
+                            <span className={remaining > 0 ? "text-rose-500 font-extrabold text-sm" : "text-emerald-600 font-extrabold text-sm"}>
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(remaining)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 text-center py-3 italic flex flex-col items-center gap-1.5">
+                          <span>No se han registrado pagos / exhibiciones aún.</span>
+                          {canModify && (
+                            <button
+                              type="button"
+                              onClick={() => setShowPaymentModal(true)}
+                              className="text-emerald-600 font-semibold hover:underline text-xs"
+                            >
+                              + Registrar la primera exhibición
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* DRAWER FOOTER */}
+                  <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentDrawer(false)}
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 font-semibold text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      <X className="w-4 h-4" /> Ocultar panel y ver perfil completo
+                    </button>
+
+                    <span className="text-slate-400 text-[11px] font-medium">
+                      Control de Pagos
+                    </span>
+                  </div>
+                </motion.div>
+              </>
+            );
+          })()}
+        </AnimatePresence>
       </motion.div>
             {/* New Activity Modal */}
       {showNewTaskModal && (
@@ -2525,9 +2948,24 @@ export function ClientDetailModal({
 
       {showDealWonModal && (
         <DealWonModal
-          client={client as Client}
+          client={{ ...client, dealValue: formData.dealValue, vehicleId: formData.vehicleId } as Client}
+          vehicle={inventoryVehicles.find(v => v.id === formData.vehicleId)}
           onConfirm={handleDealWonConfirm}
           onCancel={() => setShowDealWonModal(false)}
+        />
+      )}
+
+      {showPaymentModal && (
+        <PaymentModal
+          onConfirm={handlePaymentConfirm}
+          onCancel={() => setShowPaymentModal(false)}
+          maxAmount={(() => {
+            const soldV = inventoryVehicles.find(v => v.id === formData.vehicleId);
+            const actualPrice = formData.saleDetails?.price || formData.dealValue || soldV?.price || 0;
+            const payments = formData.saleDetails?.payments || [];
+            const paid = payments.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+            return Math.max(0, actualPrice - paid);
+          })()}
         />
       )}
 
@@ -2536,6 +2974,14 @@ export function ClientDetailModal({
           isOpen={showLostReasonModal}
           onClose={() => setShowLostReasonModal(false)}
           onConfirm={handleLostConfirm}
+        />
+      )}
+
+      {selectedVehicleForModal && (
+        <VehicleDetailModal
+          vehicle={selectedVehicleForModal}
+          onClose={() => setSelectedVehicleForModal(null)}
+          clientContext={formData as Client}
         />
       )}
     </div>

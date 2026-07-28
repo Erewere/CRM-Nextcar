@@ -172,7 +172,7 @@ function ArchivedClientsModal({
                       >
                         <ClientCard
                           client={client}
-                          tasks={tasks.filter((t) => t.clientId === clientIdToUse || (t as any).dealId === client.id)}
+                          tasks={tasks.filter((t) => t.clientId === clientIdToUse || t.clientId === client.id || (t as any).dealId === client.id)}
                         />
                       </div>
                     );
@@ -559,6 +559,7 @@ export function Kanban() {
         status: "won",
         soldAt: new Date().toISOString().split('T')[0],
         saleDetails,
+        value: saleDetails?.price || client.dealValue || 0,
         updatedAt: new Date().toISOString(),
       };
 
@@ -586,6 +587,8 @@ export function Kanban() {
         await updateDoc(doc(db, "clients", actualClientId), {
           status: "won",
           soldAt: new Date().toISOString().split('T')[0],
+          saleDetails,
+          dealValue: saleDetails?.price || client.dealValue || 0,
           updatedAt: new Date().toISOString()
         });
       }
@@ -602,13 +605,15 @@ export function Kanban() {
             type: "sold",
             requestedBy: userData?.id,
             requestedByName: userData?.name || userData?.email,
-            clientId: client.id,
+            clientId: actualClientId,
+            dealId: client.id,
             clientName: client.name,
             originalPrice,
             proposedPrice,
             purchasePrice,
             hasPriceChange,
-            saleDetails,
+            saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
+            vehicle: client.vehicle || (currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : null),
             requestedAt: new Date().toISOString(),
           },
         });
@@ -841,7 +846,7 @@ export function Kanban() {
               <div className="w-[250px] shadow-2xl opacity-100 rotate-1">
                 <ClientCard
                   client={activeClient}
-                  tasks={tasks.filter((t) => t.clientId === activeClient.id)}
+                  tasks={tasks.filter((t) => t.clientId === (activeClient.originalClientId || activeClient.id) || t.clientId === activeClient.id || (t as any).dealId === activeClient.id)}
                 />
               </div>
             ) : activeColumnRef.current ? (

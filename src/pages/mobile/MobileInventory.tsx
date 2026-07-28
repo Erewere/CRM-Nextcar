@@ -56,6 +56,7 @@ export function MobileInventory() {
   // Filters state
   const [filterOwnership, setFilterOwnership] = useState<string>('all');
   const [filterBodyType, setFilterBodyType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   // Shared matches state
   const { 
@@ -113,8 +114,6 @@ export function MobileInventory() {
 
   const filteredVehicles = vehicles.filter(v => {
     const searchLower = searchTerm.toLowerCase();
-    const isSold = v.status === 'sold';
-    if (isSold) return false;
     
     const matchesSearch = (
       v.make.toLowerCase().includes(searchLower) ||
@@ -126,7 +125,16 @@ export function MobileInventory() {
     const matchesOwnership = filterOwnership === 'all' || (v.ownership || 'propio') === filterOwnership;
     const matchesBodyType = filterBodyType === 'all' || v.bodyType?.toLowerCase() === filterBodyType.toLowerCase();
 
-    return matchesSearch && matchesOwnership && matchesBodyType;
+    let matchesStatus = true;
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'pending') {
+        matchesStatus = !!(v as any).pendingValidation;
+      } else {
+        matchesStatus = (v.status || 'available') === filterStatus && !(v as any).pendingValidation;
+      }
+    }
+
+    return matchesSearch && matchesOwnership && matchesBodyType && matchesStatus;
   });
 
   const filteredSharedMatches = sharedMatches.filter(m => {
@@ -226,12 +234,23 @@ export function MobileInventory() {
             <select
               value={filterBodyType}
               onChange={(e) => setFilterBodyType(e.target.value)}
-              className="w-full text-xs bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 font-medium capitalize"
+              className="flex-1 text-xs bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 font-medium capitalize"
             >
               <option value="all">Carrocería: Todos</option>
               {uniqueBodyTypes.map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="flex-1 text-xs bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 font-medium"
+            >
+              <option value="all">Estado: Todos</option>
+              <option value="available">Disponibles</option>
+              <option value="reserved">Reservados</option>
+              <option value="sold">Vendidos</option>
+              <option value="pending">Pendientes</option>
             </select>
           </div>
         </div>

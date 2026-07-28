@@ -21,6 +21,7 @@ export interface VehicleExpense {
   amount: number;
   date: string;
   addedBy: string;
+  agencyId?: string;
 }
 
 export interface VehicleChecklist {

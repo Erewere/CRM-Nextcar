@@ -19,6 +19,7 @@ import { signOut } from 'firebase/auth';
 import { Integrations } from './pages/Integrations';
 import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
 import { ClosedSales } from './pages/ClosedSales';
+import { PaymentInventory } from './pages/PaymentInventory';
 
 const safeDate = (val: any) => {
   if (!val) return new Date();
@@ -114,6 +115,7 @@ export default function App() {
             <Route path="billing" element={<ProtectedRoute requireRole={['master', 'admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
             <Route path="closed-sales" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><ClosedSales /></ProtectedRoute>} />
+            <Route path="payments" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><PaymentInventory /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

@@ -113,8 +113,7 @@ export function NotificationsPopover() {
     // 2. Listen to vehicles
     const vq = query(
       collection(db, "vehicles"),
-      where("agencyId", "==", userData.agencyId),
-      where("status", "==", "available")
+      where("agencyId", "==", userData.agencyId)
     );
     const unsubscribeV = onSnapshot(vq, (snapshot) => {
       const fetchedVehicles = snapshot.docs.map(
@@ -330,7 +329,59 @@ export function NotificationsPopover() {
     }
   });
 
-  // 5. Billing Notification
+  // 5. Pending Admin Approvals (Vehicles & Clients)
+  if (userData?.role === "admin" || userData?.role === "master") {
+    // A) Vehicle pending validations
+    vehicles.forEach((v) => {
+      const pv = (v as any).pendingValidation;
+      if (pv && pv.requestedAt) {
+        const notifId = `approval-vehicle-${v.id}`;
+        if (dismissedIds.has(notifId)) return;
+
+        const typeLabel = pv.type === "sold" ? "Venta" : pv.type === "reserved" ? "Reserva" : "Aprobación";
+        const requestedBy = pv.requestedByName || "Un vendedor";
+        const clientName = pv.clientName ? ` (Cliente: ${pv.clientName})` : "";
+
+        notifications.push({
+          id: notifId,
+          type: "admin-approval",
+          title: `Aprobación Pendiente: ${v.make} ${v.model}`,
+          message: `${requestedBy} solicitó marcar como ${typeLabel}${clientName}.`,
+          date: pv.requestedAt || new Date().toISOString(),
+          icon: <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />,
+          onClick: () => {
+            navigate("/inventory", { state: { pendingVehicleId: v.id, vehicleId: v.id } });
+          },
+        });
+      }
+    });
+
+    // B) Client / Deal pending validations
+    clients.forEach((client) => {
+      const pv = (client as any).pendingValidation;
+      if (pv && pv.requestedAt && !client.isDeleted) {
+        const notifId = `approval-client-${client.id}`;
+        if (dismissedIds.has(notifId)) return;
+
+        const requestedBy = pv.requestedByName || "Un vendedor";
+        const statusLabel = pv.type === "won" || pv.type === "sold" ? "Ganado / Vendido" : pv.type === "lost" ? "Perdido" : pv.type;
+
+        notifications.push({
+          id: notifId,
+          type: "admin-approval",
+          title: `Aprobación Pendiente: ${client.name || "Cliente"}`,
+          message: `${requestedBy} solicitó cambiar estado a "${statusLabel}".`,
+          date: pv.requestedAt || new Date().toISOString(),
+          icon: <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />,
+          onClick: () => {
+            navigate("/persons", { state: { clientId: client.id } });
+          },
+        });
+      }
+    });
+  }
+
+  // 6. Billing Notification
   const today = startOfDay(new Date());
   if (userData && (userData.role === "master" || userData.role === "admin")) {
     const createdAt = userData.createdAt instanceof Date ? userData.createdAt : ((userData.createdAt as any)?.toDate ? (userData.createdAt as any).toDate() : new Date(userData.createdAt || Date.now()));

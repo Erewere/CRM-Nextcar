@@ -181,12 +181,19 @@ export function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {clients.map((client) => {
+            const cId = client.originalClientId || client.id;
+            const clientTasks = tasks.filter(
+              (t) =>
+                t.clientId === client.id ||
+                (cId && t.clientId === cId) ||
+                (t.dealId && t.dealId === client.id)
+            );
             return (
               <SortableClientCard
                 key={`client-${client.id}`}
                 client={client}
                 onClick={() => onClientClick(client)}
-                tasks={tasks.filter((t) => t.clientId === client.id)}
+                tasks={clientTasks}
               />
             );
           })}

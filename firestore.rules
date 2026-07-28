@@ -129,6 +129,14 @@ service cloud.firestore {
       }
     }
 
+    // PIPELINE STAGES
+    match /pipelineStages/{stageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
     // Default catch-all
     match /{document=**} {
       allow read, write: if false;
