@@ -8,11 +8,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Vehicle, VehicleExpense, Agency, Client } from '../types';
+import { Vehicle, VehicleExpense, Agency, Client, Task } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
+import { PaymentModal } from './PaymentModal';
 
 interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
@@ -43,6 +44,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [buyerData, setBuyerData] = useState<any>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
   const [formData, setFormData] = useState<Partial<Vehicle>>(
     isNew ? { 
       status: 'available', 
@@ -318,6 +321,131 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       fetchBuyer();
     }
   }, [isNew, vehicle?.id, formData.status]);
+
+  useEffect(() => {
+    if (showPaymentModal) {
+      const fetchTasks = async () => {
+        try {
+          const cId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
+          if (cId) {
+            const q = query(collection(db, 'tasks'), where('clientId', '==', cId), where('completed', '==', false));
+            const snap = await getDocs(q);
+            setPendingTasks(snap.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
+          }
+        } catch (err) {
+          console.error("Error fetching tasks for payment modal:", err);
+        }
+      };
+      fetchTasks();
+    }
+  }, [showPaymentModal, buyerData, clientContext]);
+
+  const handlePaymentConfirm = async (paymentData: any) => {
+    setShowPaymentModal(false);
+    if (!vehicle?.id) return;
+
+    const newPayment = {
+      amount: paymentData.amount,
+      date: paymentData.date,
+      method: paymentData.method,
+      notes: paymentData.notes || '',
+      installmentNumber: paymentData.installmentNumber,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString()
+    };
+
+    const baseDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0, method: 'contado' };
+    const updatedSaleDetails = {
+      ...baseDetails,
+      payments: [...(baseDetails.payments || []), newPayment]
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      saleDetails: updatedSaleDetails
+    }));
+
+    if (buyerData) {
+      setBuyerData((prev: any) => ({
+        ...prev,
+        saleDetails: updatedSaleDetails
+      }));
+    }
+
+    try {
+      const updateData = {
+        saleDetails: updatedSaleDetails,
+        updatedAt: new Date().toISOString()
+      };
+
+      await setDoc(doc(db, "vehicles", vehicle.id), updateData, { merge: true });
+
+      const clientId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
+      if (clientId) {
+        await setDoc(doc(db, "clients", clientId), updateData, { merge: true });
+      }
+
+      if (buyerData?.id && buyerData.id !== clientId) {
+        await setDoc(doc(db, "deals", buyerData.id), updateData, { merge: true });
+      }
+
+      if (paymentData.taskIdToComplete) {
+        try {
+          await updateDoc(doc(db, "tasks", paymentData.taskIdToComplete), {
+            completed: true,
+            completedAt: new Date().toISOString()
+          });
+        } catch (tErr) {
+          console.error("Error completing payment task:", tErr);
+        }
+      }
+    } catch (err) {
+      console.error("Error saving payment from VehicleDetailModal:", err);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    const baseDetails = buyerData?.saleDetails || formData.saleDetails;
+    if (!baseDetails?.payments) return;
+    if (!confirm("¿Estás seguro de eliminar esta exhibición / pago?")) return;
+
+    const updatedPayments = baseDetails.payments.filter((p: any) => p.id !== paymentId);
+    const updatedSaleDetails = {
+      ...baseDetails,
+      payments: updatedPayments
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      saleDetails: updatedSaleDetails
+    }));
+
+    if (buyerData) {
+      setBuyerData((prev: any) => ({
+        ...prev,
+        saleDetails: updatedSaleDetails
+      }));
+    }
+
+    try {
+      const updateData = {
+        saleDetails: updatedSaleDetails,
+        updatedAt: new Date().toISOString()
+      };
+      if (vehicle.id) {
+        await setDoc(doc(db, "vehicles", vehicle.id), updateData, { merge: true });
+      }
+      const clientId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
+      if (clientId) {
+        await setDoc(doc(db, "clients", clientId), updateData, { merge: true });
+      }
+      if (buyerData?.id && buyerData.id !== clientId) {
+        await setDoc(doc(db, "deals", buyerData.id), updateData, { merge: true });
+      }
+    } catch (err) {
+      console.error("Error deleting payment in VehicleDetailModal:", err);
+    }
+  };
 
   useEffect(() => {
     if (!vehicle.id && !vehicle.vin) {
@@ -1614,9 +1742,19 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                     <div className="bg-white dark:bg-slate-800/90 rounded-lg p-4 border border-emerald-100 dark:border-emerald-800/50 shadow-sm">
                       <h5 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 border-b border-gray-100 dark:border-slate-700 pb-2 flex justify-between items-center">
                         <span>Historial de Exhibiciones / Pagos</span>
-                        <span className="text-xs font-normal text-slate-400">
-                          {paymentsList.length} exhibición(es)
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-normal text-slate-400">
+                            {paymentsList.length} exhibición(es)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowPaymentModal(true)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Registrar Pago</span>
+                          </button>
+                        </div>
                       </h5>
 
                       {paymentsList.length > 0 ? (
@@ -1633,12 +1771,27 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                                 <span className="text-slate-400 ml-2 capitalize font-medium">
                                   ({payment.method || 'Efectivo'})
                                 </span>
+                                {payment.installmentNumber && (
+                                  <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                                    Mensualidad #{payment.installmentNumber}
+                                  </span>
+                                )}
                                 {payment.notes && (
                                   <span className="block text-xs text-slate-500 italic mt-0.5">
                                     "{payment.notes}"
                                   </span>
                                 )}
                               </div>
+                              {payment.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePayment(payment.id)}
+                                  title="Eliminar este pago"
+                                  className="text-slate-300 hover:text-red-500 transition-colors p-1 rounded"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1949,6 +2102,23 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           </div>
         </div>
       </div>
+      {showPaymentModal && (
+        <PaymentModal
+          onConfirm={handlePaymentConfirm}
+          onCancel={() => setShowPaymentModal(false)}
+          saleDetails={buyerData?.saleDetails || formData.saleDetails}
+          pendingTasks={pendingTasks}
+          isWon={true}
+          clientName={buyerData?.name || buyerData?.title || buyerData?.clientInfo?.name || clientContext?.name}
+          maxAmount={(() => {
+            const sDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0 };
+            const actualPrice = sDetails.price || buyerData?.dealValue || buyerData?.value || formData.price || 0;
+            const paymentsList = sDetails.payments || [];
+            const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+            return Math.max(0, actualPrice - totalPaid);
+          })()}
+        />
+      )}
     </div>
   );
 }

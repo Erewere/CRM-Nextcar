@@ -738,7 +738,11 @@ export function ClientDetailModal({
     };
     
     const newPayment = {
-      ...payment,
+      amount: payment.amount,
+      date: payment.date,
+      method: payment.method,
+      notes: payment.notes || '',
+      installmentNumber: payment.installmentNumber,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString()
     };
@@ -747,21 +751,42 @@ export function ClientDetailModal({
       ...baseDetails,
       payments: [...(baseDetails.payments || []), newPayment]
     };
-    
-    setFormData(prev => ({
-      ...prev,
-      saleDetails: updatedSaleDetails
-    }));
-    
+
     const finalClientId = (client.originalClientId || client.id) as string;
     const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
     const finalDealId = isDeal ? (client.id as string) : null;
+    const todayIso = new Date().toISOString().split('T')[0];
+
+    let newStatus = formData.status;
+
+    // Check if markSaleAsWon was checked or if we need to confirm the sale
+    if (payment.markSaleAsWon) {
+      const wonStage = pipelineStages.find(s => 
+        s.name.toLowerCase().includes('ganad') || s.name.toLowerCase().includes('vendid')
+      );
+      if (wonStage) {
+        newStatus = wonStage.id;
+      } else {
+        newStatus = 'won';
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      status: newStatus,
+      saleDetails: updatedSaleDetails
+    }));
 
     try {
-      const updateData = {
+      const updateData: any = {
         saleDetails: updatedSaleDetails,
         updatedAt: new Date().toISOString()
       };
+
+      if (payment.markSaleAsWon) {
+        updateData.status = newStatus;
+        updateData.soldAt = todayIso;
+      }
 
       if (finalDealId) {
         await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
@@ -770,8 +795,43 @@ export function ClientDetailModal({
         await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
       }
       if (formData.vehicleId) {
-        await setDoc(doc(db, "vehicles", formData.vehicleId), updateData, { merge: true });
+        const vehicleUpdate: any = {
+          saleDetails: updatedSaleDetails,
+          updatedAt: new Date().toISOString()
+        };
+        if (payment.markSaleAsWon) {
+          vehicleUpdate.status = 'sold';
+          vehicleUpdate.soldAt = todayIso;
+        }
+        await setDoc(doc(db, "vehicles", formData.vehicleId), vehicleUpdate, { merge: true });
       }
+
+      // If completing a specific installment task
+      if (payment.taskIdToComplete) {
+        try {
+          await updateDoc(doc(db, "tasks", payment.taskIdToComplete), {
+            completed: true,
+            completedAt: new Date().toISOString()
+          });
+        } catch (tErr) {
+          console.error("Error completing payment task:", tErr);
+        }
+      }
+
+      // If marking sale as won from payment and method is credit, generate schedule tasks
+      if (payment.markSaleAsWon && updatedSaleDetails.method === 'credito') {
+        try {
+          await createPaymentTasks(
+            db, 
+            { ...client, ...formData, id: finalClientId, name: formData.name }, 
+            updatedSaleDetails, 
+            userData
+          );
+        } catch (pErr) {
+          console.error("Error creating payment tasks from payment confirm:", pErr);
+        }
+      }
+
       onUpdated?.();
     } catch (err) {
       console.error("Error saving payment", err);
@@ -899,6 +959,12 @@ export function ClientDetailModal({
           updatedAt: new Date().toISOString(),
         };
 
+        Object.keys(dataToUpdate).forEach(
+          (k) =>
+            dataToUpdate[k as keyof typeof dataToUpdate] === undefined &&
+            delete dataToUpdate[k as keyof typeof dataToUpdate],
+        );
+
         const finalClientId = client.originalClientId || client.id;
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
@@ -951,16 +1017,18 @@ export function ClientDetailModal({
             dataToUpdate.dealValue = priceVal;
           }
         }
+
+        Object.keys(dealDataToUpdate).forEach(
+          (k) =>
+            dealDataToUpdate[k] === undefined &&
+            delete dealDataToUpdate[k],
+        );
+
         if (finalDealId && Object.keys(dealDataToUpdate).length > 0) {
           dealDataToUpdate.updatedAt = new Date().toISOString();
           await setDoc(doc(db, "deals", finalDealId), dealDataToUpdate, { merge: true });
         }
 
-        Object.keys(dataToUpdate).forEach(
-          (k) =>
-            dataToUpdate[k as keyof typeof dataToUpdate] === undefined &&
-            delete dataToUpdate[k as keyof typeof dataToUpdate],
-        );
         await setDoc(doc(db, "clients", finalClientId as string), dataToUpdate, { merge: true });
 
         // Sync vehicle price if it's a won deal
@@ -1546,6 +1614,7 @@ export function ClientDetailModal({
                         if (dataToUpdate.dealValue !== undefined) {
                           dataToUpdate.dealValue = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
                         }
+                        Object.keys(dataToUpdate).forEach(k => dataToUpdate[k as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[k as keyof typeof dataToUpdate]);
                         
                         if (client.originalClientId && client.originalClientId !== client.id) {
                           const dealDataToUpdate: any = {};
@@ -1553,14 +1622,15 @@ export function ClientDetailModal({
                             dealDataToUpdate.title = dataToUpdate.dealTitle;
                           }
                           if ('dealValue' in dataToUpdate) {
-            dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
-          }
-          if ('vehicleId' in dataToUpdate) {
-            dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
-          }
-          if ('vehicle' in dataToUpdate) {
-            dealDataToUpdate.vehicle = dataToUpdate.vehicle;
-          }
+                            dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
+                          }
+                          if ('vehicleId' in dataToUpdate) {
+                            dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
+                          }
+                          if ('vehicle' in dataToUpdate) {
+                            dealDataToUpdate.vehicle = dataToUpdate.vehicle;
+                          }
+                          Object.keys(dealDataToUpdate).forEach(k => dealDataToUpdate[k] === undefined && delete dealDataToUpdate[k]);
                           
                           if (Object.keys(dealDataToUpdate).length > 0) {
                             dealDataToUpdate.updatedAt = new Date().toISOString();
@@ -1568,7 +1638,6 @@ export function ClientDetailModal({
                           }
                         }
 
-                        Object.keys(dataToUpdate).forEach(k => dataToUpdate[k as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[k as keyof typeof dataToUpdate]);
                         await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), dataToUpdate, { merge: true });
                       }
                       onClose();
@@ -2959,6 +3028,10 @@ export function ClientDetailModal({
         <PaymentModal
           onConfirm={handlePaymentConfirm}
           onCancel={() => setShowPaymentModal(false)}
+          saleDetails={formData.saleDetails}
+          pendingTasks={tasks}
+          isWon={checkIsWon(formData.status, pipelineStages)}
+          clientName={formData.name}
           maxAmount={(() => {
             const soldV = inventoryVehicles.find(v => v.id === formData.vehicleId);
             const actualPrice = formData.saleDetails?.price || formData.dealValue || soldV?.price || 0;

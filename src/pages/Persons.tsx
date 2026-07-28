@@ -819,17 +819,7 @@ export function Persons() {
                 </span>
               </button>
             )}
-            <button
-              onClick={() => {
-                const toDelete = persons.filter(p => p.origin === 'excel_import');
-                setUndoList(toDelete);
-                setShowUndoModal(true);
-              }}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-rose-100 text-rose-700 rounded font-semibold hover:bg-rose-200 shadow-sm text-xs md:text-sm"
-            >
-              <Trash2 className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">Deshacer Importación</span>
-            </button>
+            {/* Deshacer Importación button removed */}
             <label className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
               <FileSpreadsheet className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">Importar Excel</span>

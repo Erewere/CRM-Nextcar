@@ -11,6 +11,7 @@ import { DealWonModal } from '../../components/DealWonModal';
 import { LostReasonModal } from '../../components/LostReasonModal';
 import { PaymentModal } from '../../components/PaymentModal';
 import { VehicleDetailModal } from '../../components/VehicleDetailModal';
+import { createPaymentTasks } from '../../lib/paymentTasks';
 
 interface Props {
   client: Client;
@@ -41,7 +42,11 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     };
     
     const newPayment = {
-      ...payment,
+      amount: payment.amount,
+      date: payment.date,
+      method: payment.method,
+      notes: payment.notes || '',
+      installmentNumber: payment.installmentNumber,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString()
     };
@@ -50,21 +55,42 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       ...baseDetails,
       payments: [...(baseDetails.payments || []), newPayment]
     };
-    
-    setClientData(prev => ({
-      ...prev,
-      saleDetails: updatedSaleDetails
-    }));
-    
+
     const finalClientId = (client.originalClientId || client.id) as string;
     const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
     const finalDealId = isDeal ? (client.id as string) : null;
+    const todayIso = new Date().toISOString().split('T')[0];
+
+    let newStatus = currentStatus;
+
+    if (payment.markSaleAsWon) {
+      const wonStage = pipelineStages.find(s => 
+        s.name?.toLowerCase().includes('ganad') || s.name?.toLowerCase().includes('vendid')
+      );
+      if (wonStage) {
+        newStatus = wonStage.id;
+      } else {
+        newStatus = 'won';
+      }
+      setCurrentStatus(newStatus);
+    }
+
+    setClientData(prev => ({
+      ...prev,
+      status: newStatus,
+      saleDetails: updatedSaleDetails
+    }));
 
     try {
-      const updateData = {
+      const updateData: any = {
         saleDetails: updatedSaleDetails,
         updatedAt: new Date().toISOString()
       };
+
+      if (payment.markSaleAsWon) {
+        updateData.status = newStatus;
+        updateData.soldAt = todayIso;
+      }
 
       if (finalDealId) {
         await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
@@ -72,9 +98,45 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       if (finalClientId) {
         await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
       }
-      if (clientData?.vehicleId || client.vehicleId) {
-        await setDoc(doc(db, "vehicles", (clientData?.vehicleId || client.vehicleId) as string), updateData, { merge: true });
+      const vId = clientData?.vehicleId || client.vehicleId;
+      if (vId) {
+        const vehicleUpdate: any = {
+          saleDetails: updatedSaleDetails,
+          updatedAt: new Date().toISOString()
+        };
+        if (payment.markSaleAsWon) {
+          vehicleUpdate.status = 'sold';
+          vehicleUpdate.soldAt = todayIso;
+        }
+        await setDoc(doc(db, "vehicles", vId), vehicleUpdate, { merge: true });
       }
+
+      // If completing a specific installment task
+      if (payment.taskIdToComplete) {
+        try {
+          await updateDoc(doc(db, "tasks", payment.taskIdToComplete), {
+            completed: true,
+            completedAt: new Date().toISOString()
+          });
+        } catch (tErr) {
+          console.error("Error completing payment task on mobile:", tErr);
+        }
+      }
+
+      // If marking sale as won from payment and method is credit, generate schedule tasks
+      if (payment.markSaleAsWon && updatedSaleDetails.method === 'credito') {
+        try {
+          await createPaymentTasks(
+            db, 
+            { ...client, ...clientData, id: finalClientId, name: clientData?.name || client.name }, 
+            updatedSaleDetails, 
+            userData
+          );
+        } catch (pErr) {
+          console.error("Error creating payment tasks from payment confirm on mobile:", pErr);
+        }
+      }
+
       onUpdated?.();
     } catch (err) {
       console.error("Error saving payment on mobile", err);
@@ -985,6 +1047,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         <PaymentModal
           onConfirm={handlePaymentConfirm}
           onCancel={() => setShowPaymentModal(false)}
+          saleDetails={clientData?.saleDetails}
+          isWon={checkIsWon(currentStatus, pipelineStages)}
+          clientName={clientData?.name || client.name}
           maxAmount={(() => {
             const actualPrice = clientData?.saleDetails?.price || clientData?.dealValue || client.dealValue || assignedVehicle?.price || 0;
             const payments = clientData?.saleDetails?.payments || [];

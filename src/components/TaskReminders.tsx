@@ -216,35 +216,117 @@ export function TaskReminders() {
 
   const rawAlerts: ToastAlert[] = [];
 
-  // A) Tasks alerts
+  // A) Tasks alerts & Credit Payment Reminders
   tasks.forEach(task => {
     if (!task.dueDate || task.completed) return;
 
     const toastId = `task-${task.id}`;
     if (dismissedIds.has(toastId)) return;
 
+    const isPaymentTask = task.type === 'payment' || 
+      task.title?.toLowerCase().includes('pago') || 
+      task.title?.toLowerCase().includes('mensualidad') || 
+      task.title?.toLowerCase().includes('crédito');
+
     if (task.dueDate < todayStr) {
       rawAlerts.push({
         id: toastId,
         type: 'task-overdue',
-        title: 'Tarea Vencida',
+        title: isPaymentTask ? '⚠️ Pago Mensual Faltante' : 'Tarea Vencida',
         subtitle: task.title,
-        detail: `Venció el ${task.dueDate}${task.startTime ? ` (${task.startTime})` : ''}`,
+        detail: isPaymentTask
+          ? `¡Pago no registrado! Venció el ${task.dueDate}${task.startTime ? ` (${task.startTime})` : ''}`
+          : `Venció el ${task.dueDate}${task.startTime ? ` (${task.startTime})` : ''}`,
         taskId: task.id,
         clientId: task.clientId,
         severity: 'high',
       });
-    } else if (task.dueDate === todayStr) {
-      rawAlerts.push({
-        id: toastId,
-        type: 'task-today',
-        title: 'Tarea Pendiente Hoy',
-        subtitle: task.title,
-        detail: task.startTime ? `Programada a las ${task.startTime}` : 'Para atender hoy',
-        taskId: task.id,
-        clientId: task.clientId,
-        severity: 'medium',
-      });
+    } else {
+      // Calculate days difference
+      const dueMs = new Date(`${task.dueDate}T12:00:00`).getTime();
+      const todayMs = new Date(`${todayStr}T12:00:00`).getTime();
+      const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
+
+      if (diffDays >= 0 && diffDays <= 2) {
+        if (isPaymentTask) {
+          const daysTag = diffDays === 0 ? 'Vence HOY' : diffDays === 1 ? 'Vence MAÑANA' : 'Vence en 2 DÍAS';
+          rawAlerts.push({
+            id: toastId,
+            type: 'task-today',
+            title: `⏰ Próximo Pago (${daysTag})`,
+            subtitle: task.title,
+            detail: `Recordatorio: Mensualidad programada para el ${task.dueDate}. Registra la mensualidad.`,
+            taskId: task.id,
+            clientId: task.clientId,
+            severity: diffDays <= 1 ? 'high' : 'medium',
+          });
+        } else if (diffDays === 0) {
+          rawAlerts.push({
+            id: toastId,
+            type: 'task-today',
+            title: 'Tarea Pendiente Hoy',
+            subtitle: task.title,
+            detail: task.startTime ? `Programada a las ${task.startTime}` : 'Para atender hoy',
+            taskId: task.id,
+            clientId: task.clientId,
+            severity: 'medium',
+          });
+        }
+      }
+    }
+  });
+
+  // A.2) Check Client Credit Schedules directly (in case tasks were not created or to ensure no missing payment is overlooked)
+  clients.forEach(client => {
+    const sDetails = client.saleDetails;
+    if (!sDetails || sDetails.method !== 'credito' || !sDetails.termMonths || !sDetails.firstPaymentDate) return;
+
+    const termMonths = sDetails.termMonths;
+    const monthlyPayment = sDetails.calculatedMonthlyPayment || 0;
+    const existingPayments = sDetails.payments || [];
+
+    let currentDate = new Date(sDetails.firstPaymentDate);
+    currentDate.setHours(12, 0, 0, 0);
+
+    for (let i = 1; i <= termMonths; i++) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const isPaid = existingPayments.some(p => p.installmentNumber === i);
+
+      if (!isPaid) {
+        const toastId = `credit-schedule-${client.id}-m${i}`;
+        if (!dismissedIds.has(toastId)) {
+          const dueMs = currentDate.getTime();
+          const todayMs = new Date(`${todayStr}T12:00:00`).getTime();
+          const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
+
+          if (dateStr < todayStr) {
+            // Overdue missing payment!
+            rawAlerts.push({
+              id: toastId,
+              type: 'task-overdue',
+              title: '⚠️ Pago Mensual Faltante',
+              subtitle: `Mensualidad #${i}/${termMonths} - ${client.name}`,
+              detail: `¡Pago de $${monthlyPayment.toLocaleString('es-MX')} sin registrar! Venció el ${dateStr}.`,
+              clientId: client.id,
+              severity: 'high',
+            });
+          } else if (diffDays >= 0 && diffDays <= 2) {
+            // 2 days or less remaining
+            const daysTag = diffDays === 0 ? 'Vence HOY' : diffDays === 1 ? 'Vence MAÑANA' : 'Vence en 2 DÍAS';
+            rawAlerts.push({
+              id: toastId,
+              type: 'task-today',
+              title: `⏰ Próximo Pago (${daysTag})`,
+              subtitle: `Mensualidad #${i}/${termMonths} - ${client.name}`,
+              detail: `Monto: $${monthlyPayment.toLocaleString('es-MX')}. Vence el ${dateStr}.`,
+              clientId: client.id,
+              severity: diffDays <= 1 ? 'high' : 'medium',
+            });
+          }
+        }
+      }
+
+      currentDate.setMonth(currentDate.getMonth() + 1);
     }
   });
 
