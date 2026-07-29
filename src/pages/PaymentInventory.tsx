@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { Client, Vehicle } from '../types';
-import { Search, DollarSign, Calendar, CreditCard, User, Car } from 'lucide-react';
+import { Search, User, Car } from 'lucide-react';
 import { checkIsWon, deduplicateClients } from '../lib/clientUtils';
 import clsx from 'clsx';
 import { ClientDetailModal } from '../components/ClientDetailModal';
@@ -11,6 +12,11 @@ import { VehicleDetailModal } from '../components/VehicleDetailModal';
 
 export function PaymentInventory() {
   const { userData } = useAuth();
+
+  if (userData?.role === 'seller') {
+    return <Navigate to="/" replace />;
+  }
+
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -68,36 +74,109 @@ export function PaymentInventory() {
     };
   }, [userData]);
 
-  const isWon = (status: string = "") => checkIsWon(status, pipelineStages);
+  const isWon = (status: string = "", saleDetails?: any) => {
+    return checkIsWon(status, pipelineStages);
+  };
 
-  const displayClients = [
-    ...deals.map(deal => {
-      const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
-      const mergedSaleDetails = (deal.saleDetails && deal.saleDetails.price !== undefined)
-        ? deal.saleDetails
-        : (person.saleDetails && person.saleDetails.price !== undefined)
-          ? person.saleDetails
-          : deal.saleDetails || person.saleDetails;
-      const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? deal.value ?? deal.dealValue ?? person.dealValue;
-      return {
-        ...person,
-        ...deal,
-        saleDetails: mergedSaleDetails,
-        dealValue: mergedDealValue,
-        id: deal.id,
-        originalClientId: deal.clientId
-      } as Client;
-    }),
-    ...clients.filter(c => !deals.some(d => d.clientId === c.id))
-  ];
+  // Build unified list of sales
+  const itemsFromDeals = deals.map(deal => {
+    const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
+    const vehicle = vehicles.find(v => v.id === deal.vehicleId || v.id === person.vehicleId);
+    
+    const dealIsWon = isWon(deal.status) || isWon(person.status);
+
+    const mergedSaleDetails = (deal.saleDetails && (deal.saleDetails.price !== undefined || deal.saleDetails.method))
+      ? deal.saleDetails
+      : (person.saleDetails && (person.saleDetails.price !== undefined || person.saleDetails.method))
+        ? person.saleDetails
+        : (dealIsWon ? vehicle?.saleDetails : undefined);
+
+    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? (dealIsWon ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
+    const soldAt = deal.soldAt || person.soldAt || (dealIsWon ? vehicle?.soldAt : undefined) || deal.updatedAt || person.updatedAt;
+
+    const statusToUse = dealIsWon ? 'won' : (deal.status || person.status || 'lead');
+
+    return {
+      ...person,
+      ...deal,
+      status: statusToUse,
+      saleDetails: mergedSaleDetails,
+      dealValue: mergedDealValue,
+      soldAt,
+      id: deal.id,
+      originalClientId: deal.clientId,
+      vehicleId: deal.vehicleId || person.vehicleId || vehicle?.id,
+      vehicle: deal.vehicle || person.vehicle || (vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : undefined)
+    } as Client;
+  });
+
+  const clientsWithoutDeals = clients.filter(c => !deals.some(d => d.clientId === c.id));
+  const itemsFromClients = clientsWithoutDeals.map(person => {
+    const vehicle = vehicles.find(v => v.id === person.vehicleId);
+
+    const personIsWon = isWon(person.status);
+
+    const mergedSaleDetails = person.saleDetails || (personIsWon ? vehicle?.saleDetails : undefined);
+    const mergedDealValue = person.saleDetails?.price ?? (personIsWon ? vehicle?.saleDetails?.price : undefined) ?? person.dealValue ?? vehicle?.price;
+    const soldAt = person.soldAt || (personIsWon ? vehicle?.soldAt : undefined) || person.updatedAt;
+
+    const statusToUse = personIsWon ? 'won' : person.status;
+
+    return {
+      ...person,
+      status: statusToUse,
+      saleDetails: mergedSaleDetails,
+      dealValue: mergedDealValue,
+      soldAt,
+    } as Client;
+  });
+
+  const allIncludedVehicleIds = new Set<string>();
+  [...itemsFromDeals, ...itemsFromClients].forEach(item => {
+    if (item.vehicleId && (isWon(item.status, item.saleDetails))) {
+      allIncludedVehicleIds.add(item.vehicleId);
+    }
+  });
+
+  const soldVehiclesWithoutClientOrDeal = vehicles.filter(v => 
+    (v.status === 'sold' || (v.saleDetails && (v.saleDetails.price > 0 || v.saleDetails.method))) &&
+    !allIncludedVehicleIds.has(v.id)
+  ).map(v => {
+    const matchingClient = clients.find(c => 
+      ((v.buyerId && c.id === v.buyerId) ||
+       (v.soldToClientId && c.id === v.soldToClientId) ||
+       ((v as any).pendingValidation?.clientId && c.id === (v as any).pendingValidation.clientId) ||
+       (c.vehicleId === v.id && checkIsWon(c.status, pipelineStages)))
+    );
+
+    const mergedSaleDetails = v.saleDetails || matchingClient?.saleDetails;
+    const price = mergedSaleDetails?.price || v.price || 0;
+    
+    return {
+      id: matchingClient?.id || `v-sold-${v.id}`,
+      originalClientId: matchingClient?.id,
+      name: matchingClient?.name || (v as any).buyerName || (v.saleDetails as any)?.clientName || (v as any).pendingValidation?.clientName || 'Cliente (Venta de Vehículo)',
+      email: matchingClient?.email || '',
+      phone: matchingClient?.phone || '',
+      vehicleId: v.id,
+      vehicle: `${v.year} ${v.make} ${v.model}`,
+      status: 'won',
+      saleDetails: mergedSaleDetails,
+      dealValue: price,
+      soldAt: v.soldAt || matchingClient?.soldAt || v.updatedAt,
+    } as Client;
+  });
+
+  const displayClients = [...itemsFromDeals, ...itemsFromClients, ...soldVehiclesWithoutClientOrDeal];
   const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
-  const wonClients = deduplicatedClients.filter(c => isWon(c.status));
+  const wonClients = deduplicatedClients.filter(c => isWon(c.status, c.saleDetails));
 
   const filteredSales = wonClients.filter(c => {
     const search = searchTerm.toLowerCase();
     const v = vehicles.find(veh => veh.id === c.vehicleId);
     return (
       (c.name || "").toLowerCase().includes(search) ||
+      (c.vehicle || "").toLowerCase().includes(search) ||
       (v ? `${v.make} ${v.model} ${v.year}`.toLowerCase().includes(search) : false)
     );
   }).sort((a, b) => {
@@ -105,6 +184,36 @@ export function PaymentInventory() {
     const dateB = b.soldAt ? new Date(b.soldAt).getTime() : 0;
     return dateB - dateA;
   });
+
+  const getMethodBadge = (saleDetails?: any) => {
+    if (!saleDetails?.method) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          N/A
+        </span>
+      );
+    }
+    const m = saleDetails.method;
+    if (m === 'credito' || m === 'credito_propio') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+          💳 Crédito Propio
+        </span>
+      );
+    }
+    if (m === 'credito_bancario') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+          🏦 Crédito Bancario
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+        💵 Contado
+      </span>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900">
@@ -149,7 +258,7 @@ export function PaymentInventory() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSales.map((client, idx) => {
+                  filteredSales.map((client) => {
                     const vehicle = vehicles.find(v => v.id === client.vehicleId);
                     const sale = client.saleDetails;
                     const price = sale?.price || client.dealValue || vehicle?.price || 0;
@@ -172,21 +281,21 @@ export function PaymentInventory() {
                         <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                            {vehicle ? (
                              <button
-                               type="button"
-                               onClick={() => setSelectedVehicle(vehicle)}
-                               className="font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline flex items-center gap-2 text-left group transition-colors"
-                               title="Ver ficha completa del vehículo"
-                             >
+                                type="button"
+                                onClick={() => setSelectedVehicle(vehicle)}
+                                className="font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline flex items-center gap-2 text-left group transition-colors"
+                                title="Ver ficha completa del vehículo"
+                              >
                                <Car className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
                                <span>{vehicle.year} {vehicle.make} {vehicle.model}</span>
                              </button>
                            ) : client.vehicleId ? (
                              <button
-                               type="button"
-                               onClick={() => setSelectedVehicle({ id: client.vehicleId, make: client.vehicle || 'Vehículo', model: '', price } as Vehicle)}
-                               className="font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline flex items-center gap-2 text-left group transition-colors"
-                               title="Ver ficha completa del vehículo"
-                             >
+                                type="button"
+                                onClick={() => setSelectedVehicle({ id: client.vehicleId, make: client.vehicle || 'Vehículo', model: '', price } as Vehicle)}
+                                className="font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline flex items-center gap-2 text-left group transition-colors"
+                                title="Ver ficha completa del vehículo"
+                              >
                                <Car className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
                                <span>{client.vehicle || "Ver Vehículo"}</span>
                              </button>
@@ -195,9 +304,7 @@ export function PaymentInventory() {
                            )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 capitalize">
-                            {sale?.method ? sale.method.replace('_', ' ') : 'N/A'}
-                          </span>
+                          {getMethodBadge(sale)}
                         </td>
                         <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">
                           {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(price)}

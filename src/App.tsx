@@ -115,7 +115,7 @@ export default function App() {
             <Route path="billing" element={<ProtectedRoute requireRole={['master', 'admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
             <Route path="closed-sales" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><ClosedSales /></ProtectedRoute>} />
-            <Route path="payments" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><PaymentInventory /></ProtectedRoute>} />
+            <Route path="payments" element={<ProtectedRoute requireRole={['master', 'admin']}><PaymentInventory /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

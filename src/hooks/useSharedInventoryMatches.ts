@@ -24,7 +24,7 @@ export function useSharedInventoryMatches() {
 
   // 1. Listen to own agency's sharing status
   useEffect(() => {
-    if (!userData?.agencyId || userData.role === 'master') {
+    if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') {
       setLoading(false);
       return;
     }
@@ -42,7 +42,7 @@ export function useSharedInventoryMatches() {
 
   // 2. Listen to other sharing agencies
   useEffect(() => {
-    if (!userData?.agencyId || userData.role === 'master') return;
+    if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') return;
 
     const unsubscribeAgencies = onSnapshot(collection(db, "agencies"), (snap) => {
       const agenciesMap: Record<string, string> = {};
@@ -62,18 +62,10 @@ export function useSharedInventoryMatches() {
 
   // 3. Listen to our active clients (not won, not lost) that have wantedVehicle
   useEffect(() => {
-    if (!userData?.agencyId || userData.role === 'master') return;
+    if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') return;
 
     const agencyQuery = where("agencyId", "==", userData.agencyId);
-    let clientsQ = query(collection(db, "clients"), agencyQuery);
-
-    if (userData.role === "seller") {
-      clientsQ = query(
-        collection(db, "clients"),
-        agencyQuery,
-        where("sellerId", "==", userData.id)
-      );
-    }
+    const clientsQ = query(collection(db, "clients"), agencyQuery);
 
     const unsubscribeClients = onSnapshot(clientsQ, (snap) => {
       const activeClients: Client[] = [];
@@ -104,7 +96,7 @@ export function useSharedInventoryMatches() {
 
   // 4. Listen to available vehicles from other agencies (only if we are sharing)
   useEffect(() => {
-    if (!userData?.agencyId || userData.role === 'master') return;
+    if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') return;
     
     // We only load shared vehicles if we are sharing ourselves to keep it fair and secure,
     // but we can load them anyway to calculate matches or conditionally restrict. Let's load them!

@@ -304,9 +304,16 @@ export function ClientDetailModal({
       });
     }
 
+    const dealsQ = query(collection(db, "deals"), where("clientId", "==", actualClientId));
+    const unsubAllDeals = onSnapshot(dealsQ, (snap) => {
+      const dList = snap.docs.map(d => ({ ...d.data(), id: d.id } as Deal));
+      setDeals(dList);
+    });
+
     return () => {
       unsubClient();
       if (unsubDeal) unsubDeal();
+      unsubAllDeals();
     };
   }, [client.id, client.originalClientId, isNew]);
 
@@ -528,7 +535,14 @@ export function ClientDetailModal({
     setShowPhoneSuggestions(true);
   };
 
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedPersonId(null);
+  }, [client, isNew]);
+
   const handleSelectPerson = (person: Client) => {
+    setSelectedPersonId(person.id);
     setFormData((prev) => ({
       ...prev,
       name: person.name,
@@ -762,7 +776,7 @@ export function ClientDetailModal({
     // Check if markSaleAsWon was checked or if we need to confirm the sale
     if (payment.markSaleAsWon) {
       const wonStage = pipelineStages.find(s => 
-        s.name.toLowerCase().includes('ganad') || s.name.toLowerCase().includes('vendid')
+        (s.title || '').toLowerCase().includes('ganad') || (s.title || '').toLowerCase().includes('vendid')
       );
       if (wonStage) {
         newStatus = wonStage.id;
@@ -802,6 +816,9 @@ export function ClientDetailModal({
         if (payment.markSaleAsWon) {
           vehicleUpdate.status = 'sold';
           vehicleUpdate.soldAt = todayIso;
+          vehicleUpdate.buyerId = finalClientId;
+          vehicleUpdate.soldToClientId = finalClientId;
+          if (formData.name) vehicleUpdate.buyerName = formData.name;
         }
         await setDoc(doc(db, "vehicles", formData.vehicleId), vehicleUpdate, { merge: true });
       }
@@ -941,18 +958,68 @@ export function ClientDetailModal({
 
     try {
       if (isNew) {
-        const newRef = doc(collection(db, "clients"));
-        const dataToSave = {
-          ...finalFormData,
+        let finalClientId = selectedPersonId;
+
+        if (!finalClientId && finalFormData.name) {
+          const normName = finalFormData.name.trim().toLowerCase();
+          const normPhone = finalFormData.phone ? finalFormData.phone.trim() : "";
+          const matched = existingPersons.find(p => 
+            (normPhone && p.phone && p.phone.includes(normPhone)) ||
+            (normName && p.name && p.name.trim().toLowerCase() === normName)
+          );
+          if (matched) {
+            finalClientId = matched.id;
+          }
+        }
+
+        if (finalClientId) {
+          const clientUpdates: any = {
+            name: finalFormData.name,
+            email: finalFormData.email || "",
+            phone: finalFormData.phone || "",
+            organization: finalFormData.organization || "",
+            address: finalFormData.address || "",
+            updatedAt: new Date().toISOString()
+          };
+          if (finalFormData.sellerId) clientUpdates.sellerId = finalFormData.sellerId;
+          await setDoc(doc(db, "clients", finalClientId), clientUpdates, { merge: true });
+        } else {
+          const newClientRef = doc(collection(db, "clients"));
+          finalClientId = newClientRef.id;
+          const clientDataToSave = {
+            ...finalFormData,
+            id: finalClientId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          delete (clientDataToSave as any).dealTitle;
+          delete (clientDataToSave as any).dealValue;
+          Object.keys(clientDataToSave).forEach(
+            (k) =>
+              (clientDataToSave as any)[k] === undefined &&
+              delete (clientDataToSave as any)[k],
+          );
+          await setDoc(newClientRef, clientDataToSave);
+        }
+
+        // ALWAYS create a NEW deal record in `deals`
+        const newDealRef = doc(collection(db, "deals"));
+        const initialStage = finalFormData.status || (pipelineStages && pipelineStages[0]?.id) || "lead";
+        const dealDataToSave: any = {
+          id: newDealRef.id,
+          clientId: finalClientId,
+          agencyId: finalFormData.agencyId || userData?.agencyId || "",
+          sellerId: finalFormData.sellerId || userData?.id || "",
+          title: finalFormData.dealTitle || (finalFormData.vehicle ? `Trato: ${finalFormData.vehicle}` : `Trato con ${finalFormData.name || 'Cliente'}`),
+          status: initialStage,
+          value: finalFormData.dealValue ? Number(finalFormData.dealValue) : 0,
+          vehicle: finalFormData.vehicle || null,
+          vehicleId: finalFormData.vehicleId || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        Object.keys(dataToSave).forEach(
-          (k) =>
-            dataToSave[k as keyof typeof dataToSave] === undefined &&
-            delete dataToSave[k as keyof typeof dataToSave],
-        );
-        await setDoc(newRef, dataToSave);
+        if (finalFormData.saleDetails) dealDataToSave.saleDetails = finalFormData.saleDetails;
+        await setDoc(newDealRef, dealDataToSave);
       } else {
         const dataToUpdate = {
           ...finalFormData,
@@ -973,6 +1040,9 @@ export function ClientDetailModal({
           const snap = await getDocs(q);
           if (!snap.empty) {
             finalDealId = snap.docs[0].id;
+          } else {
+            const newDRef = doc(collection(db, "deals"));
+            finalDealId = newDRef.id;
           }
         }
 
@@ -1593,58 +1663,9 @@ export function ClientDetailModal({
                 </button>
                 <button
                   type="button"
-                  onClick={async (e) => {
-                    // Save client with wanted vehicle
+                  onClick={(e) => {
                     setShowWantedVehicleMenu(false);
-                    // We must bypass the showWantedVehicleMenu check now
-                    const mockEvent = { preventDefault: () => {} } as React.FormEvent;
-                    
-                    if (!userData || !formData.agencyId || formData.agencyId === "unassigned") {
-                      alert("Debes pertenecer a una agencia para guardar clientes.");
-                      return;
-                    }
-                    try {
-                      if (isNew) {
-                        const newRef = doc(collection(db, "clients"));
-                        const dataToSave = { ...formData, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-                        Object.keys(dataToSave).forEach(k => dataToSave[k as keyof typeof dataToSave] === undefined && delete dataToSave[k as keyof typeof dataToSave]);
-                        await setDoc(newRef, dataToSave);
-                      } else {
-                        const dataToUpdate = { ...formData, updatedAt: new Date().toISOString() };
-                        if (dataToUpdate.dealValue !== undefined) {
-                          dataToUpdate.dealValue = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
-                        }
-                        Object.keys(dataToUpdate).forEach(k => dataToUpdate[k as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[k as keyof typeof dataToUpdate]);
-                        
-                        if (client.originalClientId && client.originalClientId !== client.id) {
-                          const dealDataToUpdate: any = {};
-                          if ('dealTitle' in dataToUpdate) {
-                            dealDataToUpdate.title = dataToUpdate.dealTitle;
-                          }
-                          if ('dealValue' in dataToUpdate) {
-                            dealDataToUpdate.value = dataToUpdate.dealValue ? Number(dataToUpdate.dealValue) : 0;
-                          }
-                          if ('vehicleId' in dataToUpdate) {
-                            dealDataToUpdate.vehicleId = dataToUpdate.vehicleId;
-                          }
-                          if ('vehicle' in dataToUpdate) {
-                            dealDataToUpdate.vehicle = dataToUpdate.vehicle;
-                          }
-                          Object.keys(dealDataToUpdate).forEach(k => dealDataToUpdate[k] === undefined && delete dealDataToUpdate[k]);
-                          
-                          if (Object.keys(dealDataToUpdate).length > 0) {
-                            dealDataToUpdate.updatedAt = new Date().toISOString();
-                            await setDoc(doc(db, "deals", client.id as string), dealDataToUpdate, { merge: true });
-                          }
-                        }
-
-                        await setDoc(doc(db, "clients", (client.originalClientId || client.id) as string), dataToUpdate, { merge: true });
-                      }
-                      onClose();
-                    } catch (err) {
-                      console.error(err);
-                      alert("Error guardando cliente: " + err.message);
-                    }
+                    handleSave(e);
                   }}
                   className="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors"
                 >
@@ -2337,13 +2358,15 @@ export function ClientDetailModal({
             const title = prompt("Nombre del trato (ej: Compra de Ford Lobo):");
             if (!title) return;
             const ref = doc(collection(db, "deals"));
+            const actualClientId = client.originalClientId || client.id;
+            const initialStage = pipelineStages[0]?.id || "lead";
             await setDoc(ref, {
               id: ref.id,
               agencyId: userData?.agencyId || "",
-              clientId: client.id,
+              clientId: actualClientId,
               sellerId: client.sellerId || userData?.id || "",
               title,
-              status: "open",
+              status: initialStage,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             });

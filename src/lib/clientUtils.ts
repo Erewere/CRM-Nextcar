@@ -2,17 +2,18 @@ export function checkIsWon(status: string = "", pipelineStages: {id: string, tit
   const wonKeywords = [
     "ganado", "won", "vendid", "cerrad", 
     "entregad", "completad", "finalizad", 
-    "pagad", "exito", "éxito", "completed", "finish", "listo"
+    "pagad", "exito", "éxito", "completed", "finish", "listo",
+    "sold", "credito", "crédito", "financiamiento"
   ];
   const s = String(status || "").toLowerCase();
-  if (s === "won") return true;
+  if (s === "won" || s === "sold" || s === "credito" || s === "crédito") return true;
   if (wonKeywords.some((k) => s.includes(k))) return true;
   
   const stage = pipelineStages.find(st => st.id === status);
   if (stage) {
     const t = String(stage.title || "").toLowerCase();
     const id = String(stage.id || "").toLowerCase();
-    if (id === "won") return true;
+    if (id === "won" || id === "sold" || id === "credito" || id === "crédito") return true;
     return wonKeywords.some((k) => t.includes(k) || id.includes(k));
   }
   return false;

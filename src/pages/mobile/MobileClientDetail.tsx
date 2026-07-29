@@ -107,6 +107,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         if (payment.markSaleAsWon) {
           vehicleUpdate.status = 'sold';
           vehicleUpdate.soldAt = todayIso;
+          vehicleUpdate.buyerId = finalClientId;
+          vehicleUpdate.soldToClientId = finalClientId;
+          if (clientData?.name || client?.name) vehicleUpdate.buyerName = clientData?.name || client?.name;
         }
         await setDoc(doc(db, "vehicles", vId), vehicleUpdate, { merge: true });
       }

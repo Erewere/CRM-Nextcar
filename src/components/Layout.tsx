@@ -185,7 +185,7 @@ export function Layout() {
       name: "Inv. de Pagos",
       path: "/payments",
       icon: DollarSign,
-      roles: ["admin", "seller", "master"],
+      roles: ["admin", "master"],
     },
     {
       name: "Embudo",

@@ -73,6 +73,9 @@ export interface Vehicle {
   equipment?: string;
   passengers?: number;
   soldAt?: string;
+  buyerId?: string;
+  soldToClientId?: string;
+  buyerName?: string;
   saleDetails?: SaleDetails;
   checklist?: VehicleChecklist;
 }
@@ -119,6 +122,7 @@ export interface PaymentRecord {
   date: string;
   method: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
   notes?: string;
+  installmentNumber?: number;
 }
 
 export interface SaleDetails {

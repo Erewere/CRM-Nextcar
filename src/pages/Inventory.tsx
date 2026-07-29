@@ -170,6 +170,7 @@ export function Inventory() {
   };
 
   const [activeTab, setActiveTab] = useState<'my' | 'shared'>(() => {
+    if (userData?.role === 'seller') return 'my';
     const params = new URLSearchParams(window.location.search);
     return params.get('tab') === 'shared' ? 'shared' : 'my';
   });
@@ -187,6 +188,10 @@ export function Inventory() {
   }, [location.state, vehicles]);
 
   useEffect(() => {
+    if (userData?.role === 'seller') {
+      setActiveTab('my');
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam === 'shared') {
@@ -194,7 +199,7 @@ export function Inventory() {
     } else if (tabParam === 'my') {
       setActiveTab('my');
     }
-  }, [window.location.search]);
+  }, [window.location.search, userData?.role]);
 
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
   const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
@@ -480,7 +485,7 @@ export function Inventory() {
 
   // Subscribe to shared vehicles when eligible
   useEffect(() => {
-    if (userData?.role === 'master') return;
+    if (userData?.role === 'master' || userData?.role === 'seller') return;
     if (!ownAgencySharing || sharingAgencies.length === 0) {
       setSharedVehicles([]);
       return;
@@ -548,6 +553,13 @@ export function Inventory() {
         if (targetStatus === 'sold') {
           payload.soldAt = soldDate;
           payload.saleDetails = approvedSaleDetails;
+          if (pv.clientId || pv.originalClientId) {
+            payload.buyerId = pv.clientId || pv.originalClientId;
+            payload.soldToClientId = pv.clientId || pv.originalClientId;
+          }
+          if (pv.clientName) {
+            payload.buyerName = pv.clientName;
+          }
         }
 
         // 1. Update vehicle document
@@ -885,7 +897,7 @@ export function Inventory() {
           </div>
 
           {/* TAB CONTROL FOR COLLABORATIVE INVENTORY */}
-          {userData?.role !== 'master' && (
+          {userData?.role !== 'master' && userData?.role !== 'seller' && (
             <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded border border-gray-200 dark:border-slate-700">
               <button
                 type="button"

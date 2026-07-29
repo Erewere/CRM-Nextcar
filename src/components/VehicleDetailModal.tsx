@@ -30,8 +30,31 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   const pdfRef = React.useRef<HTMLDivElement>(null);
   const [isGeneratingPartnersReport, setIsGeneratingPartnersReport] = useState(false);
   const partnerDocRef = React.useRef<HTMLDivElement>(null);
+  const [pdfImageDataUrl, setPdfImageDataUrl] = useState<string>('');
+
+  const urlToDataUrl = async (url: string): Promise<string> => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    try {
+      const fetchUrl = (url.startsWith('http://') || url.startsWith('https://'))
+        ? `/api/proxy-image?url=${encodeURIComponent(url)}`
+        : url;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) return '';
+      const blob = await res.blob();
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return '';
+    }
+  };
 
   const getPdfImageSrc = () => {
+    if (pdfImageDataUrl) return pdfImageDataUrl;
     const rawSrc = (formData.photoUrls && formData.photoUrls.length > 0)
       ? formData.photoUrls[0]
       : (formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl);
@@ -41,6 +64,12 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   };
 
   const [activeTab, setActiveTab] = useState<'info' | 'expenses' | 'checklist' | 'payments'>('info');
+
+  useEffect(() => {
+    if (userData?.role === 'seller' && (activeTab === 'expenses' || activeTab === 'payments')) {
+      setActiveTab('info');
+    }
+  }, [userData?.role, activeTab]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [buyerData, setBuyerData] = useState<any>(null);
@@ -120,6 +149,41 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     };
   };
 
+  const triggerDownloadOrShare = async (
+    pdfBlob: Blob,
+    fileName: string,
+    shareTitle: string,
+    shareText: string
+  ) => {
+    const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+
+    let shared = false;
+    if (navigator.share && navigator.canShare) {
+      try {
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            files: [file]
+          });
+          shared = true;
+        }
+      } catch (shareErr) {
+        console.log('Share dismissed or unsupported:', shareErr);
+      }
+    }
+
+    if (!shared) {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const handleSharePDF = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!pdfRef.current || isGeneratingPDF) return;
@@ -130,27 +194,19 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         ? formData.photoUrls[0]
         : (formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl);
       if (rawSrc) {
-        // Preload image to browser cache to ensure it renders instantly in html-to-image
-        await new Promise<void>((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
-            img.src = rawSrc;
-          } else {
-            img.src = `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
-          }
-        });
-        // Short delay to let browser finish layout/decoding
-        await new Promise(r => setTimeout(r, 250));
+        const dataUrl = await urlToDataUrl(rawSrc);
+        if (dataUrl) {
+          setPdfImageDataUrl(dataUrl);
+          await new Promise(r => setTimeout(r, 150));
+        }
       }
 
       const imgData = await toJpeg(pdfRef.current, { 
         quality: 0.9,
         pixelRatio: 2,
-        cacheBust: true,
+        cacheBust: false,
         skipFonts: true,
+        fontEmbedCSS: '',
         imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
       });
 
@@ -162,30 +218,18 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       
       pdf.addImage(imgData, 'JPEG', 0, 0, 800, 1131);
       const pdfBlob = pdf.output('blob');
-      
-      const file = new File([pdfBlob], `${formData.make || 'Vehiculo'}_${formData.model || ''}.pdf`, { type: 'application/pdf' });
-      
-      // Check if navigator.share is available and supports files
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            title: `Ficha Técnica - ${formData.make || ''} ${formData.model || ''}`,
-            text: `Revisa este increíble ${formData.make || ''} ${formData.model || ''} ${formData.year || ''}!`,
-            files: [file]
-          });
-        } catch (shareErr) {
-          // If share fails (e.g. user canceled), just fallback to open/save
-          const pdfUrl = URL.createObjectURL(pdfBlob);
-          window.open(pdfUrl, '_blank');
-        }
-      } else {
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        window.open(pdfUrl, '_blank');
-      }
+      const fileName = `${formData.make || 'Vehiculo'}_${formData.model || ''}.pdf`;
+
+      await triggerDownloadOrShare(
+        pdfBlob,
+        fileName,
+        `Ficha Técnica - ${formData.make || ''} ${formData.model || ''}`,
+        `Revisa este increíble ${formData.make || ''} ${formData.model || ''} ${formData.year || ''}!`
+      );
     } catch (error: any) {
       console.error('Error sharing PDF:', error);
-      const errorMsg = error instanceof Error ? error.message : (typeof error === 'object' ? 'Detalles de error no disponibles' : String(error));
-      alert('Error PDF: ' + errorMsg);
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'No se pudo procesar la imagen del vehículo para la ficha PDF');
+      alert('Error al generar PDF: ' + errorMsg);
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -201,26 +245,19 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         ? formData.photoUrls[0]
         : (formData.photoUrl || vehicle?.photoUrls?.[0] || vehicle?.photoUrl);
       if (rawSrc) {
-        // Preload image
-        await new Promise<void>((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
-            img.src = rawSrc;
-          } else {
-            img.src = `/api/proxy-image?url=${encodeURIComponent(rawSrc)}`;
-          }
-        });
-        await new Promise(r => setTimeout(r, 250));
+        const dataUrl = await urlToDataUrl(rawSrc);
+        if (dataUrl) {
+          setPdfImageDataUrl(dataUrl);
+          await new Promise(r => setTimeout(r, 150));
+        }
       }
 
       const imgData = await toJpeg(partnerDocRef.current, { 
         quality: 0.9,
         pixelRatio: 2,
-        cacheBust: true,
+        cacheBust: false,
         skipFonts: true,
+        fontEmbedCSS: '',
         imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
       });
 
@@ -232,28 +269,18 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       
       pdf.addImage(imgData, 'JPEG', 0, 0, 800, 1131);
       const pdfBlob = pdf.output('blob');
-      
-      const file = new File([pdfBlob], `Reporte_Socios_${formData.make || 'Vehiculo'}_${formData.model || ''}.pdf`, { type: 'application/pdf' });
-      
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            title: `Reporte de Socios - ${formData.make || ''} ${formData.model || ''}`,
-            text: `Reporte financiero confidencial del ${formData.make || ''} ${formData.model || ''} ${formData.year || ''}.`,
-            files: [file]
-          });
-        } catch (shareErr) {
-          const pdfUrl = URL.createObjectURL(pdfBlob);
-          window.open(pdfUrl, '_blank');
-        }
-      } else {
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        window.open(pdfUrl, '_blank');
-      }
+      const fileName = `Reporte_Socios_${formData.make || 'Vehiculo'}_${formData.model || ''}.pdf`;
+
+      await triggerDownloadOrShare(
+        pdfBlob,
+        fileName,
+        `Reporte de Socios - ${formData.make || ''} ${formData.model || ''}`,
+        `Reporte financiero confidencial del ${formData.make || ''} ${formData.model || ''} ${formData.year || ''}.`
+      );
     } catch (error: any) {
       console.error('Error sharing Partners PDF:', error);
-      const errorMsg = error instanceof Error ? error.message : (typeof error === 'object' ? 'Detalles de error no disponibles' : String(error));
-      alert('Error PDF: ' + errorMsg);
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'No se pudo generar el reporte en PDF');
+      alert('Error al generar Reporte PDF: ' + errorMsg);
     } finally {
       setIsGeneratingPartnersReport(false);
     }
@@ -804,7 +831,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             >
               Info del Vehículo
             </button>
-            {(isOwnVehicle || isMaster || isAdmin || userData?.role === 'seller') && (
+            {(isOwnVehicle || isMaster || isAdmin) && userData?.role !== 'seller' && (
               <button 
                  onClick={() => setActiveTab('expenses')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -820,7 +847,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 Checklist
               </button>
             )}
-            {!isNew && formData.status === 'sold' && (
+            {!isNew && formData.status === 'sold' && userData?.role !== 'seller' && (
               <button 
                  onClick={() => setActiveTab('payments')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'payments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -1193,7 +1220,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           </>
           )}
 
-          {activeTab === 'expenses' && (
+          {activeTab === 'expenses' && userData?.role !== 'seller' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: Register Gasto and Table of Gastos */}
               <div className="lg:col-span-5 flex flex-col gap-4 h-full overflow-y-auto pr-1">
@@ -1648,7 +1675,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             </div>
           )}
 
-          {activeTab === 'payments' && !isNew && formData.status === 'sold' && (
+          {activeTab === 'payments' && !isNew && formData.status === 'sold' && userData?.role !== 'seller' && (
             <div className="flex flex-col p-6 bg-white dark:bg-slate-800 overflow-y-auto max-h-[70vh]">
               <div className="flex justify-between items-start mb-6">
                 <div>

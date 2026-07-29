@@ -80,31 +80,100 @@ export function ClosedSales() {
   }, [userData, refreshKey]);
 
   
-  const isWon = (status: string = "") => checkIsWon(status, pipelineStages);
+  const isWon = (status: string = "", saleDetails?: any) => {
+    return checkIsWon(status, pipelineStages);
+  };
 
-  const displayClients = [
-    ...deals.map(deal => {
-      const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
-      const mergedSaleDetails = (deal.saleDetails && deal.saleDetails.price !== undefined)
-        ? deal.saleDetails
-        : (person.saleDetails && person.saleDetails.price !== undefined)
-          ? person.saleDetails
-          : deal.saleDetails || person.saleDetails;
-      const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? deal.value ?? deal.dealValue ?? person.dealValue;
-      return {
-        ...person,
-        ...deal,
-        saleDetails: mergedSaleDetails,
-        dealValue: mergedDealValue,
-        id: deal.id,
-        originalClientId: deal.clientId,
-      } as Client;
-    }),
-    ...clients.filter(c => !deals.some(d => d.clientId === c.id))
-  ];
+  const itemsFromDeals = deals.map(deal => {
+    const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
+    const vehicle = vehicles.find(v => v.id === deal.vehicleId || v.id === person.vehicleId);
 
+    const dealIsWon = isWon(deal.status) || isWon(person.status);
+
+    const mergedSaleDetails = (deal.saleDetails && (deal.saleDetails.price !== undefined || deal.saleDetails.method))
+      ? deal.saleDetails
+      : (person.saleDetails && (person.saleDetails.price !== undefined || person.saleDetails.method))
+        ? person.saleDetails
+        : (dealIsWon ? vehicle?.saleDetails : undefined);
+
+    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? (dealIsWon ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
+    const soldAt = deal.soldAt || person.soldAt || (dealIsWon ? vehicle?.soldAt : undefined) || deal.updatedAt || person.updatedAt;
+
+    const statusToUse = dealIsWon ? 'won' : (deal.status || person.status || 'lead');
+
+    return {
+      ...person,
+      ...deal,
+      status: statusToUse,
+      saleDetails: mergedSaleDetails,
+      dealValue: mergedDealValue,
+      soldAt,
+      id: deal.id,
+      originalClientId: deal.clientId,
+      vehicleId: deal.vehicleId || person.vehicleId || vehicle?.id,
+    } as Client;
+  });
+
+  const clientsWithoutDeals = clients.filter(c => !deals.some(d => d.clientId === c.id));
+  const itemsFromClients = clientsWithoutDeals.map(person => {
+    const vehicle = vehicles.find(v => v.id === person.vehicleId);
+    
+    const personIsWon = isWon(person.status);
+
+    const mergedSaleDetails = person.saleDetails || (personIsWon ? vehicle?.saleDetails : undefined);
+    const mergedDealValue = person.saleDetails?.price ?? (personIsWon ? vehicle?.saleDetails?.price : undefined) ?? person.dealValue ?? vehicle?.price;
+    const soldAt = person.soldAt || (personIsWon ? vehicle?.soldAt : undefined) || person.updatedAt;
+
+    const statusToUse = personIsWon ? 'won' : person.status;
+
+    return {
+      ...person,
+      status: statusToUse,
+      saleDetails: mergedSaleDetails,
+      dealValue: mergedDealValue,
+      soldAt,
+    } as Client;
+  });
+
+  const allIncludedVehicleIds = new Set<string>();
+  [...itemsFromDeals, ...itemsFromClients].forEach(item => {
+    if (item.vehicleId && (isWon(item.status, item.saleDetails))) {
+      allIncludedVehicleIds.add(item.vehicleId);
+    }
+  });
+
+  const soldVehiclesWithoutClientOrDeal = vehicles.filter(v => 
+    (v.status === 'sold' || (v.saleDetails && (v.saleDetails.price > 0 || v.saleDetails.method))) &&
+    !allIncludedVehicleIds.has(v.id)
+  ).map(v => {
+    const matchingClient = clients.find(c => 
+      ((v.buyerId && c.id === v.buyerId) ||
+       (v.soldToClientId && c.id === v.soldToClientId) ||
+       ((v as any).pendingValidation?.clientId && c.id === (v as any).pendingValidation.clientId) ||
+       (c.vehicleId === v.id && checkIsWon(c.status, pipelineStages)))
+    );
+
+    const mergedSaleDetails = v.saleDetails || matchingClient?.saleDetails;
+    const price = mergedSaleDetails?.price || v.price || 0;
+    
+    return {
+      id: matchingClient?.id || `v-sold-${v.id}`,
+      originalClientId: matchingClient?.id,
+      name: matchingClient?.name || (v as any).buyerName || (v.saleDetails as any)?.clientName || (v as any).pendingValidation?.clientName || 'Cliente (Venta de Vehículo)',
+      email: matchingClient?.email || '',
+      phone: matchingClient?.phone || '',
+      vehicleId: v.id,
+      vehicle: `${v.year} ${v.make} ${v.model}`,
+      status: 'won',
+      saleDetails: mergedSaleDetails,
+      dealValue: price,
+      soldAt: v.soldAt || matchingClient?.soldAt || v.updatedAt,
+    } as Client;
+  });
+
+  const displayClients = [...itemsFromDeals, ...itemsFromClients, ...soldVehiclesWithoutClientOrDeal];
   const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
-  const wonClients = deduplicatedClients.filter(c => isWon(c.status));
+  const wonClients = deduplicatedClients.filter(c => isWon(c.status, c.saleDetails));
 
   const filteredSales = wonClients.filter(c => {
     const search = searchTerm.toLowerCase();
@@ -146,14 +215,18 @@ export function ClosedSales() {
                   <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Cliente</th>
                   <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Método de Pago</th>
                   <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Precio Venta</th>
-                  <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Costo + Gastos</th>
-                  <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Utilidad</th>
+                  {userData?.role !== 'seller' && (
+                    <>
+                      <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Costo + Gastos</th>
+                      <th className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">Utilidad</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {filteredSales.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={userData?.role === 'seller' ? 5 : 7} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                       No hay ventas cerradas registradas
                     </td>
                   </tr>
@@ -208,17 +281,21 @@ export function ClosedSales() {
                         <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">
                           {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(salePrice)}
                         </td>
-                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(costPlusExpenses)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={clsx(
-                            "font-bold",
-                            utility >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                          )}>
-                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(utility)}
-                          </span>
-                        </td>
+                        {userData?.role !== 'seller' && (
+                          <>
+                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(costPlusExpenses)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={clsx(
+                                "font-bold",
+                                utility >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                              )}>
+                                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(utility)}
+                              </span>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     );
                   })

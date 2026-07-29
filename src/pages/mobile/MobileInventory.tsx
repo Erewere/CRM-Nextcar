@@ -44,6 +44,10 @@ export function MobileInventory() {
   const [sharedSubTab, setSharedSubTab] = useState<'matches' | 'all'>('matches');
 
   useEffect(() => {
+    if (userData?.role === 'seller') {
+      setActiveTab('my');
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam === 'shared') {
@@ -51,7 +55,7 @@ export function MobileInventory() {
     } else if (tabParam === 'my') {
       setActiveTab('my');
     }
-  }, [window.location.search]);
+  }, [window.location.search, userData?.role]);
 
   // Filters state
   const [filterOwnership, setFilterOwnership] = useState<string>('all');
@@ -184,36 +188,38 @@ export function MobileInventory() {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded">
-          <button
-            onClick={() => setActiveTab('my')}
-            className={clsx(
-              "flex-1 py-2 text-xs font-bold rounded transition-all flex items-center justify-center gap-1.5",
-              activeTab === 'my'
-                ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
-            )}
-          >
-            Mis Vehículos
-          </button>
-          <button
-            onClick={() => setActiveTab('shared')}
-            className={clsx(
-              "flex-1 py-2 text-xs font-bold rounded transition-all flex items-center justify-center gap-1.5 relative",
-              activeTab === 'shared'
-                ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
-            )}
-          >
-            <Sparkles className={clsx("w-3.5 h-3.5", activeTab === 'shared' ? "text-amber-500" : "text-slate-400")} />
-            <span>Red Nextcar</span>
-            {ownAgencySharing && sharedMatches.length > 0 && (
-              <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
-                {sharedMatches.length}
-              </span>
-            )}
-          </button>
-        </div>
+        {userData?.role !== 'seller' && (
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded">
+            <button
+              onClick={() => setActiveTab('my')}
+              className={clsx(
+                "flex-1 py-2 text-xs font-bold rounded transition-all flex items-center justify-center gap-1.5",
+                activeTab === 'my'
+                  ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+              )}
+            >
+              Mis Vehículos
+            </button>
+            <button
+              onClick={() => setActiveTab('shared')}
+              className={clsx(
+                "flex-1 py-2 text-xs font-bold rounded transition-all flex items-center justify-center gap-1.5 relative",
+                activeTab === 'shared'
+                  ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+              )}
+            >
+              <Sparkles className={clsx("w-3.5 h-3.5", activeTab === 'shared' ? "text-amber-500" : "text-slate-400")} />
+              <span>Red Nextcar</span>
+              {ownAgencySharing && sharedMatches.length > 0 && (
+                <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
+                  {sharedMatches.length}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
         
         {/* Filter Controls Row */}
         <div className="flex flex-col gap-2">
