@@ -39,7 +39,7 @@ export function PaymentInventory() {
             setPipelineStages(data.pipelineStages);
           }
         }
-      });
+      }, (err) => console.error("PaymentInventory stages snapshot error:", err));
     }
 
     let clientsQ = query(collection(db, "clients"));
@@ -55,14 +55,17 @@ export function PaymentInventory() {
     const unsubClients = onSnapshot(clientsQ, (snap) => {
       const raw = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
       setClients(deduplicateClients(raw));
-    });
+    }, (err) => console.error("PaymentInventory clients snapshot error:", err));
 
     const unsubVehicles = onSnapshot(vehiclesQ, (snap) => {
       setVehicles(snap.docs.map(d => ({ ...d.data(), id: d.id } as Vehicle)));
-    });
+    }, (err) => console.error("PaymentInventory vehicles snapshot error:", err));
 
     const unsubDeals = onSnapshot(dealsQ, (snap) => {
       setDeals(snap.docs.map(d => ({ ...d.data(), id: d.id }) as any).filter(d => !d.isDeleted));
+      setLoading(false);
+    }, (err) => {
+      console.error("PaymentInventory deals snapshot error:", err);
       setLoading(false);
     });
 

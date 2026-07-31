@@ -49,6 +49,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("AuthContext: onAuthStateChanged triggered. User:", user ? user.email : "null");
       setCurrentUser(user);
       if (user) {
+        const savedToken = localStorage.getItem(`google_token_${user.uid}`);
+        if (savedToken) {
+          cachedAccessToken = savedToken;
+          setGoogleToken(savedToken);
+        } else {
+          cachedAccessToken = null;
+          setGoogleToken(null);
+        }
         setLoading(true);
         try {
           console.log("AuthContext: Setting up user snapshot for UID:", user.uid);
@@ -200,34 +208,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       let result;
       if (auth.currentUser) {
-        const isGoogleLinked = auth.currentUser.providerData.some(p => p.providerId === 'google.com');
-        if (isGoogleLinked) {
-          result = await reauthenticateWithPopup(auth.currentUser, provider);
-        } else {
-          try {
-            result = await linkWithPopup(auth.currentUser, provider);
-          } catch (linkErr: any) {
-            if (linkErr.code === 'auth/credential-already-in-use' || linkErr.code === 'auth/email-already-in-use') {
-              const credential = GoogleAuthProvider.credentialFromError(linkErr);
-              if (credential && credential.accessToken) {
-                cachedAccessToken = credential.accessToken;
-                setGoogleToken(credential.accessToken);
-                return credential.accessToken;
+        try {
+          result = await signInWithPopup(auth, provider);
+        } catch (popupErr: any) {
+          if (popupErr.code === 'auth/credential-already-in-use' || popupErr.code === 'auth/email-already-in-use') {
+            const credential = GoogleAuthProvider.credentialFromError(popupErr);
+            if (credential?.accessToken) {
+              const token = credential.accessToken;
+              if (auth.currentUser?.uid) {
+                localStorage.setItem(`google_token_${auth.currentUser.uid}`, token);
               }
-              throw new Error('Esta cuenta de Google ya está registrada. Por favor, selecciona OTRA cuenta de Google en la ventana emergente, o cierra sesión e ingresa directamente con Google.');
-            } else {
-              throw linkErr;
+              cachedAccessToken = token;
+              setGoogleToken(token);
+              return token;
             }
           }
+          throw popupErr;
         }
       } else {
         result = await signInWithPopup(auth, provider);
       }
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
-        cachedAccessToken = credential.accessToken;
-        setGoogleToken(credential.accessToken);
-        return credential.accessToken;
+        const token = credential.accessToken;
+        if (auth.currentUser?.uid) {
+          localStorage.setItem(`google_token_${auth.currentUser.uid}`, token);
+        }
+        cachedAccessToken = token;
+        setGoogleToken(token);
+        return token;
       }
     } catch (e: any) {
       if (e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-closed-by-user') {
@@ -241,6 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const disconnectGoogleServices = () => {
+    if (auth.currentUser?.uid) {
+      localStorage.removeItem(`google_token_${auth.currentUser.uid}`);
+    }
     cachedAccessToken = null;
     setGoogleToken(null);
   };

@@ -111,7 +111,7 @@ export function Layout() {
         if (snap.exists()) {
           setAgencyName(snap.data().name);
         }
-      });
+      }).catch((err) => console.error("Error fetching agency name:", err));
     } else if (userData?.role === "master") {
       setAgencyName("Master Admin");
     }

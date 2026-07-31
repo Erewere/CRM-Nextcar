@@ -233,7 +233,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         if (snap.exists()) {
           setAssignedVehicle({ id: snap.id, ...snap.data() } as Vehicle);
         }
-      });
+      }).catch(err => console.error("Error fetching vehicle:", err));
     }
   }, [clientData.vehicleId, client.vehicleId]);
   

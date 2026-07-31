@@ -21,7 +21,7 @@ export function VehiclePrint() {
            setImgLoaded(true);
         }
       }
-    });
+    }).catch(err => console.error("Error fetching vehicle for print:", err));
   }, [id]);
 
   useEffect(() => {

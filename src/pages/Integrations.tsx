@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+
 export function Integrations() {
-  const { userData } = useAuth();
+  const { userData, googleToken, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -200,6 +202,75 @@ export function Integrations() {
           </div>
         </div>
 
+
+        {/* Google Workspace Integration */}
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mb-8">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center shrink-0">
+                <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Google Workspace (Calendario, Gmail, Contactos, Tasks)</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Sincroniza tu cuenta personal de Google para administrar tus correos, citas y tareas de forma individual y privada.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              {googleToken ? (
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-full border border-emerald-200 dark:border-emerald-800">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    Conectado ({currentUser?.email})
+                  </span>
+                  <button
+                    onClick={() => disconnectGoogleServices()}
+                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded border border-red-200 transition-colors"
+                  >
+                    Desconectar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setGoogleLoading(true);
+                    try {
+                      await connectGoogleServices();
+                    } catch (e: any) {
+                      alert("Error conectando Google: " + e.message);
+                    } finally {
+                      setGoogleLoading(false);
+                    }
+                  }}
+                  disabled={googleLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded shadow transition-colors"
+                >
+                  <Calendar className="w-4 h-4" />
+                  {googleLoading ? "Conectando..." : "Conectar cuenta de Google"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6 bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-600 dark:text-slate-400 flex flex-col md:flex-row gap-6">
+            <div className="flex items-start gap-2">
+              <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-slate-800 dark:text-slate-200 block">Privacidad Individual</strong>
+                Cada usuario sincroniza su propia cuenta personal sin que otros vendedores o administradores puedan ver sus correos o eventos privados.
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-slate-800 dark:text-slate-200 block">Sincronización Bidireccional</strong>
+                Las actividades programadas en el CRM se enviarán automáticamente a tu Google Calendar y Google Tasks.
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Virtual Assistants API */}
         <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">

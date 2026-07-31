@@ -875,7 +875,10 @@ export function Tasks() {
   const handleSyncCalendar = async () => {
     setIsSyncing(true);
     try {
-      const token = await connectGoogleServices();
+      let token = googleToken;
+      if (!token) {
+        token = await connectGoogleServices();
+      }
       if (!token) {
         setIsSyncing(false);
         return;
