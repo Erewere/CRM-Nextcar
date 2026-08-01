@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle } from 'lucide-react';
+import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle, Copy, Bot, Key, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -13,6 +13,21 @@ export function Integrations() {
   const [saved, setSaved] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
+  const agencyOrUserId = (userData?.agencyId && userData.agencyId !== 'unassigned') 
+    ? userData.agencyId 
+    : (userData?.id || 'default');
+
+  const mcpClientId = `erewere_agency_${agencyOrUserId}`;
+  const mcpClientSecret = `secret_${agencyOrUserId.substring(0, 10)}`;
+
+  const copyToClipboard = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2500);
+  };
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -267,6 +282,110 @@ export function Integrations() {
               <div>
                 <strong className="text-slate-800 dark:text-slate-200 block">Sincronización Bidireccional</strong>
                 Las actividades programadas en el CRM se enviarán automáticamente a tu Google Calendar y Google Tasks.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* MCP Server Integration for Gemini / Spark / Claude */}
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mb-8">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/40 rounded flex items-center justify-center shrink-0">
+                <Bot className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  Servidor MCP (Model Context Protocol) & OAuth
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-full border border-emerald-300 dark:border-emerald-700">
+                    Activo
+                  </span>
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Conecta tu CRM Erewere con Gemini, Spark, Claude u otro asistente de IA utilizando el protocolo MCP con OAuth 2.0.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="mb-6 bg-indigo-50/80 dark:bg-slate-900/60 p-4 rounded-lg border border-indigo-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+              <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-sm">
+                <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                ¿Cómo conectar tu CRM a Gemini o Spark?
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300">
+                <li>En la ventana de conexión MCP de Gemini/Spark, pega la <strong>URL del Servidor MCP</strong>.</li>
+                <li>Si la plataforma solicita credenciales OAuth, ingresa el <strong>ID de cliente</strong> y el <strong>Secreto del cliente</strong> provistos abajo.</li>
+                <li>¡Listo! Tu IA podrá consultar autos en inventario, ver clientes y crear nuevos leads automáticamente.</li>
+              </ol>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* URL del servidor */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                  URL del Servidor MCP
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={mcpServerUrl}
+                    className="w-full text-xs font-mono px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-slate-800 dark:text-slate-200"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(mcpServerUrl, 'url')}
+                    title="Copiar URL"
+                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    {copiedField === 'url' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* ID de Cliente */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                  ID de cliente de OAuth
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={mcpClientId}
+                    className="w-full text-xs font-mono px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-indigo-600 dark:text-indigo-400 font-semibold"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(mcpClientId, 'client_id')}
+                    title="Copiar ID de cliente"
+                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    {copiedField === 'client_id' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Secreto del Cliente */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                  Secreto de cliente de OAuth
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={mcpClientSecret}
+                    className="w-full text-xs font-mono px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-indigo-600 dark:text-indigo-400 font-semibold"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(mcpClientSecret, 'client_secret')}
+                    title="Copiar Secreto de cliente"
+                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    {copiedField === 'client_secret' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

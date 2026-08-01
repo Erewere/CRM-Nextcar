@@ -926,8 +926,9 @@ Return a JSON array of recommendation objects with the following schema:
     }
   ];
 
-  const processJsonRpc = async (reqBody: any, db: any) => {
-    const { jsonrpc, id, method, params } = reqBody || {};
+  const processJsonRpc = async (req: express.Request, db: any) => {
+    const reqBody = req.body || {};
+    const { jsonrpc, id, method, params } = reqBody;
 
     if (jsonrpc !== "2.0") {
       return {
@@ -977,7 +978,22 @@ Return a JSON array of recommendation objects with the following schema:
     if (method === "tools/call") {
       const toolName = params?.name;
       const toolArgs = params?.arguments || {};
-      const targetAgencyId = toolArgs.agencyId || "k77PpUc4SKDVCps2qSDw";
+      
+      // Extract target agency dynamically from arguments, token, query or header
+      let extractedAgencyId = toolArgs.agencyId || (req.query?.agencyId as string);
+      
+      if (!extractedAgencyId) {
+        const authHeader = req.headers.authorization || "";
+        if (authHeader.includes("erewere_agency_")) {
+          const match = authHeader.match(/erewere_agency_([a-zA-Z0-9_-]+)/);
+          if (match) extractedAgencyId = match[1];
+        } else if (authHeader.includes("erewere_user_")) {
+          const match = authHeader.match(/erewere_user_([a-zA-Z0-9_-]+)/);
+          if (match) extractedAgencyId = match[1];
+        }
+      }
+
+      const targetAgencyId = extractedAgencyId || "k77PpUc4SKDVCps2qSDw";
 
       if (toolName === "get_inventory") {
         const q = query(
@@ -1179,26 +1195,52 @@ Return a JSON array of recommendation objects with the following schema:
   app.all("/oauth/authorize", (req, res) => {
     const redirectUri = (req.query.redirect_uri as string) || req.body?.redirect_uri;
     const state = req.query.state || req.body?.state;
+    const clientId = req.query.client_id || req.body?.client_id || "erewere_client_id";
+
     if (redirectUri) {
       const sep = redirectUri.includes("?") ? "&" : "?";
-      return res.redirect(`${redirectUri}${sep}code=erewere_mcp_auth_code_123&state=${state || ""}`);
+      return res.redirect(`${redirectUri}${sep}code=erewere_mcp_auth_code_123&state=${state || ""}&client_id=${encodeURIComponent(clientId as string)}`);
     }
-    res.json({ status: "authorized", code: "erewere_mcp_auth_code_123" });
+    res.json({ status: "authorized", code: "erewere_mcp_auth_code_123", client_id: clientId });
   });
 
   app.all("/oauth/token", (req, res) => {
+    let clientId = req.body?.client_id || req.query?.client_id;
+    let clientSecret = req.body?.client_secret || req.query?.client_secret;
+
+    // Check Basic Auth header if present
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Basic ")) {
+      try {
+        const credentials = Buffer.from(authHeader.substring(6), "base64").toString("utf-8");
+        const [u, p] = credentials.split(":");
+        if (u) clientId = u;
+        if (p) clientSecret = p;
+      } catch (e) {
+        // Ignore parse error
+      }
+    }
+
+    // Default fallback if omitted
+    if (!clientId) clientId = "erewere_client_id";
+    if (!clientSecret) clientSecret = "erewere_client_secret";
+
     res.json({
-      access_token: "erewere_mcp_token_valid",
+      access_token: `erewere_mcp_token_${clientId}`,
       token_type: "Bearer",
       expires_in: 86400,
-      scope: "mcp:all"
+      scope: "mcp:all",
+      client_id: clientId
     });
   });
 
   // SSE Transport connection handler
   const handleSseConnect = (req: express.Request, res: express.Response) => {
-    const acceptHeader = req.headers.accept || "";
-    if (req.method === "GET" && acceptHeader.includes("text/event-stream")) {
+    const acceptHeader = (req.headers.accept || "").toLowerCase();
+    const isSsePath = req.path.endsWith("/sse");
+    const isEventStreamRequest = acceptHeader.includes("text/event-stream") || isSsePath;
+
+    if (req.method === "GET" && isEventStreamRequest) {
       const sessionId = Math.random().toString(36).substring(2, 15);
       const host = req.get("host");
       const protocol = req.protocol || "https";
@@ -1209,7 +1251,8 @@ Return a JSON array of recommendation objects with the following schema:
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
-        "Access-Control-Allow-Origin": "*"
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*"
       });
 
       res.write(`event: endpoint\ndata: ${messageUrl}\n\n`);
@@ -1248,7 +1291,7 @@ Return a JSON array of recommendation objects with the following schema:
     const db = getClientDb();
 
     try {
-      const responseJson = await processJsonRpc(req.body, db);
+      const responseJson = await processJsonRpc(req, db);
 
       if (sessionId && sseSessions.has(sessionId)) {
         const sseRes = sseSessions.get(sessionId)!;
