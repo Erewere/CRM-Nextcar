@@ -939,11 +939,12 @@ Return a JSON array of recommendation objects with the following schema:
     }
 
     if (method === "initialize") {
+      const requestedVersion = params?.protocolVersion || "2024-11-05";
       return {
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: "2024-11-05",
+          protocolVersion: requestedVersion,
           capabilities: {
             tools: {
               listChanged: false
@@ -1237,10 +1238,9 @@ Return a JSON array of recommendation objects with the following schema:
   // SSE Transport connection handler
   const handleSseConnect = (req: express.Request, res: express.Response) => {
     const acceptHeader = (req.headers.accept || "").toLowerCase();
-    const isSsePath = req.path.endsWith("/sse");
-    const isEventStreamRequest = acceptHeader.includes("text/event-stream") || isSsePath;
+    const wantsJsonExplicitly = acceptHeader === "application/json" || req.query.format === "json";
 
-    if (req.method === "GET" && isEventStreamRequest) {
+    if (req.method === "GET" && !wantsJsonExplicitly) {
       const sessionId = Math.random().toString(36).substring(2, 15);
       const host = req.get("host");
       const protocol = req.protocol || "https";
@@ -1248,17 +1248,28 @@ Return a JSON array of recommendation objects with the following schema:
       const messageUrl = `${baseUrl}/api/mcp/messages?sessionId=${sessionId}`;
 
       res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*"
+        "Access-Control-Allow-Headers": "*",
+        "X-Accel-Buffering": "no"
       });
 
       res.write(`event: endpoint\ndata: ${messageUrl}\n\n`);
       sseSessions.set(sessionId, res);
 
+      // Keep connection alive with periodic comment pings
+      const keepAliveTimer = setInterval(() => {
+        try {
+          res.write(`: ping\n\n`);
+        } catch (e) {
+          clearInterval(keepAliveTimer);
+        }
+      }, 15000);
+
       req.on("close", () => {
+        clearInterval(keepAliveTimer);
         sseSessions.delete(sessionId);
       });
       return;

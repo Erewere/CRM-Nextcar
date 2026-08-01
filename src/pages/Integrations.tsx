@@ -325,7 +325,7 @@ export function Integrations() {
               {/* URL del servidor */}
               <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                  URL del Servidor MCP
+                  URL del Servidor MCP (/mcp o /sse)
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -342,6 +342,9 @@ export function Integrations() {
                     {copiedField === 'url' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  Otras variantes compatibles: <code className="text-indigo-600 dark:text-indigo-400 font-mono">{mcpServerUrl.replace('/mcp', '/sse')}</code>
+                </p>
               </div>
 
               {/* ID de Cliente */}
