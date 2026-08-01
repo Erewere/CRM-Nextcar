@@ -433,42 +433,80 @@ export function Persons() {
 
   const handleImportGoogleContacts = async () => {
     try {
+      setImportingContacts(true);
       let token = googleToken;
       if (!token) {
         token = await connectGoogleServices();
       }
-      if (!token) return;
+      if (!token) {
+        setImportingContacts(false);
+        return;
+      }
 
-      setImportingContacts(true);
-      const res = await fetch(
-        "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers,organizations&pageSize=1000",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const fetchContacts = async (accessToken: string) => {
+        return await fetch(
+          "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers,organizations&pageSize=1000",
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+      };
+
+      let res = await fetchContacts(token);
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          console.warn("Google token expired or unauthorized. Re-authenticating...");
+          const newToken = await connectGoogleServices();
+          if (newToken) {
+            token = newToken;
+            res = await fetchContacts(token);
+          }
+        }
+      }
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("People API Error:", res.status, errorData);
+        alert(
+          `Error de Google (${res.status}): ${
+            errorData.error?.message || "No se pudo acceder a Google Contacts. Verifica la conexión."
+          }`
+        );
+        return;
+      }
+
       const data = await res.json();
 
-      if (data.connections) {
+      if (data.connections && data.connections.length > 0) {
         let importedCount = 0;
         let newPersons: Client[] = [];
+        
         for (const person of data.connections) {
-          const personName = person.names?.[0]?.displayName || "";
+          const nameObj = person.names?.[0];
+          const personName =
+            nameObj?.displayName ||
+            [nameObj?.givenName, nameObj?.familyName].filter(Boolean).join(" ") ||
+            person.emailAddresses?.[0]?.value ||
+            person.organizations?.[0]?.name ||
+            "";
           const personEmail = person.emailAddresses?.[0]?.value || "";
           const personPhone = person.phoneNumbers?.[0]?.value || "";
           const personOrganization = person.organizations?.[0]?.name || "";
 
-          if (personName && (personEmail || personPhone)) {
-            // Check if already exists in persons list
-            const exists = [...persons, ...newPersons].find(
-              (p) =>
-                (personEmail && p.email?.includes(personEmail)) ||
-                (personPhone && p.phone?.includes(personPhone)) ||
-                (p.name &&
-                  String(p.name).toLowerCase() ===
-                    String(personName).toLowerCase()),
-            );
+          if (personName || personEmail || personPhone) {
+            const cleanPhone = (p: string) => p.replace(/\D/g, "");
+            const exists = [...persons, ...newPersons].find((p) => {
+              const sameEmail =
+                Boolean(personEmail) && Boolean(p.email) && p.email.toLowerCase().trim() === personEmail.toLowerCase().trim();
+              const samePhone =
+                Boolean(personPhone) && Boolean(p.phone) && cleanPhone(p.phone) === cleanPhone(personPhone);
+              const sameName =
+                Boolean(personName) && Boolean(p.name) && String(p.name).toLowerCase().trim() === String(personName).toLowerCase().trim();
+              return sameEmail || samePhone || sameName;
+            });
 
             if (!exists) {
               const newRef = doc(collection(db, "clients"));
@@ -476,7 +514,7 @@ export function Persons() {
                 id: newRef.id,
                 agencyId: userData?.agencyId || "",
                 sellerId: userData?.id || "",
-                name: personName,
+                name: personName || "Contacto Google",
                 email: personEmail,
                 phone: personPhone,
                 organization: personOrganization,
@@ -497,13 +535,17 @@ export function Persons() {
         if (newPersons.length > 0) {
           setPersons((prev) => [...newPersons, ...prev]);
         }
-        alert(`Se importaron ${importedCount} contactos nuevos desde Google.`);
+        alert(
+          importedCount > 0
+            ? `Se importaron ${importedCount} contactos nuevos desde tu cuenta de Google.`
+            : "Todos los contactos de tu cuenta de Google ya existen en el CRM."
+        );
       } else {
-        alert("No se encontraron contactos para importar.");
+        alert("No se encontraron contactos en tu cuenta de Google.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error al importar contactos:", e);
-      alert("Hubo un error al importar los contactos. Verifica los permisos.");
+      alert("Hubo un error al importar los contactos: " + (e.message || e));
     } finally {
       setImportingContacts(false);
       setShowAddPerson(false);
@@ -830,13 +872,15 @@ export function Persons() {
                 <button
                   onClick={handleImportGoogleContacts}
                   disabled={importingContacts}
-                  className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm"
+                  className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm disabled:opacity-50"
                 >
                   <Download className="w-4 h-4 shrink-0" />{" "}
                   <span className="hidden sm:inline">
                     {importingContacts ? "Importando..." : "Importar de Google"}
                   </span>
-                  <span className="sm:hidden">Importar</span>
+                  <span className="sm:hidden">
+                    {importingContacts ? "Importando..." : "Google"}
+                  </span>
                 </button>
                 <button
                   onClick={() => setShowAddPerson(true)}
@@ -1594,9 +1638,11 @@ export function Persons() {
             <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900 mt-2">
               <button
                 type="button"
-                className="flex items-center gap-2 font-bold text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:text-slate-200"
+                onClick={handleImportGoogleContacts}
+                disabled={importingContacts}
+                className="flex items-center gap-2 font-bold text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:text-slate-200 disabled:opacity-50"
               >
-                <Download className="w-4 h-4" /> Importar
+                <Download className="w-4 h-4" /> {importingContacts ? "Importando..." : "Importar de Google"}
               </button>
               <div className="flex gap-3">
                 <button

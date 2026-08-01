@@ -1,3 +1,23 @@
+export function sanitizeFirestoreData<T>(obj: T): T {
+  if (obj === undefined) return null as unknown as T;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return obj as unknown as T;
+  
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeFirestoreData(item)) as unknown as T;
+  }
+  
+  const sanitized: any = {};
+  for (const [key, value] of Object.entries(obj as any)) {
+    if (value !== undefined) {
+      sanitized[key] = sanitizeFirestoreData(value);
+    }
+  }
+  return sanitized as T;
+}
+
 export function checkIsWon(status: string = "", pipelineStages: {id: string, title?: string}[] = []) {
   const wonKeywords = [
     "ganado", "won", "vendid", "cerrad", 

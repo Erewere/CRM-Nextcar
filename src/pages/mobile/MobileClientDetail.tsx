@@ -6,7 +6,7 @@ import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDo
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
 import { format } from 'date-fns';
-import { checkIsWon, checkIsLost } from '../../lib/clientUtils';
+import { checkIsWon, checkIsLost, sanitizeFirestoreData } from '../../lib/clientUtils';
 import { DealWonModal } from '../../components/DealWonModal';
 import { LostReasonModal } from '../../components/LostReasonModal';
 import { PaymentModal } from '../../components/PaymentModal';
@@ -34,6 +34,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
   const handlePaymentConfirm = async (payment: any) => {
     setShowPaymentModal(false);
+    const todayIso = new Date().toISOString().split('T')[0];
     
     const baseDetails = clientData?.saleDetails || {
       price: clientData?.dealValue || client.dealValue || 0,
@@ -41,15 +42,17 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       payments: []
     };
     
-    const newPayment = {
-      amount: payment.amount,
-      date: payment.date,
-      method: payment.method,
+    const newPayment: any = {
+      amount: Number(payment.amount) || 0,
+      date: payment.date || todayIso,
+      method: payment.method || 'efectivo',
       notes: payment.notes || '',
-      installmentNumber: payment.installmentNumber,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString()
     };
+    if (payment.installmentNumber !== undefined && payment.installmentNumber !== null) {
+      newPayment.installmentNumber = payment.installmentNumber;
+    }
     
     const updatedSaleDetails = {
       ...baseDetails,
@@ -59,7 +62,6 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     const finalClientId = (client.originalClientId || client.id) as string;
     const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
     const finalDealId = isDeal ? (client.id as string) : null;
-    const todayIso = new Date().toISOString().split('T')[0];
 
     let newStatus = currentStatus;
 
@@ -92,11 +94,13 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         updateData.soldAt = todayIso;
       }
 
+      const sanitizedData = sanitizeFirestoreData(updateData);
+
       if (finalDealId) {
-        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
+        await setDoc(doc(db, "deals", finalDealId), sanitizedData, { merge: true });
       }
       if (finalClientId) {
-        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+        await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
       const vId = clientData?.vehicleId || client.vehicleId;
       if (vId) {
@@ -111,7 +115,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           vehicleUpdate.soldToClientId = finalClientId;
           if (clientData?.name || client?.name) vehicleUpdate.buyerName = clientData?.name || client?.name;
         }
-        await setDoc(doc(db, "vehicles", vId), vehicleUpdate, { merge: true });
+        await setDoc(doc(db, "vehicles", vId), sanitizeFirestoreData(vehicleUpdate), { merge: true });
       }
 
       // If completing a specific installment task

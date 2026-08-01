@@ -34,7 +34,7 @@ import {
   Building2,
   Eye,
   Users,
-  Edit2, Target, Calculator, Lock, Car, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
+  Edit2, Target, Calculator, Lock, Car, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search,
 } from "lucide-react";
 import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
@@ -44,7 +44,7 @@ import { PaymentModal } from "./PaymentModal";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
-import { checkIsWon, checkIsLost } from "../lib/clientUtils";
+import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 
 interface Props {
   client: Client | Partial<Client>;
@@ -473,6 +473,10 @@ export function ClientDetailModal({
   const nameInputRef = useRef<HTMLDivElement>(null);
   const phoneInputRef = useRef<HTMLDivElement>(null);
 
+  const [vehicleSearchQuery, setVehicleSearchQuery] = useState("");
+  const [isVehicleSearchOpen, setIsVehicleSearchOpen] = useState(false);
+  const vehicleSearchRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -486,6 +490,12 @@ export function ClientDetailModal({
         !phoneInputRef.current.contains(e.target as Node)
       ) {
         setShowPhoneSuggestions(false);
+      }
+      if (
+        vehicleSearchRef.current &&
+        !vehicleSearchRef.current.contains(e.target as Node)
+      ) {
+        setIsVehicleSearchOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -751,15 +761,17 @@ export function ClientDetailModal({
       payments: []
     };
     
-    const newPayment = {
-      amount: payment.amount,
-      date: payment.date,
-      method: payment.method,
+    const newPayment: any = {
+      amount: Number(payment.amount) || 0,
+      date: payment.date || new Date().toISOString().split('T')[0],
+      method: payment.method || 'efectivo',
       notes: payment.notes || '',
-      installmentNumber: payment.installmentNumber,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString()
     };
+    if (payment.installmentNumber !== undefined && payment.installmentNumber !== null) {
+      newPayment.installmentNumber = payment.installmentNumber;
+    }
     
     const updatedSaleDetails = {
       ...baseDetails,
@@ -802,11 +814,13 @@ export function ClientDetailModal({
         updateData.soldAt = todayIso;
       }
 
+      const sanitizedData = sanitizeFirestoreData(updateData);
+
       if (finalDealId) {
-        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
+        await setDoc(doc(db, "deals", finalDealId), sanitizedData, { merge: true });
       }
       if (finalClientId) {
-        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+        await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
       if (formData.vehicleId) {
         const vehicleUpdate: any = {
@@ -820,7 +834,7 @@ export function ClientDetailModal({
           vehicleUpdate.soldToClientId = finalClientId;
           if (formData.name) vehicleUpdate.buyerName = formData.name;
         }
-        await setDoc(doc(db, "vehicles", formData.vehicleId), vehicleUpdate, { merge: true });
+        await setDoc(doc(db, "vehicles", formData.vehicleId), sanitizeFirestoreData(vehicleUpdate), { merge: true });
       }
 
       // If completing a specific installment task
@@ -879,15 +893,16 @@ export function ClientDetailModal({
         saleDetails: updatedSaleDetails,
         updatedAt: new Date().toISOString()
       };
+      const sanitizedData = sanitizeFirestoreData(updateData);
 
       if (finalDealId) {
-        await setDoc(doc(db, "deals", finalDealId), updateData, { merge: true });
+        await setDoc(doc(db, "deals", finalDealId), sanitizedData, { merge: true });
       }
       if (finalClientId) {
-        await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
+        await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
       if (formData.vehicleId) {
-        await setDoc(doc(db, "vehicles", formData.vehicleId), updateData, { merge: true });
+        await setDoc(doc(db, "vehicles", formData.vehicleId), sanitizedData, { merge: true });
       }
       onUpdated?.();
     } catch (err) {
@@ -999,7 +1014,7 @@ export function ClientDetailModal({
               (clientDataToSave as any)[k] === undefined &&
               delete (clientDataToSave as any)[k],
           );
-          await setDoc(newClientRef, clientDataToSave);
+          await setDoc(newClientRef, sanitizeFirestoreData(clientDataToSave));
         }
 
         // ALWAYS create a NEW deal record in `deals`
@@ -1019,7 +1034,7 @@ export function ClientDetailModal({
           updatedAt: new Date().toISOString(),
         };
         if (finalFormData.saleDetails) dealDataToSave.saleDetails = finalFormData.saleDetails;
-        await setDoc(newDealRef, dealDataToSave);
+        await setDoc(newDealRef, sanitizeFirestoreData(dealDataToSave));
       } else {
         const dataToUpdate = {
           ...finalFormData,
@@ -1096,10 +1111,10 @@ export function ClientDetailModal({
 
         if (finalDealId && Object.keys(dealDataToUpdate).length > 0) {
           dealDataToUpdate.updatedAt = new Date().toISOString();
-          await setDoc(doc(db, "deals", finalDealId), dealDataToUpdate, { merge: true });
+          await setDoc(doc(db, "deals", finalDealId), sanitizeFirestoreData(dealDataToUpdate), { merge: true });
         }
 
-        await setDoc(doc(db, "clients", finalClientId as string), dataToUpdate, { merge: true });
+        await setDoc(doc(db, "clients", finalClientId as string), sanitizeFirestoreData(dataToUpdate), { merge: true });
 
         // Sync vehicle price if it's a won deal
         const finalStatus = dataToUpdate.status || dealDataToUpdate.status || client.status;
@@ -1689,62 +1704,245 @@ export function ClientDetailModal({
                 onSubmit={handleSave}
                 className="space-y-4"
               >
-                <div className={`space-y-1 ${isNew && currentStep !== 2 ? "hidden md:block" : ""}`}>
-                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                    Valor / Vehículo
-                  </label>
-                  <select
-                    name="vehicle"
-                    value={formData.vehicleId || formData.vehicle || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === "Otro pendiente") {
-                        setFormData({
-                          ...formData,
-                          vehicle: val,
-                          vehicleId: undefined,
-                        });
-                      } else {
-                        const v = inventoryVehicles.find(
-                          (veh) => veh.id === val,
-                        );
-                        if (v) {
+                <div
+                  className={`space-y-1 relative ${
+                    isNew && currentStep !== 2 ? "hidden md:block" : ""
+                  }`}
+                  ref={vehicleSearchRef}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      Valor / Vehículo
+                    </label>
+                    {formData.vehicleId || (formData.vehicle && formData.vehicle !== "Otro pendiente") ? (
+                      <button
+                        type="button"
+                        onClick={() => {
                           setFormData({
                             ...formData,
-                            vehicle: `${v.year} ${v.make} ${v.model}`,
-                            vehicleId: v.id,
-                            dealValue: v.price || formData.dealValue,
-                          });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            vehicle: val,
+                            vehicle: "",
                             vehicleId: undefined,
                           });
-                        }
-                      }
-                    }}
-                    className="w-full text-sm py-1.5 font-medium text-blue-600 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none bg-transparent cursor-pointer"
-                  >
-                    <option value="" disabled>
-                      Seleccionar vehículo...
-                    </option>
-                    <option value="Otro pendiente">Otro pendiente</option>
-                    {inventoryVehicles.map((v) => (
-                      <option key={`vehicle-${v.id}`} value={v.id}>
-                        {v.year} {v.make} {v.model} - {v.vin}
-                      </option>
-                    ))}
-                    {formData.vehicle &&
-                      formData.vehicle !== "Otro pendiente" &&
-                      !inventoryVehicles.find(
-                        (v) => v.id === formData.vehicleId,
-                      ) && (
-                        <option value={formData.vehicle}>
-                          {formData.vehicle}
-                        </option>
-                      )}
-                  </select>
+                          setIsVehicleSearchOpen(false);
+                          setVehicleSearchQuery("");
+                        }}
+                        className="text-[11px] font-medium text-rose-500 hover:underline"
+                      >
+                        Quitar auto
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {(() => {
+                    const assignedV = inventoryVehicles.find(
+                      (v) => v.id === formData.vehicleId
+                    );
+
+                    return (
+                      <div>
+                        {!isVehicleSearchOpen ? (
+                          <div
+                            onClick={() => setIsVehicleSearchOpen(true)}
+                            className="group cursor-pointer p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm"
+                          >
+                            {assignedV ? (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {assignedV.photoUrls?.[0] || assignedV.photoUrl ? (
+                                    <img
+                                      src={assignedV.photoUrls?.[0] || assignedV.photoUrl}
+                                      alt="vehiculo"
+                                      className="w-10 h-8 object-cover rounded border border-gray-200 dark:border-slate-600 shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-8 rounded bg-blue-50 dark:bg-slate-700 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                      <Car className="w-5 h-5" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">
+                                      {assignedV.year} {assignedV.make} {assignedV.model}
+                                    </p>
+                                    <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                      {assignedV.price
+                                        ? new Intl.NumberFormat("es-MX", {
+                                            style: "currency",
+                                            currency: "MXN",
+                                            maximumFractionDigits: 0,
+                                          }).format(assignedV.price)
+                                        : "Sin precio"}{" "}
+                                      {assignedV.vin ? `• VIN: ${assignedV.vin.slice(-6)}` : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:underline shrink-0">
+                                  Cambiar
+                                </span>
+                              </div>
+                            ) : formData.vehicle === "Otro pendiente" ? (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                  <Car className="w-4 h-4" />
+                                  <span>Otro pendiente</span>
+                                </div>
+                                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:underline">
+                                  Cambiar
+                                </span>
+                              </div>
+                            ) : formData.vehicle ? (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-gray-800 dark:text-slate-200">
+                                  <Car className="w-4 h-4 text-blue-500" />
+                                  <span className="truncate">{formData.vehicle}</span>
+                                </div>
+                                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:underline">
+                                  Cambiar
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400 py-0.5">
+                                <div className="flex items-center gap-2">
+                                  <Search className="w-4 h-4 text-blue-500" />
+                                  <span>Buscar auto en inventario...</span>
+                                </div>
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          /* Search Input & Dropdown Panel */
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                              <input
+                                type="text"
+                                autoFocus
+                                value={vehicleSearchQuery}
+                                onChange={(e) => setVehicleSearchQuery(e.target.value)}
+                                placeholder="Buscar por marca, modelo, año, VIN, placa..."
+                                className="w-full text-xs pl-8 pr-7 py-2 border border-blue-500 dark:border-blue-400 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none shadow-sm"
+                              />
+                              {vehicleSearchQuery ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setVehicleSearchQuery("")}
+                                  className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsVehicleSearchOpen(false)}
+                                  className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Dropdown Options List */}
+                            <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl max-h-64 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700">
+                              {/* Option: Otro pendiente */}
+                              <div
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData,
+                                    vehicle: "Otro pendiente",
+                                    vehicleId: undefined,
+                                  });
+                                  setIsVehicleSearchOpen(false);
+                                  setVehicleSearchQuery("");
+                                }}
+                                className="p-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 cursor-pointer flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400"
+                              >
+                                <Car className="w-4 h-4" />
+                                <span>Otro pendiente / No listado</span>
+                              </div>
+
+                              {/* Filtered Inventory Vehicles */}
+                              {(() => {
+                                const query = vehicleSearchQuery.toLowerCase().trim();
+                                const matches = inventoryVehicles.filter((v) => {
+                                  if (!query) return true;
+                                  const text = `${v.year} ${v.make} ${v.model} ${v.bodyType || ""} ${v.vin || ""} ${v.color || ""} ${v.equipment || ""} ${(v as any).version || ""} ${(v as any).licensePlate || ""} ${(v as any).stockNumber || ""} ${v.price || ""}`.toLowerCase();
+                                  return query.split(" ").every((term) => text.includes(term));
+                                });
+
+                                if (matches.length === 0) {
+                                  return (
+                                    <div className="p-4 text-center text-xs text-gray-500 dark:text-slate-400">
+                                      No se encontraron autos que coincidan con "{vehicleSearchQuery}"
+                                    </div>
+                                  );
+                                }
+
+                                return matches.map((v) => {
+                                  const isSelected = formData.vehicleId === v.id;
+                                  const photo = v.photoUrls?.[0] || v.photoUrl;
+
+                                  return (
+                                    <div
+                                      key={`search-v-${v.id}`}
+                                      onClick={() => {
+                                        setFormData({
+                                          ...formData,
+                                          vehicle: `${v.year} ${v.make} ${v.model}`,
+                                          vehicleId: v.id,
+                                          dealValue: v.price || formData.dealValue,
+                                        });
+                                        setIsVehicleSearchOpen(false);
+                                        setVehicleSearchQuery("");
+                                      }}
+                                      className={clsx(
+                                        "p-2.5 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer flex items-center justify-between gap-2 transition-colors",
+                                        isSelected && "bg-blue-50/80 dark:bg-slate-700/80"
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        {photo ? (
+                                          <img
+                                            src={photo}
+                                            alt={`${v.make} ${v.model}`}
+                                            className="w-11 h-8 object-cover rounded border border-gray-200 dark:border-slate-600 shrink-0"
+                                          />
+                                        ) : (
+                                          <div className="w-11 h-8 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 flex items-center justify-center shrink-0">
+                                            <Car className="w-4 h-4" />
+                                          </div>
+                                        )}
+
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">
+                                            {v.year} {v.make} {v.model}
+                                          </p>
+                                          <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                            {v.price
+                                              ? new Intl.NumberFormat("es-MX", {
+                                                  style: "currency",
+                                                  currency: "MXN",
+                                                  maximumFractionDigits: 0,
+                                                }).format(v.price)
+                                              : "Sin precio"}
+                                            {v.vin ? ` • VIN: ${v.vin}` : ""}
+                                            {v.color ? ` • ${v.color}` : ""}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {isSelected && (
+                                        <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {(formData.saleDetails || formData.status === 'won') && (() => {

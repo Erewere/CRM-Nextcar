@@ -10,7 +10,7 @@ import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client, Task } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { deduplicateClients } from '../lib/clientUtils';
+import { deduplicateClients, sanitizeFirestoreData } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
@@ -371,15 +371,17 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     setShowPaymentModal(false);
     if (!vehicle?.id) return;
 
-    const newPayment = {
-      amount: paymentData.amount,
-      date: paymentData.date,
-      method: paymentData.method,
+    const newPayment: any = {
+      amount: Number(paymentData.amount) || 0,
+      date: paymentData.date || new Date().toISOString().split('T')[0],
+      method: paymentData.method || 'efectivo',
       notes: paymentData.notes || '',
-      installmentNumber: paymentData.installmentNumber,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString()
     };
+    if (paymentData.installmentNumber !== undefined && paymentData.installmentNumber !== null) {
+      newPayment.installmentNumber = paymentData.installmentNumber;
+    }
 
     const baseDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0, method: 'contado' };
     const updatedSaleDetails = {
@@ -404,16 +406,17 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         saleDetails: updatedSaleDetails,
         updatedAt: new Date().toISOString()
       };
+      const sanitizedData = sanitizeFirestoreData(updateData);
 
-      await setDoc(doc(db, "vehicles", vehicle.id), updateData, { merge: true });
+      await setDoc(doc(db, "vehicles", vehicle.id), sanitizedData, { merge: true });
 
       const clientId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
       if (clientId) {
-        await setDoc(doc(db, "clients", clientId), updateData, { merge: true });
+        await setDoc(doc(db, "clients", clientId), sanitizedData, { merge: true });
       }
 
       if (buyerData?.id && buyerData.id !== clientId) {
-        await setDoc(doc(db, "deals", buyerData.id), updateData, { merge: true });
+        await setDoc(doc(db, "deals", buyerData.id), sanitizedData, { merge: true });
       }
 
       if (paymentData.taskIdToComplete) {
@@ -1356,9 +1359,11 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   {/* Document Header */}
                   <div className="flex justify-between items-start mb-3 mt-1">
                     <div>
-                      <h3 className="text-md font-black tracking-tight text-slate-900 uppercase">Nextcar CRM</h3>
+                      <h3 className="text-md font-black tracking-tight text-slate-900 uppercase">
+                        {agencies.find(a => a.id === (formData.agencyId || vehicle?.agencyId || userData?.agencyId))?.name || 'AGENCIA'}
+                      </h3>
                       <p className="text-[9px] text-slate-500 tracking-wider font-bold uppercase">
-                        {agencies.find(a => a.id === formData.agencyId)?.name || 'REPORTE FINANCIERO DE SOCIOS'}
+                        REPORTE FINANCIERO DE SOCIOS
                       </p>
                     </div>
                     <div className="text-right">
@@ -1873,7 +1878,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             <div className="w-full flex justify-between items-center mb-6 z-10">
                <div className="text-3xl font-black tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>FICHA TÉCNICA</div>
                <div className="text-3xl font-bold px-6 py-2 rounded-full" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#60a5fa' }}>
-                 {userData?.role === 'master' ? 'AUTO DEALER' : 'NUESTRO INVENTARIO'}
+                 {agencies.find(a => a.id === (formData.agencyId || vehicle?.agencyId || userData?.agencyId))?.name?.toUpperCase() || (userData?.role === 'master' ? 'AUTO DEALER' : 'NUESTRO INVENTARIO')}
                </div>
             </div>
 
@@ -1999,9 +2004,11 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             {/* Logo and report header */}
             <div className="flex justify-between items-start mb-8 mt-4">
               <div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none uppercase">Nextcar CRM</h1>
+                <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none uppercase">
+                  {agencies.find(a => a.id === (formData.agencyId || vehicle?.agencyId || userData?.agencyId))?.name || 'AGENCIA'}
+                </h1>
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-2">
-                  {agencies.find(a => a.id === formData.agencyId)?.name || 'REPORTE FINANCIERO DE SOCIOS'}
+                  REPORTE FINANCIERO DE SOCIOS
                 </p>
               </div>
               <div className="text-right">
