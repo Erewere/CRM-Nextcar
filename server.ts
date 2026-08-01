@@ -873,6 +873,270 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // === Model Context Protocol (MCP) Server Endpoint ===
+  const mcpTools = [
+    {
+      name: "get_inventory",
+      description: "Obtiene los vehículos disponibles en el inventario del CRM Erewere",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agencyId: { type: "string", description: "ID de la agencia (opcional, por defecto k77PpUc4SKDVCps2qSDw)" }
+        }
+      }
+    },
+    {
+      name: "get_clients",
+      description: "Obtiene la lista de clientes y prospectos registrados en el CRM Erewere",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agencyId: { type: "string", description: "ID de la agencia (opcional)" },
+          limit: { type: "number", description: "Número máximo de registros a retornar (por defecto 20)" }
+        }
+      }
+    },
+    {
+      name: "create_lead",
+      description: "Registra un nuevo prospecto o cliente potencial en el CRM Erewere",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agencyId: { type: "string", description: "ID de la agencia (obligatorio)" },
+          name: { type: "string", description: "Nombre completo del prospecto" },
+          phone: { type: "string", description: "Teléfono de contacto" },
+          email: { type: "string", description: "Correo electrónico" },
+          vehicle: { type: "string", description: "Vehículo o auto de interés" },
+          origin: { type: "string", description: "Origen del lead (ej: whatsapp, web, mcp_ai)" }
+        },
+        required: ["agencyId", "name"]
+      }
+    },
+    {
+      name: "get_sales_stats",
+      description: "Obtiene estadísticas de ventas, cierres e ingresos del CRM Erewere",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agencyId: { type: "string", description: "ID de la agencia (opcional)" }
+        }
+      }
+    }
+  ];
+
+  const handleMcpRequest = async (req: express.Request, res: express.Response) => {
+    if (req.method === "GET") {
+      return res.json({
+        status: "active",
+        name: "Erewere CRM MCP Server",
+        version: "1.0.0",
+        protocolVersion: "2024-11-05",
+        description: "Servidor MCP del CRM Erewere para integración con asistentes de IA (Gemini, Claude, Spark, etc.)",
+        endpoint: req.originalUrl,
+        supportedMethods: ["initialize", "notifications/initialized", "tools/list", "tools/call", "ping"]
+      });
+    }
+
+    const { jsonrpc, id, method, params } = req.body || {};
+
+    if (jsonrpc !== "2.0") {
+      return res.status(400).json({
+        jsonrpc: "2.0",
+        id: id || null,
+        error: { code: -32600, message: "Invalid Request: jsonrpc must be '2.0'" }
+      });
+    }
+
+    try {
+      if (method === "initialize") {
+        return res.json({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            protocolVersion: "2024-11-05",
+            capabilities: {
+              tools: {
+                listChanged: false
+              }
+            },
+            serverInfo: {
+              name: "Erewere CRM MCP Server",
+              version: "1.0.0"
+            }
+          }
+        });
+      }
+
+      if (method === "notifications/initialized" || method === "initialized") {
+        return res.json({ jsonrpc: "2.0", id: id || null, result: {} });
+      }
+
+      if (method === "ping") {
+        return res.json({ jsonrpc: "2.0", id, result: {} });
+      }
+
+      if (method === "tools/list") {
+        return res.json({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            tools: mcpTools
+          }
+        });
+      }
+
+      if (method === "tools/call") {
+        const toolName = params?.name;
+        const toolArgs = params?.arguments || {};
+        const targetAgencyId = toolArgs.agencyId || "k77PpUc4SKDVCps2qSDw";
+
+        const db = getClientDb();
+
+        if (toolName === "get_inventory") {
+          const q = query(
+            collection(db, "vehicles"),
+            where("agencyId", "==", targetAgencyId),
+            where("status", "==", "available")
+          );
+          const snapshot = await getDocs(q);
+          const vehicles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          return res.json({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({ count: vehicles.length, inventory: vehicles }, null, 2)
+                }
+              ]
+            }
+          });
+        }
+
+        if (toolName === "get_clients") {
+          const limitCount = toolArgs.limit || 20;
+          const q = query(
+            collection(db, "clients"),
+            where("agencyId", "==", targetAgencyId),
+            limit(limitCount)
+          );
+          const snapshot = await getDocs(q);
+          const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          return res.json({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({ count: clients.length, clients }, null, 2)
+                }
+              ]
+            }
+          });
+        }
+
+        if (toolName === "create_lead") {
+          const { name, phone, email, vehicle, origin } = toolArgs;
+          if (!name) {
+            return res.json({
+              jsonrpc: "2.0",
+              id,
+              error: { code: -32602, message: "El parámetro 'name' es obligatorio" }
+            });
+          }
+
+          const newClient = {
+            agencyId: targetAgencyId,
+            name,
+            phone: phone || "",
+            email: email || "",
+            vehicle: vehicle || "",
+            origin: origin || "mcp_ai",
+            status: "new",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          };
+
+          const docRef = await addDoc(collection(db, "clients"), newClient);
+
+          return res.json({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({ success: true, leadId: docRef.id, message: `Lead '${name}' creado correctamente con ID ${docRef.id}` })
+                }
+              ]
+            }
+          });
+        }
+
+        if (toolName === "get_sales_stats") {
+          const qClients = query(collection(db, "clients"), where("agencyId", "==", targetAgencyId));
+          const qVehicles = query(collection(db, "vehicles"), where("agencyId", "==", targetAgencyId));
+
+          const [clientsSnap, vehiclesSnap] = await Promise.all([
+            getDocs(qClients),
+            getDocs(qVehicles)
+          ]);
+
+          const clients = clientsSnap.docs.map(d => d.data());
+          const vehicles = vehiclesSnap.docs.map(d => d.data());
+
+          const soldVehicles = vehicles.filter((v: any) => v.status === "sold");
+          const totalRevenue = soldVehicles.reduce((acc: number, v: any) => acc + (v.saleDetails?.price || v.price || 0), 0);
+
+          return res.json({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    totalClients: clients.length,
+                    totalVehicles: vehicles.length,
+                    availableVehicles: vehicles.filter((v: any) => v.status === "available").length,
+                    soldVehiclesCount: soldVehicles.length,
+                    estimatedRevenueMXN: totalRevenue
+                  }, null, 2)
+                }
+              ]
+            }
+          });
+        }
+
+        return res.json({
+          jsonrpc: "2.0",
+          id,
+          error: { code: -32601, message: `Herramienta desconocida: ${toolName}` }
+        });
+      }
+
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32601, message: `Método MCP no soportado: ${method}` }
+      });
+    } catch (err: any) {
+      console.error("Error handling MCP request:", err);
+      return res.status(500).json({
+        jsonrpc: "2.0",
+        id: id || null,
+        error: { code: -32603, message: `Internal server error: ${err.message}` }
+      });
+    }
+  };
+
+  app.all("/api/mcp", handleMcpRequest);
+  app.all("/mcp", handleMcpRequest);
+
   // === Catch-all 404 for unmatched API routes (prevents returning HTML for /api/*) ===
   app.all("/api/*", (req, res) => {
     res.status(404).json({ error: `Ruta de API no encontrada: ${req.method} ${req.originalUrl}` });

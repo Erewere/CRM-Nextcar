@@ -339,16 +339,22 @@ export function Persons() {
             collection(db, "tasks"),
             where("agencyId", "==", userData.agencyId),
           );
+          const vq = query(
+            collection(db, "vehicles"),
+            where("agencyId", "==", userData.agencyId),
+          );
 
-          const [snap, dSnap, tSnap] = await Promise.all([
+          const [snap, dSnap, tSnap, vSnap] = await Promise.all([
             getDocs(q),
             getDocs(dq).catch(() => ({ docs: [] }) as any),
             getDocs(tq).catch(() => ({ docs: [] }) as any),
+            getDocs(vq).catch(() => ({ docs: [] }) as any),
           ]);
 
           clientsDocs = snap.docs;
           dealsDocs = dSnap.docs;
           tasksDocs = tSnap.docs;
+          vehiclesDocs = vSnap.docs;
         }
 
         const usersMap: Record<string, string> = {};
@@ -908,7 +914,8 @@ export function Persons() {
         <div className="p-6 flex-1 overflow-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredPersons.map((person, idx) => {
-              const matches = getClientMatches(person, vehicles);
+              const candidateVehicles = userData?.role === "seller" ? vehicles.filter(v => v.agencyId === userData?.agencyId) : vehicles;
+              const matches = getClientMatches(person, candidateVehicles);
               return (
               <div
                 key={`${person.id}-${idx}`}
@@ -1128,7 +1135,8 @@ export function Persons() {
                         if (col.id === "email") val = person.email;
                         if (col.id === "phone") val = person.phone;
                         if (col.id === "vehicle") {
-                          const matches = getClientMatches(person, vehicles);
+                          const candidateVehicles = userData?.role === "seller" ? vehicles.filter(v => v.agencyId === userData?.agencyId) : vehicles;
+                          const matches = getClientMatches(person, candidateVehicles);
                           val = (
                             <div className="flex flex-col gap-1 items-start justify-center min-h-[32px]">
                               <span className="truncate">{getVehicleOfInterestText(person)}</span>

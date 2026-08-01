@@ -34,6 +34,10 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
   const handlePaymentConfirm = async (payment: any) => {
     setShowPaymentModal(false);
+    if (userData?.role === 'seller') {
+      alert("Solamente los administradores pueden registrar pagos.");
+      return;
+    }
     const todayIso = new Date().toISOString().split('T')[0];
     
     const baseDetails = clientData?.saleDetails || {
@@ -151,6 +155,10 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   };
 
   const handleDeletePayment = async (paymentId: string) => {
+    if (userData?.role === 'seller') {
+      alert("Solamente los administradores pueden gestionar pagos.");
+      return;
+    }
     if (!clientData?.saleDetails?.payments) return;
     if (!window.confirm("¿Eliminar este pago?")) return;
 
@@ -767,14 +775,16 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowPaymentModal(true)}
-                  className="text-xs px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow transition-colors flex items-center gap-1 shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Pago</span>
-                </button>
+                {(userData?.role === 'master' || userData?.role === 'admin') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentModal(true)}
+                    className="text-xs px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow transition-colors flex items-center gap-1 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Pago</span>
+                  </button>
+                )}
               </div>
 
               <div 
@@ -890,7 +900,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                             ({payment.method || 'Efectivo'})
                           </span>
                         </div>
-                        {payment.id && (
+                        {(userData?.role === 'master' || userData?.role === 'admin') && payment.id && (
                           <button
                             type="button"
                             onClick={() => handleDeletePayment(payment.id)}
@@ -912,13 +922,15 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                 ) : (
                   <div className="text-xs text-slate-500 text-center py-2 italic flex flex-col items-center gap-1">
                     <span>Sin exhibiciones registradas</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentModal(true)}
-                      className="text-emerald-600 font-semibold text-xs mt-0.5"
-                    >
-                      + Registrar pago
-                    </button>
+                    {(userData?.role === 'master' || userData?.role === 'admin') && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentModal(true)}
+                        className="text-emerald-600 font-semibold text-xs mt-0.5"
+                      >
+                        + Registrar pago
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

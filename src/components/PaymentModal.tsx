@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
 import { X, Calculator, CheckCircle2 } from 'lucide-react';
 import { SaleDetails, Task } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface PaymentData {
   amount: number;
@@ -32,6 +33,7 @@ export function PaymentModal({
   isWon = false,
   clientName
 }: Props) {
+  const { userData } = useAuth();
   const [amount, setAmount] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [method, setMethod] = useState<'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'>('transferencia');
@@ -142,6 +144,10 @@ export function PaymentModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (userData?.role === 'seller') {
+      alert("Solamente los administradores pueden registrar pagos.");
+      return;
+    }
     const parsed = parseFloat(amount);
     if (!parsed || parsed <= 0) {
       alert("Por favor ingresa un monto válido mayor a 0");

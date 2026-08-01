@@ -141,8 +141,8 @@ export function MobileHome({
   }, [tasks, currentTime]);
 
   const availableVehicles = useMemo(() => {
-    return (vehicles || []).filter(v => v.status === "available");
-  }, [vehicles]);
+    return (vehicles || []).filter(v => (v.status === "available" || !v.status) && (userData?.role !== "seller" || v.agencyId === userData?.agencyId));
+  }, [vehicles, userData]);
 
   const getClientName = (clientId?: string) => {
     if (!clientId) return "";
@@ -650,7 +650,14 @@ export function MobileHome({
               </div>
               
               <div className="space-y-3">
-                {clientsWithScores.slice(0, 4).filter(c => c.leadScore >= 45).map((client) => {
+                {clientsWithScores.slice(0, 4).filter(c => {
+                  if (c.leadScore < 45) return false;
+                  if (userData?.role === 'seller') {
+                    const isMine = c.sellerId === userData?.id || c.createdById === userData?.id || c.userId === userData?.id;
+                    if (!isMine) return false;
+                  }
+                  return true;
+                }).map((client) => {
                   const matchedVehicles = getClientMatches(client as Client, availableVehicles);
                   if (matchedVehicles.length === 0) return null;
                   

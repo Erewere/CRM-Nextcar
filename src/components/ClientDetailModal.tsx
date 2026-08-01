@@ -67,6 +67,7 @@ export function ClientDetailModal({
     (client.creatorId === userData?.id) ||
     (client.createdByAdmin === true) ||
     (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId)));
+  const canRegisterPayments = !isReadOnly && (userData?.role === "master" || userData?.role === "admin");
   const isAdminReadOnly = isReadOnly || (userData?.role === "admin" && !canModify);
 
   const isDealContext = client.originalClientId !== undefined || isNew;
@@ -754,6 +755,10 @@ export function ClientDetailModal({
   
   const handlePaymentConfirm = async (payment: any) => {
     setShowPaymentModal(false);
+    if (userData?.role === 'seller') {
+      alert("Solamente los administradores pueden registrar pagos.");
+      return;
+    }
     
     const baseDetails = formData.saleDetails || {
       price: formData.dealValue || 0,
@@ -870,6 +875,10 @@ export function ClientDetailModal({
   };
 
   const handleDeletePayment = async (paymentId: string) => {
+    if (userData?.role === 'seller') {
+      alert("Solamente los administradores pueden gestionar pagos.");
+      return;
+    }
     if (!formData.saleDetails?.payments) return;
     if (!window.confirm("¿Seguro que deseas eliminar este pago del historial?")) return;
 
@@ -2354,7 +2363,18 @@ export function ClientDetailModal({
                       
                       {(() => {
                         if (!formData.wantedVehicle) return null;
-                        const rawMatches = getClientMatches(formData as Client, inventoryVehicles);
+                        
+                        // Rule 1: Only admin can see matches for a client not registered to them.
+                        const isSeller = userData?.role === 'seller';
+                        const isMyClient = formData.sellerId === userData?.id || formData.createdById === userData?.id || formData.userId === userData?.id;
+                        if (isSeller && !isMyClient) return null;
+
+                        // Rule 2: Sellers can ONLY see matches for vehicles in their own agency.
+                        const candidateVehicles = isSeller
+                          ? inventoryVehicles.filter(v => v.agencyId === userData?.agencyId)
+                          : inventoryVehicles;
+
+                        const rawMatches = getClientMatches(formData as Client, candidateVehicles);
                         const matches = rawMatches.filter(m => !(formData as Client).dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`));
                         if (matches.length === 0) return null;
                         
@@ -2898,7 +2918,7 @@ export function ClientDetailModal({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {canModify && (
+                      {canRegisterPayments && (
                         <button
                           type="button"
                           onClick={() => setShowPaymentModal(true)}
@@ -3079,7 +3099,7 @@ export function ClientDetailModal({
                                   </span>
                                 )}
                               </div>
-                              {canModify && payment.id && (
+                              {canRegisterPayments && payment.id && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeletePayment(payment.id)}
@@ -3102,7 +3122,7 @@ export function ClientDetailModal({
                       ) : (
                         <div className="text-xs text-slate-500 dark:text-slate-400 text-center py-3 italic flex flex-col items-center gap-1.5">
                           <span>No se han registrado pagos / exhibiciones aún.</span>
-                          {canModify && (
+                          {canRegisterPayments && (
                             <button
                               type="button"
                               onClick={() => setShowPaymentModal(true)}

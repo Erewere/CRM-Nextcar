@@ -368,7 +368,12 @@ export function Dashboard() {
   
   const baseFilteredClients = useMemo(() => {
     return displayClients.filter((c) => {
-      if (filterSeller !== "all" && c.sellerId !== filterSeller) return false;
+      if (userData?.role === "seller") {
+        const isMine = c.sellerId === userData.id || (c as any).createdById === userData.id || (c as any).userId === userData.id;
+        if (!isMine) return false;
+      } else if (filterSeller !== "all" && c.sellerId !== filterSeller) {
+        return false;
+      }
       if (filterCategory !== "all") {
         const clientVehicle = vehicles.find((v) => v.id === c.vehicleId);
         if (clientVehicle?.bodyType !== filterCategory) return false;
@@ -379,7 +384,7 @@ export function Dashboard() {
       }
       return true;
     });
-  }, [clients, filterSeller, filterCategory, vehicles, filterTags]);
+  }, [displayClients, filterSeller, filterCategory, vehicles, filterTags, userData]);
 
   const filteredClients = useMemo(() => {
     return baseFilteredClients.filter((c) => {
@@ -527,7 +532,7 @@ export function Dashboard() {
   
   // Inventory
   const availableVehicles = filteredVehicles.filter(
-    (v) => v.status === "available" || !v.status,
+    (v) => (v.status === "available" || !v.status) && (userData?.role !== "seller" || v.agencyId === userData?.agencyId),
   );
 
   const missingChecklistVehicles = vehicles.filter(v => v.checklist?.remindMissing && (

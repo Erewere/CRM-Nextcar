@@ -935,13 +935,15 @@ export function Inventory() {
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Hay vehículos que coinciden con clientes activos"></span>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => navigate('/payments')}
-                className="px-4 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
-              >
-                Pagos
-              </button>
+              {userData?.role !== 'seller' && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/payments')}
+                  className="px-4 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+                >
+                  Pagos
+                </button>
+              )}
             </div>
           )}
 

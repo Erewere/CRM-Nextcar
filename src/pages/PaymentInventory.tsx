@@ -81,21 +81,45 @@ export function PaymentInventory() {
     return checkIsWon(status, pipelineStages);
   };
 
+  // Helper to merge and deduplicate payments across deal, client, and vehicle
+  const getMergedSaleDetails = (dDetails: any, pDetails: any, vDetails: any) => {
+    const baseDetails = (dDetails && (dDetails.price !== undefined || dDetails.method))
+      ? dDetails
+      : (pDetails && (pDetails.price !== undefined || pDetails.method))
+        ? pDetails
+        : (vDetails || {});
+
+    const dPayments = dDetails?.payments || [];
+    const pPayments = pDetails?.payments || [];
+    const vPayments = vDetails?.payments || [];
+
+    const paymentMap = new Map();
+    [...dPayments, ...pPayments, ...vPayments].forEach(p => {
+      if (p) {
+        const key = p.id || `${p.date}_${p.amount}_${p.createdAt || ''}`;
+        if (!paymentMap.has(key)) {
+          paymentMap.set(key, p);
+        }
+      }
+    });
+
+    return {
+      ...baseDetails,
+      payments: Array.from(paymentMap.values())
+    };
+  };
+
   // Build unified list of sales
   const itemsFromDeals = deals.map(deal => {
     const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
     const vehicle = vehicles.find(v => v.id === deal.vehicleId || v.id === person.vehicleId);
     
-    const dealIsWon = isWon(deal.status) || isWon(person.status);
+    const dealIsWon = isWon(deal.status) || isWon(person.status) || vehicle?.status === 'sold' || Boolean(deal.saleDetails?.price || person.saleDetails?.price || vehicle?.saleDetails?.price);
 
-    const mergedSaleDetails = (deal.saleDetails && (deal.saleDetails.price !== undefined || deal.saleDetails.method))
-      ? deal.saleDetails
-      : (person.saleDetails && (person.saleDetails.price !== undefined || person.saleDetails.method))
-        ? person.saleDetails
-        : (dealIsWon ? vehicle?.saleDetails : undefined);
+    const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, person.saleDetails, vehicle?.saleDetails);
 
-    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? (dealIsWon ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
-    const soldAt = deal.soldAt || person.soldAt || (dealIsWon ? vehicle?.soldAt : undefined) || deal.updatedAt || person.updatedAt;
+    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? vehicle?.saleDetails?.price ?? deal.value ?? deal.dealValue ?? person.dealValue;
+    const soldAt = deal.soldAt || person.soldAt || vehicle?.soldAt || deal.updatedAt || person.updatedAt;
 
     const statusToUse = dealIsWon ? 'won' : (deal.status || person.status || 'lead');
 
@@ -117,11 +141,11 @@ export function PaymentInventory() {
   const itemsFromClients = clientsWithoutDeals.map(person => {
     const vehicle = vehicles.find(v => v.id === person.vehicleId);
 
-    const personIsWon = isWon(person.status);
+    const personIsWon = isWon(person.status) || vehicle?.status === 'sold' || Boolean(person.saleDetails?.price || vehicle?.saleDetails?.price);
 
-    const mergedSaleDetails = person.saleDetails || (personIsWon ? vehicle?.saleDetails : undefined);
-    const mergedDealValue = person.saleDetails?.price ?? (personIsWon ? vehicle?.saleDetails?.price : undefined) ?? person.dealValue ?? vehicle?.price;
-    const soldAt = person.soldAt || (personIsWon ? vehicle?.soldAt : undefined) || person.updatedAt;
+    const mergedSaleDetails = getMergedSaleDetails(undefined, person.saleDetails, vehicle?.saleDetails);
+    const mergedDealValue = person.saleDetails?.price ?? vehicle?.saleDetails?.price ?? person.dealValue ?? vehicle?.price;
+    const soldAt = person.soldAt || vehicle?.soldAt || person.updatedAt;
 
     const statusToUse = personIsWon ? 'won' : person.status;
 
@@ -136,7 +160,7 @@ export function PaymentInventory() {
 
   const allIncludedVehicleIds = new Set<string>();
   [...itemsFromDeals, ...itemsFromClients].forEach(item => {
-    if (item.vehicleId && (isWon(item.status, item.saleDetails))) {
+    if (item.vehicleId && (isWon(item.status, item.saleDetails) || item.status === 'won')) {
       allIncludedVehicleIds.add(item.vehicleId);
     }
   });
@@ -152,7 +176,7 @@ export function PaymentInventory() {
        (c.vehicleId === v.id && checkIsWon(c.status, pipelineStages)))
     );
 
-    const mergedSaleDetails = v.saleDetails || matchingClient?.saleDetails;
+    const mergedSaleDetails = getMergedSaleDetails(undefined, matchingClient?.saleDetails, v.saleDetails);
     const price = mergedSaleDetails?.price || v.price || 0;
     
     return {
@@ -172,7 +196,7 @@ export function PaymentInventory() {
 
   const displayClients = [...itemsFromDeals, ...itemsFromClients, ...soldVehiclesWithoutClientOrDeal];
   const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
-  const wonClients = deduplicatedClients.filter(c => isWon(c.status, c.saleDetails));
+  const wonClients = deduplicatedClients.filter(c => isWon(c.status, c.saleDetails) || c.status === 'won' || (c.saleDetails?.payments?.length || 0) > 0 || (c.saleDetails?.price || 0) > 0);
 
   const filteredSales = wonClients.filter(c => {
     const search = searchTerm.toLowerCase();
