@@ -873,7 +873,9 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
-  // === Model Context Protocol (MCP) Server Endpoint ===
+  // === Model Context Protocol (MCP) Server Implementation ===
+  const sseSessions = new Map<string, express.Response>();
+
   const mcpTools = [
     {
       name: "get_inventory",
@@ -924,218 +926,362 @@ Return a JSON array of recommendation objects with the following schema:
     }
   ];
 
-  const handleMcpRequest = async (req: express.Request, res: express.Response) => {
+  const processJsonRpc = async (reqBody: any, db: any) => {
+    const { jsonrpc, id, method, params } = reqBody || {};
+
+    if (jsonrpc !== "2.0") {
+      return {
+        jsonrpc: "2.0",
+        id: id || null,
+        error: { code: -32600, message: "Invalid Request: jsonrpc must be '2.0'" }
+      };
+    }
+
+    if (method === "initialize") {
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            tools: {
+              listChanged: false
+            }
+          },
+          serverInfo: {
+            name: "Erewere CRM MCP Server",
+            version: "1.0.0"
+          }
+        }
+      };
+    }
+
+    if (method === "notifications/initialized" || method === "initialized") {
+      return null;
+    }
+
+    if (method === "ping") {
+      return { jsonrpc: "2.0", id, result: {} };
+    }
+
+    if (method === "tools/list") {
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: {
+          tools: mcpTools
+        }
+      };
+    }
+
+    if (method === "tools/call") {
+      const toolName = params?.name;
+      const toolArgs = params?.arguments || {};
+      const targetAgencyId = toolArgs.agencyId || "k77PpUc4SKDVCps2qSDw";
+
+      if (toolName === "get_inventory") {
+        const q = query(
+          collection(db, "vehicles"),
+          where("agencyId", "==", targetAgencyId),
+          where("status", "==", "available")
+        );
+        const snapshot = await getDocs(q);
+        const vehicles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ count: vehicles.length, inventory: vehicles }, null, 2)
+              }
+            ]
+          }
+        };
+      }
+
+      if (toolName === "get_clients") {
+        const limitCount = toolArgs.limit || 20;
+        const q = query(
+          collection(db, "clients"),
+          where("agencyId", "==", targetAgencyId),
+          limit(limitCount)
+        );
+        const snapshot = await getDocs(q);
+        const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ count: clients.length, clients }, null, 2)
+              }
+            ]
+          }
+        };
+      }
+
+      if (toolName === "create_lead") {
+        const { name, phone, email, vehicle, origin } = toolArgs;
+        if (!name) {
+          return {
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32602, message: "El parámetro 'name' es obligatorio" }
+          };
+        }
+
+        const newClient = {
+          agencyId: targetAgencyId,
+          name,
+          phone: phone || "",
+          email: email || "",
+          vehicle: vehicle || "",
+          origin: origin || "mcp_ai",
+          status: "new",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+
+        const docRef = await addDoc(collection(db, "clients"), newClient);
+
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ success: true, leadId: docRef.id, message: `Lead '${name}' creado correctamente con ID ${docRef.id}` })
+              }
+            ]
+          }
+        };
+      }
+
+      if (toolName === "get_sales_stats") {
+        const qClients = query(collection(db, "clients"), where("agencyId", "==", targetAgencyId));
+        const qVehicles = query(collection(db, "vehicles"), where("agencyId", "==", targetAgencyId));
+
+        const [clientsSnap, vehiclesSnap] = await Promise.all([
+          getDocs(qClients),
+          getDocs(qVehicles)
+        ]);
+
+        const clients = clientsSnap.docs.map(d => d.data());
+        const vehicles = vehiclesSnap.docs.map(d => d.data());
+
+        const soldVehicles = vehicles.filter((v: any) => v.status === "sold");
+        const totalRevenue = soldVehicles.reduce((acc: number, v: any) => acc + (v.saleDetails?.price || v.price || 0), 0);
+
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  totalClients: clients.length,
+                  totalVehicles: vehicles.length,
+                  availableVehicles: vehicles.filter((v: any) => v.status === "available").length,
+                  soldVehiclesCount: soldVehicles.length,
+                  estimatedRevenueMXN: totalRevenue
+                }, null, 2)
+              }
+            ]
+          }
+        };
+      }
+
+      return {
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32601, message: `Herramienta desconocida: ${toolName}` }
+      };
+    }
+
+    return {
+      jsonrpc: "2.0",
+      id,
+      error: { code: -32601, message: `Método MCP no soportado: ${method}` }
+    };
+  };
+
+  // CORS Middleware for MCP routes
+  const mcpCors = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, mcp-session-id");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  };
+
+  app.use("/.well-known", mcpCors);
+  app.use("/oauth", mcpCors);
+  app.use("/mcp", mcpCors);
+  app.use("/sse", mcpCors);
+  app.use("/api/mcp", mcpCors);
+
+  // MCP Well-Known Discovery
+  app.get("/.well-known/mcp.json", (req, res) => {
+    const host = req.get("host");
+    const protocol = req.protocol || "https";
+    const baseUrl = `${protocol}://${host}`;
+    res.json({
+      name: "Erewere CRM MCP Server",
+      description: "Servidor MCP del CRM Erewere para consulta de inventario, clientes y ventas.",
+      version: "1.0.0",
+      protocolVersion: "2024-11-05",
+      endpoints: {
+        sse: `${baseUrl}/sse`,
+        messages: `${baseUrl}/api/mcp/messages`,
+        mcp: `${baseUrl}/mcp`
+      },
+      tools: mcpTools
+    });
+  });
+
+  // OAuth Discovery & Endpoints for MCP Authentication
+  app.get("/.well-known/oauth-authorization-server", (req, res) => {
+    const host = req.get("host");
+    const protocol = req.protocol || "https";
+    const baseUrl = `${protocol}://${host}`;
+    res.json({
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      response_types_supported: ["code", "token"],
+      grant_types_supported: ["client_credentials", "authorization_code"],
+      token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"]
+    });
+  });
+
+  app.get("/.well-known/openid-configuration", (req, res) => {
+    const host = req.get("host");
+    const protocol = req.protocol || "https";
+    const baseUrl = `${protocol}://${host}`;
+    res.json({
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      jwks_uri: `${baseUrl}/.well-known/jwks.json`
+    });
+  });
+
+  app.all("/oauth/authorize", (req, res) => {
+    const redirectUri = (req.query.redirect_uri as string) || req.body?.redirect_uri;
+    const state = req.query.state || req.body?.state;
+    if (redirectUri) {
+      const sep = redirectUri.includes("?") ? "&" : "?";
+      return res.redirect(`${redirectUri}${sep}code=erewere_mcp_auth_code_123&state=${state || ""}`);
+    }
+    res.json({ status: "authorized", code: "erewere_mcp_auth_code_123" });
+  });
+
+  app.all("/oauth/token", (req, res) => {
+    res.json({
+      access_token: "erewere_mcp_token_valid",
+      token_type: "Bearer",
+      expires_in: 86400,
+      scope: "mcp:all"
+    });
+  });
+
+  // SSE Transport connection handler
+  const handleSseConnect = (req: express.Request, res: express.Response) => {
+    const acceptHeader = req.headers.accept || "";
+    if (req.method === "GET" && acceptHeader.includes("text/event-stream")) {
+      const sessionId = Math.random().toString(36).substring(2, 15);
+      const host = req.get("host");
+      const protocol = req.protocol || "https";
+      const baseUrl = `${protocol}://${host}`;
+      const messageUrl = `${baseUrl}/api/mcp/messages?sessionId=${sessionId}`;
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*"
+      });
+
+      res.write(`event: endpoint\ndata: ${messageUrl}\n\n`);
+      sseSessions.set(sessionId, res);
+
+      req.on("close", () => {
+        sseSessions.delete(sessionId);
+      });
+      return;
+    }
+
     if (req.method === "GET") {
+      const host = req.get("host");
+      const protocol = req.protocol || "https";
+      const baseUrl = `${protocol}://${host}`;
       return res.json({
         status: "active",
         name: "Erewere CRM MCP Server",
         version: "1.0.0",
         protocolVersion: "2024-11-05",
         description: "Servidor MCP del CRM Erewere para integración con asistentes de IA (Gemini, Claude, Spark, etc.)",
-        endpoint: req.originalUrl,
+        endpoints: {
+          sse: `${baseUrl}/sse`,
+          messages: `${baseUrl}/api/mcp/messages`,
+          mcp: `${baseUrl}/mcp`
+        },
+        toolsCount: mcpTools.length,
         supportedMethods: ["initialize", "notifications/initialized", "tools/list", "tools/call", "ping"]
-      });
-    }
-
-    const { jsonrpc, id, method, params } = req.body || {};
-
-    if (jsonrpc !== "2.0") {
-      return res.status(400).json({
-        jsonrpc: "2.0",
-        id: id || null,
-        error: { code: -32600, message: "Invalid Request: jsonrpc must be '2.0'" }
-      });
-    }
-
-    try {
-      if (method === "initialize") {
-        return res.json({
-          jsonrpc: "2.0",
-          id,
-          result: {
-            protocolVersion: "2024-11-05",
-            capabilities: {
-              tools: {
-                listChanged: false
-              }
-            },
-            serverInfo: {
-              name: "Erewere CRM MCP Server",
-              version: "1.0.0"
-            }
-          }
-        });
-      }
-
-      if (method === "notifications/initialized" || method === "initialized") {
-        return res.json({ jsonrpc: "2.0", id: id || null, result: {} });
-      }
-
-      if (method === "ping") {
-        return res.json({ jsonrpc: "2.0", id, result: {} });
-      }
-
-      if (method === "tools/list") {
-        return res.json({
-          jsonrpc: "2.0",
-          id,
-          result: {
-            tools: mcpTools
-          }
-        });
-      }
-
-      if (method === "tools/call") {
-        const toolName = params?.name;
-        const toolArgs = params?.arguments || {};
-        const targetAgencyId = toolArgs.agencyId || "k77PpUc4SKDVCps2qSDw";
-
-        const db = getClientDb();
-
-        if (toolName === "get_inventory") {
-          const q = query(
-            collection(db, "vehicles"),
-            where("agencyId", "==", targetAgencyId),
-            where("status", "==", "available")
-          );
-          const snapshot = await getDocs(q);
-          const vehicles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          return res.json({
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify({ count: vehicles.length, inventory: vehicles }, null, 2)
-                }
-              ]
-            }
-          });
-        }
-
-        if (toolName === "get_clients") {
-          const limitCount = toolArgs.limit || 20;
-          const q = query(
-            collection(db, "clients"),
-            where("agencyId", "==", targetAgencyId),
-            limit(limitCount)
-          );
-          const snapshot = await getDocs(q);
-          const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          return res.json({
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify({ count: clients.length, clients }, null, 2)
-                }
-              ]
-            }
-          });
-        }
-
-        if (toolName === "create_lead") {
-          const { name, phone, email, vehicle, origin } = toolArgs;
-          if (!name) {
-            return res.json({
-              jsonrpc: "2.0",
-              id,
-              error: { code: -32602, message: "El parámetro 'name' es obligatorio" }
-            });
-          }
-
-          const newClient = {
-            agencyId: targetAgencyId,
-            name,
-            phone: phone || "",
-            email: email || "",
-            vehicle: vehicle || "",
-            origin: origin || "mcp_ai",
-            status: "new",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          };
-
-          const docRef = await addDoc(collection(db, "clients"), newClient);
-
-          return res.json({
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify({ success: true, leadId: docRef.id, message: `Lead '${name}' creado correctamente con ID ${docRef.id}` })
-                }
-              ]
-            }
-          });
-        }
-
-        if (toolName === "get_sales_stats") {
-          const qClients = query(collection(db, "clients"), where("agencyId", "==", targetAgencyId));
-          const qVehicles = query(collection(db, "vehicles"), where("agencyId", "==", targetAgencyId));
-
-          const [clientsSnap, vehiclesSnap] = await Promise.all([
-            getDocs(qClients),
-            getDocs(qVehicles)
-          ]);
-
-          const clients = clientsSnap.docs.map(d => d.data());
-          const vehicles = vehiclesSnap.docs.map(d => d.data());
-
-          const soldVehicles = vehicles.filter((v: any) => v.status === "sold");
-          const totalRevenue = soldVehicles.reduce((acc: number, v: any) => acc + (v.saleDetails?.price || v.price || 0), 0);
-
-          return res.json({
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify({
-                    totalClients: clients.length,
-                    totalVehicles: vehicles.length,
-                    availableVehicles: vehicles.filter((v: any) => v.status === "available").length,
-                    soldVehiclesCount: soldVehicles.length,
-                    estimatedRevenueMXN: totalRevenue
-                  }, null, 2)
-                }
-              ]
-            }
-          });
-        }
-
-        return res.json({
-          jsonrpc: "2.0",
-          id,
-          error: { code: -32601, message: `Herramienta desconocida: ${toolName}` }
-        });
-      }
-
-      return res.json({
-        jsonrpc: "2.0",
-        id,
-        error: { code: -32601, message: `Método MCP no soportado: ${method}` }
-      });
-    } catch (err: any) {
-      console.error("Error handling MCP request:", err);
-      return res.status(500).json({
-        jsonrpc: "2.0",
-        id: id || null,
-        error: { code: -32603, message: `Internal server error: ${err.message}` }
       });
     }
   };
 
-  app.all("/api/mcp", handleMcpRequest);
-  app.all("/mcp", handleMcpRequest);
+  // Dispatcher for POST MCP JSON-RPC requests
+  const handleMcpMessage = async (req: express.Request, res: express.Response) => {
+    const sessionId = (req.query.sessionId || req.headers["mcp-session-id"]) as string;
+    const db = getClientDb();
+
+    try {
+      const responseJson = await processJsonRpc(req.body, db);
+
+      if (sessionId && sseSessions.has(sessionId)) {
+        const sseRes = sseSessions.get(sessionId)!;
+        if (responseJson) {
+          sseRes.write(`event: message\ndata: ${JSON.stringify(responseJson)}\n\n`);
+        }
+        return res.status(202).send("Accepted");
+      } else {
+        if (!responseJson) {
+          return res.status(200).json({ jsonrpc: "2.0", result: {} });
+        }
+        return res.status(200).json(responseJson);
+      }
+    } catch (err: any) {
+      console.error("MCP Processing Error:", err);
+      return res.status(500).json({
+        jsonrpc: "2.0",
+        id: req.body?.id || null,
+        error: { code: -32603, message: err.message || "Internal server error" }
+      });
+    }
+  };
+
+  // Mount MCP routes across all standard URL patterns
+  app.get("/sse", handleSseConnect);
+  app.get("/mcp", handleSseConnect);
+  app.get("/api/mcp", handleSseConnect);
+  app.get("/api/mcp/sse", handleSseConnect);
+
+  app.post("/mcp", handleMcpMessage);
+  app.post("/api/mcp", handleMcpMessage);
+  app.post("/api/mcp/messages", handleMcpMessage);
+  app.post("/mcp/messages", handleMcpMessage);
 
   // === Catch-all 404 for unmatched API routes (prevents returning HTML for /api/*) ===
   app.all("/api/*", (req, res) => {
