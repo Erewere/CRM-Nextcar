@@ -2366,7 +2366,7 @@ export function ClientDetailModal({
                         
                         // Rule 1: Only admin can see matches for a client not registered to them.
                         const isSeller = userData?.role === 'seller';
-                        const isMyClient = formData.sellerId === userData?.id || formData.createdById === userData?.id || formData.userId === userData?.id;
+                        const isMyClient = formData.sellerId === userData?.id || (formData as any).createdById === userData?.id || (formData as any).userId === userData?.id;
                         if (isSeller && !isMyClient) return null;
 
                         // Rule 2: Sellers can ONLY see matches for vehicles in their own agency.

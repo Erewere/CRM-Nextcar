@@ -15,18 +15,71 @@ export function Integrations() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
-  const agencyOrUserId = (userData?.agencyId && userData.agencyId !== 'unassigned') 
-    ? userData.agencyId 
-    : (userData?.id || 'default');
+  // MCP API Key state
+  const [mcpKeyInfo, setMcpKeyInfo] = useState<{ hasKey: boolean; maskedKey: string | null } | null>(null);
+  const [newGeneratedKey, setNewGeneratedKey] = useState<string | null>(null);
+  const [mcpLoading, setMcpLoading] = useState<boolean>(false);
 
-  const mcpClientId = `erewere_agency_${agencyOrUserId}`;
-  const mcpClientSecret = `secret_${agencyOrUserId.substring(0, 10)}`;
+  const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
+  const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
 
   const copyToClipboard = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(fieldName);
     setTimeout(() => setCopiedField(null), 2500);
+  };
+
+  useEffect(() => {
+    const fetchMcpKeyInfo = async () => {
+      if (!userData?.agencyId || !currentUser) return;
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch(`/api/agencies/mcp-key?agencyId=${userData.agencyId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMcpKeyInfo(data);
+        }
+      } catch (err) {
+        console.error("Error fetching MCP key info:", err);
+      }
+    };
+    fetchMcpKeyInfo();
+  }, [userData, currentUser]);
+
+  const handleGenerateMcpKey = async () => {
+    if (!userData?.agencyId || !currentUser) return;
+    if (mcpKeyInfo?.hasKey) {
+      if (!window.confirm("Generar una nueva clave de acceso invalidará la clave anterior. ¿Deseas continuar?")) {
+        return;
+      }
+    }
+
+    setMcpLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/agencies/mcp-key", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ agencyId: userData.agencyId })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Error: " + (err.error || "No se pudo generar la clave"));
+        return;
+      }
+      const data = await res.json();
+      setNewGeneratedKey(data.mcpApiKey);
+      setMcpKeyInfo({ hasKey: true, maskedKey: data.maskedKey });
+    } catch (e: any) {
+      alert("Error al generar clave MCP: " + e.message);
+    } finally {
+      setMcpLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -296,13 +349,13 @@ export function Integrations() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  Servidor MCP (Model Context Protocol) & OAuth
-                  <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-full border border-emerald-300 dark:border-emerald-700">
-                    Activo
+                  Servidor MCP (Model Context Protocol)
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 rounded-full border border-indigo-300 dark:border-indigo-700">
+                    API Key Auth
                   </span>
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Conecta tu CRM Erewere con Gemini, Spark, Claude u otro asistente de IA utilizando el protocolo MCP con OAuth 2.0.
+                  Conecta tu CRM Erewere con Gemini, Spark, Claude u otro asistente de IA utilizando el protocolo MCP con Bearer API Key.
                 </p>
               </div>
             </div>
@@ -312,16 +365,43 @@ export function Integrations() {
             <div className="mb-6 bg-indigo-50/80 dark:bg-slate-900/60 p-4 rounded-lg border border-indigo-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 space-y-2">
               <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-sm">
                 <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                ¿Cómo conectar tu CRM a Gemini o Spark?
+                ¿Cómo conectar tu CRM a tu Asistente de IA?
               </div>
               <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300">
-                <li>En la ventana de conexión MCP de Gemini/Spark, pega la <strong>URL del Servidor MCP</strong>.</li>
-                <li>Si la plataforma solicita credenciales OAuth, ingresa el <strong>ID de cliente</strong> y el <strong>Secreto del cliente</strong> provistos abajo.</li>
-                <li>¡Listo! Tu IA podrá consultar autos en inventario, ver clientes y crear nuevos leads automáticamente.</li>
+                <li>Copia la <strong>URL del Servidor MCP</strong> provista abajo.</li>
+                <li>Genera tu <strong>Clave de Acceso MCP (API Key)</strong>.</li>
+                <li>En la configuración de tu asistente de IA, selecciona autenticación por <strong>Bearer Token / API Key</strong> e ingresa la clave generada.</li>
+                <li>¡Listo! Tu IA se comunicará de forma segura y aislada únicamente con los datos de tu agencia.</li>
               </ol>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {newGeneratedKey && (
+              <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 rounded-lg">
+                <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-bold text-sm mb-1">
+                  <Key className="w-4 h-4" /> ¡Nueva Clave de Acceso MCP Generada!
+                </div>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300 mb-2">
+                  Copia esta clave ahora. Por razones de seguridad, <strong>no se volverá a mostrar completa</strong> después de recargar.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={newGeneratedKey}
+                    className="w-full text-xs font-mono px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-400 rounded text-emerald-900 dark:text-emerald-100 font-bold"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(newGeneratedKey, 'mcp_new_key')}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    {copiedField === 'mcp_new_key' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copiedField === 'mcp_new_key' ? 'Copiada' : 'Copiar Clave'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* URL del servidor */}
               <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
@@ -342,52 +422,46 @@ export function Integrations() {
                     {copiedField === 'url' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  Otras variantes compatibles: <code className="text-indigo-600 dark:text-indigo-400 font-mono">{mcpServerUrl.replace('/mcp', '/sse')}</code>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                  Transporte SSE alternativo: <code className="text-indigo-600 dark:text-indigo-400 font-mono">{mcpServerUrl.replace('/mcp', '/sse')}</code>
                 </p>
               </div>
 
-              {/* ID de Cliente */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                  ID de cliente de OAuth
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={mcpClientId}
-                    className="w-full text-xs font-mono px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-indigo-600 dark:text-indigo-400 font-semibold"
-                  />
-                  <button
-                    onClick={() => copyToClipboard(mcpClientId, 'client_id')}
-                    title="Copiar ID de cliente"
-                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded flex items-center gap-1 shrink-0 transition-colors"
-                  >
-                    {copiedField === 'client_id' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+              {/* MCP API Key Status & Actions */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                    Clave de Acceso MCP (API Key)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={mcpKeyInfo?.hasKey ? (mcpKeyInfo.maskedKey || '••••••••') : 'Sin clave generada'}
+                      className="w-full text-xs font-mono px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Secreto del Cliente */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                  Secreto de cliente de OAuth
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={mcpClientSecret}
-                    className="w-full text-xs font-mono px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-indigo-600 dark:text-indigo-400 font-semibold"
-                  />
-                  <button
-                    onClick={() => copyToClipboard(mcpClientSecret, 'client_secret')}
-                    title="Copiar Secreto de cliente"
-                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded flex items-center gap-1 shrink-0 transition-colors"
-                  >
-                    {copiedField === 'client_secret' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                <div className="mt-4 flex items-center justify-between">
+                  {!isAdminOrMaster ? (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 italic">
+                      Solo administradores de la agencia pueden gestionar la clave MCP.
+                    </p>
+                  ) : (
+                    <button
+                      onClick={handleGenerateMcpKey}
+                      disabled={mcpLoading}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold rounded flex items-center gap-1.5 transition-colors"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      {mcpLoading
+                        ? 'Generando...'
+                        : mcpKeyInfo?.hasKey
+                        ? 'Rotar / Generar Nueva Clave'
+                        : 'Generar Clave de Acceso MCP'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

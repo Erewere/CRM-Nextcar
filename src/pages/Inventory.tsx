@@ -935,7 +935,7 @@ export function Inventory() {
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Hay vehículos que coinciden con clientes activos"></span>
                 )}
               </button>
-              {userData?.role !== 'seller' && (
+              {(userData?.role as string) !== 'seller' && (
                 <button
                   type="button"
                   onClick={() => navigate('/payments')}

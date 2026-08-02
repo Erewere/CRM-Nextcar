@@ -141,8 +141,8 @@ export function MobileHome({
   }, [tasks, currentTime]);
 
   const availableVehicles = useMemo(() => {
-    return (vehicles || []).filter(v => (v.status === "available" || !v.status) && (userData?.role !== "seller" || v.agencyId === userData?.agencyId));
-  }, [vehicles, userData]);
+    return (vehicles || []).filter(v => (v.status === "available" || !v.status) && (userRole !== "seller" || v.agencyId === agencyId));
+  }, [vehicles, userRole, agencyId]);
 
   const getClientName = (clientId?: string) => {
     if (!clientId) return "";
@@ -652,8 +652,8 @@ export function MobileHome({
               <div className="space-y-3">
                 {clientsWithScores.slice(0, 4).filter(c => {
                   if (c.leadScore < 45) return false;
-                  if (userData?.role === 'seller') {
-                    const isMine = c.sellerId === userData?.id || c.createdById === userData?.id || c.userId === userData?.id;
+                  if (userRole === 'seller') {
+                    const isMine = c.sellerId || c.createdById || c.userId;
                     if (!isMine) return false;
                   }
                   return true;

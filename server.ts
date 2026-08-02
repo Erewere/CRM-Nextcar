@@ -6,6 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { initializeApp, App as FirebaseApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -852,6 +853,24 @@ Return a JSON array of recommendation objects with the following schema:
       }
 
       const db = getClientDb();
+
+      // Validate sellerId: check if user exists and belongs to the given agency
+      let validatedSellerId = "";
+      if (sellerId && typeof sellerId === "string" && sellerId.trim() !== "") {
+        try {
+          const sellerDocRef = doc(db, "users", sellerId.trim());
+          const sellerSnap = await getDoc(sellerDocRef);
+          if (sellerSnap.exists()) {
+            const sellerData = sellerSnap.data();
+            if (sellerData && sellerData.agencyId === agencyId) {
+              validatedSellerId = sellerId.trim();
+            }
+          }
+        } catch (sErr) {
+          console.warn("Error validating sellerId for public lead:", sErr);
+        }
+      }
+
       const newClient = {
         agencyId,
         name,
@@ -860,7 +879,7 @@ Return a JSON array of recommendation objects with the following schema:
         vehicle: vehicle || "",
         origin: origin || "website",
         status: "new",
-        sellerId: sellerId || "",
+        sellerId: validatedSellerId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -873,60 +892,185 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // === Agency MCP API Key Management (Admin/Master only) ===
+  app.get("/api/agencies/mcp-key", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+      
+      const decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      const db = getClientDb();
+      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
+      if (!userDoc.exists()) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      const agencyId = (req.query.agencyId as string) || userData.agencyId;
+      
+      if (userData.role !== "master" && userData.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden consultar la clave MCP" });
+      }
+      if (userData.role !== "master" && userData.agencyId !== agencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      }
+
+      const agencySnap = await getDoc(doc(db, "agencies", agencyId));
+      if (!agencySnap.exists()) {
+        return res.status(404).json({ error: "Agencia no encontrada" });
+      }
+      const agencyData = agencySnap.data();
+      const apiKey = agencyData.mcpApiKey || null;
+
+      if (apiKey) {
+        return res.json({
+          hasKey: true,
+          maskedKey: "••••••••" + apiKey.slice(-4),
+          createdAt: agencyData.mcpApiKeyCreatedAt || null
+        });
+      } else {
+        return res.json({ hasKey: false, maskedKey: null });
+      }
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/agencies/mcp-key", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+      
+      const decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      const db = getClientDb();
+      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
+      if (!userDoc.exists()) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      const { agencyId } = req.body;
+      const targetAgencyId = agencyId || userData.agencyId;
+
+      if (userData.role !== "master" && userData.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden generar claves MCP" });
+      }
+      if (userData.role !== "master" && userData.agencyId !== targetAgencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      }
+
+      const newKey = `erewere_mcp_` + crypto.randomBytes(24).toString("hex");
+
+      await updateDoc(doc(db, "agencies", targetAgencyId), {
+        mcpApiKey: newKey,
+        mcpApiKeyCreatedAt: serverTimestamp()
+      });
+
+      return res.json({
+        success: true,
+        mcpApiKey: newKey,
+        maskedKey: "••••••••" + newKey.slice(-4)
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // === Model Context Protocol (MCP) Server Implementation ===
-  const sseSessions = new Map<string, express.Response>();
+  const sseSessions = new Map<string, { res: express.Response; agencyId: string }>();
+
+  // Helper function to validate MCP API Key against Firestore agencies
+  const authenticateMcpKey = async (req: express.Request, db: any): Promise<{ agencyId: string; agencyName?: string } | null> => {
+    let apiKey = "";
+    const authHeader = req.headers.authorization || "";
+    if (authHeader.startsWith("Bearer ")) {
+      apiKey = authHeader.substring(7).trim();
+    } else if (authHeader) {
+      apiKey = authHeader.trim();
+    }
+
+    if (!apiKey) {
+      apiKey = (req.headers["x-api-key"] as string) || (req.query?.apiKey as string) || (req.query?.token as string) || "";
+    }
+
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
+      return null;
+    }
+
+    try {
+      const agenciesRef = collection(db, "agencies");
+      const q = query(agenciesRef, where("mcpApiKey", "==", apiKey.trim()));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        return null;
+      }
+
+      const agencyDoc = snapshot.docs[0];
+      const data = agencyDoc.data();
+      return {
+        agencyId: agencyDoc.id,
+        agencyName: data.name || "Agencia"
+      };
+    } catch (err) {
+      console.error("Error authenticating MCP API key:", err);
+      return null;
+    }
+  };
 
   const mcpTools = [
     {
       name: "get_inventory",
-      description: "Obtiene los vehículos disponibles en el inventario del CRM Erewere",
+      description: "Obtiene los vehículos disponibles en el inventario de la agencia autenticada en el CRM Erewere",
       inputSchema: {
         type: "object",
-        properties: {
-          agencyId: { type: "string", description: "ID de la agencia (opcional, por defecto k77PpUc4SKDVCps2qSDw)" }
-        }
+        properties: {}
       }
     },
     {
       name: "get_clients",
-      description: "Obtiene la lista de clientes y prospectos registrados en el CRM Erewere",
+      description: "Obtiene la lista de clientes y prospectos registrados en el CRM Erewere para la agencia autenticada",
       inputSchema: {
         type: "object",
         properties: {
-          agencyId: { type: "string", description: "ID de la agencia (opcional)" },
           limit: { type: "number", description: "Número máximo de registros a retornar (por defecto 20)" }
         }
       }
     },
     {
       name: "create_lead",
-      description: "Registra un nuevo prospecto o cliente potencial en el CRM Erewere",
+      description: "Registra un nuevo prospecto o cliente potencial en el CRM Erewere para la agencia autenticada",
       inputSchema: {
         type: "object",
         properties: {
-          agencyId: { type: "string", description: "ID de la agencia (obligatorio)" },
           name: { type: "string", description: "Nombre completo del prospecto" },
           phone: { type: "string", description: "Teléfono de contacto" },
           email: { type: "string", description: "Correo electrónico" },
           vehicle: { type: "string", description: "Vehículo o auto de interés" },
           origin: { type: "string", description: "Origen del lead (ej: whatsapp, web, mcp_ai)" }
         },
-        required: ["agencyId", "name"]
+        required: ["name"]
       }
     },
     {
       name: "get_sales_stats",
-      description: "Obtiene estadísticas de ventas, cierres e ingresos del CRM Erewere",
+      description: "Obtiene estadísticas de ventas, cierres e ingresos del CRM Erewere para la agencia autenticada",
       inputSchema: {
         type: "object",
-        properties: {
-          agencyId: { type: "string", description: "ID de la agencia (opcional)" }
-        }
+        properties: {}
       }
     }
   ];
 
-  const processJsonRpc = async (req: express.Request, db: any) => {
+  const processJsonRpc = async (req: express.Request, db: any, targetAgencyId: string) => {
     const reqBody = req.body || {};
     const { jsonrpc, id, method, params } = reqBody;
 
@@ -979,22 +1123,10 @@ Return a JSON array of recommendation objects with the following schema:
     if (method === "tools/call") {
       const toolName = params?.name;
       const toolArgs = params?.arguments || {};
-      
-      // Extract target agency dynamically from arguments, token, query or header
-      let extractedAgencyId = toolArgs.agencyId || (req.query?.agencyId as string);
-      
-      if (!extractedAgencyId) {
-        const authHeader = req.headers.authorization || "";
-        if (authHeader.includes("erewere_agency_")) {
-          const match = authHeader.match(/erewere_agency_([a-zA-Z0-9_-]+)/);
-          if (match) extractedAgencyId = match[1];
-        } else if (authHeader.includes("erewere_user_")) {
-          const match = authHeader.match(/erewere_user_([a-zA-Z0-9_-]+)/);
-          if (match) extractedAgencyId = match[1];
-        }
-      }
 
-      const targetAgencyId = extractedAgencyId || "k77PpUc4SKDVCps2qSDw";
+      // SECURITY ASSURANCE:
+      // targetAgencyId comes exclusively from the authenticated mcpApiKey doc.
+      // We ignore caller-supplied agencyId or any defaults.
 
       if (toolName === "get_inventory") {
         const q = query(
@@ -1134,7 +1266,7 @@ Return a JSON array of recommendation objects with the following schema:
   const mcpCors = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, mcp-session-id");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, mcp-session-id, x-api-key");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
@@ -1142,7 +1274,6 @@ Return a JSON array of recommendation objects with the following schema:
   };
 
   app.use("/.well-known", mcpCors);
-  app.use("/oauth", mcpCors);
   app.use("/mcp", mcpCors);
   app.use("/sse", mcpCors);
   app.use("/api/mcp", mcpCors);
@@ -1157,6 +1288,10 @@ Return a JSON array of recommendation objects with the following schema:
       description: "Servidor MCP del CRM Erewere para consulta de inventario, clientes y ventas.",
       version: "1.0.0",
       protocolVersion: "2024-11-05",
+      authentication: {
+        type: "bearer",
+        header: "Authorization: Bearer <mcpApiKey>"
+      },
       endpoints: {
         sse: `${baseUrl}/sse`,
         messages: `${baseUrl}/api/mcp/messages`,
@@ -1166,77 +1301,18 @@ Return a JSON array of recommendation objects with the following schema:
     });
   });
 
-  // OAuth Discovery & Endpoints for MCP Authentication
-  app.get("/.well-known/oauth-authorization-server", (req, res) => {
-    const host = req.get("host");
-    const protocol = req.protocol || "https";
-    const baseUrl = `${protocol}://${host}`;
-    res.json({
-      issuer: baseUrl,
-      authorization_endpoint: `${baseUrl}/oauth/authorize`,
-      token_endpoint: `${baseUrl}/oauth/token`,
-      response_types_supported: ["code", "token"],
-      grant_types_supported: ["client_credentials", "authorization_code"],
-      token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"]
-    });
-  });
-
-  app.get("/.well-known/openid-configuration", (req, res) => {
-    const host = req.get("host");
-    const protocol = req.protocol || "https";
-    const baseUrl = `${protocol}://${host}`;
-    res.json({
-      issuer: baseUrl,
-      authorization_endpoint: `${baseUrl}/oauth/authorize`,
-      token_endpoint: `${baseUrl}/oauth/token`,
-      jwks_uri: `${baseUrl}/.well-known/jwks.json`
-    });
-  });
-
-  app.all("/oauth/authorize", (req, res) => {
-    const redirectUri = (req.query.redirect_uri as string) || req.body?.redirect_uri;
-    const state = req.query.state || req.body?.state;
-    const clientId = req.query.client_id || req.body?.client_id || "erewere_client_id";
-
-    if (redirectUri) {
-      const sep = redirectUri.includes("?") ? "&" : "?";
-      return res.redirect(`${redirectUri}${sep}code=erewere_mcp_auth_code_123&state=${state || ""}&client_id=${encodeURIComponent(clientId as string)}`);
-    }
-    res.json({ status: "authorized", code: "erewere_mcp_auth_code_123", client_id: clientId });
-  });
-
-  app.all("/oauth/token", (req, res) => {
-    let clientId = req.body?.client_id || req.query?.client_id;
-    let clientSecret = req.body?.client_secret || req.query?.client_secret;
-
-    // Check Basic Auth header if present
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith("Basic ")) {
-      try {
-        const credentials = Buffer.from(authHeader.substring(6), "base64").toString("utf-8");
-        const [u, p] = credentials.split(":");
-        if (u) clientId = u;
-        if (p) clientSecret = p;
-      } catch (e) {
-        // Ignore parse error
-      }
-    }
-
-    // Default fallback if omitted
-    if (!clientId) clientId = "erewere_client_id";
-    if (!clientSecret) clientSecret = "erewere_client_secret";
-
-    res.json({
-      access_token: `erewere_mcp_token_${clientId}`,
-      token_type: "Bearer",
-      expires_in: 86400,
-      scope: "mcp:all",
-      client_id: clientId
-    });
-  });
-
   // SSE Transport connection handler
-  const handleSseConnect = (req: express.Request, res: express.Response) => {
+  const handleSseConnect = async (req: express.Request, res: express.Response) => {
+    const db = getClientDb();
+    const authResult = await authenticateMcpKey(req, db);
+
+    if (!authResult) {
+      return res.status(401).json({
+        error: "No autorizado: Clave de API de MCP inválida o ausente.",
+        message: "Proporcione su clave en el encabezado 'Authorization: Bearer <mcpApiKey>' o parámetro 'apiKey'."
+      });
+    }
+
     const acceptHeader = (req.headers.accept || "").toLowerCase();
     const wantsJsonExplicitly = acceptHeader === "application/json" || req.query.format === "json";
 
@@ -1257,9 +1333,8 @@ Return a JSON array of recommendation objects with the following schema:
       });
 
       res.write(`event: endpoint\ndata: ${messageUrl}\n\n`);
-      sseSessions.set(sessionId, res);
+      sseSessions.set(sessionId, { res, agencyId: authResult.agencyId });
 
-      // Keep connection alive with periodic comment pings
       const keepAliveTimer = setInterval(() => {
         try {
           res.write(`: ping\n\n`);
@@ -1283,8 +1358,8 @@ Return a JSON array of recommendation objects with the following schema:
         status: "active",
         name: "Erewere CRM MCP Server",
         version: "1.0.0",
-        protocolVersion: "2024-11-05",
-        description: "Servidor MCP del CRM Erewere para integración con asistentes de IA (Gemini, Claude, Spark, etc.)",
+        authenticatedAgencyId: authResult.agencyId,
+        agencyName: authResult.agencyName,
         endpoints: {
           sse: `${baseUrl}/sse`,
           messages: `${baseUrl}/api/mcp/messages`,
@@ -1301,13 +1376,26 @@ Return a JSON array of recommendation objects with the following schema:
     const sessionId = (req.query.sessionId || req.headers["mcp-session-id"]) as string;
     const db = getClientDb();
 
+    // Authenticate API key for POST /mcp requests
+    const authResult = await authenticateMcpKey(req, db);
+    if (!authResult) {
+      return res.status(401).json({
+        jsonrpc: "2.0",
+        id: req.body?.id || null,
+        error: {
+          code: -32001,
+          message: "No autorizado: Clave de API de MCP inválida o ausente. Envíe 'Authorization: Bearer <mcpApiKey>'."
+        }
+      });
+    }
+
     try {
-      const responseJson = await processJsonRpc(req, db);
+      const responseJson = await processJsonRpc(req, db, authResult.agencyId);
 
       if (sessionId && sseSessions.has(sessionId)) {
-        const sseRes = sseSessions.get(sessionId)!;
+        const sseSession = sseSessions.get(sessionId)!;
         if (responseJson) {
-          sseRes.write(`event: message\ndata: ${JSON.stringify(responseJson)}\n\n`);
+          sseSession.res.write(`event: message\ndata: ${JSON.stringify(responseJson)}\n\n`);
         }
         return res.status(202).send("Accepted");
       } else {
