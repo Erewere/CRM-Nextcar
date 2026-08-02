@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle, Copy, Bot, Key, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export function Integrations() {
@@ -31,25 +31,51 @@ export function Integrations() {
 
   useEffect(() => {
     const fetchMcpKeyInfo = async () => {
-      if (!userData?.agencyId || !currentUser) return;
+      if (!userData?.agencyId) return;
+
+      // Try API route first if token is available
       try {
-        const token = await currentUser.getIdToken();
-        const res = await fetch(`/api/agencies/mcp-key?agencyId=${userData.agencyId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setMcpKeyInfo(data);
+        if (currentUser) {
+          const token = await currentUser.getIdToken();
+          const res = await fetch(`/api/agencies/mcp-key?agencyId=${userData.agencyId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const contentType = res.headers.get("content-type") || "";
+          if (res.ok && contentType.includes("application/json")) {
+            const data = await res.json();
+            setMcpKeyInfo(data);
+            return;
+          }
         }
       } catch (err) {
-        console.error("Error fetching MCP key info:", err);
+        console.warn("API route for MCP key unavailable, falling back to Firestore:", err);
+      }
+
+      // Fallback: Read directly from Firestore
+      try {
+        const agencySnap = await getDoc(doc(db, "agencies", userData.agencyId));
+        if (agencySnap.exists()) {
+          const agencyData = agencySnap.data();
+          const apiKey = agencyData?.mcpApiKey || null;
+          if (apiKey) {
+            setMcpKeyInfo({
+              hasKey: true,
+              maskedKey: "••••••••" + apiKey.slice(-4)
+            });
+          } else {
+            setMcpKeyInfo({ hasKey: false, maskedKey: null });
+          }
+        }
+      } catch (fsErr) {
+        console.error("Error loading MCP key info from Firestore:", fsErr);
       }
     };
+
     fetchMcpKeyInfo();
   }, [userData, currentUser]);
 
   const handleGenerateMcpKey = async () => {
-    if (!userData?.agencyId || !currentUser) return;
+    if (!userData?.agencyId) return;
     if (mcpKeyInfo?.hasKey) {
       if (!window.confirm("Generar una nueva clave de acceso invalidará la clave anterior. ¿Deseas continuar?")) {
         return;
@@ -58,25 +84,53 @@ export function Integrations() {
 
     setMcpLoading(true);
     try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch("/api/agencies/mcp-key", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ agencyId: userData.agencyId })
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert("Error: " + (err.error || "No se pudo generar la clave"));
-        return;
+      let generatedKey: string | null = null;
+      let maskedKey: string | null = null;
+
+      // Try backend API route first
+      if (currentUser) {
+        try {
+          const token = await currentUser.getIdToken();
+          const res = await fetch("/api/agencies/mcp-key", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ agencyId: userData.agencyId })
+          });
+
+          const contentType = res.headers.get("content-type") || "";
+          if (res.ok && contentType.includes("application/json")) {
+            const data = await res.json();
+            if (data.mcpApiKey) {
+              generatedKey = data.mcpApiKey;
+              maskedKey = data.maskedKey;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("API route failed, using direct Firestore key generation:", apiErr);
+        }
       }
-      const data = await res.json();
-      setNewGeneratedKey(data.mcpApiKey);
-      setMcpKeyInfo({ hasKey: true, maskedKey: data.maskedKey });
+
+      // Fallback: Generate key client-side and store directly in Firestore
+      if (!generatedKey) {
+        const randomArray = new Uint8Array(24);
+        window.crypto.getRandomValues(randomArray);
+        const randomHex = Array.from(randomArray).map(b => b.toString(16).padStart(2, '0')).join('');
+        generatedKey = `erewere_mcp_${randomHex}`;
+        maskedKey = "••••••••" + generatedKey.slice(-4);
+
+        await updateDoc(doc(db, "agencies", userData.agencyId), {
+          mcpApiKey: generatedKey,
+          mcpApiKeyCreatedAt: serverTimestamp()
+        });
+      }
+
+      setNewGeneratedKey(generatedKey);
+      setMcpKeyInfo({ hasKey: true, maskedKey });
     } catch (e: any) {
-      alert("Error al generar clave MCP: " + e.message);
+      alert("Error al generar clave MCP: " + (e.message || e));
     } finally {
       setMcpLoading(false);
     }
