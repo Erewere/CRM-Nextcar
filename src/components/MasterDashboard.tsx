@@ -182,6 +182,12 @@ export function MasterDashboard() {
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar al usuario "${userName || userId}"?`)) {
+        return;
+    }
+
+    let deletedViaApi = false;
+
     try {
         const auth = getAuth();
         const token = await auth.currentUser?.getIdToken();
@@ -194,16 +200,30 @@ export function MasterDashboard() {
             body: JSON.stringify({ uid: userId })
         });
         
-        if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
             const data = await res.json();
-            throw new Error(data.error || 'Error al eliminar usuario');
+            if (data.success) {
+                deletedViaApi = true;
+            }
         }
+    } catch (e) {
+        console.warn("Backend API delete-user endpoint failed, falling back to Firestore delete:", e);
+    }
 
+    if (deletedViaApi) {
+        fetchUsersAndFiles();
+        alert('Usuario eliminado correctamente.');
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(db, 'users', userId));
         fetchUsersAndFiles();
         alert('Usuario eliminado correctamente.');
     } catch (e: any) {
-        console.error("Error deleting user:", e);
-        alert('Error al eliminar usuario: ' + e.message);
+        console.error("Error deleting user from Firestore:", e);
+        alert('Error al eliminar usuario: ' + (e.message || 'Error desconocido'));
     }
   };
 

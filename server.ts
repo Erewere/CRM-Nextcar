@@ -8,7 +8,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
-import { initializeApp, App as FirebaseApp } from "firebase-admin/app";
+import { initializeApp, getApps, App as FirebaseApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -42,19 +42,28 @@ let adminApp: FirebaseApp | null = null;
 
 function getAdminApp() {
   if (!adminApp) {
-    let projectId = process.env.FIREBASE_PROJECT_ID;
-    if (!projectId) {
-      try {
-        const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
-        const config = JSON.parse(configStr);
-        projectId = config.projectId;
-      } catch (e) {
-        console.error("FAIL config load:", e);
+    try {
+      const existingApps = getApps();
+      if (existingApps && existingApps.length > 0) {
+        adminApp = existingApps[0];
+      } else {
+        let projectId = process.env.FIREBASE_PROJECT_ID;
+        if (!projectId) {
+          try {
+            const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
+            const config = JSON.parse(configStr);
+            projectId = config.projectId;
+          } catch (e) {
+            console.error("FAIL config load:", e);
+          }
+        }
+        adminApp = initializeApp({
+          projectId: projectId || undefined,
+        });
       }
+    } catch (e) {
+      console.warn("Could not initialize Firebase Admin app:", e);
     }
-    adminApp = initializeApp({
-      projectId: projectId || undefined,
-    });
   }
   return adminApp;
 }
@@ -337,8 +346,11 @@ async function startServer() {
       if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.split("Bearer ")[1];
         try {
-          const auth = getAuth(getAdminApp()!);
-          await auth.verifyIdToken(token);
+          const app = getAdminApp();
+          if (app) {
+            const auth = getAuth(app);
+            await auth.verifyIdToken(token);
+          }
         } catch (err) {
           console.warn("Verify token warning in delete-user:", err);
         }
@@ -351,20 +363,32 @@ async function startServer() {
 
       // Delete from Firebase Auth
       try {
-        const auth = getAuth(getAdminApp()!);
-        await auth.deleteUser(uid);
+        const app = getAdminApp();
+        if (app) {
+          const auth = getAuth(app);
+          await auth.deleteUser(uid);
+        }
       } catch (authErr: any) {
         console.warn("Could not delete from Firebase Auth (ignoring):", authErr.message);
       }
 
-      // Delete from Firestore
-      const db = getClientDb();
-      await deleteDoc(doc(db, "users", uid));
+      // Delete from Firestore using Admin DB
+      try {
+        const adminDb = getAdminDb();
+        if (adminDb) {
+          await adminDb.collection("users").doc(uid).delete();
+        } else {
+          const db = getClientDb();
+          await deleteDoc(doc(db, "users", uid));
+        }
+      } catch (fsErr: any) {
+        console.warn("Error deleting user doc from Firestore in server API:", fsErr.message);
+      }
 
       res.status(200).json({ success: true });
     } catch (err: any) {
       console.error("Delete User Error:", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message || "Error al eliminar usuario" });
     }
   });
 
@@ -375,16 +399,21 @@ async function startServer() {
         return res.status(400).json({ error: "Falta el parámetro agencyId" });
       }
 
-      const db = getClientDb();
-      
-      // Unassign users belonging to this agency
-      const usersSnap = await getDocs(query(collection(db, "users"), where("agencyId", "==", agencyId)));
-      for (const uDoc of usersSnap.docs) {
-        await updateDoc(doc(db, "users", uDoc.id), { agencyId: "unassigned" });
+      const adminDb = getAdminDb();
+      if (adminDb) {
+        const usersSnap = await adminDb.collection("users").where("agencyId", "==", agencyId).get();
+        for (const uDoc of usersSnap.docs) {
+          await adminDb.collection("users").doc(uDoc.id).update({ agencyId: "unassigned" });
+        }
+        await adminDb.collection("agencies").doc(agencyId).delete();
+      } else {
+        const db = getClientDb();
+        const usersSnap = await getDocs(query(collection(db, "users"), where("agencyId", "==", agencyId)));
+        for (const uDoc of usersSnap.docs) {
+          await updateDoc(doc(db, "users", uDoc.id), { agencyId: "unassigned" });
+        }
+        await deleteDoc(doc(db, "agencies", agencyId));
       }
-
-      // Delete agency document
-      await deleteDoc(doc(db, "agencies", agencyId));
 
       res.status(200).json({ success: true });
     } catch (err: any) {

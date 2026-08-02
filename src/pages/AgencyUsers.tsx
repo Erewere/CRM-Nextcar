@@ -305,9 +305,15 @@ export function AgencyUsers() {
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (userData?.role !== 'admin' && userData?.role !== 'master') return;
     if (userId === userData?.id) {
-        console.warn("No puedes eliminar tu propia cuenta.");
+        alert("No puedes eliminar tu propia cuenta.");
         return;
     }
+
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar al usuario "${userName || userId}"?`)) {
+        return;
+    }
+
+    let deletedViaApi = false;
 
     try {
         const auth = getAuth();
@@ -316,21 +322,35 @@ export function AgencyUsers() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
             body: JSON.stringify({ uid: userId })
         });
         
-        if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
             const data = await res.json();
-            throw new Error(data.error || 'Error al eliminar usuario');
+            if (data.success) {
+                deletedViaApi = true;
+            }
         }
+    } catch (e) {
+        console.warn("Backend API delete-user endpoint unreachable, falling back to Firestore delete:", e);
+    }
 
+    if (deletedViaApi) {
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        alert('Usuario eliminado correctamente.');
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(db, 'users', userId));
         setUsers(prev => prev.filter(u => u.id !== userId));
         alert('Usuario eliminado correctamente.');
     } catch (e: any) {
-        console.error("Error deleting user:", e);
-        alert('Error al eliminar usuario: ' + e.message);
+        console.error("Error deleting user from Firestore:", e);
+        alert('Error al eliminar usuario: ' + (e.message || 'Error desconocido'));
     }
   };
 

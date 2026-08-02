@@ -53,7 +53,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isUserDoc(userId);
       allow update: if isAuthenticated() && (isUserDoc(userId) || isMaster() || isAdmin());
-      allow delete: if isMaster() || (isAdmin() && resource.data.agencyId == getUserAgencyId());
+      allow delete: if isMaster() || (isAdmin() && resource != null && resource.data.agencyId == getUserAgencyId());
     }
 
     // CLIENTS
