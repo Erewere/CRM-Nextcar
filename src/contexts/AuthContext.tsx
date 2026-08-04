@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User, Agency } from '../types';
 
@@ -100,7 +100,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 });
               }
             } else {
-              console.log("AuthContext: User document does not exist, creating default/pending profile");
+              console.log("AuthContext: User document does not exist, checking if email document exists");
+              try {
+                if (user.email) {
+                  const qSnap = await getDocs(query(collection(db, 'users'), where('email', '==', user.email)));
+                  if (!qSnap.empty) {
+                    const existingDoc = qSnap.docs[0];
+                    const existingData = existingDoc.data();
+                    console.log("AuthContext: Found existing doc by email:", existingDoc.id, existingData);
+                    const mergedUserData = {
+                      email: user.email,
+                      name: existingData.name || user.displayName || user.email.split('@')[0],
+                      role: existingData.role || 'seller',
+                      agencyId: existingData.agencyId || 'unassigned',
+                      createdAt: existingData.createdAt || serverTimestamp()
+                    };
+                    await setDoc(doc(db, 'users', user.uid), mergedUserData, { merge: true });
+                    if (existingDoc.id !== user.uid) {
+                      await deleteDoc(doc(db, 'users', existingDoc.id)).catch(() => {});
+                    }
+                    return;
+                  }
+                }
+              } catch (e) {
+                console.warn("AuthContext: Error checking existing user by email:", e);
+              }
+
               const params = new URLSearchParams(window.location.search);
               const inviteAgencyId = params.get('agencyId');
               

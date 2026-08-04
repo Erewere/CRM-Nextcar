@@ -1016,20 +1016,18 @@ Return a JSON array of recommendation objects with the following schema:
   // === Model Context Protocol (MCP) Server Implementation ===
   const sseSessions = new Map<string, { res: express.Response; agencyId: string }>();
 
-  // Helper function to validate MCP API Key against Firestore agencies
-  const authenticateMcpKey = async (req: express.Request, db: any): Promise<{ agencyId: string; agencyName?: string } | null> => {
-    let apiKey = "";
-    const authHeader = req.headers.authorization || "";
-    if (authHeader.startsWith("Bearer ")) {
-      apiKey = authHeader.substring(7).trim();
-    } else if (authHeader) {
-      apiKey = authHeader.trim();
-    }
+  // In-memory storage for short-lived OAuth authorization codes
+  const oauthAuthCodes = new Map<string, {
+    agencyId: string;
+    mcpApiKey: string;
+    redirectUri: string;
+    codeChallenge: string;
+    codeChallengeMethod: string;
+    expiresAt: number;
+  }>();
 
-    if (!apiKey) {
-      apiKey = (req.headers["x-api-key"] as string) || (req.query?.apiKey as string) || (req.query?.token as string) || "";
-    }
-
+  // Helper function to find agency by MCP API Key directly
+  const findAgencyByMcpKey = async (apiKey: string, db: any): Promise<{ agencyId: string; agencyName?: string; mcpApiKey?: string } | null> => {
     if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
       return null;
     }
@@ -1047,12 +1045,109 @@ Return a JSON array of recommendation objects with the following schema:
       const data = agencyDoc.data();
       return {
         agencyId: agencyDoc.id,
-        agencyName: data.name || "Agencia"
+        agencyName: data.name || "Agencia",
+        mcpApiKey: data.mcpApiKey || apiKey.trim()
       };
     } catch (err) {
       console.error("Error authenticating MCP API key:", err);
       return null;
     }
+  };
+
+  // Helper function to validate MCP API Key from request against Firestore agencies
+  const authenticateMcpKey = async (req: express.Request, db: any): Promise<{ agencyId: string; agencyName?: string; mcpApiKey?: string } | null> => {
+    let apiKey = "";
+    const authHeader = req.headers.authorization || "";
+    if (authHeader.startsWith("Bearer ")) {
+      apiKey = authHeader.substring(7).trim();
+    } else if (authHeader) {
+      apiKey = authHeader.trim();
+    }
+
+    if (!apiKey) {
+      apiKey = (req.headers["x-api-key"] as string) || (req.query?.apiKey as string) || (req.query?.token as string) || "";
+    }
+
+    return await findAgencyByMcpKey(apiKey, db);
+  };
+
+  const verifyPkce = (codeVerifier: string, codeChallenge: string, method: string): boolean => {
+    if (!codeChallenge) return true;
+    if (!codeVerifier) return false;
+    if (method === "plain") {
+      return codeVerifier === codeChallenge;
+    }
+    const hash = crypto.createHash("sha256").update(codeVerifier).digest();
+    const calculated = hash.toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    return calculated === codeChallenge;
+  };
+
+  const renderOauthAuthorizeHtml = (opts: {
+    client_id: string;
+    redirect_uri: string;
+    state: string;
+    code_challenge: string;
+    code_challenge_method: string;
+    response_type: string;
+    errorMessage?: string;
+  }) => {
+    const { client_id, redirect_uri, state, code_challenge, code_challenge_method, response_type, errorMessage } = opts;
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autorizar Conexión MCP - Erewere CRM</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #f8fafc; color: #0f172a; display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); width: 100%; max-width: 440px; padding: 2rem; }
+    .logo { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+    .logo-badge { background: #2563eb; color: #fff; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; text-transform: uppercase; }
+    h1 { font-size: 1.125rem; font-weight: 600; color: #334155; margin-bottom: 0.5rem; }
+    p { font-size: 0.875rem; color: #64748b; line-height: 1.4; margin-bottom: 1.5rem; }
+    .error-box { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.875rem; font-weight: 500; color: #475569; margin-bottom: 0.5rem; }
+    input[type="text"], input[type="password"] { width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.875rem; outline: none; transition: border-color 0.15s; margin-bottom: 1.25rem; }
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    button { width: 100%; background-color: #2563eb; color: #ffffff; border: none; padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
+    button:hover { background-color: #1d4ed8; }
+    .footer { font-size: 0.75rem; color: #94a3b8; text-align: center; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <span>Erewere CRM</span>
+      <span class="logo-badge">MCP</span>
+    </div>
+    <h1>Autorización de Cliente MCP</h1>
+    <p>Ingresa la <strong>Clave API de MCP</strong> de tu agencia (obtenida en Ajustes &gt; Integraciones) para permitir la conexión de tu asistente o cliente remoto.</p>
+    
+    ${errorMessage ? `<div class="error-box">${errorMessage}</div>` : ""}
+
+    <form method="POST" action="/oauth/authorize">
+      <input type="hidden" name="client_id" value="${encodeURIComponent(client_id)}">
+      <input type="hidden" name="redirect_uri" value="${encodeURIComponent(redirect_uri)}">
+      <input type="hidden" name="state" value="${encodeURIComponent(state)}">
+      <input type="hidden" name="code_challenge" value="${encodeURIComponent(code_challenge)}">
+      <input type="hidden" name="code_challenge_method" value="${encodeURIComponent(code_challenge_method)}">
+      <input type="hidden" name="response_type" value="${encodeURIComponent(response_type)}">
+
+      <label for="mcpApiKey">Clave API de MCP de la Agencia</label>
+      <input type="password" id="mcpApiKey" name="mcpApiKey" placeholder="mcp_live_..." required autofocus autocomplete="off">
+
+      <button type="submit">Autorizar Conexión</button>
+    </form>
+    <div class="footer">
+      Erewere CRM MCP OAuth 2.0
+    </div>
+  </div>
+</body>
+</html>`;
   };
 
   const mcpTools = [
@@ -1306,6 +1401,177 @@ Return a JSON array of recommendation objects with the following schema:
   app.use("/mcp", mcpCors);
   app.use("/sse", mcpCors);
   app.use("/api/mcp", mcpCors);
+  app.use("/oauth", mcpCors);
+
+  // 1. OAuth Metadata Discovery Endpoints (RFC 8414)
+  const handleOauthMetadata = (req: express.Request, res: express.Response) => {
+    const host = req.get("host");
+    const protocol = req.protocol || "https";
+    const baseUrl = `${protocol}://${host}`;
+    res.json({
+      issuer: baseUrl,
+      authorization_servers: [baseUrl],
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      registration_endpoint: `${baseUrl}/oauth/register`,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code"],
+      code_challenge_methods_supported: ["S256"],
+      token_endpoint_auth_methods_supported: ["none"]
+    });
+  };
+
+  app.get("/.well-known/oauth-authorization-server", handleOauthMetadata);
+  app.get("/.well-known/oauth-protected-resource", handleOauthMetadata);
+
+  // 2. Dynamic Client Registration (RFC 7591)
+  app.post("/oauth/register", express.json(), express.urlencoded({ extended: true }), (req, res) => {
+    const clientId = crypto.randomBytes(16).toString("hex");
+    res.json({
+      client_id: clientId,
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code"],
+      response_types: ["code"]
+    });
+  });
+
+  // 3. GET /oauth/authorize - Render authorization form
+  app.get("/oauth/authorize", (req, res) => {
+    const redirect_uri = (req.query.redirect_uri as string) || "";
+    const client_id = (req.query.client_id as string) || "";
+    const state = (req.query.state as string) || "";
+    const code_challenge = (req.query.code_challenge as string) || "";
+    const code_challenge_method = (req.query.code_challenge_method as string) || "S256";
+    const response_type = (req.query.response_type as string) || "code";
+
+    let isValidRedirect = false;
+    if (redirect_uri && typeof redirect_uri === "string") {
+      try {
+        new URL(redirect_uri);
+        isValidRedirect = true;
+      } catch (e) {
+        isValidRedirect = false;
+      }
+    }
+
+    if (!isValidRedirect) {
+      return res.status(400).send("redirect_uri inválida o ausente.");
+    }
+
+    const html = renderOauthAuthorizeHtml({
+      client_id,
+      redirect_uri,
+      state,
+      code_challenge,
+      code_challenge_method,
+      response_type,
+      errorMessage: ""
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  });
+
+  // 4. POST /oauth/authorize - Handle form submission and generate auth code
+  app.post("/oauth/authorize", express.urlencoded({ extended: true }), express.json(), async (req, res) => {
+    const body = req.body || {};
+    const mcpApiKey = (body.mcpApiKey || body.apiKey || "").trim();
+    const client_id = body.client_id ? decodeURIComponent(body.client_id) : ((req.query.client_id as string) || "");
+    const redirect_uri = body.redirect_uri ? decodeURIComponent(body.redirect_uri) : ((req.query.redirect_uri as string) || "");
+    const state = body.state ? decodeURIComponent(body.state) : ((req.query.state as string) || "");
+    const code_challenge = body.code_challenge ? decodeURIComponent(body.code_challenge) : ((req.query.code_challenge as string) || "");
+    const code_challenge_method = body.code_challenge_method ? decodeURIComponent(body.code_challenge_method) : ((req.query.code_challenge_method as string) || "S256");
+    const response_type = body.response_type ? decodeURIComponent(body.response_type) : ((req.query.response_type as string) || "code");
+
+    let isValidRedirect = false;
+    if (redirect_uri && typeof redirect_uri === "string") {
+      try {
+        new URL(redirect_uri);
+        isValidRedirect = true;
+      } catch (e) {
+        isValidRedirect = false;
+      }
+    }
+
+    if (!isValidRedirect) {
+      return res.status(400).send("redirect_uri inválida o ausente.");
+    }
+
+    const db = getClientDb();
+    const agency = await findAgencyByMcpKey(mcpApiKey, db);
+
+    if (!agency) {
+      const html = renderOauthAuthorizeHtml({
+        client_id,
+        redirect_uri,
+        state,
+        code_challenge,
+        code_challenge_method,
+        response_type,
+        errorMessage: "Clave de API de MCP inválida. Verifíquela en Ajustes > Integraciones."
+      });
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+
+    // Generate single-use authorization code expiring in 5 minutes
+    const code = crypto.randomBytes(32).toString("hex");
+    oauthAuthCodes.set(code, {
+      agencyId: agency.agencyId,
+      mcpApiKey: agency.mcpApiKey || mcpApiKey,
+      redirectUri: redirect_uri,
+      codeChallenge: code_challenge,
+      codeChallengeMethod: code_challenge_method,
+      expiresAt: Date.now() + 5 * 60 * 1000
+    });
+
+    const targetUrl = new URL(redirect_uri);
+    targetUrl.searchParams.set("code", code);
+    if (state) {
+      targetUrl.searchParams.set("state", state);
+    }
+    return res.redirect(302, targetUrl.toString());
+  });
+
+  // 5. POST /oauth/token - Exchange auth code for access_token (the mcpApiKey)
+  app.post("/oauth/token", express.urlencoded({ extended: true }), express.json(), async (req, res) => {
+    const body = req.body || {};
+    const grant_type = body.grant_type || req.query.grant_type;
+    const code = body.code || req.query.code;
+    const redirect_uri = body.redirect_uri || req.query.redirect_uri;
+    const code_verifier = body.code_verifier || req.query.code_verifier;
+
+    if (grant_type !== "authorization_code") {
+      return res.status(400).json({ error: "invalid_grant", error_description: "grant_type debe ser authorization_code" });
+    }
+
+    if (!code || typeof code !== "string" || !oauthAuthCodes.has(code)) {
+      return res.status(400).json({ error: "invalid_grant", error_description: "Código de autorización inválido o no encontrado" });
+    }
+
+    const savedData = oauthAuthCodes.get(code)!;
+    // Single-use: delete immediately after lookup
+    oauthAuthCodes.delete(code);
+
+    if (savedData.expiresAt < Date.now()) {
+      return res.status(400).json({ error: "invalid_grant", error_description: "Código de autorización expirado" });
+    }
+
+    if (redirect_uri && savedData.redirectUri !== redirect_uri) {
+      return res.status(400).json({ error: "invalid_grant", error_description: "redirect_uri no coincide con la solicitud original" });
+    }
+
+    if (savedData.codeChallenge) {
+      const pkceValid = verifyPkce(code_verifier, savedData.codeChallenge, savedData.codeChallengeMethod);
+      if (!pkceValid) {
+        return res.status(400).json({ error: "invalid_grant", error_description: "Fallo de verificación PKCE" });
+      }
+    }
+
+    return res.json({
+      access_token: savedData.mcpApiKey,
+      token_type: "Bearer"
+    });
+  });
 
   // MCP Well-Known Discovery
   app.get("/.well-known/mcp.json", (req, res) => {
@@ -1336,6 +1602,10 @@ Return a JSON array of recommendation objects with the following schema:
     const authResult = await authenticateMcpKey(req, db);
 
     if (!authResult) {
+      const host = req.get("host");
+      const protocol = req.protocol || "https";
+      const baseUrl = `${protocol}://${host}`;
+      res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
       return res.status(401).json({
         error: "No autorizado: Clave de API de MCP inválida o ausente.",
         message: "Proporcione su clave en el encabezado 'Authorization: Bearer <mcpApiKey>' o parámetro 'apiKey'."
@@ -1408,6 +1678,10 @@ Return a JSON array of recommendation objects with the following schema:
     // Authenticate API key for POST /mcp requests
     const authResult = await authenticateMcpKey(req, db);
     if (!authResult) {
+      const host = req.get("host");
+      const protocol = req.protocol || "https";
+      const baseUrl = `${protocol}://${host}`;
+      res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
       return res.status(401).json({
         jsonrpc: "2.0",
         id: req.body?.id || null,

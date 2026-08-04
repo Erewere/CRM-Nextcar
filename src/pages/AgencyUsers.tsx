@@ -4,7 +4,7 @@ import { getApiUrl } from '../lib/api';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc, addDoc } from 'firebase/firestore';
 import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
 import { Task, Client } from '../types';
 import { deduplicateClients } from '../lib/clientUtils';
@@ -265,6 +265,55 @@ export function AgencyUsers() {
 
         if (!res.ok) {
             const errorMsg = data.error?.message || 'Error al crear el usuario en Auth';
+            if (errorMsg.includes('EMAIL_EXISTS')) {
+                // Check if user already exists in Firestore users collection
+                const q = query(collection(db, 'users'), where('email', '==', targetEmail));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    alert(`El usuario con el correo "${targetEmail}" ya está registrado y activo en el CRM.`);
+                    return;
+                }
+
+                // Email exists in Auth (orphaned from previous delete), but not active in CRM!
+                // Create user document in Firestore so they appear in CRM
+                const docRef = await addDoc(collection(db, 'users'), {
+                    email: targetEmail,
+                    name: inviteName.trim(),
+                    role: inviteRole,
+                    agencyId: targetAgencyId,
+                    createdAt: new Date().toISOString()
+                });
+
+                // Send password reset email so user can set a new password
+                try {
+                    await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseConfig.apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            requestType: 'PASSWORD_RESET',
+                            email: targetEmail
+                        })
+                    });
+                } catch (oobErr) {
+                    console.warn("Could not send password reset email:", oobErr);
+                }
+
+                setUsers(prev => [...prev, {
+                    id: docRef.id,
+                    email: targetEmail,
+                    name: inviteName.trim(),
+                    role: inviteRole,
+                    agencyId: targetAgencyId,
+                    createdAt: new Date().toISOString()
+                }]);
+
+                setInviteSuccessMsg(`¡El usuario ya existía en la autenticación! Se ha reactivado su cuenta en el CRM y se le ha enviado un correo para restablecer su contraseña.`);
+                setCreatedUserPassword('(Enviado enlace de restablecimiento a ' + targetEmail + ')');
+                setCreatedUserEmail(targetEmail);
+                setInviteEmail('');
+                setInviteName('');
+                return;
+            }
             throw new Error(errorMsg);
         }
         
