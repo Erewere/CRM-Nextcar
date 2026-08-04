@@ -1496,12 +1496,24 @@ Return a JSON array of recommendation objects with the following schema:
   // 2. Dynamic Client Registration (RFC 7591)
   app.post("/oauth/register", express.json(), express.urlencoded({ extended: true }), (req, res) => {
     const clientId = crypto.randomBytes(16).toString("hex");
-    res.json({
+    const body = req.body || {};
+    const responseData: Record<string, any> = {
       client_id: clientId,
-      token_endpoint_auth_method: "none",
-      grant_types: ["authorization_code"],
-      response_types: ["code"]
-    });
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      token_endpoint_auth_method: body.token_endpoint_auth_method || "none",
+      grant_types: Array.isArray(body.grant_types) ? body.grant_types : ["authorization_code"],
+      response_types: Array.isArray(body.response_types) ? body.response_types : ["code"],
+      redirect_uris: Array.isArray(body.redirect_uris) ? body.redirect_uris : []
+    };
+
+    if (body.client_name) {
+      responseData.client_name = body.client_name;
+    }
+    if (body.application_type) {
+      responseData.application_type = body.application_type;
+    }
+
+    res.json(responseData);
   });
 
   // 3. GET /oauth/authorize - Render authorization form
