@@ -92,6 +92,7 @@ function getStripe(): Stripe {
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", true);
   app.use(cors({
     origin: true,
     credentials: true,
