@@ -1402,7 +1402,6 @@ Return a JSON array of recommendation objects with the following schema:
   app.use("/mcp", mcpCors);
   app.use("/sse", mcpCors);
   app.use("/api/mcp", mcpCors);
-  app.use("/oauth", mcpCors);
 
   // 1. OAuth Metadata Discovery Endpoints (RFC 8414)
   const handleOauthMetadata = (req: express.Request, res: express.Response) => {
