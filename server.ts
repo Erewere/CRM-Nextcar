@@ -1389,7 +1389,7 @@ Return a JSON array of recommendation objects with the following schema:
 
   // CORS Middleware for MCP routes
   const mcpCors = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, mcp-session-id, x-api-key");
     if (req.method === "OPTIONS") {
@@ -1626,7 +1626,7 @@ Return a JSON array of recommendation objects with the following schema:
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": req.headers.origin || "*",
         "Access-Control-Allow-Headers": "*",
         "X-Accel-Buffering": "no"
       });
