@@ -1403,8 +1403,8 @@ Return a JSON array of recommendation objects with the following schema:
   app.use("/sse", mcpCors);
   app.use("/api/mcp", mcpCors);
 
-  // 1. OAuth Metadata Discovery Endpoints (RFC 8414)
-  const handleOauthMetadata = (req: express.Request, res: express.Response) => {
+  // 1. OAuth Metadata Discovery Endpoints (RFC 8414 & RFC 9728)
+  const handleOauthAuthorizationServerMetadata = (req: express.Request, res: express.Response) => {
     const host = req.get("host");
     const protocol = req.protocol || "https";
     const baseUrl = `${protocol}://${host}`;
@@ -1421,8 +1421,23 @@ Return a JSON array of recommendation objects with the following schema:
     });
   };
 
-  app.get("/.well-known/oauth-authorization-server", handleOauthMetadata);
-  app.get("/.well-known/oauth-protected-resource", handleOauthMetadata);
+  const handleOauthProtectedResourceMetadata = (resourcePath: string = "") => {
+    return (req: express.Request, res: express.Response) => {
+      const host = req.get("host");
+      const protocol = req.protocol || "https";
+      const baseUrl = `${protocol}://${host}`;
+      const resourceUrl = resourcePath ? `${baseUrl}/${resourcePath}` : baseUrl;
+      res.json({
+        resource: resourceUrl,
+        authorization_servers: [baseUrl]
+      });
+    };
+  };
+
+  app.get("/.well-known/oauth-authorization-server", handleOauthAuthorizationServerMetadata);
+  app.get("/.well-known/oauth-protected-resource", handleOauthProtectedResourceMetadata(""));
+  app.get("/.well-known/oauth-protected-resource/mcp", handleOauthProtectedResourceMetadata("mcp"));
+  app.get("/.well-known/oauth-protected-resource/sse", handleOauthProtectedResourceMetadata("sse"));
 
   // 2. Dynamic Client Registration (RFC 7591)
   app.post("/oauth/register", express.json(), express.urlencoded({ extended: true }), (req, res) => {
@@ -1605,7 +1620,8 @@ Return a JSON array of recommendation objects with the following schema:
       const host = req.get("host");
       const protocol = req.protocol || "https";
       const baseUrl = `${protocol}://${host}`;
-      res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
+      const resourcePath = req.path.includes("sse") ? "sse" : "mcp";
+      res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/${resourcePath}"`);
       return res.status(401).json({
         error: "No autorizado: Clave de API de MCP inválida o ausente.",
         message: "Proporcione su clave en el encabezado 'Authorization: Bearer <mcpApiKey>' o parámetro 'apiKey'."
@@ -1681,7 +1697,8 @@ Return a JSON array of recommendation objects with the following schema:
       const host = req.get("host");
       const protocol = req.protocol || "https";
       const baseUrl = `${protocol}://${host}`;
-      res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
+      const resourcePath = req.path.includes("sse") ? "sse" : "mcp";
+      res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/${resourcePath}"`);
       return res.status(401).json({
         jsonrpc: "2.0",
         id: req.body?.id || null,
