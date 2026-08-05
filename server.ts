@@ -1398,60 +1398,6 @@ Return a JSON array of recommendation objects with the following schema:
     next();
   };
 
-  // Temporary logging middleware for MCP and OAuth requests
-  app.use(express.urlencoded({ extended: true }));
-  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const url = req.originalUrl || req.url || "";
-    const isMcpOrOauthRoute = 
-      url.startsWith("/oauth") ||
-      url.startsWith("/.well-known") ||
-      url.startsWith("/mcp") ||
-      url.startsWith("/sse") ||
-      url.startsWith("/api/mcp");
-
-    if (!isMcpOrOauthRoute) {
-      return next();
-    }
-
-    const timestamp = new Date().toISOString();
-    const method = req.method;
-    const origin = (req.headers.origin as string) || "sin origin";
-    const userAgent = (req.headers["user-agent"] as string) || "sin user-agent";
-    const contentType = (req.headers["content-type"] as string) || "sin content-type";
-    const accept = (req.headers.accept as string) || "sin accept";
-
-    let authHeaderStr = "ausente";
-    const rawAuth = req.headers.authorization;
-    if (rawAuth) {
-      authHeaderStr = rawAuth.length > 15 ? `${rawAuth.substring(0, 15)}...` : rawAuth;
-    }
-
-    let bodyStr = "N/A";
-    if (method === "POST" || method === "PUT" || method === "PATCH") {
-      try {
-        bodyStr = req.body ? JSON.stringify(req.body) : "vacío/sin body";
-      } catch (err) {
-        bodyStr = "body no parseable";
-      }
-    }
-
-    console.log(`[MCP_DEBUG] [${timestamp}] ${method} ${url}`);
-    console.log(`[MCP_DEBUG]   Origin: ${origin}`);
-    console.log(`[MCP_DEBUG]   User-Agent: ${userAgent}`);
-    console.log(`[MCP_DEBUG]   Authorization: ${authHeaderStr}`);
-    console.log(`[MCP_DEBUG]   Content-Type: ${contentType}`);
-    console.log(`[MCP_DEBUG]   Accept: ${accept}`);
-    if (method === "POST" || method === "PUT" || method === "PATCH") {
-      console.log(`[MCP_DEBUG]   Body: ${bodyStr}`);
-    }
-
-    res.on("finish", () => {
-      console.log(`[MCP_DEBUG] [FINISH] [${new Date().toISOString()}] ${method} ${url} -> Status: ${res.statusCode}`);
-    });
-
-    next();
-  });
-
   app.use("/.well-known", mcpCors);
   app.use("/mcp", mcpCors);
   app.use("/sse", mcpCors);
