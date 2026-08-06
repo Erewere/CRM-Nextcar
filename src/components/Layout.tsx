@@ -476,7 +476,7 @@ export function Layout() {
 
             {/* Simulating "Integration with website" CTA just conceptually or link out */}
             <a
-              href="https://www.nextcar.com.mx"
+              href="https://www.nextcar.erewere.com"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
