@@ -199,6 +199,19 @@ async function startServer() {
             await setDoc(agencyRef, updates, { merge: true });
           }
           break;
+        case "customer.subscription.updated": {
+          const subscription = event.data.object as Stripe.Subscription;
+          const customerId = subscription.customer as string;
+          const status = subscription.status;
+          const agenciesQuery = query(collection(db, "agencies"), where("stripeCustomerId", "==", customerId));
+          const agenciesSnapshot = await getDocs(agenciesQuery);
+          
+          if (!agenciesSnapshot.empty) {
+            const agencyDoc = agenciesSnapshot.docs[0];
+            await setDoc(agencyDoc.ref, { subscriptionStatus: status, updatedAt: serverTimestamp() }, { merge: true });
+          }
+          break;
+        }
         case "customer.subscription.deleted":
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
