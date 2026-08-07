@@ -15,7 +15,7 @@ export function Billing() {
   const [userCount, setUserCount] = useState(0);
   const [agency, setAgency] = useState<Agency | null>(null);
   
-  const PRICE_PER_USER = 9.99;
+  const PRICE_PER_USER = 199;
 
   useEffect(() => {
     // Clean up any legacy localStorage override
@@ -253,10 +253,10 @@ export function Billing() {
 
           <div className="w-full md:w-auto min-w-[280px] bg-[#f4f5f5] dark:bg-slate-900 p-6 md:p-8 rounded border border-gray-200 dark:border-slate-700 text-center">
             <div className="text-5xl font-extrabold text-slate-900 dark:text-white mb-2">
-              ${PRICE_PER_USER}
+              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(PRICE_PER_USER)}
             </div>
             <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 uppercase tracking-wider">
-              USD / usuario / mes
+              MXN / usuario / mes
             </div>
             <div className="flex items-center justify-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium bg-white dark:bg-slate-800 py-2 px-4 rounded shadow-sm border border-gray-200 dark:border-slate-700">
               <Users className="w-4 h-4 text-blue-500" />
@@ -264,7 +264,7 @@ export function Billing() {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center font-bold text-slate-900 dark:text-white">
               <span>Total Estimado:</span>
-              <span>${(PRICE_PER_USER * userCount).toFixed(2)} USD / mes</span>
+              <span>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(PRICE_PER_USER * userCount)} / mes</span>
             </div>
           </div>
         </div>
