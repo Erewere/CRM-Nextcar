@@ -17,7 +17,7 @@ import { getFirestore as getClientFirestore, doc, getDoc, setDoc, updateDoc, inc
 
 let clientApp: any = null;
 import { initializeApp as initClientApp } from "firebase/app";
-import { getAuth as getClientAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth as getClientAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 function getClientDb() {
   if (!clientApp) {
@@ -102,39 +102,31 @@ async function startServer() {
   app.options("*", cors());
   // Authenticate server app with email/password purely via client-side SDK to avoid GCP IAM restrictions
   try {
-    const cDb = getClientDb();
-    const email = "system@localhost.local";
-    const password = "SuperSecretPassword123!";
-    const clientAuth = getClientAuth(clientApp);
-    
-    let userCredential;
-    try {
-      userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
-      console.log("Server signed in as system admin.");
-    } catch (signInErr: any) {
-      if (signInErr.code === "auth/user-not-found" || signInErr.code === "auth/invalid-credential" || signInErr.code === "auth/cannot-find-user" || signInErr.code === "auth/invalid-email") {
-        console.log("System user not found, attempting to create...");
-        try {
-          userCredential = await createUserWithEmailAndPassword(clientAuth, email, password);
-          console.log("System user created successfully.");
-        } catch (createErr: any) {
-          console.error("Failed to create system user:", createErr);
-          throw createErr;
-        }
-      } else {
-        console.error("Failed to sign in system user:", signInErr);
-        throw signInErr;
-      }
-    }
+    const email = process.env.SYSTEM_USER_EMAIL;
+    const password = process.env.SYSTEM_USER_PASSWORD;
 
-    if (userCredential && userCredential.user) {
-      // Ensure system-admin user doc exists in Firestore using client SDK
-      await setDoc(doc(cDb, "users", userCredential.user.uid), {
-        role: "master",
-        email,
-        agencyId: "k77PpUc4SKDVCps2qSDw"
-      }, { merge: true });
-      console.log("Server authenticated and user doc synchronized:", userCredential.user.uid);
+    if (!email || !password) {
+      console.error("SYSTEM_USER_EMAIL / SYSTEM_USER_PASSWORD no configuradas: el servidor no podrá escribir en Firestore");
+    } else {
+      const cDb = getClientDb();
+      const clientAuth = getClientAuth(clientApp);
+
+      try {
+        const userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
+        console.log("Server signed in as system admin.");
+
+        if (userCredential && userCredential.user) {
+          // Ensure system-admin user doc exists in Firestore using client SDK
+          await setDoc(doc(cDb, "users", userCredential.user.uid), {
+            role: "master",
+            email,
+            agencyId: "k77PpUc4SKDVCps2qSDw"
+          }, { merge: true });
+          console.log("Server authenticated and user doc synchronized:", userCredential.user.uid);
+        }
+      } catch (signInErr: any) {
+        console.error("Failed to sign in system user:", signInErr);
+      }
     }
   } catch(e: any) {
     console.error("Failed client-side authentication on server:", e);
@@ -1779,24 +1771,9 @@ Return a JSON array of recommendation objects with the following schema:
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "custom",
+      appType: "spa",
     });
     app.use(vite.middlewares);
-    // Provide fallback for SPA router in development
-    app.get("*", async (req, res, next) => {
-      const url = req.originalUrl;
-      try {
-        let template = fs.readFileSync(
-          path.resolve(process.cwd(), "index.html"),
-          "utf-8",
-        );
-        template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ "Content-Type": "text/html" }).end(template);
-      } catch (e) {
-        vite.ssrFixStacktrace(e as Error);
-        next(e);
-      }
-    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
