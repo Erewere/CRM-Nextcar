@@ -871,7 +871,24 @@ Return a JSON array of recommendation objects with the following schema:
       );
       const snapshot = await getDocs(q);
 
-      const vehicles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const vehicles = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          make: data.make,
+          model: data.model,
+          year: data.year,
+          color: data.color,
+          transmission: data.transmission,
+          bodyType: data.bodyType,
+          price: data.price,
+          photoUrl: data.photoUrl,
+          photoUrls: data.photoUrls,
+          km: data.km,
+          status: data.status,
+          ...(data.description !== undefined ? { description: data.description } : {})
+        };
+      });
       res.json({ vehicles });
     } catch (e: any) {
       console.error("Error fetching public inventory:", e);
