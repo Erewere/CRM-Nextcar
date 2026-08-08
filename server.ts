@@ -8,7 +8,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
-import { initializeApp, getApps, App as FirebaseApp } from "firebase-admin/app";
+import { initializeApp, getApps, cert, App as FirebaseApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -47,19 +47,38 @@ function getAdminApp() {
       if (existingApps && existingApps.length > 0) {
         adminApp = existingApps[0];
       } else {
-        let projectId = process.env.FIREBASE_PROJECT_ID;
-        if (!projectId) {
+        const saEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
+        let serviceAccount: any = null;
+        if (saEnv) {
           try {
-            const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
-            const config = JSON.parse(configStr);
-            projectId = config.projectId;
-          } catch (e) {
-            console.error("FAIL config load:", e);
+            serviceAccount = JSON.parse(saEnv);
+          } catch (jsonErr) {
+            console.warn("FIREBASE_SERVICE_ACCOUNT inválida (error al parsear JSON):", jsonErr);
           }
         }
-        adminApp = initializeApp({
-          projectId: projectId || undefined,
-        });
+
+        if (serviceAccount && serviceAccount.project_id) {
+          adminApp = initializeApp({
+            credential: cert(serviceAccount),
+            projectId: serviceAccount.project_id,
+          });
+          console.log("Firebase Admin inicializado con cuenta de servicio.");
+        } else {
+          console.warn("FIREBASE_SERVICE_ACCOUNT no configurada o inválida: las operaciones Admin de Firestore no funcionarán.");
+          let projectId = process.env.FIREBASE_PROJECT_ID;
+          if (!projectId) {
+            try {
+              const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
+              const config = JSON.parse(configStr);
+              projectId = config.projectId;
+            } catch (e) {
+              console.error("FAIL config load:", e);
+            }
+          }
+          adminApp = initializeApp({
+            projectId: projectId || undefined,
+          });
+        }
       }
     } catch (e) {
       console.warn("Could not initialize Firebase Admin app:", e);
@@ -135,6 +154,19 @@ async function startServer() {
     } catch (fsErr) {
       console.error("Failed to write server error log:", fsErr);
     }
+  }
+
+  // Verificación de arranque del Admin SDK (no interrumpe el servidor)
+  try {
+    const adminDb = getAdminDb();
+    if (adminDb) {
+      const snap = await adminDb.collection("agencies").limit(1).get();
+      console.log(`Verificación Admin SDK: lectura de Firestore OK (${snap.docs.length} documentos).`);
+    } else {
+      console.error("Verificación Admin SDK FALLÓ: adminDb no está disponible.");
+    }
+  } catch (adminCheckErr: any) {
+    console.error("Verificación Admin SDK FALLÓ:", adminCheckErr?.message || adminCheckErr);
   }
 
   
