@@ -109,17 +109,7 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-async function startServer() {
-  const app = express();
-  app.set("trust proxy", true);
-  app.use(cors({
-    origin: true,
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-  }));
-  app.options("*", cors());
-  // Authenticate server app with email/password purely via client-side SDK to avoid GCP IAM restrictions
+async function initSystemAuth() {
   try {
     const email = process.env.SYSTEM_USER_EMAIL;
     const password = process.env.SYSTEM_USER_PASSWORD;
@@ -135,7 +125,6 @@ async function startServer() {
         console.log("Server signed in as system admin.");
 
         if (userCredential && userCredential.user) {
-          // Ensure system-admin user doc exists in Firestore using client SDK
           await setDoc(doc(cDb, "users", userCredential.user.uid), {
             role: "master",
             email,
@@ -155,19 +144,20 @@ async function startServer() {
       console.error("Failed to write server error log:", fsErr);
     }
   }
+}
 
-  // Verificación de arranque del Admin SDK (no interrumpe el servidor)
-  try {
-    const adminDb = getAdminDb();
-    if (adminDb) {
-      const snap = await adminDb.collection("agencies").limit(1).get();
-      console.log(`Verificación Admin SDK: lectura de Firestore OK (${snap.docs.length} documentos).`);
-    } else {
-      console.error("Verificación Admin SDK FALLÓ: adminDb no está disponible.");
-    }
-  } catch (adminCheckErr: any) {
-    console.error("Verificación Admin SDK FALLÓ:", adminCheckErr?.message || adminCheckErr);
-  }
+async function startServer() {
+  const app = express();
+  app.set("trust proxy", true);
+  app.use(cors({
+    origin: true,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  }));
+  app.options("*", cors());
+  // Fire system user authentication asynchronously without blocking server startup
+  initSystemAuth().catch((e) => console.error("Error in system auth init:", e));
 
   
 
