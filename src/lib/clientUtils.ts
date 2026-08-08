@@ -19,37 +19,36 @@ export function sanitizeFirestoreData<T>(obj: T): T {
 }
 
 export function checkIsWon(status: string = "", pipelineStages: {id: string, title?: string}[] = []) {
-  const wonKeywords = [
-    "ganado", "won", "vendid", "cerrad", 
-    "entregad", "completad", "finalizad", 
-    "pagad", "exito", "éxito", "completed", "finish", "listo",
-    "sold", "credito", "crédito", "financiamiento"
-  ];
-  const s = String(status || "").toLowerCase();
-  if (s === "won" || s === "sold" || s === "credito" || s === "crédito") return true;
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "won" || s === "ganado" || s === "ganados" || s === "sold" || s === "vendido" || s === "vendidos") return true;
+
+  const wonKeywords = ["ganad", "won", "cerrado ganado", "venta ganada"];
   if (wonKeywords.some((k) => s.includes(k))) return true;
-  
+
   const stage = pipelineStages.find(st => st.id === status);
   if (stage) {
-    const t = String(stage.title || "").toLowerCase();
-    const id = String(stage.id || "").toLowerCase();
-    if (id === "won" || id === "sold" || id === "credito" || id === "crédito") return true;
+    const t = String(stage.title || "").trim().toLowerCase();
+    const id = String(stage.id || "").trim().toLowerCase();
+    if (id === "won" || id === "ganado" || id === "ganados" || id === "sold" || id === "vendido" || id === "vendidos") return true;
+    if (t === "ganado" || t === "ganados" || t === "won" || t === "vendido" || t === "vendidos") return true;
     return wonKeywords.some((k) => t.includes(k) || id.includes(k));
   }
   return false;
 }
 
 export function checkIsLost(status: string = "", pipelineStages: {id: string, title?: string}[] = []) {
-  const lostKeywords = ["perdid", "lost", "cancelad", "rechazad", "fallid", "abandonad"];
-  const s = String(status || "").toLowerCase();
-  if (s === "lost") return true;
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "lost" || s === "perdido" || s === "perdidos" || s === "cancelado" || s === "rechazado") return true;
+
+  const lostKeywords = ["perdid", "lost", "descartad"];
   if (lostKeywords.some((k) => s.includes(k))) return true;
-  
+
   const stage = pipelineStages.find(st => st.id === status);
   if (stage) {
-    const t = String(stage.title || "").toLowerCase();
-    const id = String(stage.id || "").toLowerCase();
-    if (id === "lost") return true;
+    const t = String(stage.title || "").trim().toLowerCase();
+    const id = String(stage.id || "").trim().toLowerCase();
+    if (id === "lost" || id === "perdido" || id === "perdidos" || id === "cancelado" || id === "rechazado") return true;
+    if (t === "perdido" || t === "perdidos" || t === "lost" || t === "cancelado" || t === "rechazado") return true;
     return lostKeywords.some((k) => t.includes(k) || id.includes(k));
   }
   return false;
