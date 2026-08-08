@@ -65,11 +65,6 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
   const [activeTab, setActiveTab] = useState<'info' | 'expenses' | 'checklist' | 'payments'>('info');
 
-  useEffect(() => {
-    if (userData?.role === 'seller' && (activeTab === 'expenses' || activeTab === 'payments')) {
-      setActiveTab('info');
-    }
-  }, [userData?.role, activeTab]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [buyerData, setBuyerData] = useState<any>(null);
@@ -99,6 +94,18 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       ...vehicle
     }
   );
+
+  const isMaster = userData?.role === 'master';
+  const isOwnVehicle = isNew || (formData.agencyId ? formData.agencyId === userData?.agencyId : (vehicle?.agencyId ? vehicle.agencyId === userData?.agencyId : false));
+
+  useEffect(() => {
+    if (userData?.role === 'seller' && (activeTab === 'expenses' || activeTab === 'payments')) {
+      setActiveTab('info');
+    }
+    if (!isOwnVehicle && !isMaster && (activeTab === 'expenses' || activeTab === 'checklist' || activeTab === 'payments')) {
+      setActiveTab('info');
+    }
+  }, [userData?.role, activeTab, isOwnVehicle, isMaster]);
   const allPhotos = (formData.photoUrls && formData.photoUrls.length > 0)
     ? formData.photoUrls
     : (formData.photoUrl ? [formData.photoUrl] : []);
@@ -772,8 +779,6 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     }
   };
 
-  const isMaster = userData?.role === 'master';
-  const isOwnVehicle = isNew || formData.agencyId === userData?.agencyId;
   const isGlobalReadOnly = useReadOnly();
   const isAdmin = userData?.role === 'admin' || isMaster;
   const isReadOnly = isGlobalReadOnly || (!isOwnVehicle && !isMaster) || !isAdmin;
@@ -834,7 +839,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             >
               Info del Vehículo
             </button>
-            {(isOwnVehicle || isMaster || isAdmin) && userData?.role !== 'seller' && (
+            {(isOwnVehicle || isMaster) && userData?.role !== 'seller' && (
               <button 
                  onClick={() => setActiveTab('expenses')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -842,7 +847,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 Gastos
               </button>
             )}
-            {!isNew && (
+            {!isNew && (isOwnVehicle || isMaster) && (
               <button 
                  onClick={() => setActiveTab('checklist')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'checklist' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -850,7 +855,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 Checklist
               </button>
             )}
-            {!isNew && formData.status === 'sold' && userData?.role !== 'seller' && (
+            {!isNew && (isOwnVehicle || isMaster) && formData.status === 'sold' && userData?.role !== 'seller' && (
               <button 
                  onClick={() => setActiveTab('payments')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'payments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -1223,7 +1228,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           </>
           )}
 
-          {activeTab === 'expenses' && userData?.role !== 'seller' && (
+          {activeTab === 'expenses' && (isOwnVehicle || isMaster) && userData?.role !== 'seller' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: Register Gasto and Table of Gastos */}
               <div className="lg:col-span-5 flex flex-col gap-4 h-full overflow-y-auto pr-1">
@@ -1493,7 +1498,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           )}
 
           
-          {activeTab === 'checklist' && !isNew && (
+          {activeTab === 'checklist' && !isNew && (isOwnVehicle || isMaster) && (
             <div className="flex flex-col gap-6 p-6 bg-white dark:bg-slate-800 overflow-y-auto max-h-[70vh]">
               
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800/50 mb-2">
@@ -1680,7 +1685,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             </div>
           )}
 
-          {activeTab === 'payments' && !isNew && formData.status === 'sold' && userData?.role !== 'seller' && (
+          {activeTab === 'payments' && !isNew && (isOwnVehicle || isMaster) && formData.status === 'sold' && userData?.role !== 'seller' && (
             <div className="flex flex-col p-6 bg-white dark:bg-slate-800 overflow-y-auto max-h-[70vh]">
               <div className="flex justify-between items-start mb-6">
                 <div>

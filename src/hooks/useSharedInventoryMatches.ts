@@ -98,8 +98,12 @@ export function useSharedInventoryMatches() {
   useEffect(() => {
     if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') return;
     
-    // We only load shared vehicles if we are sharing ourselves to keep it fair and secure,
-    // but we can load them anyway to calculate matches or conditionally restrict. Let's load them!
+    // We only load shared vehicles if we are sharing ourselves to keep it fair and secure.
+    if (!ownAgencySharing) {
+      setOtherVehicles([]);
+      return;
+    }
+
     const sharingIds = Object.keys(sharingAgencies);
     if (sharingIds.length === 0) {
       setOtherVehicles([]);
@@ -127,11 +131,11 @@ export function useSharedInventoryMatches() {
     });
 
     return () => unsubscribeVehicles();
-  }, [sharingAgencies, userData]);
+  }, [sharingAgencies, userData, ownAgencySharing]);
 
   // 5. Calculate matches whenever clients or otherVehicles change
   useEffect(() => {
-    if (clients.length === 0 || otherVehicles.length === 0) {
+    if (!ownAgencySharing || clients.length === 0 || otherVehicles.length === 0) {
       setMatches([]);
       setLoading(false);
       return;
@@ -157,7 +161,7 @@ export function useSharedInventoryMatches() {
     calculated.sort((a, b) => b.score - a.score);
     setMatches(calculated);
     setLoading(false);
-  }, [clients, otherVehicles, sharingAgencies]);
+  }, [clients, otherVehicles, sharingAgencies, ownAgencySharing]);
 
   return {
     ownAgencySharing,

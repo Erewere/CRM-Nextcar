@@ -65,7 +65,7 @@ const isClosedStatus = (status: string | undefined, pipelineStages: any[] = []) 
 export function TaskReminders() {
   const { userData } = useAuth();
   const navigate = useNavigate();
-  const { matches } = useSharedInventoryMatches();
+  const { matches, ownAgencySharing } = useSharedInventoryMatches();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -365,23 +365,25 @@ export function TaskReminders() {
   });
 
   // C) Network Matches alerts
-  matches.forEach(m => {
-    const toastId = `match-${m.client.id}-${m.vehicle.id}`;
-    if (dismissedIds.has(toastId)) return;
+  if (ownAgencySharing) {
+    matches.forEach(m => {
+      const toastId = `match-${m.client.id}-${m.vehicle.id}`;
+      if (dismissedIds.has(toastId)) return;
 
-    const isHigh = m.level === 'exact' || m.score >= 80;
-    rawAlerts.push({
-      id: toastId,
-      type: 'match-network',
-      title: m.level === 'exact' ? 'Match Perfecto en Red' : `Coincidencia ${m.score}% en Red`,
-      subtitle: `${m.vehicle.make} ${m.vehicle.model} (${m.vehicle.year})`,
-      detail: `Coincide con cliente: ${m.client.name} • ${m.agencyName}`,
-      matchVehicle: m.vehicle,
-      matchClient: m.client,
-      agencyName: m.agencyName,
-      severity: isHigh ? 'high' : 'medium',
+      const isHigh = m.level === 'exact' || m.score >= 80;
+      rawAlerts.push({
+        id: toastId,
+        type: 'match-network',
+        title: m.level === 'exact' ? 'Match Perfecto en Red' : `Coincidencia ${m.score}% en Red`,
+        subtitle: `${m.vehicle.make} ${m.vehicle.model} (${m.vehicle.year})`,
+        detail: `Coincide con cliente: ${m.client.name} • ${m.agencyName}`,
+        matchVehicle: m.vehicle,
+        matchClient: m.client,
+        agencyName: m.agencyName,
+        severity: isHigh ? 'high' : 'medium',
+      });
     });
-  });
+  }
 
   // Sort alerts: high severity first, then stale days / dates
   rawAlerts.sort((a, b) => {

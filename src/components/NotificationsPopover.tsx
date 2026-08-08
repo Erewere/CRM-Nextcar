@@ -66,7 +66,7 @@ export function NotificationsPopover() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedClientContext, setSelectedClientContext] = useState<Client | null>(null);
 
-  const { matches } = useSharedInventoryMatches();
+  const { matches, ownAgencySharing } = useSharedInventoryMatches();
   const popoverRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -351,22 +351,24 @@ export function NotificationsPopover() {
   });
 
   // 3. Network Inventory Matches
-  matches.forEach((m) => {
-    const notifId = `match-${m.client.id}-${m.vehicle.id}`;
-    if (dismissedIds.has(notifId)) return;
-    notifications.push({
-      id: notifId,
-      type: "match-network",
-      title: m.level === "exact" ? "Match Perfecto en Red" : `Match en Red (${m.score}%)`,
-      message: `${m.vehicle.make} ${m.vehicle.model} (${m.vehicle.year}) coincide con cliente ${m.client.name}`,
-      date: new Date().toISOString(),
-      icon: <Sparkles className="w-5 h-5 text-amber-500 shrink-0 animate-pulse" />,
-      onClick: () => {
-        setSelectedVehicle(m.vehicle);
-        setSelectedClientContext(m.client);
-      },
+  if (ownAgencySharing) {
+    matches.forEach((m) => {
+      const notifId = `match-${m.client.id}-${m.vehicle.id}`;
+      if (dismissedIds.has(notifId)) return;
+      notifications.push({
+        id: notifId,
+        type: "match-network",
+        title: m.level === "exact" ? "Match Perfecto en Red" : `Match en Red (${m.score}%)`,
+        message: `${m.vehicle.make} ${m.vehicle.model} (${m.vehicle.year}) coincide con cliente ${m.client.name}`,
+        date: new Date().toISOString(),
+        icon: <Sparkles className="w-5 h-5 text-amber-500 shrink-0 animate-pulse" />,
+        onClick: () => {
+          setSelectedVehicle(m.vehicle);
+          setSelectedClientContext(m.client);
+        },
+      });
     });
-  });
+  }
 
   // 4. Vehicles Checklist Documents Missing
   vehicles.forEach((v) => {
