@@ -23,49 +23,49 @@ service cloud.firestore {
     }
 
     match /clients/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /vehicles/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /deals/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /tasks/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /notes/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /files/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /vehicleExpenses/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
     match /agency_tags/{id} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
