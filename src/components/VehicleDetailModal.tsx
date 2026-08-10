@@ -329,12 +329,16 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     if (!isNew && vehicle?.id && formData.status === 'sold') {
       const fetchBuyer = async () => {
         try {
-          const q = query(collection(db, 'clients'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']));
+          let q = query(collection(db, 'clients'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']));
+          let dq = query(collection(db, 'deals'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']));
+          if (userData?.role !== 'master' && userData?.agencyId) {
+            q = query(collection(db, 'clients'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']), where('agencyId', '==', userData.agencyId));
+            dq = query(collection(db, 'deals'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']), where('agencyId', '==', userData.agencyId));
+          }
           const snap = await getDocs(q);
           if (!snap.empty) {
             setBuyerData({ ...snap.docs[0].data(), id: snap.docs[0].id });
           } else {
-             const dq = query(collection(db, 'deals'), where('vehicleId', '==', vehicle.id), where('status', 'in', ['won', 'sold']));
              const dSnap = await getDocs(dq);
              if (!dSnap.empty) {
                  const dealData = dSnap.docs[0].data();
@@ -362,7 +366,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         try {
           const cId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
           if (cId) {
-            const q = query(collection(db, 'tasks'), where('clientId', '==', cId), where('completed', '==', false));
+            let q = query(collection(db, 'tasks'), where('clientId', '==', cId), where('completed', '==', false));
+            if (userData?.role !== 'master' && userData?.agencyId) {
+              q = query(collection(db, 'tasks'), where('clientId', '==', cId), where('completed', '==', false), where('agencyId', '==', userData.agencyId));
+            }
             const snap = await getDocs(q);
             setPendingTasks(snap.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
           }
@@ -494,7 +501,9 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
     const targetIds = [vehicle.id, vehicle.vin, (vehicle as any)?.originalVehicleId].filter(Boolean) as string[];
 
-    const q = query(collection(db, 'vehicleExpenses'));
+    const q = (userData?.role !== 'master' && userData?.agencyId)
+      ? query(collection(db, 'vehicleExpenses'), where('agencyId', '==', userData.agencyId))
+      : query(collection(db, 'vehicleExpenses'));
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs
         .map(d => ({ ...d.data(), id: d.id }) as VehicleExpense)
@@ -578,7 +587,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       if (!isSeller && payload.status === 'sold' && payload.price) {
         // If the admin is updating a sold vehicle, also sync the dealValue to any open/won client/deal associated with it
         try {
-          const dealsQ = query(collection(db, 'deals'), where('vehicleId', '==', docRef.id));
+          let dealsQ = query(collection(db, 'deals'), where('vehicleId', '==', docRef.id));
+          if (userData?.role !== 'master' && userData?.agencyId) {
+            dealsQ = query(collection(db, 'deals'), where('vehicleId', '==', docRef.id), where('agencyId', '==', userData.agencyId));
+          }
           const dealsSnap = await getDocs(dealsQ);
           dealsSnap.forEach(async (dSnap) => {
              const dData = dSnap.data();
@@ -596,7 +608,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
              }
           });
 
-          const clientsQ = query(collection(db, 'clients'), where('vehicleId', '==', docRef.id));
+          let clientsQ = query(collection(db, 'clients'), where('vehicleId', '==', docRef.id));
+          if (userData?.role !== 'master' && userData?.agencyId) {
+            clientsQ = query(collection(db, 'clients'), where('vehicleId', '==', docRef.id), where('agencyId', '==', userData.agencyId));
+          }
           const clientsSnap = await getDocs(clientsQ);
           clientsSnap.forEach(async (cSnap) => {
              const cData = cSnap.data();

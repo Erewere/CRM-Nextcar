@@ -19,10 +19,9 @@ export class RecommendationEngine {
   public static async getNextActionForClient(client: Client): Promise<{ action: Recommendation, score: LeadScore }> {
     // 1. Obtener tareas asociadas al cliente desde Firestore
     const tasksRef = collection(db, "tasks");
-    const tasksQuery = query(
-      tasksRef,
-      where("clientId", "==", client.id)
-    );
+    const tasksQuery = client.agencyId
+      ? query(tasksRef, where("clientId", "==", client.id), where("agencyId", "==", client.agencyId))
+      : query(tasksRef, where("clientId", "==", client.id));
     const snapshot = await getDocs(tasksQuery);
     
     const allTasks: Task[] = [];

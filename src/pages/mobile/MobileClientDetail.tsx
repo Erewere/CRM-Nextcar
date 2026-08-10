@@ -333,10 +333,16 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         const notesMap = new Map<string, any>();
 
         for (const cId of idsToQuery) {
-          const q = query(
-            collection(db, "notes"),
-            where("clientId", "==", cId)
-          );
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(
+                collection(db, "notes"),
+                where("clientId", "==", cId),
+                where("agencyId", "==", userData.agencyId)
+              )
+            : query(
+                collection(db, "notes"),
+                where("clientId", "==", cId)
+              );
           const s = await getDocs(q);
           s.docs.forEach((d) => {
             notesMap.set(d.id, { ...d.data(), id: d.id });
@@ -345,10 +351,16 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
         const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
         for (const dId of dealIdsToQuery) {
-          const q = query(
-            collection(db, "notes"),
-            where("dealId", "==", dId)
-          );
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(
+                collection(db, "notes"),
+                where("dealId", "==", dId),
+                where("agencyId", "==", userData.agencyId)
+              )
+            : query(
+                collection(db, "notes"),
+                where("dealId", "==", dId)
+              );
           const s = await getDocs(q);
           s.docs.forEach((d) => {
             notesMap.set(d.id, { ...d.data(), id: d.id });
@@ -433,7 +445,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         });
         
         // Also update any deals if they exist
-        const q = query(collection(db, 'deals'), where('clientId', '==', client.id!));
+        const q = (userData?.role !== "master" && userData?.agencyId)
+          ? query(collection(db, 'deals'), where('clientId', '==', client.id!), where('agencyId', '==', userData.agencyId))
+          : query(collection(db, 'deals'), where('clientId', '==', client.id!));
         const snap = await getDocs(q);
         if (!snap.empty) {
           const dealDoc = snap.docs[0];
@@ -484,7 +498,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           updatedAt: new Date().toISOString()
         });
         
-        const q = query(collection(db, 'deals'), where('clientId', '==', client.id!));
+        const q = (userData?.role !== "master" && userData?.agencyId)
+          ? query(collection(db, 'deals'), where('clientId', '==', client.id!), where('agencyId', '==', userData.agencyId))
+          : query(collection(db, 'deals'), where('clientId', '==', client.id!));
         const snap = await getDocs(q);
         if (!snap.empty) {
           const dealDoc = snap.docs[0];
@@ -540,7 +556,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           updatedAt: new Date().toISOString()
         });
         
-        const q = query(collection(db, 'deals'), where('clientId', '==', client.id!));
+        const q = (userData?.role !== "master" && userData?.agencyId)
+          ? query(collection(db, 'deals'), where('clientId', '==', client.id!), where('agencyId', '==', userData.agencyId))
+          : query(collection(db, 'deals'), where('clientId', '==', client.id!));
         const snap = await getDocs(q);
         if (!snap.empty) {
           const dealDoc = snap.docs[0];
@@ -640,10 +658,16 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       const notesMap = new Map<string, any>();
 
       for (const cId of idsToQuery) {
-        const q = query(
-          collection(db, "notes"),
-          where("clientId", "==", cId)
-        );
+        const q = (userData?.role !== "master" && userData?.agencyId)
+          ? query(
+              collection(db, "notes"),
+              where("clientId", "==", cId),
+              where("agencyId", "==", userData.agencyId)
+            )
+          : query(
+              collection(db, "notes"),
+              where("clientId", "==", cId)
+            );
         const s = await getDocs(q);
         s.docs.forEach((d) => {
           notesMap.set(d.id, { ...d.data(), id: d.id });
@@ -652,10 +676,16 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
 
       const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
       for (const dId of dealIdsToQuery) {
-        const q = query(
-          collection(db, "notes"),
-          where("dealId", "==", dId)
-        );
+        const q = (userData?.role !== "master" && userData?.agencyId)
+          ? query(
+              collection(db, "notes"),
+              where("dealId", "==", dId),
+              where("agencyId", "==", userData.agencyId)
+            )
+          : query(
+              collection(db, "notes"),
+              where("dealId", "==", dId)
+            );
         const s = await getDocs(q);
         s.docs.forEach((d) => {
           notesMap.set(d.id, { ...d.data(), id: d.id });

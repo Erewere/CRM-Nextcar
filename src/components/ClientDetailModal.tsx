@@ -305,7 +305,10 @@ export function ClientDetailModal({
       });
     }
 
-    const dealsQ = query(collection(db, "deals"), where("clientId", "==", actualClientId));
+    let dealsQ = query(collection(db, "deals"), where("clientId", "==", actualClientId));
+    if (userData?.role !== "master" && userData?.agencyId) {
+      dealsQ = query(collection(db, "deals"), where("clientId", "==", actualClientId), where("agencyId", "==", userData.agencyId));
+    }
     const unsubAllDeals = onSnapshot(dealsQ, (snap) => {
       const dList = snap.docs.map(d => ({ ...d.data(), id: d.id } as Deal));
       setDeals(dList);
@@ -342,6 +345,12 @@ export function ClientDetailModal({
               where("clientId", "==", cId),
               where("sellerId", "==", userData.id),
             );
+          } else if (userData?.role !== "master" && userData?.agencyId) {
+            q = query(
+              collection(db, "tasks"),
+              where("clientId", "==", cId),
+              where("agencyId", "==", userData.agencyId),
+            );
           }
           const s = await getDocs(q);
           s.docs.forEach((d) => {
@@ -360,6 +369,12 @@ export function ClientDetailModal({
               collection(db, "tasks"),
               where("dealId", "==", dId),
               where("sellerId", "==", userData.id),
+            );
+          } else if (userData?.role !== "master" && userData?.agencyId) {
+            q = query(
+              collection(db, "tasks"),
+              where("dealId", "==", dId),
+              where("agencyId", "==", userData.agencyId),
             );
           }
           const s = await getDocs(q);
@@ -387,10 +402,16 @@ export function ClientDetailModal({
         const filesMap = new Map<string, ClientFile>();
 
         for (const cId of idsToQuery) {
-          const q = query(
-            collection(db, "files"),
-            where("clientId", "==", cId),
-          );
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(
+                collection(db, "files"),
+                where("clientId", "==", cId),
+                where("agencyId", "==", userData.agencyId),
+              )
+            : query(
+                collection(db, "files"),
+                where("clientId", "==", cId),
+              );
           const s = await getDocs(q);
           s.docs.forEach((d) => {
             filesMap.set(d.id, { ...d.data(), id: d.id } as ClientFile);
@@ -399,10 +420,16 @@ export function ClientDetailModal({
 
         const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
         for (const dId of dealIdsToQuery) {
-          const q = query(
-            collection(db, "files"),
-            where("dealId", "==", dId),
-          );
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(
+                collection(db, "files"),
+                where("dealId", "==", dId),
+                where("agencyId", "==", userData.agencyId),
+              )
+            : query(
+                collection(db, "files"),
+                where("dealId", "==", dId),
+              );
           const s = await getDocs(q);
           s.docs.forEach((d) => {
             filesMap.set(d.id, { ...d.data(), id: d.id } as ClientFile);
@@ -428,10 +455,16 @@ export function ClientDetailModal({
         const notesMap = new Map<string, any>();
 
         for (const cId of idsToQuery) {
-          const q = query(
-            collection(db, "notes"),
-            where("clientId", "==", cId),
-          );
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(
+                collection(db, "notes"),
+                where("clientId", "==", cId),
+                where("agencyId", "==", userData.agencyId),
+              )
+            : query(
+                collection(db, "notes"),
+                where("clientId", "==", cId),
+              );
           const s = await getDocs(q);
           s.docs.forEach((d) => {
             notesMap.set(d.id, { ...d.data(), id: d.id });
@@ -440,10 +473,16 @@ export function ClientDetailModal({
 
         const dealIdsToQuery = Array.from(new Set([actualDealId, client.id].filter(Boolean) as string[]));
         for (const dId of dealIdsToQuery) {
-          const q = query(
-            collection(db, "notes"),
-            where("dealId", "==", dId),
-          );
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(
+                collection(db, "notes"),
+                where("dealId", "==", dId),
+                where("agencyId", "==", userData.agencyId),
+              )
+            : query(
+                collection(db, "notes"),
+                where("dealId", "==", dId),
+              );
           const s = await getDocs(q);
           s.docs.forEach((d) => {
             notesMap.set(d.id, { ...d.data(), id: d.id });
@@ -597,7 +636,9 @@ export function ClientDetailModal({
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         if (!finalDealId) {
-          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
+            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
           const snap = await getDocs(q);
           if (!snap.empty) {
             finalDealId = snap.docs[0].id;
@@ -643,7 +684,9 @@ export function ClientDetailModal({
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         if (!finalDealId) {
-          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
+            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
           const snap = await getDocs(q);
           if (!snap.empty) {
             finalDealId = snap.docs[0].id;
@@ -705,7 +748,9 @@ export function ClientDetailModal({
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         if (!finalDealId) {
-          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
+            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
           const snap = await getDocs(q);
           if (!snap.empty) {
             finalDealId = snap.docs[0].id;
@@ -1060,7 +1105,9 @@ export function ClientDetailModal({
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         if (!finalDealId) {
-          const q = query(collection(db, "deals"), where("clientId", "==", finalClientId));
+          const q = (userData?.role !== "master" && userData?.agencyId)
+            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
+            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
           const snap = await getDocs(q);
           if (!snap.empty) {
             finalDealId = snap.docs[0].id;
@@ -3232,7 +3279,9 @@ export function ClientDetailModal({
               const idsToQuery = Array.from(new Set([targetClientId, client.id].filter(Boolean) as string[]));
               const tasksMap = new Map<string, Task>();
               for (const cId of idsToQuery) {
-                let q = query(collection(db, "tasks"), where("clientId", "==", cId));
+                let q = (userData?.role !== "master" && userData?.agencyId)
+                  ? query(collection(db, "tasks"), where("clientId", "==", cId), where("agencyId", "==", userData.agencyId))
+                  : query(collection(db, "tasks"), where("clientId", "==", cId));
                 const s = await getDocs(q);
                 s.docs.forEach((d) => tasksMap.set(d.id, { ...d.data(), id: d.id } as Task));
               }
@@ -3242,7 +3291,9 @@ export function ClientDetailModal({
 
               const notesMap = new Map<string, any>();
               for (const cId of idsToQuery) {
-                const q = query(collection(db, "notes"), where("clientId", "==", cId));
+                const q = (userData?.role !== "master" && userData?.agencyId)
+                  ? query(collection(db, "notes"), where("clientId", "==", cId), where("agencyId", "==", userData.agencyId))
+                  : query(collection(db, "notes"), where("clientId", "==", cId));
                 const s = await getDocs(q);
                 s.docs.forEach((d) => notesMap.set(d.id, { ...d.data(), id: d.id }));
               }

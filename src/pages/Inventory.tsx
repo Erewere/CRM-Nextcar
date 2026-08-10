@@ -412,7 +412,7 @@ export function Inventory() {
     if (userData?.role !== 'master') {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
       clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
-      expensesQ = query(collection(db, 'vehicleExpenses'));
+      expensesQ = query(collection(db, 'vehicleExpenses'), where('agencyId', '==', userData.agencyId));
     }
 
     const unsubscribeVehicles = onSnapshot(q, (snapshot) => {
@@ -610,7 +610,10 @@ export function Inventory() {
 
           // B) Update deals associated with targetClientId
           try {
-            const dealsQ = query(collection(db, 'deals'), where('clientId', '==', targetClientId));
+            let dealsQ = query(collection(db, 'deals'), where('clientId', '==', targetClientId));
+            if (userData?.role !== 'master' && userData?.agencyId) {
+              dealsQ = query(collection(db, 'deals'), where('clientId', '==', targetClientId), where('agencyId', '==', userData.agencyId));
+            }
             const dealsSnap = await getDocs(dealsQ);
             for (const dDoc of dealsSnap.docs) {
               await updateDoc(doc(db, 'deals', dDoc.id), {
