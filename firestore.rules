@@ -6,140 +6,90 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isUserDoc(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function userExists() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function isMaster() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master';
     }
 
     function getUserAgencyId() {
-      return userExists() ? getUserData().agencyId : null;
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.agencyId
+        : null;
     }
 
-    function isMaster() {
-      return isAuthenticated() && (
-        (request.auth.token.email != null && request.auth.token.email == 'luisfj@gmail.com') ||
-        (userExists() && getUserData().role == 'master')
-      );
+    function belongsToMyAgency(data) {
+      return isMaster() || (data.agencyId != null && data.agencyId == getUserAgencyId());
     }
 
-    function isAdmin() {
-      return isAuthenticated() && (
-        isMaster() ||
-        (userExists() && getUserData().role == 'admin')
-      );
+    match /clients/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
-    function isSameAgency(agencyId) {
-      return isMaster() || (isAuthenticated() && agencyId != null && getUserAgencyId() == agencyId);
+    match /vehicles/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
-    // AGENCIES
-    match /agencies/{agencyId} {
+    match /deals/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
+
+    match /tasks/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
+
+    match /notes/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
+
+    match /files/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
+
+    match /vehicleExpenses/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
+
+    match /agency_tags/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
+      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
+
+    match /agencies/{id} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isMaster() || (isAdmin() && isSameAgency(agencyId));
+      allow update: if isMaster() || (isAuthenticated() && getUserAgencyId() == id);
       allow delete: if isMaster();
     }
 
-    // USERS
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isUserDoc(userId);
-      allow update: if isAuthenticated() && (isUserDoc(userId) || isMaster() || isAdmin());
-      allow delete: if isMaster() || (isAdmin() && resource != null && resource.data.agencyId == getUserAgencyId());
-    }
-
-    // CLIENTS
-    match /clients/{clientId} {
-      allow read: if isAuthenticated();
-      allow create: if true; // Allow public leads / forms & authenticated users
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // TASKS
-    match /tasks/{taskId} {
-      allow read: if isAuthenticated();
-      allow create: if true;
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // DEALS
-    match /deals/{dealId} {
-      allow read: if isAuthenticated();
-      allow create: if true;
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // VEHICLES
-    match /vehicles/{vehicleId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // VEHICLE EXPENSES
-    match /vehicleExpenses/{expenseId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // NOTES
-    match /notes/{noteId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // FILES
-    match /files/{fileId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // AGENCY TAGS
-    match /agency_tags/{tagId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // AGENCY CHATS
-    match /agencyChats/{chatId} {
+    match /users/{id} {
       allow read, write: if isAuthenticated();
+    }
 
+    match /agencyChats/{id} {
+      allow read, write: if isAuthenticated();
       match /messages/{messageId} {
         allow read, write: if isAuthenticated();
       }
     }
 
-    // PIPELINE STAGES
-    match /pipelineStages/{stageId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
-    }
-
-    // Default catch-all
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isAuthenticated();
     }
   }
 }
