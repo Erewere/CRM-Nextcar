@@ -12,27 +12,6 @@ import { initializeApp, getApps, cert, App as FirebaseApp } from "firebase-admin
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
-import { getFirestore as getClientFirestore, doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, getDocs, deleteDoc, serverTimestamp, limit } from "firebase/firestore";
-
-
-let clientApp: any = null;
-import { initializeApp as initClientApp } from "firebase/app";
-import { getAuth as getClientAuth, signInWithEmailAndPassword } from "firebase/auth";
-import { getAuth as getAdminAuth } from "firebase-admin/auth";
-function getClientDb() {
-  if (!clientApp) {
-    try {
-      const configStr = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8");
-      clientApp = initClientApp(JSON.parse(configStr));
-    } catch (e) {
-      console.error("FAIL config load:", e);
-    }
-  }
-  return getClientFirestore(clientApp, "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a");
-}
-
-
-
 import { Resend } from "resend";
 import Stripe from "stripe";
 
@@ -110,42 +89,7 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-async function initSystemAuth() {
-  try {
-    const email = process.env.SYSTEM_USER_EMAIL;
-    const password = process.env.SYSTEM_USER_PASSWORD;
-
-    if (!email || !password) {
-      console.error("SYSTEM_USER_EMAIL / SYSTEM_USER_PASSWORD no configuradas: el servidor no podrá escribir en Firestore");
-    } else {
-      const cDb = getClientDb();
-      const clientAuth = getClientAuth(clientApp);
-
-      try {
-        const userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
-        console.log("Server signed in as system admin.");
-
-        if (userCredential && userCredential.user) {
-          await setDoc(doc(cDb, "users", userCredential.user.uid), {
-            role: "master",
-            email,
-            agencyId: "k77PpUc4SKDVCps2qSDw"
-          }, { merge: true });
-          console.log("Server authenticated and user doc synchronized:", userCredential.user.uid);
-        }
-      } catch (signInErr: any) {
-        console.error("Failed to sign in system user:", signInErr);
-      }
-    }
-  } catch(e: any) {
-    console.error("Failed client-side authentication on server:", e);
-    try {
-      fs.writeFileSync("server-error.log", e instanceof Error ? e.stack || e.message : String(e));
-    } catch (fsErr) {
-      console.error("Failed to write server error log:", fsErr);
-    }
-  }
-
+async function checkAdminDbAccess() {
   // Verificación de diagnóstico del Admin SDK (ejecutado en segundo plano)
   try {
     const adminDb = getAdminDb();
@@ -170,8 +114,8 @@ async function startServer() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   }));
   app.options("*", cors());
-  // Fire system user authentication asynchronously without blocking server startup
-  initSystemAuth().catch((e) => console.error("Error in system auth init:", e));
+  // Diagnostic check for Admin SDK in background
+  checkAdminDbAccess().catch((e) => console.error("Error en verificación Admin SDK:", e));
 
   
 
@@ -278,12 +222,14 @@ async function startServer() {
         return res.status(401).json({ error: "Sesión no válida o expirada. Por favor, vuelve a iniciar sesión." });
       }
 
-      let decodedToken: any = null;
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
       try {
-        const auth = getAuth(getAdminApp()!);
-        decodedToken = await auth.verifyIdToken(token);
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
       } catch (tokenErr) {
-        console.warn("Verify token warning in create-checkout-session:", tokenErr);
+        return res.status(401).json({ error: "Token inválido o expirado. Por favor, vuelve a iniciar sesión." });
       }
       
       const { agencyId, priceId, quantity, mode, metadata } = req.body;
@@ -291,19 +237,18 @@ async function startServer() {
         return res.status(400).json({ error: "Falta el ID de la agencia (agencyId)" });
       }
 
-      if (decodedToken) {
-        const adminDb = getAdminDb();
-        if (!adminDb) {
-          return res.status(500).json({ error: "Base de datos no disponible" });
-        }
-        const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
-        const userDoc = await userDocRef.get();
-        if (userDoc.exists) {
-          const userData = userDoc.data();
-          if (userData && userData.role !== "master" && userData.agencyId !== agencyId) {
-            return res.status(403).json({ error: "No tienes permiso para esta agencia" });
-          }
-        }
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      if (userData?.role !== "master" && userData?.agencyId !== agencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
       }
 
       const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -585,10 +530,43 @@ async function startServer() {
 
   // === Meta (WhatsApp/Messenger) Webhook Integration ===
 
-  // 1. Webhook Verification (GET)
-  
   app.post("/api/meta/send-template", async (req, res) => {
     try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      
+      const token = authHeader.split("Bearer ")[1];
+      if (!token || token === "undefined" || token === "null") {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+
+      const userData = userDoc.data();
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+
       const { to, templateName, variables } = req.body;
       const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
       const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
@@ -599,75 +577,11 @@ async function startServer() {
         return res.json({ success: true, simulated: true });
       }
 
-      // In a real app, this would be a fetch to Graph API:
-      /*
-      const response = await fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${META_ACCESS_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: to,
-          type: "template",
-          template: {
-            name: templateName,
-            language: { code: "es_MX" },
-            components: [ ...variables ]
-          }
-        })
-      });
-      */
-      
       console.log(`Sending WhatsApp template ${templateName} to ${to}`);
       res.json({ success: true, simulated: true });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-
-  
-  app.post("/api/meta/send-template", async (req, res) => {
-    try {
-      const { to, templateName, variables } = req.body;
-      const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-      const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
-
-      if (!META_ACCESS_TOKEN || !PHONE_NUMBER_ID) {
-        // Return success even if not configured, for demo purposes, so it doesn't break
-        console.warn("WhatsApp API not configured, simulating success");
-        return res.json({ success: true, simulated: true });
-      }
-
-      // In a real app, this would be a fetch to Graph API:
-      /*
-      const response = await fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${META_ACCESS_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: to,
-          type: "template",
-          template: {
-            name: templateName,
-            language: { code: "es_MX" },
-            components: [ ...variables ]
-          }
-        })
-      });
-      */
-      
-      console.log(`Sending WhatsApp template ${templateName} to ${to}`);
-      res.json({ success: true, simulated: true });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: e.message || "Error al enviar plantilla" });
     }
   });
 
