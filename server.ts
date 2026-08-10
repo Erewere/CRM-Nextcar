@@ -393,17 +393,39 @@ async function startServer() {
   app.post("/api/delete-user", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.split("Bearer ")[1];
-        try {
-          const app = getAdminApp();
-          if (app) {
-            const auth = getAuth(app);
-            await auth.verifyIdToken(token);
-          }
-        } catch (err) {
-          console.warn("Verify token warning in delete-user:", err);
-        }
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+
+      const token = authHeader.split("Bearer ")[1];
+      if (!token) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+
+      const callerDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const callerDoc = await callerDocRef.get();
+      if (!callerDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+
+      const callerData = callerDoc.data();
+      if (callerData?.role !== "master" && callerData?.role !== "admin") {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
       }
 
       const { uid } = req.body;
@@ -411,52 +433,92 @@ async function startServer() {
         return res.status(400).json({ error: "Falta el parámetro uid" });
       }
 
+      if (uid === decodedToken.uid) {
+        return res.status(400).json({ error: "No puedes eliminar tu propio usuario" });
+      }
+
+      if (callerData.role === "admin") {
+        const targetDocRef = adminDb.collection("users").doc(uid);
+        const targetDoc = await targetDocRef.get();
+        if (!targetDoc.exists) {
+          return res.status(404).json({ error: "Usuario a eliminar no encontrado" });
+        }
+        const targetData = targetDoc.data();
+        if (targetData?.agencyId !== callerData.agencyId) {
+          return res.status(403).json({ error: "No tienes permiso para eliminar usuarios de otra agencia" });
+        }
+      }
+
       // Delete from Firebase Auth
       try {
-        const app = getAdminApp();
-        if (app) {
-          const auth = getAuth(app);
-          await auth.deleteUser(uid);
-        }
+        await getAuth(adminApp).deleteUser(uid);
       } catch (authErr: any) {
         console.warn("Could not delete from Firebase Auth (ignoring):", authErr.message);
       }
 
-      // Delete from Firestore using Admin DB
-      const adminDb = getAdminDb();
-      if (!adminDb) {
-        return res.status(500).json({ error: "Base de datos no disponible" });
-      }
+      // Delete from Firestore
       await adminDb.collection("users").doc(uid).delete();
 
-      res.status(200).json({ success: true });
+      return res.status(200).json({ success: true });
     } catch (err: any) {
       console.error("Delete User Error:", err);
-      res.status(500).json({ error: err.message || "Error al eliminar usuario" });
+      return res.status(500).json({ error: err.message || "Error al eliminar usuario" });
     }
   });
 
   app.post("/api/delete-agency", async (req, res) => {
     try {
-      const { agencyId } = req.body;
-      if (!agencyId) {
-        return res.status(400).json({ error: "Falta el parámetro agencyId" });
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+
+      const token = authHeader.split("Bearer ")[1];
+      if (!token) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
       }
 
       const adminDb = getAdminDb();
       if (!adminDb) {
         return res.status(500).json({ error: "Base de datos no disponible" });
       }
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+
+      const userData = userDoc.data();
+      if (userData?.role !== "master") {
+        return res.status(403).json({ error: "Solo el rol master puede eliminar una agencia" });
+      }
+
+      const { agencyId } = req.body;
+      if (!agencyId) {
+        return res.status(400).json({ error: "Falta el parámetro agencyId" });
+      }
+
       const usersSnap = await adminDb.collection("users").where("agencyId", "==", agencyId).get();
       for (const uDoc of usersSnap.docs) {
         await adminDb.collection("users").doc(uDoc.id).update({ agencyId: "unassigned" });
       }
       await adminDb.collection("agencies").doc(agencyId).delete();
 
-      res.status(200).json({ success: true });
+      return res.status(200).json({ success: true });
     } catch (err: any) {
       console.error("Delete Agency Error:", err);
-      res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: err.message || "Error al eliminar agencia" });
     }
   });
 
