@@ -634,16 +634,19 @@ async function startServer() {
     const body = req.body;
     if (body.object === "whatsapp_business_account" || body.object === "page") {
       try {
-        const adminDb = getClientDb();
+        const adminDb = getAdminDb();
+        if (!adminDb) {
+          return res.status(500).json({ error: "Base de datos no disponible" });
+        }
         for (const entry of body.entry) {
           const entryId = entry.id; // page_id for Messenger, waba_id for WhatsApp
           let agencyId = "DEFAULT_AGENCY";
           
           // Consultar la agencia correspondiente al page_id o waba_id
-          const agenciesRef = collection(adminDb, "agencies");
+          const agenciesRef = adminDb.collection("agencies");
           // Para soportar múltiples agencias, buscamos cuál tiene este facebookPageId
-          const q = query(agenciesRef, where("facebookPageId", "==", entryId));
-          const snapshot = await getDocs(q);
+          const q = agenciesRef.where("facebookPageId", "==", entryId);
+          const snapshot = await q.get();
           if (!snapshot.empty) {
             agencyId = snapshot.docs[0].id;
           } else if (entryId === "604166786115980") {
@@ -706,9 +709,10 @@ async function startServer() {
     origin: string,
     text: string,
   ) {
-    const clientsRef = collection(adminDb, "clients");
+    if (!adminDb) return;
+    const clientsRef = adminDb.collection("clients");
     
-const newClient = {
+    const newClient = {
       agencyId,
       name,
       address: `Lead from ${origin}`,
@@ -718,10 +722,10 @@ const newClient = {
       status: "new",
       origin: origin,
       sellerId: "",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
-    await addDoc(clientsRef, newClient);
+    await clientsRef.add(newClient);
   }
 
     app.get("/api/proxy-image", async (req, res) => {
@@ -899,13 +903,16 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(400).json({ error: "agencyId is required" });
       }
 
-      const db = getClientDb();
-      const q = query(
-        collection(db, "vehicles"),
-        where("agencyId", "==", agencyId),
-        where("status", "==", "available")
-      );
-      const snapshot = await getDocs(q);
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+
+      const q = adminDb
+        .collection("vehicles")
+        .where("agencyId", "==", agencyId)
+        .where("status", "==", "available");
+      const snapshot = await q.get();
 
       const vehicles = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -940,15 +947,18 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(400).json({ error: "agencyId and name are required" });
       }
 
-      const db = getClientDb();
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
 
       // Validate sellerId: check if user exists and belongs to the given agency
       let validatedSellerId = "";
       if (sellerId && typeof sellerId === "string" && sellerId.trim() !== "") {
         try {
-          const sellerDocRef = doc(db, "users", sellerId.trim());
-          const sellerSnap = await getDoc(sellerDocRef);
-          if (sellerSnap.exists()) {
+          const sellerDocRef = adminDb.collection("users").doc(sellerId.trim());
+          const sellerSnap = await sellerDocRef.get();
+          if (sellerSnap.exists) {
             const sellerData = sellerSnap.data();
             if (sellerData && sellerData.agencyId === agencyId) {
               validatedSellerId = sellerId.trim();
@@ -968,11 +978,11 @@ Return a JSON array of recommendation objects with the following schema:
         origin: origin || "website",
         status: "new",
         sellerId: validatedSellerId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
       };
       
-      const docRef = await addDoc(collection(db, "clients"), newClient);
+      const docRef = await adminDb.collection("clients").add(newClient);
 
       res.status(201).json({ success: true, leadId: docRef.id });
     } catch (e: any) {
