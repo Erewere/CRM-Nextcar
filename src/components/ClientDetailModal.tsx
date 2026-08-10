@@ -343,6 +343,7 @@ export function ClientDetailModal({
             q = query(
               collection(db, "tasks"),
               where("clientId", "==", cId),
+              where("agencyId", "==", userData.agencyId),
               where("sellerId", "==", userData.id),
             );
           } else if (userData?.role !== "master" && userData?.agencyId) {
@@ -368,6 +369,7 @@ export function ClientDetailModal({
             q = query(
               collection(db, "tasks"),
               where("dealId", "==", dId),
+              where("agencyId", "==", userData.agencyId),
               where("sellerId", "==", userData.id),
             );
           } else if (userData?.role !== "master" && userData?.agencyId) {
