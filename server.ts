@@ -197,9 +197,9 @@ async function startServer() {
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
-      const db = getClientDb();
-      if (!db) {
-        return res.status(500).send("Database not initialized");
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).send("Base de datos no disponible");
       }
 
       // Handle the event
@@ -209,14 +209,14 @@ async function startServer() {
           const agencyId = checkoutSession.client_reference_id;
           
           if (agencyId) {
-            const agencyRef = doc(db, "agencies", agencyId);
+            const agencyRef = adminDb.collection("agencies").doc(agencyId);
             const updates: any = {
-              updatedAt: serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
             };
             
             // Check if this was a credit purchase
             if (checkoutSession.metadata && checkoutSession.metadata.creditsToAdd) {
-               updates.aiCredits = increment(parseInt(checkoutSession.metadata.creditsToAdd, 10));
+               updates.aiCredits = FieldValue.increment(parseInt(checkoutSession.metadata.creditsToAdd, 10));
             } else {
                // Otherwise assume it's the main subscription
                updates.subscriptionStatus = "active";
@@ -224,34 +224,35 @@ async function startServer() {
             }
             
             // Update agency status
-            await setDoc(agencyRef, updates, { merge: true });
+            await agencyRef.set(updates, { merge: true });
           }
           break;
         case "customer.subscription.updated": {
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
           const status = subscription.status;
-          const agenciesQuery = query(collection(db, "agencies"), where("stripeCustomerId", "==", customerId));
-          const agenciesSnapshot = await getDocs(agenciesQuery);
+          const agenciesQuery = adminDb.collection("agencies").where("stripeCustomerId", "==", customerId);
+          const agenciesSnapshot = await agenciesQuery.get();
           
           if (!agenciesSnapshot.empty) {
             const agencyDoc = agenciesSnapshot.docs[0];
-            await setDoc(agencyDoc.ref, { subscriptionStatus: status, updatedAt: serverTimestamp() }, { merge: true });
+            await agencyDoc.ref.set({ subscriptionStatus: status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
           }
           break;
         }
-        case "customer.subscription.deleted":
+        case "customer.subscription.deleted": {
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
           // Find agency by customerId and update status
-          const agenciesQuery = query(collection(db, "agencies"), where("stripeCustomerId", "==", customerId));
-          const agenciesSnapshot = await getDocs(agenciesQuery);
+          const agenciesQuery = adminDb.collection("agencies").where("stripeCustomerId", "==", customerId);
+          const agenciesSnapshot = await agenciesQuery.get();
           
           if (!agenciesSnapshot.empty) {
             const agencyDoc = agenciesSnapshot.docs[0];
-            await setDoc(agencyDoc.ref, { subscriptionStatus: "canceled", updatedAt: serverTimestamp() }, { merge: true });
+            await agencyDoc.ref.set({ subscriptionStatus: "canceled", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
           }
           break;
+        }
         // ... handle other event types
         default:
           console.log(`Unhandled event type ${event.type}`);
@@ -291,11 +292,15 @@ async function startServer() {
       }
 
       if (decodedToken) {
-        const db = getClientDb();
-        const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
-        if (userDoc.exists()) {
+        const adminDb = getAdminDb();
+        if (!adminDb) {
+          return res.status(500).json({ error: "Base de datos no disponible" });
+        }
+        const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+        const userDoc = await userDocRef.get();
+        if (userDoc.exists) {
           const userData = userDoc.data();
-          if (userData.role !== "master" && userData.agencyId !== agencyId) {
+          if (userData && userData.role !== "master" && userData.agencyId !== agencyId) {
             return res.status(403).json({ error: "No tienes permiso para esta agencia" });
           }
         }
@@ -366,13 +371,16 @@ async function startServer() {
         displayName: name || email.split('@')[0],
       });
 
-      const db = getClientDb();
-      await setDoc(doc(db, "users", userRecord.uid), {
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+      await adminDb.collection("users").doc(userRecord.uid).set({
         email,
         role,
         agencyId,
         name: name || email.split('@')[0],
-        createdAt: serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
@@ -415,17 +423,11 @@ async function startServer() {
       }
 
       // Delete from Firestore using Admin DB
-      try {
-        const adminDb = getAdminDb();
-        if (adminDb) {
-          await adminDb.collection("users").doc(uid).delete();
-        } else {
-          const db = getClientDb();
-          await deleteDoc(doc(db, "users", uid));
-        }
-      } catch (fsErr: any) {
-        console.warn("Error deleting user doc from Firestore in server API:", fsErr.message);
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
       }
+      await adminDb.collection("users").doc(uid).delete();
 
       res.status(200).json({ success: true });
     } catch (err: any) {
@@ -442,20 +444,14 @@ async function startServer() {
       }
 
       const adminDb = getAdminDb();
-      if (adminDb) {
-        const usersSnap = await adminDb.collection("users").where("agencyId", "==", agencyId).get();
-        for (const uDoc of usersSnap.docs) {
-          await adminDb.collection("users").doc(uDoc.id).update({ agencyId: "unassigned" });
-        }
-        await adminDb.collection("agencies").doc(agencyId).delete();
-      } else {
-        const db = getClientDb();
-        const usersSnap = await getDocs(query(collection(db, "users"), where("agencyId", "==", agencyId)));
-        for (const uDoc of usersSnap.docs) {
-          await updateDoc(doc(db, "users", uDoc.id), { agencyId: "unassigned" });
-        }
-        await deleteDoc(doc(db, "agencies", agencyId));
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
       }
+      const usersSnap = await adminDb.collection("users").where("agencyId", "==", agencyId).get();
+      for (const uDoc of usersSnap.docs) {
+        await adminDb.collection("users").doc(uDoc.id).update({ agencyId: "unassigned" });
+      }
+      await adminDb.collection("agencies").doc(agencyId).delete();
 
       res.status(200).json({ success: true });
     } catch (err: any) {
@@ -476,14 +472,18 @@ async function startServer() {
       const auth = getAuth(getAdminApp()!);
       const decodedToken = await auth.verifyIdToken(token);
       
-      const db = getClientDb();
-      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
-      if (!userDoc.exists()) {
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
       
       const userData = userDoc.data();
-      if (userData.role !== "master" && userData.role !== "admin") {
+      if (userData?.role !== "master" && userData?.role !== "admin") {
         return res.status(403).json({ error: "Se requiere rol admin o master" });
       }
     } catch (e) {
