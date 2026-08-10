@@ -1002,33 +1002,37 @@ Return a JSON array of recommendation objects with the following schema:
       if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
       
       const decodedToken = await getAuth(adminApp).verifyIdToken(token);
-      const db = getClientDb();
-      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
-      if (!userDoc.exists()) {
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
       const userData = userDoc.data();
-      const agencyId = (req.query.agencyId as string) || userData.agencyId;
+      const agencyId = (req.query.agencyId as string) || userData?.agencyId;
       
-      if (userData.role !== "master" && userData.role !== "admin") {
+      if (userData?.role !== "master" && userData?.role !== "admin") {
         return res.status(403).json({ error: "Solo administradores pueden consultar la clave MCP" });
       }
-      if (userData.role !== "master" && userData.agencyId !== agencyId) {
+      if (userData?.role !== "master" && userData?.agencyId !== agencyId) {
         return res.status(403).json({ error: "No tienes permiso para esta agencia" });
       }
 
-      const agencySnap = await getDoc(doc(db, "agencies", agencyId));
-      if (!agencySnap.exists()) {
+      const agencyDocRef = adminDb.collection("agencies").doc(agencyId);
+      const agencySnap = await agencyDocRef.get();
+      if (!agencySnap.exists) {
         return res.status(404).json({ error: "Agencia no encontrada" });
       }
       const agencyData = agencySnap.data();
-      const apiKey = agencyData.mcpApiKey || null;
+      const apiKey = agencyData?.mcpApiKey || null;
 
       if (apiKey) {
         return res.json({
           hasKey: true,
           maskedKey: "••••••••" + apiKey.slice(-4),
-          createdAt: agencyData.mcpApiKeyCreatedAt || null
+          createdAt: agencyData?.mcpApiKeyCreatedAt || null
         });
       } else {
         return res.json({ hasKey: false, maskedKey: null });
@@ -1049,27 +1053,30 @@ Return a JSON array of recommendation objects with the following schema:
       if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
       
       const decodedToken = await getAuth(adminApp).verifyIdToken(token);
-      const db = getClientDb();
-      const userDoc = await getDoc(doc(db, "users", decodedToken.uid));
-      if (!userDoc.exists()) {
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
       const userData = userDoc.data();
       const { agencyId } = req.body;
-      const targetAgencyId = agencyId || userData.agencyId;
+      const targetAgencyId = agencyId || userData?.agencyId;
 
-      if (userData.role !== "master" && userData.role !== "admin") {
+      if (userData?.role !== "master" && userData?.role !== "admin") {
         return res.status(403).json({ error: "Solo administradores pueden generar claves MCP" });
       }
-      if (userData.role !== "master" && userData.agencyId !== targetAgencyId) {
+      if (userData?.role !== "master" && userData?.agencyId !== targetAgencyId) {
         return res.status(403).json({ error: "No tienes permiso para esta agencia" });
       }
 
       const newKey = `erewere_mcp_` + crypto.randomBytes(24).toString("hex");
 
-      await updateDoc(doc(db, "agencies", targetAgencyId), {
+      await adminDb.collection("agencies").doc(targetAgencyId).update({
         mcpApiKey: newKey,
-        mcpApiKeyCreatedAt: serverTimestamp()
+        mcpApiKeyCreatedAt: FieldValue.serverTimestamp()
       });
 
       return res.json({
@@ -1102,9 +1109,9 @@ Return a JSON array of recommendation objects with the following schema:
     }
 
     try {
-      const agenciesRef = collection(db, "agencies");
-      const q = query(agenciesRef, where("mcpApiKey", "==", apiKey.trim()));
-      const snapshot = await getDocs(q);
+      const agenciesRef = db.collection("agencies");
+      const q = agenciesRef.where("mcpApiKey", "==", apiKey.trim());
+      const snapshot = await q.get();
 
       if (snapshot.empty) {
         return null;
@@ -1322,13 +1329,12 @@ Return a JSON array of recommendation objects with the following schema:
       // We ignore caller-supplied agencyId or any defaults.
 
       if (toolName === "get_inventory") {
-        const q = query(
-          collection(db, "vehicles"),
-          where("agencyId", "==", targetAgencyId),
-          where("status", "==", "available")
-        );
-        const snapshot = await getDocs(q);
-        const vehicles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const q = db
+          .collection("vehicles")
+          .where("agencyId", "==", targetAgencyId)
+          .where("status", "==", "available");
+        const snapshot = await q.get();
+        const vehicles = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
         return {
           jsonrpc: "2.0",
@@ -1346,13 +1352,12 @@ Return a JSON array of recommendation objects with the following schema:
 
       if (toolName === "get_clients") {
         const limitCount = toolArgs.limit || 20;
-        const q = query(
-          collection(db, "clients"),
-          where("agencyId", "==", targetAgencyId),
-          limit(limitCount)
-        );
-        const snapshot = await getDocs(q);
-        const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const q = db
+          .collection("clients")
+          .where("agencyId", "==", targetAgencyId)
+          .limit(limitCount);
+        const snapshot = await q.get();
+        const clients = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
         return {
           jsonrpc: "2.0",
@@ -1386,11 +1391,11 @@ Return a JSON array of recommendation objects with the following schema:
           vehicle: vehicle || "",
           origin: origin || "mcp_ai",
           status: "new",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
         };
 
-        const docRef = await addDoc(collection(db, "clients"), newClient);
+        const docRef = await db.collection("clients").add(newClient);
 
         return {
           jsonrpc: "2.0",
@@ -1407,16 +1412,16 @@ Return a JSON array of recommendation objects with the following schema:
       }
 
       if (toolName === "get_sales_stats") {
-        const qClients = query(collection(db, "clients"), where("agencyId", "==", targetAgencyId));
-        const qVehicles = query(collection(db, "vehicles"), where("agencyId", "==", targetAgencyId));
+        const qClients = db.collection("clients").where("agencyId", "==", targetAgencyId);
+        const qVehicles = db.collection("vehicles").where("agencyId", "==", targetAgencyId);
 
         const [clientsSnap, vehiclesSnap] = await Promise.all([
-          getDocs(qClients),
-          getDocs(qVehicles)
+          qClients.get(),
+          qVehicles.get()
         ]);
 
-        const clients = clientsSnap.docs.map(d => d.data());
-        const vehicles = vehiclesSnap.docs.map(d => d.data());
+        const clients = clientsSnap.docs.map((d: any) => d.data());
+        const vehicles = vehiclesSnap.docs.map((d: any) => d.data());
 
         const soldVehicles = vehicles.filter((v: any) => v.status === "sold");
         const totalRevenue = soldVehicles.reduce((acc: number, v: any) => acc + (v.saleDetails?.price || v.price || 0), 0);
@@ -1591,8 +1596,11 @@ Return a JSON array of recommendation objects with the following schema:
       return res.status(400).send("redirect_uri inválida o ausente.");
     }
 
-    const db = getClientDb();
-    const agency = await findAgencyByMcpKey(mcpApiKey, db);
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      return res.status(500).send("Base de datos no disponible");
+    }
+    const agency = await findAgencyByMcpKey(mcpApiKey, adminDb);
 
     if (!agency) {
       const html = renderOauthAuthorizeHtml({
@@ -1693,8 +1701,11 @@ Return a JSON array of recommendation objects with the following schema:
 
   // SSE Transport connection handler
   const handleSseConnect = async (req: express.Request, res: express.Response) => {
-    const db = getClientDb();
-    const authResult = await authenticateMcpKey(req, db);
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      return res.status(500).json({ error: "Base de datos no disponible" });
+    }
+    const authResult = await authenticateMcpKey(req, adminDb);
 
     if (!authResult) {
       const host = req.get("host");
@@ -1769,10 +1780,20 @@ Return a JSON array of recommendation objects with the following schema:
   // Dispatcher for POST MCP JSON-RPC requests
   const handleMcpMessage = async (req: express.Request, res: express.Response) => {
     const sessionId = (req.query.sessionId || req.headers["mcp-session-id"]) as string;
-    const db = getClientDb();
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      return res.status(500).json({
+        jsonrpc: "2.0",
+        id: req.body?.id || null,
+        error: {
+          code: -32603,
+          message: "Base de datos no disponible"
+        }
+      });
+    }
 
     // Authenticate API key for POST /mcp requests
-    const authResult = await authenticateMcpKey(req, db);
+    const authResult = await authenticateMcpKey(req, adminDb);
     if (!authResult) {
       const host = req.get("host");
       const protocol = req.protocol || "https";
@@ -1790,7 +1811,7 @@ Return a JSON array of recommendation objects with the following schema:
     }
 
     try {
-      const responseJson = await processJsonRpc(req, db, authResult.agencyId);
+      const responseJson = await processJsonRpc(req, adminDb, authResult.agencyId);
 
       if (sessionId && sseSessions.has(sessionId)) {
         const sseSession = sseSessions.get(sessionId)!;
