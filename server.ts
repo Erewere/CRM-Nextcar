@@ -47,13 +47,14 @@ function getAdminApp() {
       if (existingApps && existingApps.length > 0) {
         adminApp = existingApps[0];
       } else {
-        const saEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
+        const saB64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
         let serviceAccount: any = null;
-        if (saEnv) {
+        if (saB64) {
           try {
-            serviceAccount = JSON.parse(saEnv);
+            const decodedJson = Buffer.from(saB64, "base64").toString("utf8");
+            serviceAccount = JSON.parse(decodedJson);
           } catch (jsonErr) {
-            console.warn("FIREBASE_SERVICE_ACCOUNT inválida (error al parsear JSON):", jsonErr);
+            console.warn("FIREBASE_SERVICE_ACCOUNT_B64 inválida (error al decodificar base64 o parsear JSON):", jsonErr);
           }
         }
 
@@ -64,7 +65,7 @@ function getAdminApp() {
           });
           console.log("Firebase Admin inicializado con cuenta de servicio.");
         } else {
-          console.warn("FIREBASE_SERVICE_ACCOUNT no configurada o inválida: las operaciones Admin de Firestore no funcionarán.");
+          console.warn("FIREBASE_SERVICE_ACCOUNT_B64 no configurada o inválida: las operaciones Admin de Firestore no funcionarán.");
           let projectId = process.env.FIREBASE_PROJECT_ID;
           if (!projectId) {
             try {
@@ -143,6 +144,19 @@ async function initSystemAuth() {
     } catch (fsErr) {
       console.error("Failed to write server error log:", fsErr);
     }
+  }
+
+  // Verificación de diagnóstico del Admin SDK (ejecutado en segundo plano)
+  try {
+    const adminDb = getAdminDb();
+    if (adminDb) {
+      const snap = await adminDb.collection("agencies").limit(1).get();
+      console.log(`Verificación Admin SDK: lectura de Firestore OK (${snap.docs.length} documentos).`);
+    } else {
+      console.error("Verificación Admin SDK FALLÓ: adminDb no está disponible.");
+    }
+  } catch (adminCheckErr: any) {
+    console.error("Verificación Admin SDK FALLÓ:", adminCheckErr?.message || adminCheckErr);
   }
 }
 
