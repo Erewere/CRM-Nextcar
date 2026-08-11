@@ -4,6 +4,7 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { Client, Vehicle } from "../types";
 import { getClientMatches } from "../services/matchingEngine";
+import { getApiUrl } from "../lib/api";
 
 export interface SharedMatch {
   client: Client;
@@ -97,8 +98,7 @@ export function useSharedInventoryMatches() {
   // 4. Listen to available vehicles from other agencies (only if we are sharing)
   useEffect(() => {
     if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') return;
-    
-    // We only load shared vehicles if we are sharing ourselves to keep it fair and secure.
+
     if (!ownAgencySharing) {
       setOtherVehicles([]);
       return;
@@ -110,27 +110,40 @@ export function useSharedInventoryMatches() {
       return;
     }
 
-    // Load available vehicles. Since Firestore "in" operator has a max of 30, we can fetch all "available" vehicles
-    // and filter them in memory, or query them. Fetching all available vehicles is very standard.
-    const vehiclesQ = query(
-      collection(db, "vehicles"),
-      where("status", "==", "available")
-    );
+    let cancelled = false;
 
-    const unsubscribeVehicles = onSnapshot(vehiclesQ, (snap) => {
-      const list: Vehicle[] = [];
-      snap.forEach((d) => {
-        const v = { id: d.id, ...d.data() } as Vehicle;
-        if (v.agencyId !== userData.agencyId && sharingAgencies[v.agencyId]) {
-          list.push(v);
+    const fetchOtherVehicles = async () => {
+      try {
+        const results = await Promise.all(
+          sharingIds.map(async (agencyId) => {
+            try {
+              const res = await fetch(
+                getApiUrl(`/api/public/v1/inventory?agencyId=${encodeURIComponent(agencyId)}`)
+              );
+              if (!res.ok) return [];
+              const data = await res.json();
+              return (data.vehicles || []).map((v: any) => ({ ...v, agencyId }));
+            } catch (err) {
+              console.error(`Error loading shared inventory from agency ${agencyId}:`, err);
+              return [];
+            }
+          })
+        );
+        if (!cancelled) {
+          setOtherVehicles(results.flat() as Vehicle[]);
         }
-      });
-      setOtherVehicles(list);
-    }, (err) => {
-      console.error("Error loading available vehicles for matches:", err);
-    });
+      } catch (err) {
+        console.error("Error loading available vehicles for matches:", err);
+      }
+    };
 
-    return () => unsubscribeVehicles();
+    fetchOtherVehicles();
+    const intervalId = setInterval(fetchOtherVehicles, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, [sharingAgencies, userData, ownAgencySharing]);
 
   // 5. Calculate matches whenever clients or otherVehicles change
