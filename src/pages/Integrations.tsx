@@ -9,6 +9,8 @@ export function Integrations() {
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [hasAccessToken, setHasAccessToken] = useState(false);
+  const [maskedAccessToken, setMaskedAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -140,48 +142,65 @@ export function Integrations() {
     const loadConfig = async () => {
       if (!userData?.agencyId) return;
       try {
-        const docRef = doc(db, 'agencies', userData.agencyId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data.whatsappConfig) {
-            setPhoneNumberId(data.whatsappConfig.phoneNumberId || '');
-            setAccountId(data.whatsappConfig.accountId || '');
-            setAccessToken(data.whatsappConfig.accessToken || '');
+        if (currentUser) {
+          const token = await currentUser.getIdToken();
+          const res = await fetch(`/api/agencies/whatsapp-config?agencyId=${userData.agencyId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setPhoneNumberId(data.phoneNumberId || '');
+            setAccountId(data.accountId || '');
+            setHasAccessToken(!!data.hasAccessToken);
+            setMaskedAccessToken(data.maskedAccessToken || null);
           }
         }
-        // Generate a webhook URL specific to this agency for them to configure in Meta
+        // La misma URL de webhook sirve para todas las agencias: Meta identifica
+        // a cuál pertenece cada mensaje según el Phone Number ID configurado abajo.
         const currentDomain = window.location.origin;
-        setWebhookUrl(`${currentDomain}/api/whatsapp/webhook/${userData.agencyId}`);
+        setWebhookUrl(`${currentDomain}/api/meta/webhook`);
       } catch (error) {
         console.error("Error loading whatsapp config:", error);
       }
     };
     loadConfig();
-  }, [userData]);
+  }, [userData, currentUser]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userData?.agencyId) return;
-    
+    if (!userData?.agencyId || !currentUser) return;
+
     setLoading(true);
     setSaved(false);
-    
+
     try {
-      const docRef = doc(db, 'agencies', userData.agencyId);
-      await updateDoc(docRef, {
-        whatsappConfig: {
+      const token = await currentUser.getIdToken();
+      const res = await fetch('/api/agencies/whatsapp-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          agencyId: userData.agencyId,
           phoneNumberId,
           accountId,
-          accessToken,
-          updatedAt: new Date().toISOString()
-        }
+          ...(accessToken ? { accessToken } : {}),
+        }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar la configuración');
+
+      if (accessToken) {
+        setHasAccessToken(true);
+        setMaskedAccessToken('••••••••' + accessToken.slice(-4));
+        setAccessToken('');
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving whatsapp config:", error);
-      alert("Hubo un error al guardar la configuración.");
+      alert(error.message || "Hubo un error al guardar la configuración.");
     } finally {
       setLoading(false);
     }
@@ -241,10 +260,11 @@ export function Integrations() {
                   <div className="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs border border-gray-200 dark:border-slate-700">4</div>
                   <div className="text-slate-600 dark:text-slate-400">
                     <strong className="text-slate-800 dark:text-slate-200 block mb-0.5">Configura el Webhook</strong>
-                    En la sección "Webhooks" de Meta, usa esta URL de devolución y el token <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-xs">CRM_VERIFY_TOKEN</code>:
+                    Esta URL es la misma para todas las agencias — Meta identifica automáticamente a cuál pertenece cada mensaje según el Phone Number ID que configures a la derecha. En la sección "Webhooks" de Meta, usa esta URL de devolución:
                     <div className="mt-2 p-2 bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded text-xs font-mono break-all text-slate-800 dark:text-slate-300 select-all">
                       {webhookUrl || 'Cargando URL...'}
                     </div>
+                    Como token de verificación, usa el valor configurado en la variable de entorno <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-xs">META_VERIFY_TOKEN</code> en Hostinger (pídele a tu administrador técnico este valor si no lo tienes).
                   </div>
                 </div>
               </div>
@@ -289,12 +309,17 @@ export function Integrations() {
                     </label>
                     <input
                       type="password"
-                      required
+                      required={!hasAccessToken}
                       value={accessToken}
                       onChange={(e) => setAccessToken(e.target.value)}
-                      placeholder="EAAL..."
+                      placeholder={hasAccessToken ? 'Dejar en blanco para mantener el token actual' : 'EAAL...'}
                       className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
                     />
+                    {hasAccessToken && (
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Token guardado: {maskedAccessToken}. Por seguridad no se puede ver completo — solo reemplazarlo.
+                      </p>
+                    )}
                   </div>
 
                   <div className="pt-2">

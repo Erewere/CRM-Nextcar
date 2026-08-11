@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function ShareVehicleModal({ vehicle, onClose }: Props) {
-  const { userData } = useAuth();
+  const { userData, currentUser } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -66,9 +66,13 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
       if (phone.length === 10) phone = '52' + phone;
 
       // Send Template
+      const idToken = await currentUser?.getIdToken();
       const res = await fetch(getApiUrl('/api/meta/send-template'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           to: phone,
           templateName: 'vehicle_recommendation',
