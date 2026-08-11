@@ -467,6 +467,69 @@ async function startServer() {
     }
   });
 
+  app.post("/api/delete-vehicle", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.split("Bearer ")[1];
+      if (!token) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+
+      const callerDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const callerDoc = await callerDocRef.get();
+      if (!callerDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const callerData = callerDoc.data();
+      if (callerData?.role !== "master" && callerData?.role !== "admin") {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+
+      const { vehicleId } = req.body;
+      if (!vehicleId) {
+        return res.status(400).json({ error: "Falta el parámetro vehicleId" });
+      }
+
+      const vehicleDocRef = adminDb.collection("vehicles").doc(vehicleId);
+      const vehicleDoc = await vehicleDocRef.get();
+      if (!vehicleDoc.exists) {
+        return res.status(404).json({ error: "Vehículo no encontrado" });
+      }
+
+      if (callerData.role === "admin") {
+        const vehicleData = vehicleDoc.data();
+        if (vehicleData?.agencyId !== callerData.agencyId) {
+          return res.status(403).json({ error: "No tienes permiso para eliminar vehículos de otra agencia" });
+        }
+      }
+
+      await vehicleDocRef.delete();
+
+      return res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("Delete Vehicle Error:", err);
+      return res.status(500).json({ error: err.message || "Error al eliminar vehículo" });
+    }
+  });
+
   // === Resend Email Endpoint ===
   app.post("/api/send-invite", async (req, res) => {
     try {

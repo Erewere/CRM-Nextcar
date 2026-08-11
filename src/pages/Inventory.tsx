@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDocs, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs, getDoc } from 'firebase/firestore';
+import { getApiUrl } from '../lib/api';
 import { Vehicle, Client, VehicleExpense } from '../types';
 import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
@@ -139,7 +140,7 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
 };
 
 export function Inventory() {
-  const { userData } = useAuth();
+  const { userData, currentUser } = useAuth();
   const isMobile = useIsMobile();
   const isReadOnly = useReadOnly();
   const navigate = useNavigate();
@@ -509,8 +510,24 @@ export function Inventory() {
   }, [ownAgencySharing, sharingAgencies, userData]);
 
   const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, 'vehicles', id));
-    setVehicleToDelete(null);
+    try {
+      const token = await currentUser?.getIdToken();
+      const res = await fetch(getApiUrl('/api/delete-vehicle'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ vehicleId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar el vehículo');
+    } catch (err: any) {
+      console.error('Error deleting vehicle:', err);
+      alert(err.message || 'Error al eliminar el vehículo');
+    } finally {
+      setVehicleToDelete(null);
+    }
   };
 
   const handleValidateStatus = async (vehicleId: string, approve: boolean, newStatus?: string) => {
