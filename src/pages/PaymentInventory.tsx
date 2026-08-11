@@ -121,9 +121,9 @@ export function PaymentInventory() {
     );
     const dealIsWon = isWon(deal.status) || isWon(person.status) || Boolean(deal.saleDetails?.price || person.saleDetails?.price) || (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
-    const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, person.saleDetails, vehicle?.saleDetails);
+    const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, person.saleDetails, isRecordedBuyer ? vehicle?.saleDetails : undefined);
 
-    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? vehicle?.saleDetails?.price ?? deal.value ?? deal.dealValue ?? person.dealValue;
+    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? (isRecordedBuyer ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
     const soldAt = deal.soldAt || person.soldAt || vehicle?.soldAt || deal.updatedAt || person.updatedAt;
 
     const statusToUse = dealIsWon ? 'won' : (deal.status || person.status || 'lead');
@@ -152,8 +152,8 @@ export function PaymentInventory() {
     );
     const personIsWon = isWon(person.status) || Boolean(person.saleDetails?.price) || (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
-    const mergedSaleDetails = getMergedSaleDetails(undefined, person.saleDetails, vehicle?.saleDetails);
-    const mergedDealValue = person.saleDetails?.price ?? vehicle?.saleDetails?.price ?? person.dealValue ?? vehicle?.price;
+    const mergedSaleDetails = getMergedSaleDetails(undefined, person.saleDetails, isRecordedBuyer ? vehicle?.saleDetails : undefined);
+    const mergedDealValue = person.saleDetails?.price ?? (isRecordedBuyer ? vehicle?.saleDetails?.price : undefined) ?? person.dealValue ?? vehicle?.price;
     const soldAt = person.soldAt || vehicle?.soldAt || person.updatedAt;
 
     const statusToUse = personIsWon ? 'won' : person.status;

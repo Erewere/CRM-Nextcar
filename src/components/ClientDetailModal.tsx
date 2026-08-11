@@ -275,7 +275,7 @@ export function ClientDetailModal({
           ...prev,
           ...cData,
           dealValue: cData.saleDetails?.price !== undefined ? cData.saleDetails.price : (cData.dealValue !== undefined ? cData.dealValue : prev.dealValue),
-          saleDetails: cData.saleDetails || prev.saleDetails,
+          saleDetails: cData.saleDetails,
           soldAt: cData.soldAt || prev.soldAt,
           status: cData.status || prev.status,
           vehicle: cData.vehicle || prev.vehicle,
@@ -295,7 +295,7 @@ export function ClientDetailModal({
           setFormData((prev) => ({
             ...prev,
             dealValue: dData.saleDetails?.price !== undefined ? dData.saleDetails.price : (dData.value !== undefined ? dData.value : (dData.dealValue !== undefined ? dData.dealValue : prev.dealValue)),
-            saleDetails: dData.saleDetails || prev.saleDetails,
+            saleDetails: dData.saleDetails,
             soldAt: dData.soldAt || prev.soldAt,
             status: dData.status || prev.status,
             vehicle: dData.vehicle || prev.vehicle,
@@ -874,7 +874,8 @@ export function ClientDetailModal({
       if (finalClientId) {
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
-      if (formData.vehicleId) {
+      const isThisClientTheBuyer = Boolean(payment.markSaleAsWon || formData.status === 'won');
+      if (formData.vehicleId && isThisClientTheBuyer) {
         const vehicleUpdate: any = {
           saleDetails: updatedSaleDetails,
           updatedAt: new Date().toISOString()

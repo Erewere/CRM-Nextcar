@@ -107,7 +107,8 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
       const vId = clientData?.vehicleId || client.vehicleId;
-      if (vId) {
+      const isThisClientTheBuyer = Boolean(payment.markSaleAsWon || currentStatus === 'won' || clientData?.status === 'won' || client?.status === 'won');
+      if (vId && isThisClientTheBuyer) {
         const vehicleUpdate: any = {
           saleDetails: updatedSaleDetails,
           updatedAt: new Date().toISOString()
@@ -205,7 +206,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     const unsubClient = onSnapshot(doc(db, "clients", actualClientId), (snap) => {
       if (snap.exists()) {
         const cData = snap.data() as Client;
-        setClientData(prev => ({ ...prev, ...cData }));
+        setClientData(prev => ({ ...prev, ...cData, saleDetails: cData.saleDetails }));
         if (cData.status) setCurrentStatus(cData.status);
       }
     });
@@ -221,7 +222,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           setClientData(prev => ({
             ...prev,
             dealValue: dData.value !== undefined ? dData.value : (dData.saleDetails?.price || prev.dealValue),
-            saleDetails: dData.saleDetails || prev.saleDetails,
+            saleDetails: dData.saleDetails,
             soldAt: dData.soldAt || prev.soldAt,
             status: dData.status || prev.status,
             vehicle: dData.vehicle || prev.vehicle,
