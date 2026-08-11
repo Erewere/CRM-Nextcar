@@ -29,7 +29,7 @@ const safeDate = (val: any) => {
   return isNaN(d.getTime()) ? new Date() : d;
 };
 
-const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller')[] }) => {
+const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller' | 'taller')[] }) => {
   const { currentUser, userData, agencyData, loading } = useAuth();
 
   console.log("ProtectedRoute: rendering", { 
@@ -100,12 +100,12 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><VehiclePrint /></ProtectedRoute>} />
+          <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['master', 'admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="intelligence" element={<ProtectedRoute requireRole={['master', 'admin']}><IntelligenceDashboard /></ProtectedRoute>} />
-            <Route path="inventory" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><Inventory /></ProtectedRoute>} />
+            <Route path="inventory" element={<ProtectedRoute requireRole={['master', 'admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />

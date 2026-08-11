@@ -19,6 +19,8 @@ export function AgencyUsers() {
   const [newAgencyName, setNewAgencyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteTargetAgencyId, setInviteTargetAgencyId] = useState('');
+  const [inviteCanManageVehicles, setInviteCanManageVehicles] = useState(false);
+  const [inviteCanManageExpenses, setInviteCanManageExpenses] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState('');
   
@@ -213,6 +215,18 @@ export function AgencyUsers() {
     }
   };
 
+  const handleTogglePermission = async (userId: string, permission: 'canManageVehicles' | 'canManageExpenses', value: boolean) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        [permission]: value
+      });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, [permission]: value } : u));
+    } catch (err) {
+      console.error("Error updating permission:", err);
+      alert("Error al actualizar permisos.");
+    }
+  };
+
   const handleUpdateAgency = async (userId: string, newAgencyId: string) => {
     try {
       await updateDoc(doc(db, 'users', userId), { agencyId: newAgencyId });
@@ -275,13 +289,20 @@ export function AgencyUsers() {
                 }
 
                 // Email exists in Auth (orphaned from previous delete), but not active in CRM!
+                const isSellerRole = inviteRole === 'seller';
+                const extraPermissions = {
+                    canManageVehicles: isSellerRole ? inviteCanManageVehicles : false,
+                    canManageExpenses: isSellerRole ? inviteCanManageExpenses : false,
+                };
+
                 // Create user document in Firestore so they appear in CRM
                 const docRef = await addDoc(collection(db, 'users'), {
                     email: targetEmail,
                     name: inviteName.trim(),
                     role: inviteRole,
                     agencyId: targetAgencyId,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    ...extraPermissions
                 });
 
                 // Send password reset email so user can set a new password
@@ -304,7 +325,8 @@ export function AgencyUsers() {
                     name: inviteName.trim(),
                     role: inviteRole,
                     agencyId: targetAgencyId,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    ...extraPermissions
                 }]);
 
                 setInviteSuccessMsg(`¡El usuario ya existía en la autenticación! Se ha reactivado su cuenta en el CRM y se le ha enviado un correo para restablecer su contraseña.`);
@@ -312,12 +334,19 @@ export function AgencyUsers() {
                 setCreatedUserEmail(targetEmail);
                 setInviteEmail('');
                 setInviteName('');
+                setInviteCanManageVehicles(false);
+                setInviteCanManageExpenses(false);
                 return;
             }
             throw new Error(errorMsg);
         }
         
         const newUserId = data.localId;
+        const isSellerRole = inviteRole === 'seller';
+        const extraPermissions = {
+            canManageVehicles: isSellerRole ? inviteCanManageVehicles : false,
+            canManageExpenses: isSellerRole ? inviteCanManageExpenses : false,
+        };
 
         // Save user data to Firestore
         await setDoc(doc(db, 'users', newUserId), {
@@ -325,7 +354,8 @@ export function AgencyUsers() {
             name: inviteName.trim(),
             role: inviteRole,
             agencyId: targetAgencyId,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            ...extraPermissions
         });
 
         // Add the new user to the local list
@@ -335,7 +365,8 @@ export function AgencyUsers() {
             name: inviteName.trim(),
             role: inviteRole,
             agencyId: targetAgencyId,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            ...extraPermissions
         }]);
 
         setInviteSuccessMsg(`¡Usuario creado con éxito!`);
@@ -343,6 +374,8 @@ export function AgencyUsers() {
         setCreatedUserEmail(targetEmail);
         setInviteEmail('');
         setInviteName('');
+        setInviteCanManageVehicles(false);
+        setInviteCanManageExpenses(false);
     } catch (e: any) {
         console.error(e);
         alert('Error al crear usuario. ' + (e.message || ''));
@@ -598,10 +631,37 @@ export function AgencyUsers() {
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             >
               <option value="seller">Vendedor</option>
+              <option value="taller">Taller</option>
               <option value="admin">Administrador</option>
             </select>
           </div>
         </div>
+
+        {inviteRole === 'seller' && (
+          <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col gap-2 text-xs">
+            <span className="font-bold text-slate-700 dark:text-slate-300">Permisos opcionales para Vendedor:</span>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={inviteCanManageVehicles}
+                  onChange={e => setInviteCanManageVehicles(e.target.checked)}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>Puede dar de alta vehículos</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={inviteCanManageExpenses}
+                  onChange={e => setInviteCanManageExpenses(e.target.checked)}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>Puede gestionar gastos de vehículo</span>
+              </label>
+            </div>
+          </div>
+        )}
         <div className="flex justify-end mt-2">
           <button
             onClick={handleCreateUser}
@@ -957,12 +1017,35 @@ export function AgencyUsers() {
                   {u.role === 'master' && <span className="inline-flex items-center rounded-md bg-stone-100 px-2 py-1 text-[10px] font-medium text-stone-600 ring-1 ring-inset ring-stone-500/10"><Shield className="w-3 h-3 mr-1"/> Master</span>}
                   {u.role === 'admin' && <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Admin</span>}
                   {u.role === 'seller' && <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">Vendedor</span>}
+                  {u.role === 'taller' && <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-[10px] font-medium text-purple-700 ring-1 ring-inset ring-purple-600/10">Taller</span>}
                   {u.role === 'unassigned' && <span className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-[10px] font-medium text-orange-700 ring-1 ring-inset ring-orange-600/10">Pendiente</span>}
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
                   <Mail className="w-3 h-3" />
                   {u.email}
                 </div>
+                {u.role === 'seller' && (
+                  <div className="flex flex-col gap-1 mt-2 text-xs text-slate-600 dark:text-slate-400">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!u.canManageVehicles}
+                        onChange={e => handleTogglePermission(u.id, 'canManageVehicles', e.target.checked)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Puede dar de alta vehículos</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!u.canManageExpenses}
+                        onChange={e => handleTogglePermission(u.id, 'canManageExpenses', e.target.checked)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Puede gestionar gastos de vehículo</span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -994,6 +1077,7 @@ export function AgencyUsers() {
                       {isMaster && u.role === 'master' && <option value="master">Master</option>}
                       <option value="admin">Administrador</option>
                       <option value="seller">Vendedor</option>
+                      <option value="taller">Taller</option>
                       <option value="unassigned">Desasignado</option>
                     </select>
                   </div>

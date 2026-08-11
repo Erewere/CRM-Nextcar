@@ -77,7 +77,7 @@ import {
 import { MasterDashboard } from "../components/MasterDashboard";
 import { LeadScoringEngine } from "../modules/lead-intelligence/services/scoringEngine";
 
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 
 
@@ -108,6 +108,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function Dashboard() {
   const { userData } = useAuth();
+
+  if (userData?.role === 'taller') {
+    return <Navigate to="/inventory" replace />;
+  }
+
   const isReadOnly = useReadOnly();
   const isMobile = useIsMobile();
   const [clients, setClients] = useState<Client[]>([]);

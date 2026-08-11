@@ -179,7 +179,7 @@ export function Layout() {
       name: "Inventario",
       path: "/inventory",
       icon: Car,
-      roles: ["admin", "seller", "master"],
+      roles: ["admin", "seller", "master", "taller"],
     },
     {
       name: "Inv. de Pagos",

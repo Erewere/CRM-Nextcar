@@ -1,12 +1,14 @@
 export interface User {
   id: string; // The uid created in Firebase Auth
   email: string;
-  role: "master" | "admin" | "seller" | "unassigned";
+  role: "master" | "admin" | "seller" | "taller" | "unassigned";
   agencyId: string;
   name: string;
   createdAt: string | Date;
   photoURL?: string;
   adminMobileViewAllContacts?: boolean;
+  canManageVehicles?: boolean;
+  canManageExpenses?: boolean;
 }
 
 export interface PipelineStage {

@@ -96,16 +96,29 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   );
 
   const isMaster = userData?.role === 'master';
+  const isAdmin = userData?.role === 'admin' || isMaster;
   const isOwnVehicle = isNew || (formData.agencyId ? formData.agencyId === userData?.agencyId : (vehicle?.agencyId ? vehicle.agencyId === userData?.agencyId : false));
 
+  const canEditVehicle = (isOwnVehicle || isMaster) && (
+    isAdmin || 
+    userData?.role === 'taller' || 
+    (userData?.role === 'seller' && !!userData?.canManageVehicles)
+  );
+
+  const isGlobalReadOnly = useReadOnly();
+  const isReadOnly = isGlobalReadOnly || !canEditVehicle;
+
   useEffect(() => {
-    if (userData?.role === 'seller' && (activeTab === 'expenses' || activeTab === 'payments')) {
+    if (userData?.role === 'seller' && ((activeTab === 'expenses' && !userData?.canManageExpenses) || activeTab === 'payments')) {
+      setActiveTab('info');
+    }
+    if (userData?.role === 'taller' && activeTab === 'payments') {
       setActiveTab('info');
     }
     if (!isOwnVehicle && !isMaster && (activeTab === 'expenses' || activeTab === 'checklist' || activeTab === 'payments')) {
       setActiveTab('info');
     }
-  }, [userData?.role, activeTab, isOwnVehicle, isMaster]);
+  }, [userData?.role, userData?.canManageExpenses, activeTab, isOwnVehicle, isMaster]);
   const allPhotos = (formData.photoUrls && formData.photoUrls.length > 0)
     ? formData.photoUrls
     : (formData.photoUrl ? [formData.photoUrl] : []);
@@ -794,9 +807,6 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     }
   };
 
-  const isGlobalReadOnly = useReadOnly();
-  const isAdmin = userData?.role === 'admin' || isMaster;
-  const isReadOnly = isGlobalReadOnly || (!isOwnVehicle && !isMaster) || !isAdmin;
 
   const handleStartChat = async () => {
     if (!userData?.agencyId || !formData.agencyId) return;
@@ -854,7 +864,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             >
               Info del Vehículo
             </button>
-            {(isOwnVehicle || isMaster) && userData?.role !== 'seller' && (
+            {(isOwnVehicle || isMaster) && (userData?.role !== 'seller' || userData?.canManageExpenses) && (
               <button 
                  onClick={() => setActiveTab('expenses')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -870,7 +880,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 Checklist
               </button>
             )}
-            {!isNew && (isOwnVehicle || isMaster) && formData.status === 'sold' && userData?.role !== 'seller' && (
+            {!isNew && (isOwnVehicle || isMaster) && formData.status === 'sold' && userData?.role !== 'seller' && userData?.role !== 'taller' && (
               <button 
                  onClick={() => setActiveTab('payments')}
                  className={`font-semibold border-b-2 px-1 py-2 transition-colors ${activeTab === 'payments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
@@ -1057,26 +1067,28 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                       />
                     </div>
                   )}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Precio de Venta</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        type="number" inputMode="numeric" pattern="[0-9]*" required
-                        value={finalSalePrice || ''}
-                        onChange={e => {
-                          const newPrice = Number(e.target.value);
-                          setFormData({
-                            ...formData, 
-                            price: newPrice,
-                            ...(formData.saleDetails ? { saleDetails: { ...formData.saleDetails, price: newPrice } } : {})
-                          });
-                        }}
-                        readOnly={userData?.role === 'seller' && !isNew}
-                        className={`w-full pl-9 pr-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300 ${userData?.role === 'seller' && !isNew ? 'bg-slate-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`} 
-                      />
+                  {userData?.role !== 'taller' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Precio de Venta</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                          type="number" inputMode="numeric" pattern="[0-9]*" required
+                          value={finalSalePrice || ''}
+                          onChange={e => {
+                            const newPrice = Number(e.target.value);
+                            setFormData({
+                              ...formData, 
+                              price: newPrice,
+                              ...(formData.saleDetails ? { saleDetails: { ...formData.saleDetails, price: newPrice } } : {})
+                            });
+                          }}
+                          readOnly={userData?.role === 'seller' && !isNew}
+                          className={`w-full pl-9 pr-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300 ${userData?.role === 'seller' && !isNew ? 'bg-slate-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`} 
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {(formData.status === 'reserved' || formData.status === 'sold') && userData?.role === 'seller' && (
                     <div className="col-span-2">
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Cliente Solicitante</label>
@@ -1243,7 +1255,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           </>
           )}
 
-          {activeTab === 'expenses' && (isOwnVehicle || isMaster) && userData?.role !== 'seller' && (
+          {activeTab === 'expenses' && (isOwnVehicle || isMaster) && (userData?.role !== 'seller' || userData?.canManageExpenses) && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: Register Gasto and Table of Gastos */}
               <div className="lg:col-span-5 flex flex-col gap-4 h-full overflow-y-auto pr-1">
@@ -1882,7 +1894,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 {loading ? 'Iniciando...' : 'Iniciar Chat con Agencia'}
               </button>
             )}
-            {!isReadOnly && isAdmin && (
+            {!isReadOnly && (
               <button type="submit" form="vehicle-form" disabled={loading || uploading} className="px-4 py-2 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded font-bold">
                 {loading ? 'Guardando...' : 'Guardar Vehículo'}
               </button>
