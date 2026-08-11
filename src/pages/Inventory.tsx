@@ -1053,7 +1053,7 @@ export function Inventory() {
                     </div>
                   )}
                   <div className="absolute top-2 right-2 flex gap-2">
-                    {(userData?.role === 'admin' || userData?.role === 'master') && (
+                    {((userData?.role === 'admin' || userData?.role === 'master') && vehicle.agencyId === userData?.agencyId) && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
                         className="p-1.5 bg-white dark:bg-slate-800/90 rounded text-slate-400 hover:text-red-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1260,7 +1260,7 @@ export function Inventory() {
                       );
                     })}
                     <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600 dark:text-slate-400">
-                      {(userData?.role === 'admin' || userData?.role === 'master') ? (
+                      {((userData?.role === 'admin' || userData?.role === 'master') && vehicle.agencyId === userData?.agencyId) ? (
                         <button 
                           onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
                           className="p-1 hover:text-red-600 transition-colors"
