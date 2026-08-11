@@ -493,20 +493,40 @@ export function Inventory() {
     }
 
     const sliceAgencies = sharingAgencies.slice(0, 10);
-    const sharedQ = query(
-      collection(db, 'vehicles'),
-      where('agencyId', 'in', sliceAgencies),
-      where('status', '==', 'available')
-    );
+    let cancelled = false;
 
-    const unsubscribeShared = onSnapshot(sharedQ, (snapshot) => {
-      const loaded = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Vehicle));
-      setSharedVehicles(loaded);
-    }, (err) => {
-      console.error("Error loading shared vehicles:", err);
-    });
+    const fetchSharedVehicles = async () => {
+      try {
+        const results = await Promise.all(
+          sliceAgencies.map(async (agencyId) => {
+            try {
+              const res = await fetch(
+                getApiUrl(`/api/public/v1/inventory?agencyId=${encodeURIComponent(agencyId)}`)
+              );
+              if (!res.ok) return [];
+              const data = await res.json();
+              return (data.vehicles || []).map((v: any) => ({ ...v, agencyId }));
+            } catch (err) {
+              console.error(`Error loading shared vehicles from agency ${agencyId}:`, err);
+              return [];
+            }
+          })
+        );
+        if (!cancelled) {
+          setSharedVehicles(results.flat() as Vehicle[]);
+        }
+      } catch (err) {
+        console.error("Error loading shared vehicles:", err);
+      }
+    };
 
-    return () => unsubscribeShared();
+    fetchSharedVehicles();
+    const intervalId = setInterval(fetchSharedVehicles, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, [ownAgencySharing, sharingAgencies, userData]);
 
   const handleDelete = async (id: string) => {
