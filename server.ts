@@ -593,6 +593,116 @@ async function startServer() {
 
   // === Meta (WhatsApp/Messenger) Webhook Integration ===
 
+  // === Agency WhatsApp Config (Admin/Master only) ===
+  app.get("/api/agencies/whatsapp-config", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      const decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      const agencyId = (req.query.agencyId as string) || userData?.agencyId;
+
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden consultar la configuración de WhatsApp" });
+      }
+      if (userData?.role !== "master" && userData?.agencyId !== agencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(agencyId);
+      const agencySnap = await agencyDocRef.get();
+      if (!agencySnap.exists) {
+        return res.status(404).json({ error: "Agencia no encontrada" });
+      }
+      const whatsappConfig = agencySnap.data()?.whatsappConfig || {};
+
+      const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
+      const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
+
+      return res.json({
+        phoneNumberId: whatsappConfig.phoneNumberId || "",
+        accountId: whatsappConfig.accountId || "",
+        hasAccessToken: !!accessToken,
+        maskedAccessToken: accessToken ? "••••••••" + accessToken.slice(-4) : null,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/agencies/whatsapp-config", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      const decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      const { agencyId: bodyAgencyId, phoneNumberId, accountId, accessToken } = req.body;
+      const targetAgencyId = bodyAgencyId || userData?.agencyId;
+
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden configurar WhatsApp" });
+      }
+      if (userData?.role !== "master" && userData?.agencyId !== targetAgencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      }
+      if (!phoneNumberId || !accountId) {
+        return res.status(400).json({ error: "Faltan phoneNumberId o accountId" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(targetAgencyId);
+      await agencyDocRef.set({
+        whatsappConfig: {
+          phoneNumberId,
+          accountId,
+          updatedAt: FieldValue.serverTimestamp(),
+          // Legacy field: tokens used to be stored here in plaintext, readable by
+          // any authenticated user. Always strip it — the token now lives in the
+          // secrets subcollection, reachable only via the Admin SDK.
+          accessToken: FieldValue.delete(),
+        }
+      }, { merge: true });
+
+      if (accessToken) {
+        await agencyDocRef.collection("secrets").doc("whatsapp").set({
+          accessToken,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/meta/send-template", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -625,23 +735,62 @@ async function startServer() {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
 
+      // Any user attached to an agency may send (sellers share vehicles with their
+      // own clients); the credentials used are always their own agency's.
       const userData = userDoc.data();
-      if (userData?.role !== "master" && userData?.role !== "admin") {
-        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      if (!userData?.agencyId || userData.agencyId === "unassigned") {
+        return res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
       }
 
-      const { to, templateName, variables } = req.body;
-      const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-      const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
-
-      if (!META_ACCESS_TOKEN || !PHONE_NUMBER_ID) {
-        // Return success even if not configured, for demo purposes, so it doesn't break
-        console.warn("WhatsApp API not configured, simulating success");
-        return res.json({ success: true, simulated: true });
+      const { to, templateName, variables, agencyId: bodyAgencyId } = req.body;
+      if (!to || !templateName) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos (to, templateName)" });
       }
 
-      console.log(`Sending WhatsApp template ${templateName} to ${to}`);
-      res.json({ success: true, simulated: true });
+      const targetAgencyId = (userData?.role === "master" && bodyAgencyId) ? bodyAgencyId : userData?.agencyId;
+      if (!targetAgencyId) {
+        return res.status(400).json({ error: "No se pudo determinar la agencia" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(targetAgencyId);
+      const agencySnap = await agencyDocRef.get();
+      if (!agencySnap.exists) {
+        return res.status(404).json({ error: "Agencia no encontrada" });
+      }
+      const phoneNumberId = agencySnap.data()?.whatsappConfig?.phoneNumberId;
+
+      const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
+      const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
+
+      if (!phoneNumberId || !accessToken) {
+        return res.status(400).json({ error: "WhatsApp no está configurado para esta agencia. Ve a Integraciones para conectarlo." });
+      }
+
+      const metaRes = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: "es_MX" },
+            ...(variables && variables.length ? { components: [{ type: "body", parameters: variables }] } : {}),
+          },
+        }),
+      });
+
+      const metaData: any = await metaRes.json();
+      if (!metaRes.ok) {
+        console.error("Meta API error:", metaData);
+        return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje de WhatsApp" });
+      }
+
+      res.json({ success: true, messageId: metaData?.messages?.[0]?.id });
     } catch (e: any) {
       console.error(e);
       res.status(500).json({ error: e.message || "Error al enviar plantilla" });
@@ -679,25 +828,25 @@ async function startServer() {
         }
         for (const entry of body.entry) {
           const entryId = entry.id; // page_id for Messenger, waba_id for WhatsApp
-          let agencyId = "DEFAULT_AGENCY";
-          
-          // Consultar la agencia correspondiente al page_id o waba_id
-          const agenciesRef = adminDb.collection("agencies");
-          // Para soportar múltiples agencias, buscamos cuál tiene este facebookPageId
-          const q = agenciesRef.where("facebookPageId", "==", entryId);
-          const snapshot = await q.get();
-          if (!snapshot.empty) {
-            agencyId = snapshot.docs[0].id;
-          } else if (entryId === "604166786115980") {
-             // Fallback default for testing specifically asked by user
-             agencyId = "k77PpUc4SKDVCps2qSDw";
-          }
 
-          // For WhatsApp
+          // For WhatsApp: resolve the owning agency by the phone_number_id that
+          // received the message (the value configured per-agency in Integraciones),
+          // not by the WABA id — a single WhatsApp Business Account can host
+          // multiple phone numbers belonging to different agencies.
           if (body.object === "whatsapp_business_account" && entry.changes) {
             for (const change of entry.changes) {
               const value = change.value;
               if (value && value.messages && value.messages[0]) {
+                const phoneNumberId = value.metadata?.phone_number_id;
+                const agenciesRef = adminDb.collection("agencies");
+                const q = agenciesRef.where("whatsappConfig.phoneNumberId", "==", phoneNumberId);
+                const snapshot = await q.get();
+                if (snapshot.empty) {
+                  console.warn(`No agency configured for WhatsApp phone_number_id ${phoneNumberId}, skipping message`);
+                  continue;
+                }
+                const agencyId = snapshot.docs[0].id;
+
                 const phone = value.contacts?.[0]?.wa_id || "";
                 const name =
                   value.contacts?.[0]?.profile?.name || "Unknown WA Lead";
@@ -709,8 +858,16 @@ async function startServer() {
               }
             }
           }
-          // For Messenger
+          // For Messenger: resolve the owning agency by the Facebook Page id.
           if (body.object === "page" && entry.messaging) {
+            const agenciesRef = adminDb.collection("agencies");
+            const q = agenciesRef.where("facebookPageId", "==", entryId);
+            const snapshot = await q.get();
+            if (snapshot.empty) {
+              console.warn(`No agency configured for Messenger page ${entryId}, skipping messages`);
+              continue;
+            }
+            const agencyId = snapshot.docs[0].id;
             for (const event of entry.messaging) {
               const senderId = event.sender?.id || "";
               const text = event.message?.text || "";
