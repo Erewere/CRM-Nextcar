@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { useAuth } from "../../contexts/AuthContext";
 import { Task, Client, PipelineStage, Vehicle } from "../../types";
 import { format, isBefore, startOfToday } from "date-fns";
 import { es } from "date-fns/locale";
@@ -75,18 +76,27 @@ export function MobileHome({
 }: MobileHomeProps) {
   
   const navigate = useNavigate();
+  const { userData } = useAuth();
   const [currentTime] = useState(new Date());
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
   const missingChecklistVehicles = useMemo(() => {
-    return (vehicles || []).filter((v: any) => v.checklist?.remindMissing && (
-      !v.checklist.facturaOrigen ||
-      !v.checklist.tarjetaCirculacion ||
-      !v.checklist.tenenciasPagadas ||
-      !v.checklist.verificacionVigente ||
-      !v.checklist.duplicadoLlaves ||
-      !v.checklist.inePropietario
-    )).map((v: any) => {
+    const isRestrictedSeller = userRole === 'seller' || (userRole === 'admin' && (userData as any)?.adminMobileViewAllContacts === false);
+    return (vehicles || []).filter((v: any) => {
+      if (!v.checklist?.remindMissing) return false;
+      if (isRestrictedSeller) {
+        const isMine = v.sellerId === userData?.id || v.createdById === userData?.id || v.userId === userData?.id || clients.some(c => c.vehicleId === v.id && c.sellerId === userData?.id);
+        if (!isMine) return false;
+      }
+      return (
+        !v.checklist.facturaOrigen ||
+        !v.checklist.tarjetaCirculacion ||
+        !v.checklist.tenenciasPagadas ||
+        !v.checklist.verificacionVigente ||
+        !v.checklist.duplicadoLlaves ||
+        !v.checklist.inePropietario
+      );
+    }).map((v: any) => {
       const missingItems: string[] = [];
       if (!v.checklist?.facturaOrigen) missingItems.push('Factura Origen');
       if (!v.checklist?.tarjetaCirculacion) missingItems.push('Tarjeta Circulación');
@@ -96,7 +106,13 @@ export function MobileHome({
       if (!v.checklist?.inePropietario) missingItems.push('INE Propietario');
       return { ...v, missingItems };
     });
-  }, [vehicles]);
+  }, [vehicles, userRole, userData, clients]);
+
+  const filteredInactiveAlerts = useMemo(() => {
+    const isRestrictedSeller = userRole === 'seller' || (userRole === 'admin' && (userData as any)?.adminMobileViewAllContacts === false);
+    if (!isRestrictedSeller) return inactiveAlerts;
+    return inactiveAlerts.filter(alert => alert.task.sellerId === userData?.id);
+  }, [inactiveAlerts, userRole, userData]);
 
   // Shared matches state
   const { ownAgencySharing, matches, loading: matchesLoading } = useSharedInventoryMatches();
@@ -421,14 +437,14 @@ export function MobileHome({
             )}
 
             {/* Admin Inactivity Alerts */}
-            {inactiveAlerts.length > 0 && (
+            {filteredInactiveAlerts.length > 0 && (
               <section className="space-y-3">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-red-500" />
                   <h2 className="text-base font-black text-slate-800 dark:text-white">Alertas de Inactividad</h2>
                 </div>
                 <div className="space-y-2">
-                  {inactiveAlerts.slice(0, 4).map((alert, index) => {
+                  {filteredInactiveAlerts.slice(0, 4).map((alert, index) => {
                     const sellerObj = sellerPerformance.find(s => s.id === alert.task.sellerId);
                     const targetClient = alert.client || clients.find(c => c.id === alert.task.clientId);
                     return (

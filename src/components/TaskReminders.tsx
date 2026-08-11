@@ -162,7 +162,9 @@ export function TaskReminders() {
       where('completed', '==', false)
     );
 
-    if (userData.role === 'seller') {
+    const isSeller = userData.role === 'seller' || (userData.role === 'admin' && (userData as any).adminMobileViewAllContacts === false);
+
+    if (isSeller) {
       q = query(
         collection(db, 'tasks'),
         where('agencyId', '==', userData.agencyId),
@@ -190,7 +192,9 @@ export function TaskReminders() {
       where('agencyId', '==', userData.agencyId)
     );
 
-    if (userData.role === 'seller') {
+    const isSeller = userData.role === 'seller' || (userData.role === 'admin' && (userData as any).adminMobileViewAllContacts === false);
+
+    if (isSeller) {
       q = query(
         collection(db, 'clients'),
         where('agencyId', '==', userData.agencyId),
@@ -213,11 +217,13 @@ export function TaskReminders() {
   // Generate Toast Alerts
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const isSellerToast = userData?.role === 'seller' || (userData?.role === 'admin' && (userData as any)?.adminMobileViewAllContacts === false);
 
   const rawAlerts: ToastAlert[] = [];
 
   // A) Tasks alerts & Credit Payment Reminders
   tasks.forEach(task => {
+    if (isSellerToast && task.sellerId && task.sellerId !== userData?.id) return;
     if (!task.dueDate || task.completed) return;
 
     const toastId = `task-${task.id}`;
@@ -278,6 +284,7 @@ export function TaskReminders() {
 
   // A.2) Check Client Credit Schedules directly (in case tasks were not created or to ensure no missing payment is overlooked)
   clients.forEach(client => {
+    if (isSellerToast && client.sellerId && client.sellerId !== userData?.id) return;
     const sDetails = client.saleDetails;
     if (!sDetails || sDetails.method !== 'credito' || !sDetails.termMonths || !sDetails.firstPaymentDate) return;
 
@@ -332,6 +339,7 @@ export function TaskReminders() {
 
   // B) Stale Deals alerts (3+ days without movement)
   clients.forEach(client => {
+    if (isSellerToast && client.sellerId && client.sellerId !== userData?.id) return;
     if (client.isDeleted || (client as any).dismissedStale || (client as any).isArchived || (client as any).isClosed) return;
     if (isClosedStatus(client.status, pipelineStages) || isClosedStatus((client as any).stageId, pipelineStages)) return;
 
@@ -356,7 +364,7 @@ export function TaskReminders() {
         type: 'deal-stale',
         title: isHighSeverity ? 'Trato Estancado' : 'Sin Movimiento Reciente',
         subtitle: `${dealName}${vehicleInfo}`,
-        detail: `Sin actividad desde hace ${diffDays} días (${client.status || 'En seguimiento'})`,
+        detail: `Sin activity desde hace ${diffDays} días (${client.status || 'En seguimiento'})`,
         daysStale: diffDays,
         clientId: client.id,
         severity: isHighSeverity ? 'high' : 'medium',
@@ -367,6 +375,7 @@ export function TaskReminders() {
   // C) Network Matches alerts
   if (ownAgencySharing) {
     matches.forEach(m => {
+      if (isSellerToast && m.client.sellerId && m.client.sellerId !== userData?.id) return;
       const toastId = `match-${m.client.id}-${m.vehicle.id}`;
       if (dismissedIds.has(toastId)) return;
 

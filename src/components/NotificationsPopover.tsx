@@ -87,6 +87,8 @@ export function NotificationsPopover() {
   useEffect(() => {
     if (!userData) return;
 
+    const isSeller = userData.role === "seller" || (userData.role === "admin" && (userData as any).adminMobileViewAllContacts === false);
+
     // 1. Listen to tasks
     let qTasks = query(
       collection(db, "tasks"),
@@ -94,7 +96,7 @@ export function NotificationsPopover() {
       where("completed", "==", false)
     );
 
-    if (userData.role === "seller") {
+    if (isSeller) {
       qTasks = query(
         collection(db, "tasks"),
         where("agencyId", "==", userData.agencyId),
@@ -128,7 +130,7 @@ export function NotificationsPopover() {
       where("agencyId", "==", userData.agencyId)
     );
 
-    if (userData.role === "seller") {
+    if (isSeller) {
       qClients = query(
         collection(db, "clients"),
         where("agencyId", "==", userData.agencyId),
@@ -195,9 +197,11 @@ export function NotificationsPopover() {
   }> = [];
 
   const now = new Date();
+  const isSellerNotif = userData?.role === "seller" || (userData?.role === "admin" && (userData as any)?.adminMobileViewAllContacts === false);
 
   // 1. Task & Payment Notifications
   tasks.forEach((task) => {
+    if (isSellerNotif && task.sellerId && task.sellerId !== userData?.id) return;
     if (!task.dueDate) return;
     
     let taskDateTime;
@@ -261,6 +265,7 @@ export function NotificationsPopover() {
   // 1.2. Client Credit Schedules Direct Notifications
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   clients.forEach((client) => {
+    if (isSellerNotif && client.sellerId && client.sellerId !== userData?.id) return;
     const sDetails = client.saleDetails;
     if (!sDetails || sDetails.method !== 'credito' || !sDetails.termMonths || !sDetails.firstPaymentDate) return;
 
@@ -319,6 +324,7 @@ export function NotificationsPopover() {
 
   // 2. Stale Deals Notifications (3+ days)
   clients.forEach((client) => {
+    if (isSellerNotif && client.sellerId && client.sellerId !== userData?.id) return;
     if (client.isDeleted || (client as any).dismissedStale || (client as any).isArchived || (client as any).isClosed) return;
     if (isClosedStatus(client.status, pipelineStages) || isClosedStatus((client as any).stageId, pipelineStages)) return;
 
@@ -353,6 +359,7 @@ export function NotificationsPopover() {
   // 3. Network Inventory Matches
   if (ownAgencySharing) {
     matches.forEach((m) => {
+      if (isSellerNotif && m.client.sellerId && m.client.sellerId !== userData?.id) return;
       const notifId = `match-${m.client.id}-${m.vehicle.id}`;
       if (dismissedIds.has(notifId)) return;
       notifications.push({
@@ -372,6 +379,10 @@ export function NotificationsPopover() {
 
   // 4. Vehicles Checklist Documents Missing
   vehicles.forEach((v) => {
+    if (isSellerNotif) {
+      const isMine = (v as any).sellerId === userData?.id || (v as any).createdById === userData?.id || (v as any).userId === userData?.id || clients.some(c => c.vehicleId === v.id && c.sellerId === userData?.id);
+      if (!isMine) return;
+    }
     if (v.checklist?.remindMissing) {
       const notifId = `vehicle-checklist-${v.id}`;
       if (dismissedIds.has(notifId)) return;
