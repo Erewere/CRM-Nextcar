@@ -114,7 +114,12 @@ export function PaymentInventory() {
     const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
     const vehicle = vehicles.find(v => v.id === deal.vehicleId || v.id === person.vehicleId);
     
-    const dealIsWon = isWon(deal.status) || isWon(person.status) || vehicle?.status === 'sold' || Boolean(deal.saleDetails?.price || person.saleDetails?.price || vehicle?.saleDetails?.price);
+    const isRecordedBuyer = !!vehicle && (
+      vehicle.buyerId === person.id ||
+      vehicle.soldToClientId === deal.clientId ||
+      vehicle.soldToClientId === person.id
+    );
+    const dealIsWon = isWon(deal.status) || isWon(person.status) || Boolean(deal.saleDetails?.price || person.saleDetails?.price) || (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
     const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, person.saleDetails, vehicle?.saleDetails);
 
@@ -141,7 +146,11 @@ export function PaymentInventory() {
   const itemsFromClients = clientsWithoutDeals.map(person => {
     const vehicle = vehicles.find(v => v.id === person.vehicleId);
 
-    const personIsWon = isWon(person.status) || vehicle?.status === 'sold' || Boolean(person.saleDetails?.price || vehicle?.saleDetails?.price);
+    const isRecordedBuyer = !!vehicle && (
+      vehicle.buyerId === person.id ||
+      vehicle.soldToClientId === person.id
+    );
+    const personIsWon = isWon(person.status) || Boolean(person.saleDetails?.price) || (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
     const mergedSaleDetails = getMergedSaleDetails(undefined, person.saleDetails, vehicle?.saleDetails);
     const mergedDealValue = person.saleDetails?.price ?? vehicle?.saleDetails?.price ?? person.dealValue ?? vehicle?.price;
