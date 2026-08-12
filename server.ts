@@ -1369,6 +1369,142 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // === Fase 1 de la separacion contacto/trato: crear los tratos faltantes ===
+  // Hoy muchos contactos guardan dentro de si mismos los datos de su trato.
+  // Esta rutina crea el documento correspondiente en "deals" cuando no existe,
+  // sin modificar ni borrar nada del contacto.
+  //
+  // Por defecto corre en modo simulacion. Solo escribe si se envia
+  // { "apply": true } en el cuerpo de la peticion.
+  app.post("/api/admin/migrate/backfill-deals", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (tokenErr) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Solo el usuario master puede ejecutar migraciones" });
+      }
+
+      const apply = req.body?.apply === true;
+
+      // Un contacto "carga" un trato si tiene cualquiera de estos campos
+      const dealFields = [
+        "dealTitle",
+        "dealValue",
+        "saleDetails",
+        "soldAt",
+        "lostReason",
+        "vehicleId",
+      ];
+
+      const clientsSnap = await adminDb.collection("clients").get();
+      const dealsSnap = await adminDb.collection("deals").get();
+
+      // Indice de tratos existentes por clientId
+      const dealsByClient = new Map<string, number>();
+      dealsSnap.docs.forEach((d: any) => {
+        const cid = d.data()?.clientId;
+        if (cid) dealsByClient.set(cid, (dealsByClient.get(cid) || 0) + 1);
+      });
+
+      const wouldCreate: any[] = [];
+      const alreadyHadDeal: any[] = [];
+      const withoutDealData: any[] = [];
+
+      for (const doc of clientsSnap.docs) {
+        const c: any = doc.data() || {};
+        if (c.isDeleted) continue;
+
+        const carriesDeal = dealFields.some(
+          (f) => c[f] !== undefined && c[f] !== null && c[f] !== ""
+        );
+
+        if (!carriesDeal) {
+          withoutDealData.push({ id: doc.id, name: c.name || "(sin nombre)" });
+          continue;
+        }
+
+        if (dealsByClient.has(doc.id)) {
+          alreadyHadDeal.push({ id: doc.id, name: c.name || "(sin nombre)" });
+          continue;
+        }
+
+        const nuevoTrato = {
+          clientId: doc.id,
+          agencyId: c.agencyId || "",
+          sellerId: c.sellerId || "",
+          title:
+            c.dealTitle ||
+            (c.vehicle ? `Trato: ${c.vehicle}` : `Trato con ${c.name || "Cliente"}`),
+          value: Number(c.dealValue) || Number(c.saleDetails?.price) || 0,
+          status: c.status || "lead",
+          vehicle: c.vehicle || null,
+          vehicleId: c.vehicleId || null,
+          ...(c.saleDetails ? { saleDetails: c.saleDetails } : {}),
+          ...(c.soldAt ? { soldAt: c.soldAt } : {}),
+          ...(c.lostReason ? { lostReason: c.lostReason } : {}),
+          ...(c.lostAt ? { lostAt: c.lostAt } : {}),
+          createdAt: c.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          migradoDesdeContacto: true,
+        };
+
+        wouldCreate.push({
+          contactoId: doc.id,
+          nombre: c.name || "(sin nombre)",
+          trato: nuevoTrato,
+        });
+      }
+
+      let creados = 0;
+      if (apply) {
+        for (const item of wouldCreate) {
+          await adminDb.collection("deals").add(item.trato);
+          creados++;
+        }
+      }
+
+      return res.status(200).json({
+        modo: apply ? "APLICADO" : "SIMULACION (no se escribio nada)",
+        resumen: {
+          contactosTotales: clientsSnap.size,
+          tratosExistentes: dealsSnap.size,
+          contactosSinDatosDeTrato: withoutDealData.length,
+          contactosQueYaTenianTrato: alreadyHadDeal.length,
+          tratosPorCrear: wouldCreate.length,
+          tratosCreados: creados,
+        },
+        detalle: wouldCreate.map((w) => ({
+          contactoId: w.contactoId,
+          nombre: w.nombre,
+          titulo: w.trato.title,
+          valor: w.trato.value,
+          estado: w.trato.status,
+        })),
+      });
+    } catch (err: any) {
+      console.error("Backfill deals error:", err);
+      return res.status(500).json({ error: err.message || "Error en la migración" });
+    }
+  });
+
   // === Model Context Protocol (MCP) Server Implementation ===
   const sseSessions = new Map<string, { res: express.Response; agencyId: string }>();
 

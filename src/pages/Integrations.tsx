@@ -26,6 +26,10 @@ export function Integrations() {
   const [backupLoading, setBackupLoading] = useState<boolean>(false);
   const [backupDone, setBackupDone] = useState<boolean>(false);
 
+  // Herramienta temporal de migracion (Fase 1: crear tratos faltantes)
+  const [migLoading, setMigLoading] = useState<boolean>(false);
+  const [migResult, setMigResult] = useState<any>(null);
+
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
   const isMaster = userData?.role === 'master';
@@ -251,6 +255,38 @@ export function Integrations() {
       alert(e.message || "No se pudo generar el respaldo.");
     } finally {
       setBackupLoading(false);
+    }
+  };
+
+  const handleBackfillDeals = async (apply: boolean) => {
+    if (!currentUser) {
+      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    if (apply && !window.confirm(
+      "Se van a CREAR los tratos faltantes en la base de datos. " +
+      "Esta acción escribe información real. ¿Continuar?"
+    )) {
+      return;
+    }
+    setMigLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/admin/migrate/backfill-deals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ apply })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      setMigResult(data);
+    } catch (e: any) {
+      alert(e.message || "No se pudo ejecutar la migración.");
+    } finally {
+      setMigLoading(false);
     }
   };
 
@@ -636,6 +672,72 @@ export function Integrations() {
                 <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
                   <Check className="w-4 h-4" /> Respaldo descargado correctamente.
                 </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Herramienta temporal de migración (Fase 1) */}
+        {isMaster && (
+          <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-dashed border-indigo-300 dark:border-indigo-800 overflow-hidden mt-8">
+            <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Migración: crear tratos faltantes
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Herramienta temporal. Crea el trato correspondiente para los contactos que hoy
+                guardan esa información dentro de sí mismos. No modifica ni borra contactos.
+              </p>
+            </div>
+            <div className="p-6">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => handleBackfillDeals(false)}
+                  disabled={migLoading}
+                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                >
+                  {migLoading ? "Procesando..." : "1. Simular (no escribe nada)"}
+                </button>
+                <button
+                  onClick={() => handleBackfillDeals(true)}
+                  disabled={migLoading || !migResult}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
+                >
+                  2. Aplicar cambios
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                El botón de aplicar se habilita después de simular.
+              </p>
+
+              {migResult && (
+                <div className="mt-5 border border-gray-200 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mb-3">
+                    Modo: {migResult.modo}
+                  </p>
+                  <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1 mb-4">
+                    <li>Contactos totales: <strong>{migResult.resumen?.contactosTotales}</strong></li>
+                    <li>Tratos existentes: <strong>{migResult.resumen?.tratosExistentes}</strong></li>
+                    <li>Contactos sin datos de trato: <strong>{migResult.resumen?.contactosSinDatosDeTrato}</strong></li>
+                    <li>Contactos que ya tenían trato: <strong>{migResult.resumen?.contactosQueYaTenianTrato}</strong></li>
+                    <li className="text-indigo-700 dark:text-indigo-400">
+                      Tratos por crear: <strong>{migResult.resumen?.tratosPorCrear}</strong>
+                    </li>
+                    <li className="text-emerald-700 dark:text-emerald-400">
+                      Tratos creados: <strong>{migResult.resumen?.tratosCreados}</strong>
+                    </li>
+                  </ul>
+                  {Array.isArray(migResult.detalle) && migResult.detalle.length > 0 && (
+                    <div className="max-h-64 overflow-y-auto border-t border-gray-200 dark:border-slate-700 pt-3">
+                      {migResult.detalle.map((d: any) => (
+                        <div key={d.contactoId} className="text-xs text-slate-600 dark:text-slate-400 py-1 border-b border-gray-100 dark:border-slate-800 last:border-0">
+                          <strong className="text-slate-800 dark:text-slate-200">{d.nombre}</strong>
+                          {" — "}{d.titulo}{" · "}${Number(d.valor).toLocaleString("es-MX")}{" · "}{d.estado}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
