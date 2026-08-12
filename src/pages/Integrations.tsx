@@ -22,6 +22,10 @@ export function Integrations() {
   const [newGeneratedKey, setNewGeneratedKey] = useState<string | null>(null);
   const [mcpLoading, setMcpLoading] = useState<boolean>(false);
 
+  // Respaldo completo de la base
+  const [backupLoading, setBackupLoading] = useState<boolean>(false);
+  const [backupDone, setBackupDone] = useState<boolean>(false);
+
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
 
@@ -203,6 +207,49 @@ export function Integrations() {
       alert(error.message || "Hubo un error al guardar la configuración.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    if (!currentUser) {
+      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    setBackupLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/admin/backup", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        let message = `Error ${res.status} generando el respaldo.`;
+        try {
+          const data = await res.json();
+          if (data?.error) message = data.error;
+        } catch {
+          // La respuesta no era JSON; se conserva el mensaje genérico.
+        }
+        throw new Error(message);
+      }
+
+      const blob = await res.blob();
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:]/g, "-");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `respaldo-crm-${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setBackupDone(true);
+      setTimeout(() => setBackupDone(false), 4000);
+    } catch (e: any) {
+      alert(e.message || "No se pudo generar el respaldo.");
+    } finally {
+      setBackupLoading(false);
     }
   };
 
@@ -546,6 +593,52 @@ export function Integrations() {
             </div>
           </div>
         </div>
+
+        {/* Respaldo de la base de datos */}
+        {isAdminOrMaster && (
+          <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
+            <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-6 h-6 text-amber-600 dark:text-amber-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Respaldo de la información</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Descarga una copia completa de tus contactos, tratos, inventario, gastos, tareas y notas.
+                </p>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
+                El archivo se guarda directamente en tu computadora en formato JSON. Conviene descargarlo
+                antes de cualquier cambio importante en el sistema. La clave de acceso MCP no se incluye
+                en el archivo por seguridad.
+              </p>
+              <button
+                onClick={handleDownloadBackup}
+                disabled={backupLoading}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+              >
+                {backupLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generando respaldo...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    Descargar respaldo
+                  </>
+                )}
+              </button>
+              {backupDone && (
+                <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                  <Check className="w-4 h-4" /> Respaldo descargado correctamente.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Virtual Assistants API */}
         <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">

@@ -1285,6 +1285,108 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // === Respaldo completo de la base (solo admin/master) ===
+  // Descarga un JSON con todas las colecciones. Un admin solo obtiene los
+  // datos de su propia agencia; un master obtiene todo.
+  app.get("/api/admin/backup", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (tokenErr) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const requester = userDoc.data() || {};
+      if (requester.role !== "master" && requester.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden descargar el respaldo" });
+      }
+
+      const isMasterRequest = requester.role === "master";
+      const scopeAgencyId = requester.agencyId;
+
+      // Colecciones que llevan agencyId y por lo tanto se pueden acotar
+      const agencyScoped = [
+        "clients",
+        "deals",
+        "vehicles",
+        "vehicleExpenses",
+        "tasks",
+        "notes",
+        "files",
+        "agency_tags",
+        "users",
+      ];
+
+      const backup: Record<string, any[]> = {};
+
+      for (const name of agencyScoped) {
+        const collectionQuery = isMasterRequest
+          ? adminDb.collection(name)
+          : adminDb.collection(name).where("agencyId", "==", scopeAgencyId);
+        const snapshot = await collectionQuery.get();
+        backup[name] = snapshot.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+      }
+
+      // Agencias: el master se lleva todas; un admin solo la suya
+      if (isMasterRequest) {
+        const agenciesSnap = await adminDb.collection("agencies").get();
+        backup.agencies = agenciesSnap.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+      } else {
+        const agencySnap = await adminDb.collection("agencies").doc(scopeAgencyId).get();
+        backup.agencies = agencySnap.exists
+          ? [{ ...agencySnap.data(), id: agencySnap.id }]
+          : [];
+      }
+
+      // La clave MCP no debe viajar dentro del respaldo
+      backup.agencies = backup.agencies.map((a: any) => {
+        const { mcpApiKey, ...rest } = a;
+        return rest;
+      });
+
+      const totals: Record<string, number> = {};
+      for (const key of Object.keys(backup)) {
+        totals[key] = backup[key].length;
+      }
+
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: decodedToken.uid,
+        scope: isMasterRequest ? "todas las agencias" : scopeAgencyId,
+        totals,
+        data: backup,
+      };
+
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="respaldo-crm-${stamp}.json"`
+      );
+      return res.status(200).send(JSON.stringify(payload, null, 2));
+    } catch (err: any) {
+      console.error("Backup error:", err);
+      return res.status(500).json({ error: err.message || "Error generando el respaldo" });
+    }
+  });
+
   // === Model Context Protocol (MCP) Server Implementation ===
   const sseSessions = new Map<string, { res: express.Response; agencyId: string }>();
 
