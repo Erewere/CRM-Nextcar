@@ -1530,7 +1530,9 @@ Return a JSON array of recommendation objects with the following schema:
           .where("agencyId", "==", targetAgencyId)
           .where("status", "==", "available");
         const snapshot = await q.get();
-        const vehicles = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        // El id del documento va al final para que no lo pise un campo "id"
+        // guardado dentro de los datos.
+        const vehicles = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
 
         return {
           jsonrpc: "2.0",
@@ -1553,7 +1555,9 @@ Return a JSON array of recommendation objects with the following schema:
           .where("agencyId", "==", targetAgencyId)
           .limit(limitCount);
         const snapshot = await q.get();
-        const clients = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        // El id del documento va al final para que no lo pise un campo "id"
+        // guardado dentro de los datos.
+        const clients = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
 
         return {
           jsonrpc: "2.0",
