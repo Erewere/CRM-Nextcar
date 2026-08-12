@@ -715,9 +715,13 @@ export function Integrations() {
                   <p className="text-sm font-bold text-slate-900 dark:text-white mb-3">
                     Modo: {migResult.modo}
                   </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    Agencia: <code>{migResult.agencia}</code>
+                  </p>
                   <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1 mb-4">
                     <li>Contactos totales: <strong>{migResult.resumen?.contactosTotales}</strong></li>
                     <li>Tratos existentes: <strong>{migResult.resumen?.tratosExistentes}</strong></li>
+                    <li>Tratos sin contacto enlazado: <strong>{migResult.resumen?.tratosSinContactoEnlazado}</strong></li>
                     <li>Contactos sin datos de trato: <strong>{migResult.resumen?.contactosSinDatosDeTrato}</strong></li>
                     <li>Contactos que ya tenían trato: <strong>{migResult.resumen?.contactosQueYaTenianTrato}</strong></li>
                     <li className="text-indigo-700 dark:text-indigo-400">

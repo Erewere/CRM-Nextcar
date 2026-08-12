@@ -1404,6 +1404,13 @@ Return a JSON array of recommendation objects with the following schema:
 
       const apply = req.body?.apply === true;
 
+      // La migracion se acota siempre a una sola agencia. Por defecto la del
+      // usuario que la ejecuta; el master puede indicar otra explicitamente.
+      const targetAgencyId = req.body?.agencyId || userDoc.data()?.agencyId;
+      if (!targetAgencyId) {
+        return res.status(400).json({ error: "No se pudo determinar la agencia a migrar" });
+      }
+
       // Un contacto "carga" un trato si tiene cualquiera de estos campos
       const dealFields = [
         "dealTitle",
@@ -1414,15 +1421,38 @@ Return a JSON array of recommendation objects with the following schema:
         "vehicleId",
       ];
 
-      const clientsSnap = await adminDb.collection("clients").get();
-      const dealsSnap = await adminDb.collection("deals").get();
+      const clientsSnap = await adminDb
+        .collection("clients")
+        .where("agencyId", "==", targetAgencyId)
+        .get();
+      const dealsSnap = await adminDb
+        .collection("deals")
+        .where("agencyId", "==", targetAgencyId)
+        .get();
 
-      // Indice de tratos existentes por clientId
-      const dealsByClient = new Map<string, number>();
+      // Indices para reconocer un trato que ya existe, por tres caminos
+      // distintos, porque el enlace historico no siempre usa el mismo id.
+      const dealClientIds = new Set<string>();
+      const dealByTitulo = new Set<string>();
+      const dealByVehiculo = new Set<string>();
+
+      const normaliza = (v: any) => String(v ?? "").trim().toLowerCase();
+
       dealsSnap.docs.forEach((d: any) => {
-        const cid = d.data()?.clientId;
-        if (cid) dealsByClient.set(cid, (dealsByClient.get(cid) || 0) + 1);
+        const dd = d.data() || {};
+        if (dd.clientId) dealClientIds.add(dd.clientId);
+        if (dd.title) dealByTitulo.add(normaliza(dd.title));
+        if (dd.vehicleId) {
+          dealByVehiculo.add(`${dd.vehicleId}|${Number(dd.value) || 0}`);
+        }
       });
+
+      // Cuantos tratos no estan enlazados a ningun contacto existente
+      const idsDeContactos = new Set(clientsSnap.docs.map((d: any) => d.id));
+      const tratosHuerfanos = dealsSnap.docs.filter((d: any) => {
+        const cid = d.data()?.clientId;
+        return !cid || !idsDeContactos.has(cid);
+      }).length;
 
       const wouldCreate: any[] = [];
       const alreadyHadDeal: any[] = [];
@@ -1441,7 +1471,20 @@ Return a JSON array of recommendation objects with the following schema:
           continue;
         }
 
-        if (dealsByClient.has(doc.id)) {
+        const tituloEsperado = normaliza(
+          c.dealTitle ||
+            (c.vehicle ? `Trato: ${c.vehicle}` : `Trato con ${c.name || "Cliente"}`)
+        );
+        const valorEsperado =
+          Number(c.dealValue) || Number(c.saleDetails?.price) || 0;
+
+        const yaTiene =
+          dealClientIds.has(doc.id) ||
+          (c.originalClientId && dealClientIds.has(c.originalClientId)) ||
+          (tituloEsperado && dealByTitulo.has(tituloEsperado)) ||
+          (c.vehicleId && dealByVehiculo.has(`${c.vehicleId}|${valorEsperado}`));
+
+        if (yaTiene) {
           alreadyHadDeal.push({ id: doc.id, name: c.name || "(sin nombre)" });
           continue;
         }
@@ -1483,9 +1526,11 @@ Return a JSON array of recommendation objects with the following schema:
 
       return res.status(200).json({
         modo: apply ? "APLICADO" : "SIMULACION (no se escribio nada)",
+        agencia: targetAgencyId,
         resumen: {
           contactosTotales: clientsSnap.size,
           tratosExistentes: dealsSnap.size,
+          tratosSinContactoEnlazado: tratosHuerfanos,
           contactosSinDatosDeTrato: withoutDealData.length,
           contactosQueYaTenianTrato: alreadyHadDeal.length,
           tratosPorCrear: wouldCreate.length,
