@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle, Copy, Bot, Key, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export function Integrations() {
@@ -29,6 +29,8 @@ export function Integrations() {
   // Herramienta temporal de migracion (Fase 1: crear tratos faltantes)
   const [migLoading, setMigLoading] = useState<boolean>(false);
   const [migResult, setMigResult] = useState<any>(null);
+  const [migAgencies, setMigAgencies] = useState<{ id: string; name: string }[]>([]);
+  const [migAgencyId, setMigAgencyId] = useState<string>('');
 
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
@@ -258,9 +260,29 @@ export function Integrations() {
     }
   };
 
+  // El master carga la lista de agencias para poder elegir cual migrar
+  useEffect(() => {
+    if (!isMaster) return;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'agencies'));
+        const lista = snap.docs
+          .map((d) => ({ id: d.id, name: (d.data() as any)?.name || d.id }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setMigAgencies(lista);
+      } catch (e) {
+        console.error('No se pudo cargar la lista de agencias:', e);
+      }
+    })();
+  }, [isMaster]);
+
   const handleBackfillDeals = async (apply: boolean) => {
     if (!currentUser) {
       alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    if (!migAgencyId) {
+      alert("Selecciona primero la agencia que quieres migrar.");
       return;
     }
     if (apply && !window.confirm(
@@ -278,7 +300,7 @@ export function Integrations() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ apply })
+        body: JSON.stringify({ apply, agencyId: migAgencyId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
@@ -690,10 +712,28 @@ export function Integrations() {
               </p>
             </div>
             <div className="p-6">
+              <div className="mb-4 max-w-md">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Agencia a migrar
+                </label>
+                <select
+                  value={migAgencyId}
+                  onChange={(e) => { setMigAgencyId(e.target.value); setMigResult(null); }}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
+                >
+                  <option value="">Selecciona una agencia...</option>
+                  {migAgencies.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">
+                  Se migra una agencia a la vez. Al cambiar de agencia hay que simular de nuevo.
+                </p>
+              </div>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => handleBackfillDeals(false)}
-                  disabled={migLoading}
+                  disabled={migLoading || !migAgencyId}
                   className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
                 >
                   {migLoading ? "Procesando..." : "1. Simular (no escribe nada)"}
