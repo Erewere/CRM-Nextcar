@@ -1105,18 +1105,27 @@ export function ClientDetailModal({
         );
 
         const finalClientId = client.originalClientId || client.id;
-        let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
+        let finalDealId: string | null = null;
 
-        if (!finalDealId) {
-          const q = (userData?.role !== "master" && userData?.agencyId)
-            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
-            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            finalDealId = snap.docs[0].id;
-          } else {
-            const newDRef = doc(collection(db, "deals"));
-            finalDealId = newDRef.id;
+        // Un contacto y un trato son cosas distintas. Al editar un contacto
+        // desde Personas no se toca ningun trato: solo se guardan sus datos.
+        // Los tratos se gestionan desde el embudo o desde la pestaña "Tratos"
+        // del propio contacto.
+        if (isDealContext) {
+          finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
+
+          if (!finalDealId) {
+            const q = (userData?.role !== "master" && userData?.agencyId)
+              ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
+              : query(collection(db, "deals"), where("clientId", "==", finalClientId));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              finalDealId = snap.docs[0].id;
+            }
+            // Si no existe ningun trato para este contacto no se inventa uno:
+            // antes se generaba un id nuevo y el setDoc posterior terminaba
+            // creando un trato incompleto, sin agencyId, que Firestore
+            // rechazaba por reglas.
           }
         }
 
@@ -2653,16 +2662,42 @@ export function ClientDetailModal({
                   <h4 className="font-semibold text-slate-800 dark:text-slate-200">{deal.title}</h4>
                   <p className="text-xs text-slate-500">Estado: {deal.status || deal.stageId || 'Open'}</p>
                 </div>
-                <button 
-                  onClick={async () => {
-                    if (confirm("¿Marcar trato como ganado?")) {
-                      await setDoc(doc(db, "deals", deal.id), { status: "won" }, { merge: true });
-                    }
-                  }}
-                  className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
-                >
-                  Marcar Ganado
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={async () => {
+                      const nuevoTitulo = prompt("Nuevo nombre del trato:", deal.title || "");
+                      if (nuevoTitulo === null) return;
+                      const limpio = nuevoTitulo.trim();
+                      if (!limpio) {
+                        alert("El nombre del trato no puede quedar vacío.");
+                        return;
+                      }
+                      if (limpio === deal.title) return;
+                      try {
+                        await setDoc(
+                          doc(db, "deals", deal.id),
+                          { title: limpio, updatedAt: new Date().toISOString() },
+                          { merge: true }
+                        );
+                      } catch (e: any) {
+                        alert("No se pudo renombrar el trato: " + (e?.message || e));
+                      }
+                    }}
+                    className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    Renombrar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm("¿Marcar trato como ganado?")) {
+                        await setDoc(doc(db, "deals", deal.id), { status: "won" }, { merge: true });
+                      }
+                    }}
+                    className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
+                  >
+                    Marcar Ganado
+                  </button>
+                </div>
               </div>
             ))}
           </div>
