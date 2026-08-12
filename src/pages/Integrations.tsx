@@ -28,6 +28,7 @@ export function Integrations() {
 
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
+  const isMaster = userData?.role === 'master';
 
   const copyToClipboard = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text);
@@ -594,8 +595,8 @@ export function Integrations() {
           </div>
         </div>
 
-        {/* Respaldo de la base de datos */}
-        {isAdminOrMaster && (
+        {/* Respaldo de la base de datos (exclusivo del rol master) */}
+        {isMaster && (
           <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
             <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
               <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded flex items-center justify-center shrink-0">

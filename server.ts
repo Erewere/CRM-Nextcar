@@ -1285,9 +1285,8 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
-  // === Respaldo completo de la base (solo admin/master) ===
-  // Descarga un JSON con todas las colecciones. Un admin solo obtiene los
-  // datos de su propia agencia; un master obtiene todo.
+  // === Respaldo completo de la base (exclusivo del rol master) ===
+  // Descarga un JSON con todas las colecciones de todas las agencias.
   app.get("/api/admin/backup", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -1314,15 +1313,12 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
       const requester = userDoc.data() || {};
-      if (requester.role !== "master" && requester.role !== "admin") {
-        return res.status(403).json({ error: "Solo administradores pueden descargar el respaldo" });
+      if (requester.role !== "master") {
+        return res.status(403).json({ error: "Solo el usuario master puede descargar el respaldo" });
       }
 
-      const isMasterRequest = requester.role === "master";
-      const scopeAgencyId = requester.agencyId;
-
-      // Colecciones que llevan agencyId y por lo tanto se pueden acotar
-      const agencyScoped = [
+      const collectionNames = [
+        "agencies",
         "clients",
         "deals",
         "vehicles",
@@ -1336,23 +1332,9 @@ Return a JSON array of recommendation objects with the following schema:
 
       const backup: Record<string, any[]> = {};
 
-      for (const name of agencyScoped) {
-        const collectionQuery = isMasterRequest
-          ? adminDb.collection(name)
-          : adminDb.collection(name).where("agencyId", "==", scopeAgencyId);
-        const snapshot = await collectionQuery.get();
+      for (const name of collectionNames) {
+        const snapshot = await adminDb.collection(name).get();
         backup[name] = snapshot.docs.map((d: any) => ({ ...d.data(), id: d.id }));
-      }
-
-      // Agencias: el master se lleva todas; un admin solo la suya
-      if (isMasterRequest) {
-        const agenciesSnap = await adminDb.collection("agencies").get();
-        backup.agencies = agenciesSnap.docs.map((d: any) => ({ ...d.data(), id: d.id }));
-      } else {
-        const agencySnap = await adminDb.collection("agencies").doc(scopeAgencyId).get();
-        backup.agencies = agencySnap.exists
-          ? [{ ...agencySnap.data(), id: agencySnap.id }]
-          : [];
       }
 
       // La clave MCP no debe viajar dentro del respaldo
@@ -1369,7 +1351,7 @@ Return a JSON array of recommendation objects with the following schema:
       const payload = {
         exportedAt: new Date().toISOString(),
         exportedBy: decodedToken.uid,
-        scope: isMasterRequest ? "todas las agencias" : scopeAgencyId,
+        scope: "todas las agencias",
         totals,
         data: backup,
       };
