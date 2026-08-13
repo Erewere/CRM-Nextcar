@@ -1376,6 +1376,122 @@ Return a JSON array of recommendation objects with the following schema:
   //
   // Por defecto corre en modo simulacion. Solo escribe si se envia
   // { "apply": true } en el cuerpo de la peticion.
+  // === Separacion de los datos financieros del vehiculo ===
+  // Copia el precio de compra a la coleccion vehicleFinancials, que se puede
+  // cerrar por reglas de forma independiente. Firestore no sabe ocultar campos
+  // sueltos de un documento: o deja leer el vehiculo entero, o no lo deja. Por
+  // eso, mientras el costo viva dentro del vehiculo, ocultarlo en pantalla es
+  // solo cosmetico.
+  //
+  // Esta rutina no borra nada del vehiculo. La limpieza es un paso posterior,
+  // una vez verificado que la aplicacion lee del lugar nuevo.
+  app.post("/api/admin/migrate/split-financials", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (tokenErr) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Solo el usuario master puede ejecutar migraciones" });
+      }
+
+      const apply = req.body?.apply === true;
+      const targetAgencyId = req.body?.agencyId || userDoc.data()?.agencyId;
+      if (!targetAgencyId) {
+        return res.status(400).json({ error: "No se pudo determinar la agencia a migrar" });
+      }
+
+      const vehiculosSnap = await adminDb
+        .collection("vehicles")
+        .where("agencyId", "==", targetAgencyId)
+        .get();
+
+      const financierosSnap = await adminDb
+        .collection("vehicleFinancials")
+        .where("agencyId", "==", targetAgencyId)
+        .get();
+
+      const yaMigrados = new Set(financierosSnap.docs.map((d: any) => d.id));
+
+      const porCopiar: any[] = [];
+      const yaEstaban: any[] = [];
+      const sinCosto: any[] = [];
+
+      for (const doc of vehiculosSnap.docs) {
+        const v: any = doc.data() || {};
+        const nombre = `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim() || "(sin nombre)";
+        const costo = Number(v.purchasePrice) || 0;
+
+        if (!costo) {
+          sinCosto.push({ id: doc.id, nombre });
+          continue;
+        }
+        if (yaMigrados.has(doc.id)) {
+          yaEstaban.push({ id: doc.id, nombre });
+          continue;
+        }
+        porCopiar.push({ id: doc.id, nombre, costo, agencyId: v.agencyId });
+      }
+
+      let copiados = 0;
+      if (apply) {
+        for (const item of porCopiar) {
+          // El id del documento financiero es el mismo del vehiculo, para que
+          // la correspondencia sea directa y no haga falta una consulta.
+          await adminDb.collection("vehicleFinancials").doc(item.id).set(
+            {
+              vehicleId: item.id,
+              agencyId: item.agencyId,
+              purchasePrice: item.costo,
+              migradoEl: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          copiados++;
+        }
+      }
+
+      return res.status(200).json({
+        modo: apply ? "APLICADO" : "SIMULACION (no se escribio nada)",
+        agencia: targetAgencyId,
+        resumen: {
+          vehiculosTotales: vehiculosSnap.size,
+          registrosFinancierosExistentes: financierosSnap.size,
+          vehiculosSinCostoRegistrado: sinCosto.length,
+          vehiculosYaMigrados: yaEstaban.length,
+          porCopiar: porCopiar.length,
+          copiados,
+        },
+        detalle: porCopiar.map((v) => ({
+          contactoId: v.id,
+          nombre: v.nombre,
+          titulo: "Precio de compra",
+          valor: v.costo,
+          estado: "por copiar",
+        })),
+      });
+    } catch (err: any) {
+      console.error("Split financials error:", err);
+      return res.status(500).json({ error: err.message || "Error en la migración" });
+    }
+  });
+
   app.post("/api/admin/migrate/backfill-deals", express.json(), async (req, res) => {
     try {
       const authHeader = req.headers.authorization;

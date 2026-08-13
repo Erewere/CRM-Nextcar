@@ -276,7 +276,7 @@ export function Integrations() {
     })();
   }, [isMaster]);
 
-  const handleBackfillDeals = async (apply: boolean) => {
+  const handleMigracion = async (ruta: string, apply: boolean) => {
     if (!currentUser) {
       alert("No hay una sesión activa. Vuelve a iniciar sesión.");
       return;
@@ -294,7 +294,7 @@ export function Integrations() {
     setMigLoading(true);
     try {
       const token = await currentUser.getIdToken();
-      const res = await fetch("/api/admin/migrate/backfill-deals", {
+      const res = await fetch(`/api/admin/migrate/${ruta}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -732,14 +732,14 @@ export function Integrations() {
               </div>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => handleBackfillDeals(false)}
+                  onClick={() => handleMigracion('backfill-deals', false)}
                   disabled={migLoading || !migAgencyId}
                   className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
                 >
                   {migLoading ? "Procesando..." : "1. Simular (no escribe nada)"}
                 </button>
                 <button
-                  onClick={() => handleBackfillDeals(true)}
+                  onClick={() => handleMigracion('backfill-deals', true)}
                   disabled={migLoading || !migResult}
                   className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
                 >
@@ -750,6 +750,32 @@ export function Integrations() {
                 El botón de aplicar se habilita después de simular.
               </p>
 
+              <div className="mt-6 pt-5 border-t border-gray-200 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                  Separar el precio de compra
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Copia el precio de compra de cada auto a un registro aparte, que puede
+                  cerrarse por separado. No borra nada del vehículo.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => handleMigracion('split-financials', false)}
+                    disabled={migLoading || !migAgencyId}
+                    className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                  >
+                    {migLoading ? "Procesando..." : "1. Simular"}
+                  </button>
+                  <button
+                    onClick={() => handleMigracion('split-financials', true)}
+                    disabled={migLoading || !migResult}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
+                  >
+                    2. Aplicar
+                  </button>
+                </div>
+              </div>
+
               {migResult && (
                 <div className="mt-5 border border-gray-200 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50">
                   <p className="text-sm font-bold text-slate-900 dark:text-white mb-3">
@@ -758,18 +784,24 @@ export function Integrations() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                     Agencia: <code>{migResult.agencia}</code>
                   </p>
+                  {/* El resumen se dibuja a partir de lo que devuelve cada
+                      migracion, para que la misma tarjeta sirva a todas. */}
                   <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1 mb-4">
-                    <li>Contactos totales: <strong>{migResult.resumen?.contactosTotales}</strong></li>
-                    <li>Tratos existentes: <strong>{migResult.resumen?.tratosExistentes}</strong></li>
-                    <li>Tratos sin contacto enlazado: <strong>{migResult.resumen?.tratosSinContactoEnlazado}</strong></li>
-                    <li>Contactos sin datos de trato: <strong>{migResult.resumen?.contactosSinDatosDeTrato}</strong></li>
-                    <li>Contactos que ya tenían trato: <strong>{migResult.resumen?.contactosQueYaTenianTrato}</strong></li>
-                    <li className="text-indigo-700 dark:text-indigo-400">
-                      Tratos por crear: <strong>{migResult.resumen?.tratosPorCrear}</strong>
-                    </li>
-                    <li className="text-emerald-700 dark:text-emerald-400">
-                      Tratos creados: <strong>{migResult.resumen?.tratosCreados}</strong>
-                    </li>
+                    {Object.entries(migResult.resumen || {}).map(([clave, valor]) => {
+                      const etiqueta = clave
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, (c) => c.toUpperCase());
+                      const destacado = /porCrear|porCopiar/.test(clave)
+                        ? 'text-indigo-700 dark:text-indigo-400'
+                        : /creados|copiados/.test(clave)
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : '';
+                      return (
+                        <li key={clave} className={destacado}>
+                          {etiqueta}: <strong>{String(valor)}</strong>
+                        </li>
+                      );
+                    })}
                   </ul>
                   {Array.isArray(migResult.detalle) && migResult.detalle.length > 0 && (
                     <div className="max-h-64 overflow-y-auto border-t border-gray-200 dark:border-slate-700 pt-3">
