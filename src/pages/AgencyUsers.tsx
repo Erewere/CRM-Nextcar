@@ -8,6 +8,7 @@ import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, g
 import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
 import { Task, Client } from '../types';
 import { deduplicateClients } from '../lib/clientUtils';
+import { ROLES_ASIGNABLES, NOMBRE_ROL, DESCRIPCION_ROL, type Rol } from '../lib/permissions';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 export function AgencyUsers() {
@@ -630,10 +631,13 @@ export function AgencyUsers() {
               onChange={(e) => setInviteRole(e.target.value)}
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             >
-              <option value="seller">Vendedor</option>
-              <option value="taller">Taller</option>
-              <option value="admin">Administrador</option>
+              {ROLES_ASIGNABLES.map((r) => (
+                <option key={`invite-${r}`} value={r}>{NOMBRE_ROL[r]}</option>
+              ))}
             </select>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {DESCRIPCION_ROL[inviteRole as Rol] || ""}
+            </p>
           </div>
         </div>
 
@@ -1075,9 +1079,9 @@ export function AgencyUsers() {
                       disabled={(!isMaster && u.role === 'master') || (u.role === 'master' && u.id === userData?.id)}
                     >
                       {isMaster && u.role === 'master' && <option value="master">Master</option>}
-                      <option value="admin">Administrador</option>
-                      <option value="seller">Vendedor</option>
-                      <option value="taller">Taller</option>
+                      {ROLES_ASIGNABLES.map((r) => (
+                        <option key={`rol-${r}`} value={r}>{NOMBRE_ROL[r]}</option>
+                      ))}
                       <option value="unassigned">Desasignado</option>
                     </select>
                   </div>
