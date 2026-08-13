@@ -210,11 +210,6 @@ export function Kanban() {
   });
   const [showArchived, setShowArchived] = useState(false);
 
-  // Alta de un trato para un contacto que ya existe
-  const [showPickContact, setShowPickContact] = useState(false);
-  const [pickSearch, setPickSearch] = useState("");
-  const [pickSaving, setPickSaving] = useState(false);
-
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
@@ -425,8 +420,8 @@ export function Kanban() {
       } as Client;
     }),
     // El embudo representa tratos, no contactos. Un contacto sin trato vive
-    // en Personas y no ocupa lugar aqui; para meterlo al embudo se le crea un
-    // trato de forma explicita.
+    // en Personas; para incorporarlo al embudo se usa "+ NUEVO TRATO", que
+    // permite buscar a la persona existente y reutilizarla.
   ];
 
   const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
@@ -746,22 +741,12 @@ export function Kanban() {
               </div>
             )}
         </div>
-        <div className="flex items-center gap-2">
-          {!isReadOnly && (
-            <button
-              onClick={() => { setPickSearch(""); setShowPickContact(true); }}
-              className="border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors px-4 py-2 rounded text-xs font-bold"
-            >
-              + TRATO A CONTACTO EXISTENTE
-            </button>
-          )}
-          <button
-            onClick={() => setSelectedClient({} as Client)}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded text-xs font-bold shadow-sm shadow-blue-200"
-          >
-            + NUEVO TRATO
-          </button>
-        </div>
+        <button
+          onClick={() => setSelectedClient({} as Client)}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded text-xs font-bold shadow-sm shadow-blue-200"
+        >
+          + NUEVO TRATO
+        </button>
       </div>
 
       <div className="flex flex-col flex-1 min-h-0">
@@ -888,97 +873,6 @@ export function Kanban() {
           onClose={() => setShowSettings(false)}
           currentStages={columns}
         />
-      )}
-
-      {showPickContact && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
-              <h2 className="font-bold text-slate-800 dark:text-slate-200">
-                Nuevo trato para un contacto existente
-              </h2>
-              <button
-                onClick={() => setShowPickContact(false)}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-5 border-b border-gray-200 dark:border-slate-700">
-              <input
-                autoFocus
-                value={pickSearch}
-                onChange={(e) => setPickSearch(e.target.value)}
-                placeholder="Buscar por nombre, teléfono o correo..."
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {clients
-                .filter((c) => !c.isDeleted)
-                .filter((c) => {
-                  const q = pickSearch.trim().toLowerCase();
-                  if (!q) return true;
-                  return (
-                    (c.name || "").toLowerCase().includes(q) ||
-                    (c.phone || "").toLowerCase().includes(q) ||
-                    (c.email || "").toLowerCase().includes(q)
-                  );
-                })
-                .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-                .slice(0, 50)
-                .map((c) => {
-                  const tratosDelContacto = deals.filter((d) => d.clientId === c.id).length;
-                  return (
-                    <button
-                      key={c.id}
-                      disabled={pickSaving}
-                      onClick={async () => {
-                        if (!userData?.agencyId) return;
-                        setPickSaving(true);
-                        try {
-                          const ref = doc(collection(db, "deals"));
-                          await setDoc(ref, {
-                            id: ref.id,
-                            clientId: c.id,
-                            agencyId: userData.agencyId,
-                            sellerId: c.sellerId || userData.id,
-                            title: `Trato con ${c.name || "Cliente"}`,
-                            value: 0,
-                            status: activeColumns[0]?.id || columns[0]?.id || "new",
-                            vehicle: null,
-                            vehicleId: null,
-                            origin: "manual",
-                            createdAt: new Date().toISOString(),
-                            updatedAt: new Date().toISOString(),
-                          });
-                          setShowPickContact(false);
-                        } catch (e: any) {
-                          alert("No se pudo crear el trato: " + (e?.message || e));
-                        } finally {
-                          setPickSaving(false);
-                        }
-                      }}
-                      className="w-full text-left px-5 py-3 border-b border-gray-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors disabled:opacity-50"
-                    >
-                      <div className="font-medium text-slate-800 dark:text-slate-200 text-sm">
-                        {c.name || "(sin nombre)"}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        {c.phone || "sin teléfono"}
-                        {tratosDelContacto > 0 && ` · ${tratosDelContacto} trato(s) ya`}
-                      </div>
-                    </button>
-                  );
-                })}
-            </div>
-            <div className="px-5 py-3 border-t border-gray-200 dark:border-slate-700">
-              <p className="text-xs text-slate-400">
-                Se crea el trato en la primera etapa. Ábrelo para asignarle vehículo y monto.
-              </p>
-            </div>
-          </div>
-        </div>
       )}
 
       {clientToMarkWon && (
