@@ -29,6 +29,9 @@ export function Integrations() {
   // Herramienta temporal de migracion (Fase 1: crear tratos faltantes)
   const [migLoading, setMigLoading] = useState<boolean>(false);
   const [migResult, setMigResult] = useState<any>(null);
+  // Que migracion fue la ultima simulada. Sin esto, simular una habilitaba el
+  // boton de aplicar de la otra, que escribe cosas distintas.
+  const [migSimulada, setMigSimulada] = useState<string>('');
   const [migAgencies, setMigAgencies] = useState<{ id: string; name: string }[]>([]);
   const [migAgencyId, setMigAgencyId] = useState<string>('');
 
@@ -285,10 +288,15 @@ export function Integrations() {
       alert("Selecciona primero la agencia que quieres migrar.");
       return;
     }
-    if (apply && !window.confirm(
-      "Se van a CREAR los tratos faltantes en la base de datos. " +
-      "Esta acción escribe información real. ¿Continuar?"
-    )) {
+    const AVISO: Record<string, string> = {
+      'backfill-deals':
+        "Se van a CREAR los tratos faltantes en la base de datos. " +
+        "Esta acción escribe información real. ¿Continuar?",
+      'split-financials':
+        "Se va a COPIAR el precio de compra de cada auto a un registro aparte. " +
+        "No se borra ni se modifica nada de los autos. ¿Continuar?",
+    };
+    if (apply && !window.confirm(AVISO[ruta] || "Esta acción escribe en la base de datos. ¿Continuar?")) {
       return;
     }
     setMigLoading(true);
@@ -305,6 +313,7 @@ export function Integrations() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
       setMigResult(data);
+      setMigSimulada(apply ? '' : ruta);
     } catch (e: any) {
       alert(e.message || "No se pudo ejecutar la migración.");
     } finally {
@@ -704,11 +713,11 @@ export function Integrations() {
           <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-dashed border-indigo-300 dark:border-indigo-800 overflow-hidden mt-8">
             <div className="p-6 border-b border-gray-200 dark:border-slate-700">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                Migración: crear tratos faltantes
+                Migraciones de datos
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Herramienta temporal. Crea el trato correspondiente para los contactos que hoy
-                guardan esa información dentro de sí mismos. No modifica ni borra contactos.
+                Herramientas temporales. Cada una se simula primero y solo escribe cuando
+                se aplica. Ninguna borra información.
               </p>
             </div>
             <div className="p-6">
@@ -718,7 +727,7 @@ export function Integrations() {
                 </label>
                 <select
                   value={migAgencyId}
-                  onChange={(e) => { setMigAgencyId(e.target.value); setMigResult(null); }}
+                  onChange={(e) => { setMigAgencyId(e.target.value); setMigResult(null); setMigSimulada(''); }}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
                 >
                   <option value="">Selecciona una agencia...</option>
@@ -730,6 +739,13 @@ export function Integrations() {
                   Se migra una agencia a la vez. Al cambiar de agencia hay que simular de nuevo.
                 </p>
               </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                Crear tratos faltantes
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                Crea el trato correspondiente para los contactos que hoy guardan esa
+                información dentro de sí mismos. No modifica ni borra contactos.
+              </p>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => handleMigracion('backfill-deals', false)}
@@ -740,7 +756,7 @@ export function Integrations() {
                 </button>
                 <button
                   onClick={() => handleMigracion('backfill-deals', true)}
-                  disabled={migLoading || !migResult}
+                  disabled={migLoading || migSimulada !== 'backfill-deals'}
                   className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
                 >
                   2. Aplicar cambios
@@ -768,7 +784,7 @@ export function Integrations() {
                   </button>
                   <button
                     onClick={() => handleMigracion('split-financials', true)}
-                    disabled={migLoading || !migResult}
+                    disabled={migLoading || migSimulada !== 'split-financials'}
                     className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
                   >
                     2. Aplicar
