@@ -12,6 +12,7 @@ import { Vehicle, VehicleExpense, Agency, Client, Task } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients, sanitizeFirestoreData } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
+import { usePermissions } from '../hooks/usePermissions';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 
@@ -99,11 +100,14 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   const isAdmin = userData?.role === 'admin' || isMaster;
   const isOwnVehicle = isNew || (formData.agencyId ? formData.agencyId === userData?.agencyId : (vehicle?.agencyId ? vehicle.agencyId === userData?.agencyId : false));
 
-  const canEditVehicle = (isOwnVehicle || isMaster) && (
-    isAdmin || 
-    userData?.role === 'taller' || 
-    (userData?.role === 'seller' && !!userData?.canManageVehicles)
-  );
+  const { can } = usePermissions();
+
+  // "Ver el costo" no es lo mismo que "poder editar el auto": el taller edita
+  // la ficha pero no debe alcanzar los numeros de compra ni el margen.
+  const puedeVerCosto = can('vehiculos.costo') && (isOwnVehicle || isMaster);
+  const puedeVerPrecioVenta = can('vehiculos.precio');
+
+  const canEditVehicle = (isOwnVehicle || isMaster) && can('vehiculos.editar');
 
   const isGlobalReadOnly = useReadOnly();
   const isReadOnly = isGlobalReadOnly || !canEditVehicle;
@@ -257,6 +261,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
   const handleSharePartnersReport = async (e: React.MouseEvent) => {
     e.preventDefault();
+    // El documento para socios contiene costo de adquisicion y utilidad.
+    if (!puedeVerCosto) return;
     if (!partnerDocRef.current || isGeneratingPartnersReport) return;
     setIsGeneratingPartnersReport(true);
 
@@ -890,8 +896,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {!isNew && (
-              <button 
+            {!isNew && !(activeTab === 'expenses' && !puedeVerCosto) && (
+              <button
                 onClick={activeTab === 'expenses' ? handleSharePartnersReport : handleSharePDF}
                 disabled={activeTab === 'expenses' ? isGeneratingPartnersReport : isGeneratingPDF}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded transition-colors mr-2 shadow-sm"
@@ -1067,7 +1073,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                       />
                     </div>
                   )}
-                  {userData?.role !== 'taller' && (
+                  {puedeVerPrecioVenta && (
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Precio de Venta</label>
                       <div className="relative">
@@ -1107,7 +1113,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   )}
                 </div>
 
-                {isAdmin && (isOwnVehicle || isMaster) && (
+                {puedeVerCosto && (
                   <div className="p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-700">
                     <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
                       <span>Precio de Compra</span>
@@ -1226,7 +1232,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   </div>
                 </div>
 
-                {!isNew && isAdmin && (isOwnVehicle || isMaster) && (
+                {!isNew && puedeVerCosto && (
                   <div className="mt-8 p-4 bg-green-50 rounded border border-green-200">
                     <h4 className="text-sm font-bold text-green-900 mb-2">Resumen Financiero</h4>
                     <div className="space-y-1 text-sm text-green-800">
@@ -1369,7 +1375,9 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 </div>
               </div>
 
-              {/* Right Column: Partners Document Preview */}
+              {/* Documento para socios: expone costo y utilidad, de modo que
+                  solo se ofrece a quien tiene permiso de costo. */}
+              {puedeVerCosto && (
               <div className="lg:col-span-7 flex flex-col h-full">
                 <div className="flex justify-between items-center mb-2 px-1">
                   <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Documento para Socios (Vista Previa)</span>
@@ -1431,7 +1439,11 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                     </div>
                   </div>
 
-                  {/* Financial Balance Section */}
+                  {/* Resumen financiero: incluye el costo de adquisicion, de
+                      modo que solo lo ve quien tiene permiso de costo. Antes
+                      la condicion excluia unicamente a los vendedores, asi que
+                      el taller lo veia justo en la pestaña donde trabaja. */}
+                  {puedeVerCosto && (
                   <div className="mb-3">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Resumen Financiero del Vehículo</span>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -1462,6 +1474,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Mini Ledger of Expenses inside Document */}
                   <div className="mb-4 flex-1">
@@ -1521,6 +1534,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           )}
 

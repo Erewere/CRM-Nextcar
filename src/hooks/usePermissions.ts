@@ -29,7 +29,23 @@ export function usePermissions() {
 
   const can = (permiso: Permiso): boolean => {
     if (isReadOnly && DE_ESCRITURA.includes(permiso)) return false;
-    return puedeRol(rol, permiso);
+    if (puedeRol(rol, permiso)) return true;
+
+    // Excepciones heredadas, previas al catalogo: dos banderas por usuario que
+    // amplian lo que puede un vendedor. Se conservan para no retirarle
+    // capacidades a quien hoy las tiene. Quedan aqui, en un solo lugar, hasta
+    // decidir si esos usuarios pasan a un rol que ya las incluya.
+    if (rol === "seller") {
+      const u = userData as any;
+      if (u?.canManageVehicles && (permiso === "vehiculos.crear" || permiso === "vehiculos.editar")) {
+        return true;
+      }
+      if (u?.canManageExpenses && (permiso === "gastos.ver" || permiso === "gastos.crear")) {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   return { can, rol, isReadOnly };
