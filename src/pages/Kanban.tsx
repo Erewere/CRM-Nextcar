@@ -473,13 +473,20 @@ export function Kanban() {
     const originalStatus = activeOriginalStatusRef.current;
     
     if (client && originalStatus !== overColumnId) {
-      if (userData?.role === "admin") {
-        const canModify = !client.id ||
-          (client.creatorId === userData?.id) ||
-          (client.createdByAdmin === true) ||
-          (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId));
-        if (!canModify) {
-          alert("Como administrador, no puedes modificar el embudo de otro vendedor. Solo puedes modificar contactos o tratos creados por ti.");
+      // Un administrador supervisa el embudo completo de su agencia: puede mover
+      // el trato de cualquier asesor, igual que ya podia reasignarlo desde la
+      // ficha del contacto. Antes esta regla contradecia a la del modal, de modo
+      // que un mismo trato se podia reasignar pero no arrastrar.
+      if (userData?.role !== "admin" && userData?.role !== "master") {
+        // Un asesor mueve lo que trae asignado, lo que creo el mismo y lo que
+        // esta sin asignar. Todo lo demas se lo reasigna un administrador.
+        const esSuyo =
+          !client.id ||
+          client.sellerId === userData?.id ||
+          !client.sellerId ||
+          client.creatorId === userData?.id;
+        if (!esSuyo) {
+          alert("Este trato está asignado a otro asesor. Pide a un administrador que te lo reasigne.");
           // Revert locally modified state
           setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus as string } : c));
           activeOriginalStatusRef.current = null; activeColumnRef.current = null;
