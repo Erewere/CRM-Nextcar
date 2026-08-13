@@ -20,14 +20,7 @@ import { Integrations } from './pages/Integrations';
 import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
 import { ClosedSales } from './pages/ClosedSales';
 import { PaymentInventory } from './pages/PaymentInventory';
-
-const safeDate = (val: any) => {
-  if (!val) return new Date();
-  if (typeof val.toDate === 'function') return val.toDate();
-  if (val.seconds) return new Date(val.seconds * 1000);
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? new Date() : d;
-};
+import { hasActiveAccess } from './lib/subscription';
 
 const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller' | 'taller')[] }) => {
   const { currentUser, userData, agencyData, loading } = useAuth();
@@ -66,22 +59,8 @@ const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, 
   const isMaster = userData.role === 'master';
   
   if (!isMaster && userData.agencyId && userData.agencyId !== 'unassigned') {
-    let hasActiveSubscription = agencyData?.hasFreeAccess || agencyData?.subscriptionStatus === 'active';
-    
-    if (agencyData?.subscriptionStatus === 'trialing') {
-      let trialEnds;
-      if (agencyData.createdAt) {
-        const createdDate = safeDate(agencyData.createdAt);
-        trialEnds = new Date(createdDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-      } else if (agencyData.trialEndsAt) {
-        trialEnds = safeDate(agencyData.trialEndsAt);
-      }
+    const hasActiveSubscription = hasActiveAccess(agencyData);
 
-      if (trialEnds && trialEnds > new Date()) {
-        hasActiveSubscription = true;
-      }
-    }
-    
     if (!hasActiveSubscription) {
       const pathname = window.location.pathname;
       if (pathname !== '/' && pathname !== '/billing') {

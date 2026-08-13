@@ -38,27 +38,11 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
 import { NextcarLogo } from "./NextcarLogo";
-
-const safeDate = (val: any) => {
-  if (!val) return new Date();
-  if (typeof val.toDate === 'function') return val.toDate();
-  if (val.seconds) return new Date(val.seconds * 1000);
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? new Date() : d;
-};
+import { getTrialDaysLeft } from "../lib/subscription";
 
 export function Layout() {
   const { userData, agencyData } = useAuth();
-  let trialDaysLeft = null;
-  if (agencyData?.subscriptionStatus === "trialing") {
-    if (agencyData.createdAt) {
-      const createdDate = safeDate(agencyData.createdAt);
-      const daysSinceCreation = Math.floor((new Date().getTime() - createdDate.getTime()) / (1000 * 3600 * 24));
-      trialDaysLeft = Math.max(0, 30 - daysSinceCreation);
-    } else if (agencyData.trialEndsAt) {
-      trialDaysLeft = Math.max(0, Math.ceil((safeDate(agencyData.trialEndsAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
-    }
-  }
+  const trialDaysLeft = getTrialDaysLeft(agencyData);
   const isGlobalReadOnly = useReadOnly();
   const navigate = useNavigate();
   const location = useLocation();
