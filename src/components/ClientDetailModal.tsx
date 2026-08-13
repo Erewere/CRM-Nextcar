@@ -991,6 +991,15 @@ export function ClientDetailModal({
     }
 
     let finalFormData = { ...formData };
+
+    // Solo administracion reasigna el asesor. Ocultar el selector no basta:
+    // aqui se descarta cualquier cambio de sellerId que venga de otro rol,
+    // conservando el valor que ya tenia el registro.
+    const puedeReasignar = userData?.role === "admin" || userData?.role === "master";
+    if (!puedeReasignar && !isNew) {
+      finalFormData.sellerId = client.sellerId;
+    }
+
     if (finalFormData.dealValue !== undefined) {
       finalFormData.dealValue = finalFormData.dealValue ? Number(finalFormData.dealValue) : 0;
     }
@@ -2166,34 +2175,52 @@ export function ClientDetailModal({
                     )}
                   </div>
                   <div className="flex flex-col gap-1 mt-2">
-                    {(userData?.role === 'admin' || userData?.role === 'master') && (
-                      <span className="text-[10px] uppercase font-extrabold tracking-wider text-indigo-600 dark:text-indigo-400">
-                        Reasignación de Trato / Vendedor
-                      </span>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-gray-400 shrink-0" />
-                      <select
-                        id="sellerId-select"
-                        name="sellerId"
-                        value={formData.sellerId || ""}
-                        onChange={handleChange}
-                        className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-gray-200 dark:border-slate-700 hover:border-gray-300 focus:border-blue-600 focus:outline-none"
-                      >
-                        <option value="" disabled>
-                          Seleccionar Asignado...
-                        </option>
-                        {agencyUsers
-                          .filter((u) => u.role !== "unassigned")
-                          .map((u) => (
-                            <option key={`user-${u.id}`} value={u.id}>
-                              {(!u.name || u.name === 'Usuario Pendiente')
-                                ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
-                                : u.name} {u.role === 'admin' ? '(Admin)' : u.role === 'master' ? '(Master)' : '(Vendedor)'}
+                    {/* Reasignar es facultad de administracion. Antes solo se
+                        ocultaba el titulo y el selector quedaba disponible, de
+                        modo que un asesor podia pasarle sus clientes a otro. */}
+                    {(userData?.role === 'admin' || userData?.role === 'master') ? (
+                      <>
+                        <span className="text-[10px] uppercase font-extrabold tracking-wider text-indigo-600 dark:text-indigo-400">
+                          Reasignación de Trato / Vendedor
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-gray-400 shrink-0" />
+                          <select
+                            id="sellerId-select"
+                            name="sellerId"
+                            value={formData.sellerId || ""}
+                            onChange={handleChange}
+                            className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-gray-200 dark:border-slate-700 hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                          >
+                            <option value="" disabled>
+                              Seleccionar Asignado...
                             </option>
-                          ))}
-                      </select>
-                    </div>
+                            {agencyUsers
+                              .filter((u) => u.role !== "unassigned")
+                              .map((u) => (
+                                <option key={`user-${u.id}`} value={u.id}>
+                                  {(!u.name || u.name === 'Usuario Pendiente')
+                                    ? (u.role === 'admin' ? 'Administrador' : u.email?.split('@')[0] || 'Usuario')
+                                    : u.name} {u.role === 'admin' ? '(Admin)' : u.role === 'master' ? '(Master)' : '(Vendedor)'}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300 py-1">
+                          {(() => {
+                            const asignado = agencyUsers.find((u) => u.id === formData.sellerId);
+                            if (!asignado) return "Sin asignar";
+                            return (!asignado.name || asignado.name === 'Usuario Pendiente')
+                              ? (asignado.email?.split('@')[0] || 'Usuario')
+                              : asignado.name;
+                          })()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     <Eye className="w-4 h-4 text-gray-400" />
