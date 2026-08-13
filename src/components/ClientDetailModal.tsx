@@ -1789,7 +1789,11 @@ export function ClientDetailModal({
                           setFormData({
                             ...formData,
                             vehicle: "",
-                            vehicleId: undefined,
+                            // null y no undefined: los campos undefined se
+                            // descartan antes de guardar, de modo que con
+                            // merge el valor anterior quedaba intacto y el
+                            // auto no se podia quitar.
+                            vehicleId: null as any,
                           });
                           setIsVehicleSearchOpen(false);
                           setVehicleSearchQuery("");
@@ -1917,7 +1921,10 @@ export function ClientDetailModal({
                                   setFormData({
                                     ...formData,
                                     vehicle: "Otro pendiente",
-                                    vehicleId: undefined,
+                                    // null para que si venia de un auto del
+                                    // inventario, el id anterior se limpie
+                                    // en lugar de conservarse.
+                                    vehicleId: null as any,
                                   });
                                   setIsVehicleSearchOpen(false);
                                   setVehicleSearchQuery("");
