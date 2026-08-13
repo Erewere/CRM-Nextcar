@@ -30,6 +30,7 @@ export type Permiso =
   | "vehiculos.precio"        // precio de venta al publico
   | "vehiculos.costo"         // precio de compra y margen
   | "vehiculos.propietario"   // quien compro el auto, desde su ficha
+  | "vehiculos.compartido"    // inventario de otras agencias asociadas
   // Gastos
   | "gastos.ver"
   | "gastos.crear"
@@ -53,6 +54,7 @@ export type Permiso =
 const TODOS: Permiso[] = [
   "vehiculos.ver", "vehiculos.crear", "vehiculos.editar", "vehiculos.eliminar",
   "vehiculos.fotos", "vehiculos.precio", "vehiculos.costo", "vehiculos.propietario",
+  "vehiculos.compartido",
   "gastos.ver", "gastos.crear",
   "contactos.ver", "contactos.editar", "contactos.reasignar",
   "tratos.ver", "tratos.gestionar", "tratos.ajenos", "ventas.cerrar",
@@ -71,6 +73,7 @@ const PERMISOS_POR_ROL: Record<Rol, Permiso[]> = {
   manager: [
     "vehiculos.ver", "vehiculos.crear", "vehiculos.editar",
     "vehiculos.fotos", "vehiculos.precio", "vehiculos.costo", "vehiculos.propietario",
+    "vehiculos.compartido",
     "gastos.ver", "gastos.crear",
     "contactos.ver", "contactos.editar", "contactos.reasignar",
     "tratos.ver", "tratos.gestionar", "tratos.ajenos", "ventas.cerrar",

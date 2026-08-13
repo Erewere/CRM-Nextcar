@@ -39,6 +39,7 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { MobileFab } from "./MobileFab";
 import { NextcarLogo } from "./NextcarLogo";
 import { getTrialDaysLeft } from "../lib/subscription";
+import { NOMBRE_ROL, type Rol } from "../lib/permissions";
 
 export function Layout() {
   const { userData, agencyData } = useAuth();
@@ -430,8 +431,7 @@ export function Layout() {
               )}
               <div className="hidden sm:flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 shrink-0 transition-colors">
                 <span className="text-[10px] md:text-[11px] font-medium text-slate-600 dark:text-slate-400 capitalize">
-                  {userData?.role === 'master' ? 'Master' : 
-                   userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
+                  {NOMBRE_ROL[(userData?.role as Rol)] || 'Usuario'}
                 </span>
               </div>
               {trialDaysLeft !== null && (

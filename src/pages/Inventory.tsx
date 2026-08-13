@@ -14,6 +14,7 @@ import { useSharedInventoryMatches } from '../hooks/useSharedInventoryMatches';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 import { useReadOnly } from '../hooks/useReadOnly';
+import { usePermissions } from '../hooks/usePermissions';
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -143,6 +144,9 @@ export function Inventory() {
   const { userData, currentUser } = useAuth();
   const isMobile = useIsMobile();
   const isReadOnly = useReadOnly();
+  const { can } = usePermissions();
+  const puedeVerCompartido = can('vehiculos.compartido');
+  const puedeVerPagos = can('pagos.gestionar');
   const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -189,7 +193,9 @@ export function Inventory() {
   }, [location.state, vehicles]);
 
   useEffect(() => {
-    if (userData?.role === 'seller') {
+    // Quien no tiene permiso sobre el inventario compartido se queda en el
+    // propio, aunque llegue con ?tab=shared en la direccion.
+    if (!puedeVerCompartido) {
       setActiveTab('my');
       return;
     }
@@ -200,7 +206,7 @@ export function Inventory() {
     } else if (tabParam === 'my') {
       setActiveTab('my');
     }
-  }, [window.location.search, userData?.role]);
+  }, [window.location.search, puedeVerCompartido]);
 
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
   const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
@@ -936,8 +942,11 @@ export function Inventory() {
             </select>
           </div>
 
-          {/* TAB CONTROL FOR COLLABORATIVE INVENTORY */}
-          {userData?.role !== 'master' && userData?.role !== 'seller' && (
+          {/* Pestañas de inventario. Antes se decidia por lista negra de roles
+              -"todos menos master y vendedor"- de modo que cualquier rol nuevo
+              quedaba dentro sin quererlo: el taller veia el inventario de otras
+              agencias y el acceso a Pagos. */}
+          {userData?.role !== 'master' && (puedeVerCompartido || puedeVerPagos) && (
             <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded border border-gray-200 dark:border-slate-700">
               <button
                 type="button"
@@ -951,6 +960,7 @@ export function Inventory() {
               >
                 Mi Inventario
               </button>
+              {puedeVerCompartido && (
               <button
                 type="button"
                 onClick={() => {
@@ -975,7 +985,8 @@ export function Inventory() {
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Hay vehículos que coinciden con clientes activos"></span>
                 )}
               </button>
-              {(userData?.role as string) !== 'seller' && (
+              )}
+              {puedeVerPagos && (
                 <button
                   type="button"
                   onClick={() => navigate('/payments')}
