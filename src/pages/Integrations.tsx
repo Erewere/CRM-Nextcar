@@ -279,6 +279,29 @@ export function Integrations() {
     })();
   }, [isMaster]);
 
+  // Revisa toda la plataforma, no una agencia, y no escribe nada.
+  const handleRevisionUsuarios = async () => {
+    if (!currentUser) {
+      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    setMigLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/admin/audit-users", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      setMigResult(data);
+      setMigSimulada('');
+    } catch (e: any) {
+      alert(e.message || "No se pudo revisar los usuarios.");
+    } finally {
+      setMigLoading(false);
+    }
+  };
+
   const handleMigracion = async (ruta: string, apply: boolean) => {
     if (!currentUser) {
       alert("No hay una sesión activa. Vuelve a iniciar sesión.");
@@ -739,6 +762,24 @@ export function Integrations() {
                   Se migra una agencia a la vez. Al cambiar de agencia hay que simular de nuevo.
                 </p>
               </div>
+              {/* No usa la agencia seleccionada: revisa toda la plataforma. */}
+              <div className="mb-6 pb-5 border-b border-gray-200 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                  Revisar usuarios contra sus cuentas
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Compara cada ficha de usuario con la cuenta real con la que se inicia
+                  sesión, y señala las que sobran. Solo lee, no cambia nada.
+                </p>
+                <button
+                  onClick={() => handleRevisionUsuarios()}
+                  disabled={migLoading}
+                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                >
+                  {migLoading ? "Procesando..." : "Revisar"}
+                </button>
+              </div>
+
               <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
                 Crear tratos faltantes
               </h3>
@@ -821,10 +862,13 @@ export function Integrations() {
                   </ul>
                   {Array.isArray(migResult.detalle) && migResult.detalle.length > 0 && (
                     <div className="max-h-64 overflow-y-auto border-t border-gray-200 dark:border-slate-700 pt-3">
-                      {migResult.detalle.map((d: any) => (
-                        <div key={d.contactoId} className="text-xs text-slate-600 dark:text-slate-400 py-1 border-b border-gray-100 dark:border-slate-800 last:border-0">
+                      {migResult.detalle.map((d: any, i: number) => (
+                        <div key={d.contactoId || i} className="text-xs text-slate-600 dark:text-slate-400 py-1 border-b border-gray-100 dark:border-slate-800 last:border-0">
                           <strong className="text-slate-800 dark:text-slate-200">{d.nombre}</strong>
-                          {" — "}{d.titulo}{" · "}${Number(d.valor).toLocaleString("es-MX")}{" · "}{d.estado}
+                          {/* Cada revision describe sus renglones a su manera. */}
+                          {d.texto
+                            ? <>{" — "}{d.texto}</>
+                            : <>{" — "}{d.titulo}{" · "}${Number(d.valor).toLocaleString("es-MX")}{" · "}{d.estado}</>}
                         </div>
                       ))}
                     </div>

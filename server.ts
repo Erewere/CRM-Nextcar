@@ -1494,6 +1494,91 @@ Return a JSON array of recommendation objects with the following schema:
   //
   // Esta rutina no borra nada del vehiculo. La limpieza es un paso posterior,
   // una vez verificado que la aplicacion lee del lugar nuevo.
+  // Revision de usuarios: compara cada ficha del CRM contra la cuenta real de
+  // la autenticacion.
+  //
+  // Son dos cosas distintas y desde la base de datos no se distinguen: la
+  // ficha guarda el rol y la agencia, la cuenta es con lo que se inicia
+  // sesion. Al entrar se busca la ficha cuyo identificador coincide con el de
+  // la cuenta. Si una cuenta se borra y se vuelve a crear, la nueva recibe
+  // otro identificador y la ficha anterior se queda ahi, visible en la lista
+  // de usuarios, aparentando un acceso que ya no existe.
+  //
+  // Solo lee. No modifica ni borra nada.
+  app.get("/api/admin/audit-users", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.split("Bearer ")[1]);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!llamanteDoc.exists || llamanteDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Se requiere rol master" });
+      }
+
+      const fichas = await adminDb.collection("users").get();
+
+      // Un correo puede repetirse en varias fichas; su cuenta se busca una vez.
+      const correos = [...new Set(fichas.docs.map((d) => d.data().email).filter(Boolean))];
+      const uidPorCorreo = new Map<string, string | null>();
+      for (const correo of correos) {
+        try {
+          const cuenta = await getAuth(adminApp).getUserByEmail(correo);
+          uidPorCorreo.set(correo, cuenta.uid);
+        } catch {
+          uidPorCorreo.set(correo, null);
+        }
+      }
+
+      let correctas = 0;
+      const problemas: any[] = [];
+
+      fichas.docs.forEach((d) => {
+        const datos = d.data();
+        const uidVivo = datos.email ? uidPorCorreo.get(datos.email) : null;
+
+        if (uidVivo && uidVivo === d.id) {
+          correctas++;
+          return;
+        }
+
+        problemas.push({
+          nombre: datos.name || datos.email || d.id,
+          texto: !uidVivo
+            ? `SIN CUENTA — ficha ${d.id} · ${datos.email || "sin correo"} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`
+            : `IDENTIFICADOR VIEJO — ficha ${d.id} pero la cuenta viva es ${uidVivo} · ${datos.email} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`,
+        });
+      });
+
+      res.json({
+        modo: "REVISION (solo lectura)",
+        agencia: "todas",
+        resumen: {
+          fichasTotales: fichas.size,
+          fichasCorrectas: correctas,
+          fichasConProblema: problemas.length,
+        },
+        detalle: problemas,
+      });
+    } catch (err: any) {
+      console.error("Audit Users Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/admin/migrate/split-financials", express.json(), async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
