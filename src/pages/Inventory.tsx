@@ -10,7 +10,7 @@ import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients } from '../lib/clientUtils';
-import { useSharedInventoryMatches } from '../hooks/useSharedInventoryMatches';
+import { useSharedInventoryMatches, useInventarioCompartido } from '../hooks/useSharedInventoryMatches';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 import { useReadOnly } from '../hooks/useReadOnly';
@@ -210,7 +210,6 @@ export function Inventory() {
 
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
   const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
-  const [sharedVehicles, setSharedVehicles] = useState<Vehicle[]>([]);
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>({});
 
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
@@ -490,50 +489,14 @@ export function Inventory() {
     };
   }, [userData]);
 
-  // Subscribe to shared vehicles when eligible
-  useEffect(() => {
-    if (userData?.role === 'master' || userData?.role === 'seller') return;
-    if (!ownAgencySharing || sharingAgencies.length === 0) {
-      setSharedVehicles([]);
-      return;
-    }
-
-    const sliceAgencies = sharingAgencies.slice(0, 10);
-    let cancelled = false;
-
-    const fetchSharedVehicles = async () => {
-      try {
-        const results = await Promise.all(
-          sliceAgencies.map(async (agencyId) => {
-            try {
-              const res = await fetch(
-                getApiUrl(`/api/public/v1/inventory?agencyId=${encodeURIComponent(agencyId)}`)
-              );
-              if (!res.ok) return [];
-              const data = await res.json();
-              return (data.vehicles || []).map((v: any) => ({ ...v, agencyId }));
-            } catch (err) {
-              console.error(`Error loading shared vehicles from agency ${agencyId}:`, err);
-              return [];
-            }
-          })
-        );
-        if (!cancelled) {
-          setSharedVehicles(results.flat() as Vehicle[]);
-        }
-      } catch (err) {
-        console.error("Error loading shared vehicles:", err);
-      }
-    };
-
-    fetchSharedVehicles();
-    const intervalId = setInterval(fetchSharedVehicles, 60000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [ownAgencySharing, sharingAgencies, userData]);
+  // Inventario compartido: lo pide el mismo mecanismo que usa el resto de la
+  // aplicacion, de modo que esta pantalla no abre una consulta aparte.
+  const sharedVehicles = useInventarioCompartido(
+    sharingAgencies.slice(0, 10),
+    ownAgencySharing &&
+      userData?.role !== 'master' &&
+      userData?.role !== 'seller'
+  );
 
   const handleDelete = async (id: string) => {
     try {

@@ -1092,11 +1092,23 @@ Return a JSON array of recommendation objects with the following schema:
   
 
   // === Public API for Virtual Assistants ===
+  // El inventario publico se consulta en bucle desde el navegador para mostrar
+  // el inventario compartido entre agencias. Se guarda la respuesta un rato
+  // para que un cliente insistente no se traduzca en lecturas repetidas de
+  // Firestore: el inventario de otra agencia no cambia de un segundo a otro.
+  const CACHE_INVENTARIO_MS = 60 * 1000;
+  const cacheInventario = new Map<string, { momento: number; vehicles: any[] }>();
+
   app.get("/api/public/v1/inventory", async (req, res) => {
     try {
       const agencyId = req.query.agencyId as string;
       if (!agencyId) {
         return res.status(400).json({ error: "agencyId is required" });
+      }
+
+      const guardado = cacheInventario.get(agencyId);
+      if (guardado && Date.now() - guardado.momento < CACHE_INVENTARIO_MS) {
+        return res.json({ vehicles: guardado.vehicles, cached: true });
       }
 
       const adminDb = getAdminDb();
@@ -1128,6 +1140,7 @@ Return a JSON array of recommendation objects with the following schema:
           ...(data.description !== undefined ? { description: data.description } : {})
         };
       });
+      cacheInventario.set(agencyId, { momento: Date.now(), vehicles });
       res.json({ vehicles });
     } catch (e: any) {
       console.error("Error fetching public inventory:", e);
