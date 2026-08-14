@@ -4,7 +4,7 @@ import { getApiUrl } from '../lib/api';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc, addDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
 import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
 import { Task, Client } from '../types';
 import { deduplicateClients } from '../lib/clientUtils';
@@ -296,15 +296,31 @@ export function AgencyUsers() {
                     canManageExpenses: isSellerRole ? inviteCanManageExpenses : false,
                 };
 
-                // Create user document in Firestore so they appear in CRM
-                const docRef = await addDoc(collection(db, 'users'), {
-                    email: targetEmail,
-                    name: inviteName.trim(),
-                    role: inviteRole,
-                    agencyId: targetAgencyId,
-                    createdAt: new Date().toISOString(),
-                    ...extraPermissions
+                // El documento debe llevar el identificador real de la cuenta,
+                // porque es el que se consulta al iniciar sesion. Solo el
+                // servidor puede averiguarlo a partir del correo.
+                const reactRes = await fetch(getApiUrl('/api/admin/reactivate-user'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${await getAuth().currentUser?.getIdToken()}`
+                    },
+                    body: JSON.stringify({
+                        email: targetEmail,
+                        name: inviteName.trim(),
+                        role: inviteRole,
+                        agencyId: targetAgencyId,
+                        extras: extraPermissions
+                    })
                 });
+                const reactData = await reactRes.json();
+                if (!reactRes.ok) {
+                    throw new Error(reactData?.error || 'No se pudo reactivar el usuario');
+                }
+                const docRef = { id: reactData.uid };
+                if (reactData.duplicados?.length) {
+                    console.warn('Documentos duplicados para este correo:', reactData.duplicados);
+                }
 
                 // Send password reset email so user can set a new password
                 try {

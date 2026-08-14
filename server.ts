@@ -304,9 +304,30 @@ async function startServer() {
         return res.status(401).json({ error: "Token inválido" });
       }
 
+      const adminDbAuth = getAdminDb();
+      if (!adminDbAuth) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+
+      // Verificar tener sesion no basta: sin esto, cualquier usuario con
+      // cuenta -- un vendedor, alguien de taller -- podia crear una cuenta con
+      // el rol que quisiera en la agencia que quisiera, master incluido.
+      const llamanteDoc = await adminDbAuth.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || (llamante.role !== "master" && llamante.role !== "admin")) {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+
       const { email, password, name, role, agencyId } = req.body;
       if (!email || !password || !role || !agencyId) {
         return res.status(400).json({ error: "Faltan parámetros requeridos" });
+      }
+
+      if (llamante.role === "admin" && agencyId !== llamante.agencyId) {
+        return res.status(403).json({ error: "Solo puedes crear usuarios en tu propia agencia" });
+      }
+      if (role === "master" && llamante.role !== "master") {
+        return res.status(403).json({ error: "No puedes otorgar el rol master" });
       }
 
       const auth = getAuth(getAdminApp()!);
@@ -331,6 +352,81 @@ async function startServer() {
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
     } catch (err: any) {
       console.error("Create User Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Reactivar en el CRM a alguien que ya existe en la autenticacion.
+  //
+  // Antes esto se resolvia en el navegador creando el documento con un
+  // identificador al azar, porque el cliente no tiene manera de averiguar el
+  // identificador real de la cuenta. Ese documento no era el que se consulta
+  // al entrar -- la sesion busca users/{uid} -- asi que la asignacion de
+  // agencia que se veia en pantalla no era la que se aplicaba al iniciar
+  // sesion. Aqui si se puede resolver el identificador correcto.
+  app.post("/api/admin/reactivate-user", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.split("Bearer ")[1]);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || (llamante.role !== "master" && llamante.role !== "admin")) {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+
+      const { email, name, role, agencyId, extras } = req.body || {};
+      if (!email || !role || !agencyId) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos" });
+      }
+      if (llamante.role === "admin" && agencyId !== llamante.agencyId) {
+        return res.status(403).json({ error: "Solo puedes dar de alta usuarios en tu propia agencia" });
+      }
+      if (role === "master" && llamante.role !== "master") {
+        return res.status(403).json({ error: "No puedes otorgar el rol master" });
+      }
+
+      let userRecord;
+      try {
+        userRecord = await getAuth(adminApp).getUserByEmail(email);
+      } catch (err) {
+        return res.status(404).json({ error: "Ese correo no existe en la autenticación" });
+      }
+
+      await adminDb.collection("users").doc(userRecord.uid).set({
+        email,
+        name: name || email.split("@")[0],
+        role,
+        agencyId,
+        createdAt: new Date().toISOString(),
+        ...(extras && typeof extras === "object" ? extras : {}),
+      }, { merge: true });
+
+      // Documentos sueltos con ese mismo correo pero otro identificador: son
+      // los que quedaron del metodo anterior. No se borran aqui; se informan
+      // para poder revisarlos antes de tocar nada.
+      const sueltos = await adminDb.collection("users").where("email", "==", email).get();
+      const duplicados = sueltos.docs
+        .filter((d) => d.id !== userRecord.uid)
+        .map((d) => ({ id: d.id, agencyId: d.data().agencyId, role: d.data().role }));
+
+      res.json({ uid: userRecord.uid, duplicados });
+    } catch (err: any) {
+      console.error("Reactivate User Error:", err);
       res.status(500).json({ error: err.message });
     }
   });
