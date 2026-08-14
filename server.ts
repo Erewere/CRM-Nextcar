@@ -1546,22 +1546,44 @@ Return a JSON array of recommendation objects with the following schema:
       let correctas = 0;
       const problemas: any[] = [];
 
-      fichas.docs.forEach((d) => {
+      for (const d of fichas.docs) {
         const datos = d.data();
         const uidVivo = datos.email ? uidPorCorreo.get(datos.email) : null;
 
         if (uidVivo && uidVivo === d.id) {
           correctas++;
-          return;
+          continue;
+        }
+
+        // Una ficha sin correo no se puede buscar por correo, pero su propio
+        // identificador si puede corresponder a una cuenta real. Sin esta
+        // comprobacion se reportaba como huerfana sin haberlo verificado.
+        let cuentaPorUid: string | null = null;
+        try {
+          const cuenta = await getAuth(adminApp).getUser(d.id);
+          cuentaPorUid = cuenta.email || "(cuenta sin correo)";
+        } catch {
+          cuentaPorUid = null;
+        }
+
+        const comun = `ficha ${d.id} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`;
+
+        if (cuentaPorUid && !datos.email) {
+          correctas++;
+          problemas.push({
+            nombre: datos.name || d.id,
+            texto: `FICHA SIN CORREO — ${comun} · la cuenta existe y su correo es ${cuentaPorUid}`,
+          });
+          continue;
         }
 
         problemas.push({
           nombre: datos.name || datos.email || d.id,
-          texto: !uidVivo
-            ? `SIN CUENTA — ficha ${d.id} · ${datos.email || "sin correo"} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`
-            : `IDENTIFICADOR VIEJO — ficha ${d.id} pero la cuenta viva es ${uidVivo} · ${datos.email} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`,
+          texto: uidVivo
+            ? `IDENTIFICADOR VIEJO — ${comun} · ${datos.email} · la cuenta viva es ${uidVivo}`
+            : `SIN CUENTA — ${comun} · ${datos.email || "sin correo"}`,
         });
-      });
+      }
 
       res.json({
         modo: "REVISION (solo lectura)",
