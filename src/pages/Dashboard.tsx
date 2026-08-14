@@ -79,6 +79,7 @@ import { LeadScoringEngine } from "../modules/lead-intelligence/services/scoring
 
 import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
+import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 
 
 
@@ -117,7 +118,9 @@ export function Dashboard() {
   const isMobile = useIsMobile();
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
+  const { conCosto } = useCostosVehiculos();
+  const vehicles = useMemo(() => conCosto(vehiculosCrudos), [vehiculosCrudos, conCosto]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [notes, setNotes] = useState<any[]>([]);

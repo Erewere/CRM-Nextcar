@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { checkIsWon, deduplicateClients } from "../lib/clientUtils";
 import { db } from "../lib/firebase";
@@ -8,12 +8,15 @@ import { ClientDetailModal } from "../components/ClientDetailModal";
 import { VehicleDetailModal } from "../components/VehicleDetailModal";
 import { Search } from "lucide-react";
 import clsx from "clsx";
+import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 
 export function ClosedSales() {
   const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
+  const { conCosto } = useCostosVehiculos();
+  const vehicles = useMemo(() => conCosto(vehiculosCrudos), [vehiculosCrudos, conCosto]);
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   
   const [loading, setLoading] = useState(true);

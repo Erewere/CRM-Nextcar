@@ -13,6 +13,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { deduplicateClients, sanitizeFirestoreData } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
+import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 
@@ -95,6 +96,23 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       ...vehicle
     }
   );
+
+  const { costoDe } = useCostosVehiculos();
+
+  // Este modal se abre desde varias pantallas, y no todas traen el costo
+  // dentro del auto. Se toma de su fuente para que el campo nunca aparezca en
+  // cero teniendo un valor guardado: si apareciera asi, guardar lo borraria.
+  useEffect(() => {
+    if (isNew || !vehicle?.id) return;
+    const guardado = costoDe(vehicle.id);
+    // Mientras los costos no han terminado de cargar, costoDe responde cero.
+    // Escribir ese cero en el formulario y guardar en ese instante borraria el
+    // valor real, asi que solo se rellena cuando hay algo que poner.
+    if (!guardado) return;
+    setFormData((prev) =>
+      prev.purchasePrice === guardado ? prev : { ...prev, purchasePrice: guardado }
+    );
+  }, [vehicle?.id, costoDe, isNew]);
 
   const isMaster = userData?.role === 'master';
   const isAdmin = userData?.role === 'admin' || isMaster;
@@ -573,6 +591,13 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         updatedAt: new Date().toISOString()
       };
 
+      // El costo se guarda aparte, en vehicleFinancials, y por eso sale del
+      // documento del vehiculo. Quien no puede verlo tampoco lo escribe: de
+      // otro modo, al guardar un auto sin tener el dato a la vista, lo
+      // sobrescribiria con un cero.
+      const costoIngresado = (formData as any).purchasePrice;
+      delete payload.purchasePrice;
+
       const isSeller = userData?.role === 'seller';
       if (isSeller) {
          if (!isNew) {
@@ -602,6 +627,10 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       }
 
       await setDoc(docRef, payload, { merge: true });
+
+      if (puedeVerCosto) {
+        await guardarCosto(docRef.id, formData.agencyId!, costoIngresado);
+      }
 
       if (!isSeller && payload.status === 'sold' && payload.price) {
         // If the admin is updating a sold vehicle, also sync the dealValue to any open/won client/deal associated with it

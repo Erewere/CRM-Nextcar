@@ -602,7 +602,6 @@ export function Kanban() {
         const currentVehicle = vehicles.find(v => v.id === client.vehicleId);
         const originalPrice = currentVehicle?.price || client.dealValue || 0;
         const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
-        const purchasePrice = currentVehicle?.purchasePrice || 0;
         const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
         await updateDoc(doc(db, "vehicles", client.vehicleId), {
@@ -615,7 +614,8 @@ export function Kanban() {
             clientName: client.name,
             originalPrice,
             proposedPrice,
-            purchasePrice,
+            // El costo no se copia aqui: nadie lo leia de este registro, y
+            // quien cierra una venta no necesariamente puede verlo.
             hasPriceChange,
             saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
             vehicle: client.vehicle || (currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : null),

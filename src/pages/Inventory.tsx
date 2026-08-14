@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -15,6 +15,7 @@ import clsx from 'clsx';
 import * as XLSX from "xlsx";
 import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
+import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -148,7 +149,11 @@ export function Inventory() {
   const puedeVerCompartido = can('vehiculos.compartido');
   const puedeVerPagos = can('pagos.gestionar');
   const navigate = useNavigate();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
+  // El costo llega por separado y se vuelve a unir al auto aqui, de modo
+  // que el resto de la pantalla siga leyendo vehicle.purchasePrice.
+  const { conCosto, puedeVerCostos } = useCostosVehiculos();
+  const vehicles = useMemo(() => conCosto(vehiculosCrudos), [vehiculosCrudos, conCosto]);
   const [clients, setClients] = useState<Client[]>([]);
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -337,7 +342,6 @@ export function Inventory() {
             model: vModel,
             year: vYear,
             price: vPrice,
-            purchasePrice: vCost,
             vin: vVin,
             color: vColor,
             transmission: vTransmission,
@@ -348,6 +352,12 @@ export function Inventory() {
             updatedAt: new Date().toISOString(),
           };
           await setDoc(doc(db, "vehicles", newRef.id), newVehicle);
+          // El costo no viaja dentro del vehiculo: va a su coleccion aparte.
+          // Quien no puede verlo tampoco puede escribirlo, y la regla
+          // rechazaria la escritura interrumpiendo toda la importacion.
+          if (puedeVerCostos) {
+            await guardarCosto(newRef.id, userData?.agencyId || "", vCost);
+          }
           importedCount++;
         }
       }

@@ -769,7 +769,6 @@ export function ClientDetailModal({
           const currentVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
           const originalPrice = currentVehicle?.price || client.dealValue || 0;
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
-          const purchasePrice = currentVehicle?.purchasePrice || 0;
           const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
           await updateDoc(doc(db, "vehicles", formData.vehicleId), {
@@ -782,7 +781,8 @@ export function ClientDetailModal({
               clientName: client.name || formData.name,
               originalPrice,
               proposedPrice,
-              purchasePrice,
+              // El costo no se copia aqui: nadie lo leia de este registro, y
+              // quien cierra una venta no necesariamente puede verlo.
               hasPriceChange,
               saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
               vehicle: formData.vehicle || (currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : null),
