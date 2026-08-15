@@ -318,6 +318,10 @@ export function Integrations() {
       'split-financials':
         "Se va a COPIAR el precio de compra de cada auto a un registro aparte. " +
         "No se borra ni se modifica nada de los autos. ¿Continuar?",
+      'clear-vehicle-costs':
+        "Se va a BORRAR el precio de compra de dentro de cada auto. " +
+        "Esto NO SE PUEDE DESHACER. Solo se borra donde el costo ya está " +
+        "guardado aparte y coincide. ¿Continuar?",
     };
     if (apply && !window.confirm(AVISO[ruta] || "Esta acción escribe en la base de datos. ¿Continuar?")) {
       return;
@@ -829,6 +833,39 @@ export function Integrations() {
                     className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
                   >
                     2. Aplicar
+                  </button>
+                </div>
+              </div>
+
+              {/* Unico paso irreversible: por eso va marcado aparte. */}
+              <div className="mt-6 pt-5 border-t border-red-200 dark:border-red-900">
+                <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
+                  Quitar el precio de compra del vehículo
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Borra el campo de dentro de cada auto, dejando la copia aparte como
+                  única. Hasta que esto pase, ocultar el costo en pantalla no protege
+                  nada: sigue siendo legible consultando la base directamente.
+                  <strong className="text-red-700 dark:text-red-400">
+                    {" "}No se puede deshacer.
+                  </strong>{" "}
+                  Solo borra donde el costo ya está guardado aparte y coincide; cualquier
+                  diferencia la deja intacta y te la reporta.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => handleMigracion('clear-vehicle-costs', false)}
+                    disabled={migLoading || !migAgencyId}
+                    className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                  >
+                    {migLoading ? "Procesando..." : "1. Simular"}
+                  </button>
+                  <button
+                    onClick={() => handleMigracion('clear-vehicle-costs', true)}
+                    disabled={migLoading || migSimulada !== 'clear-vehicle-costs'}
+                    className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
+                  >
+                    2. Borrar
                   </button>
                 </div>
               </div>

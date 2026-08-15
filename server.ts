@@ -1545,6 +1545,7 @@ Return a JSON array of recommendation objects with the following schema:
 
       let correctas = 0;
       const problemas: any[] = [];
+      const avisos: any[] = [];
 
       for (const d of fichas.docs) {
         const datos = d.data();
@@ -1568,9 +1569,11 @@ Return a JSON array of recommendation objects with the following schema:
 
         const comun = `ficha ${d.id} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`;
 
+        // Esta ficha esta sana; se lista solo para dejar ver de quien es. No
+        // se cuenta como problema, o los totales no cuadrarian.
         if (cuentaPorUid && !datos.email) {
           correctas++;
-          problemas.push({
+          avisos.push({
             nombre: datos.name || d.id,
             texto: `FICHA SIN CORREO — ${comun} · la cuenta existe y su correo es ${cuentaPorUid}`,
           });
@@ -1593,11 +1596,127 @@ Return a JSON array of recommendation objects with the following schema:
           fichasCorrectas: correctas,
           fichasConProblema: problemas.length,
         },
-        detalle: problemas,
+        detalle: [...problemas, ...avisos],
       });
     } catch (err: any) {
       console.error("Audit Users Error:", err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Ultimo paso de separar el costo: quitarlo del documento del vehiculo.
+  //
+  // Hasta aqui el dato estaba en los dos lados y ocultarlo seguia siendo
+  // cosmetico, porque cualquiera con acceso al inventario podia leerlo
+  // consultando la base. Al quitarlo de aqui, la unica copia queda en
+  // vehicleFinancials, donde la regla si puede negarla.
+  //
+  // Es irreversible, asi que solo borra el campo de los vehiculos cuyo costo
+  // ya esta guardado aparte Y coincide exactamente. Cualquier diferencia lo
+  // deja intacto y lo reporta: mas vale un dato de mas que uno perdido.
+  app.post("/api/admin/migrate/clear-vehicle-costs", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (tokenErr) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Solo el usuario master puede ejecutar migraciones" });
+      }
+
+      const apply = req.body?.apply === true;
+      const targetAgencyId = req.body?.agencyId || userDoc.data()?.agencyId;
+      if (!targetAgencyId) {
+        return res.status(400).json({ error: "No se pudo determinar la agencia" });
+      }
+
+      const vehiculosSnap = await adminDb
+        .collection("vehicles")
+        .where("agencyId", "==", targetAgencyId)
+        .get();
+
+      const financierosSnap = await adminDb
+        .collection("vehicleFinancials")
+        .where("agencyId", "==", targetAgencyId)
+        .get();
+
+      const costoGuardado = new Map<string, number>();
+      financierosSnap.docs.forEach((d: any) => {
+        costoGuardado.set(d.id, Number(d.data().purchasePrice) || 0);
+      });
+
+      const borrables: any[] = [];
+      const bloqueados: any[] = [];
+      let yaLimpios = 0;
+
+      for (const doc of vehiculosSnap.docs) {
+        const v: any = doc.data() || {};
+        const nombre = `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim() || "(sin nombre)";
+
+        if (v.purchasePrice === undefined || v.purchasePrice === null) {
+          yaLimpios++;
+          continue;
+        }
+
+        const enVehiculo = Number(v.purchasePrice) || 0;
+        const aparte = costoGuardado.get(doc.id);
+
+        if (aparte === undefined) {
+          bloqueados.push({
+            nombre,
+            texto: `SIN COPIA APARTE — costo ${enVehiculo}. Hay que correr antes "Separar el precio de compra" en esta agencia.`,
+          });
+          continue;
+        }
+        if (aparte !== enVehiculo) {
+          bloqueados.push({
+            nombre,
+            texto: `NO COINCIDEN — en el vehiculo ${enVehiculo}, aparte ${aparte}. Se deja intacto.`,
+          });
+          continue;
+        }
+        borrables.push({ id: doc.id, nombre, costo: enVehiculo });
+      }
+
+      let borrados = 0;
+      if (apply) {
+        for (const item of borrables) {
+          await adminDb.collection("vehicles").doc(item.id).update({
+            purchasePrice: FieldValue.delete(),
+          });
+          borrados++;
+        }
+      }
+
+      res.json({
+        modo: apply ? "APLICADO" : "SIMULACION (no se escribio nada)",
+        agencia: targetAgencyId,
+        resumen: {
+          vehiculosTotales: vehiculosSnap.size,
+          sinElCampo: yaLimpios,
+          bloqueados: bloqueados.length,
+          porBorrar: apply ? 0 : borrables.length,
+          borrados,
+        },
+        detalle: bloqueados,
+      });
+    } catch (e: any) {
+      console.error("Clear vehicle costs error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
     }
   });
 
