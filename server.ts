@@ -1661,6 +1661,7 @@ Return a JSON array of recommendation objects with the following schema:
 
       const borrables: any[] = [];
       const bloqueados: any[] = [];
+      const avisos: any[] = [];
       let yaLimpios = 0;
 
       for (const doc of vehiculosSnap.docs) {
@@ -1675,19 +1676,29 @@ Return a JSON array of recommendation objects with the following schema:
         const enVehiculo = Number(v.purchasePrice) || 0;
         const aparte = costoGuardado.get(doc.id);
 
+        // Sin copia aparte, borrar si perderia el dato. Salvo que valga cero,
+        // donde no hay nada que perder.
         if (aparte === undefined) {
+          if (enVehiculo === 0) {
+            borrables.push({ id: doc.id, nombre, costo: 0 });
+            continue;
+          }
           bloqueados.push({
             nombre,
             texto: `SIN COPIA APARTE — costo ${enVehiculo}. Hay que correr antes "Separar el precio de compra" en esta agencia.`,
           });
           continue;
         }
+
+        // Con copia aparte, el valor de adentro ya no lo lee nadie: desde que
+        // la aplicacion lee de la coleccion, esta cifra quedo muerta. Se avisa
+        // de la diferencia para poder revisar el numero antes de perderlo,
+        // pero no impide el borrado.
         if (aparte !== enVehiculo) {
-          bloqueados.push({
+          avisos.push({
             nombre,
-            texto: `NO COINCIDEN — en el vehiculo ${enVehiculo}, aparte ${aparte}. Se deja intacto.`,
+            texto: `DIFERENCIA — dentro del vehiculo ${enVehiculo}, aparte ${aparte}. Vale el de aparte, que es el que usa el CRM; al borrar, el otro se pierde.`,
           });
-          continue;
         }
         borrables.push({ id: doc.id, nombre, costo: enVehiculo });
       }
@@ -1709,10 +1720,11 @@ Return a JSON array of recommendation objects with the following schema:
           vehiculosTotales: vehiculosSnap.size,
           sinElCampo: yaLimpios,
           bloqueados: bloqueados.length,
+          conDiferencia: avisos.length,
           porBorrar: apply ? 0 : borrables.length,
           borrados,
         },
-        detalle: bloqueados,
+        detalle: [...bloqueados, ...avisos],
       });
     } catch (e: any) {
       console.error("Clear vehicle costs error:", e);
