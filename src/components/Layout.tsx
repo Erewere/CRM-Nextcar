@@ -24,6 +24,7 @@ import {
   TrendingUp,
   MessageSquare,
   DollarSign,
+  Building2,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -148,6 +149,12 @@ export function Layout() {
   };
 
   const navItems = [
+    {
+      name: "Plataforma",
+      path: "/platform",
+      icon: Building2,
+      roles: ["master"],
+    },
     {
       name: "Dashboard",
       path: "/",

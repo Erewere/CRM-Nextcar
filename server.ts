@@ -1511,6 +1511,146 @@ Return a JSON array of recommendation objects with the following schema:
   // Las migraciones se corren agencia por agencia, asi que es facil dejar una
   // sin hacer y creer que el costo esta protegido cuando en esa agencia sigue
   // siendo legible por cualquiera que pueda ver el inventario. Solo lee.
+  // Panel de control de la plataforma.
+  //
+  // Todo se calcula aqui, con el SDK de administrador, y al navegador solo
+  // viajan numeros. Asi el master puede ver como va cada agencia sin que su
+  // sesion tenga que leer los contactos, los tratos ni el inventario de nadie:
+  // saber cuantos hay no exige poder verlos.
+  //
+  // Se usan conteos agregados en vez de traer los documentos. Firestore los
+  // cobra a una lectura por cada mil, de modo que el panel entero cuesta unas
+  // pocas lecturas en lugar de una por registro.
+  app.get("/api/admin/platform-stats", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Se requiere rol master" });
+      }
+
+      const agenciasSnap = await adminDb.collection("agencies").get();
+
+      const contar = async (coleccion: string, agencyId: string) => {
+        try {
+          const agg = await adminDb
+            .collection(coleccion)
+            .where("agencyId", "==", agencyId)
+            .count()
+            .get();
+          return agg.data().count as number;
+        } catch {
+          return -1; // -1 distingue "fallo el conteo" de "hay cero"
+        }
+      };
+
+      const ahora = Date.now();
+      const agencias: any[] = [];
+
+      for (const doc of agenciasSnap.docs) {
+        const a: any = doc.data() || {};
+
+        const [usuarios, vehiculos, contactos, tratos] = await Promise.all([
+          contar("users", doc.id),
+          contar("vehicles", doc.id),
+          contar("clients", doc.id),
+          contar("deals", doc.id),
+        ]);
+
+        // Estado real de acceso, con la misma logica que usa la aplicacion:
+        // la fecha de fin de prueba manda sobre la de creacion.
+        const finPrueba = a.trialEndsAt ? new Date(a.trialEndsAt).getTime() : null;
+        const enPrueba = finPrueba !== null && finPrueba > ahora;
+        const estado = a.hasFreeAccess
+          ? "cortesia"
+          : a.subscriptionStatus === "active"
+          ? "activa"
+          : enPrueba
+          ? "prueba"
+          : "sin acceso";
+
+        // Cuantos usuarios paga contra cuantos tiene. Stripe fija la cantidad
+        // al contratar y nadie la actualiza despues, asi que una agencia que
+        // crece sigue pagando por los que tenia el primer dia.
+        let usuariosFacturados: number | null = null;
+        if (a.stripeCustomerId) {
+          try {
+            const subs = await getStripe().subscriptions.list({
+              customer: a.stripeCustomerId,
+              status: "active",
+              limit: 1,
+            });
+            const linea = subs.data[0]?.items?.data?.[0];
+            if (linea) usuariosFacturados = linea.quantity ?? null;
+          } catch (e) {
+            usuariosFacturados = null;
+          }
+        }
+
+        agencias.push({
+          id: doc.id,
+          nombre: a.name || doc.id,
+          estado,
+          diasDePruebaRestantes:
+            enPrueba && finPrueba ? Math.ceil((finPrueba - ahora) / 86400000) : null,
+          usuarios,
+          usuariosFacturados,
+          sinFacturar:
+            usuariosFacturados !== null && usuarios > usuariosFacturados
+              ? usuarios - usuariosFacturados
+              : 0,
+          vehiculos,
+          contactos,
+          tratos,
+        });
+      }
+
+      agencias.sort((x, y) => y.usuarios - x.usuarios);
+
+      const activas = agencias.filter((a) => a.estado === "activa");
+      const totalSinFacturar = agencias.reduce((s, a) => s + a.sinFacturar, 0);
+      const facturados = agencias.reduce((s, a) => s + (a.usuariosFacturados || 0), 0);
+
+      res.json({
+        generadoEl: new Date().toISOString(),
+        precioPorUsuario: Number(process.env.VITE_STRIPE_PRICE_AMOUNT) || 199,
+        totales: {
+          agencias: agencias.length,
+          activas: activas.length,
+          enPrueba: agencias.filter((a) => a.estado === "prueba").length,
+          cortesia: agencias.filter((a) => a.estado === "cortesia").length,
+          sinAcceso: agencias.filter((a) => a.estado === "sin acceso").length,
+          usuarios: agencias.reduce((s, a) => s + Math.max(a.usuarios, 0), 0),
+          usuariosFacturados: facturados,
+          usuariosSinFacturar: totalSinFacturar,
+          vehiculos: agencias.reduce((s, a) => s + Math.max(a.vehiculos, 0), 0),
+          contactos: agencias.reduce((s, a) => s + Math.max(a.contactos, 0), 0),
+          tratos: agencias.reduce((s, a) => s + Math.max(a.tratos, 0), 0),
+        },
+        agencias,
+      });
+    } catch (e: any) {
+      console.error("Platform stats error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
   app.get("/api/admin/audit-costs", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;

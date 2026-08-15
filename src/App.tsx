@@ -18,6 +18,7 @@ import { signOut } from 'firebase/auth';
 
 import { Integrations } from './pages/Integrations';
 import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
+import { PlatformPanel } from './pages/PlatformPanel';
 import { ClosedSales } from './pages/ClosedSales';
 import { PaymentInventory } from './pages/PaymentInventory';
 import { hasActiveAccess } from './lib/subscription';
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="intelligence" element={<ProtectedRoute requireRole={['master', 'admin']}><IntelligenceDashboard /></ProtectedRoute>} />
+            <Route path="platform" element={<ProtectedRoute requireRole={['master']}><PlatformPanel /></ProtectedRoute>} />
             <Route path="inventory" element={<ProtectedRoute requireRole={['master', 'admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
