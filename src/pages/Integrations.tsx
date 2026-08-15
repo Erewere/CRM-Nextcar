@@ -31,9 +31,6 @@ export function Integrations() {
   const [migResult, setMigResult] = useState<any>(null);
   // Que migracion fue la ultima simulada. Sin esto, simular una habilitaba el
   // boton de aplicar de la otra, que escribe cosas distintas.
-  const [migSimulada, setMigSimulada] = useState<string>('');
-  const [migAgencies, setMigAgencies] = useState<{ id: string; name: string }[]>([]);
-  const [migAgencyId, setMigAgencyId] = useState<string>('');
 
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
@@ -263,22 +260,6 @@ export function Integrations() {
     }
   };
 
-  // El master carga la lista de agencias para poder elegir cual migrar
-  useEffect(() => {
-    if (!isMaster) return;
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, 'agencies'));
-        const lista = snap.docs
-          .map((d) => ({ id: d.id, name: (d.data() as any)?.name || d.id }))
-          .sort((a, b) => a.name.localeCompare(b.name));
-        setMigAgencies(lista);
-      } catch (e) {
-        console.error('No se pudo cargar la lista de agencias:', e);
-      }
-    })();
-  }, [isMaster]);
-
   // Revisa toda la plataforma, no una agencia, y no escribe nada.
   const handleRevision = async (ruta: string) => {
     if (!currentUser) {
@@ -294,55 +275,8 @@ export function Integrations() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
       setMigResult(data);
-      setMigSimulada('');
     } catch (e: any) {
       alert(e.message || "No se pudo completar la revisión.");
-    } finally {
-      setMigLoading(false);
-    }
-  };
-
-  const handleMigracion = async (ruta: string, apply: boolean) => {
-    if (!currentUser) {
-      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
-      return;
-    }
-    if (!migAgencyId) {
-      alert("Selecciona primero la agencia que quieres migrar.");
-      return;
-    }
-    const AVISO: Record<string, string> = {
-      'backfill-deals':
-        "Se van a CREAR los tratos faltantes en la base de datos. " +
-        "Esta acción escribe información real. ¿Continuar?",
-      'split-financials':
-        "Se va a COPIAR el precio de compra de cada auto a un registro aparte. " +
-        "No se borra ni se modifica nada de los autos. ¿Continuar?",
-      'clear-vehicle-costs':
-        "Se va a BORRAR el precio de compra de dentro de cada auto. " +
-        "Esto NO SE PUEDE DESHACER. Solo se borra donde el costo ya está " +
-        "guardado aparte y coincide. ¿Continuar?",
-    };
-    if (apply && !window.confirm(AVISO[ruta] || "Esta acción escribe en la base de datos. ¿Continuar?")) {
-      return;
-    }
-    setMigLoading(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch(`/api/admin/migrate/${ruta}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ apply, agencyId: migAgencyId })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-      setMigResult(data);
-      setMigSimulada(apply ? '' : ruta);
-    } catch (e: any) {
-      alert(e.message || "No se pudo ejecutar la migración.");
     } finally {
       setMigLoading(false);
     }
@@ -735,38 +669,18 @@ export function Integrations() {
           </div>
         )}
 
-        {/* Herramienta temporal de migración (Fase 1) */}
+        {/* Revisiones de mantenimiento, solo para master. */}
         {isMaster && (
           <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-dashed border-indigo-300 dark:border-indigo-800 overflow-hidden mt-8">
             <div className="p-6 border-b border-gray-200 dark:border-slate-700">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                Migraciones de datos
+                Revisiones de la plataforma
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Herramientas temporales. Cada una se simula primero y solo escribe cuando
-                se aplica. Ninguna borra información.
+                Comprobaciones de solo lectura. No modifican nada.
               </p>
             </div>
             <div className="p-6">
-              <div className="mb-4 max-w-md">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Agencia a migrar
-                </label>
-                <select
-                  value={migAgencyId}
-                  onChange={(e) => { setMigAgencyId(e.target.value); setMigResult(null); setMigSimulada(''); }}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
-                >
-                  <option value="">Selecciona una agencia...</option>
-                  {migAgencies.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-400 mt-1">
-                  Se migra una agencia a la vez. Al cambiar de agencia hay que simular de nuevo.
-                </p>
-              </div>
-              {/* No usa la agencia seleccionada: revisa toda la plataforma. */}
               <div className="mb-6 pb-5 border-b border-gray-200 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
                   Revisar usuarios contra sus cuentas
@@ -802,91 +716,6 @@ export function Integrations() {
                 </button>
               </div>
 
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                Crear tratos faltantes
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                Crea el trato correspondiente para los contactos que hoy guardan esa
-                información dentro de sí mismos. No modifica ni borra contactos.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => handleMigracion('backfill-deals', false)}
-                  disabled={migLoading || !migAgencyId}
-                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
-                >
-                  {migLoading ? "Procesando..." : "1. Simular (no escribe nada)"}
-                </button>
-                <button
-                  onClick={() => handleMigracion('backfill-deals', true)}
-                  disabled={migLoading || migSimulada !== 'backfill-deals'}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
-                >
-                  2. Aplicar cambios
-                </button>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">
-                El botón de aplicar se habilita después de simular.
-              </p>
-
-              <div className="mt-6 pt-5 border-t border-gray-200 dark:border-slate-700">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                  Separar el precio de compra
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                  Copia el precio de compra de cada auto a un registro aparte, que puede
-                  cerrarse por separado. No borra nada del vehículo.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => handleMigracion('split-financials', false)}
-                    disabled={migLoading || !migAgencyId}
-                    className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
-                  >
-                    {migLoading ? "Procesando..." : "1. Simular"}
-                  </button>
-                  <button
-                    onClick={() => handleMigracion('split-financials', true)}
-                    disabled={migLoading || migSimulada !== 'split-financials'}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
-                  >
-                    2. Aplicar
-                  </button>
-                </div>
-              </div>
-
-              {/* Unico paso irreversible: por eso va marcado aparte. */}
-              <div className="mt-6 pt-5 border-t border-red-200 dark:border-red-900">
-                <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
-                  Quitar el precio de compra del vehículo
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                  Borra el campo de dentro de cada auto, dejando la copia aparte como
-                  única. Hasta que esto pase, ocultar el costo en pantalla no protege
-                  nada: sigue siendo legible consultando la base directamente.
-                  <strong className="text-red-700 dark:text-red-400">
-                    {" "}No se puede deshacer.
-                  </strong>{" "}
-                  Solo borra donde el costo ya está guardado aparte y coincide; cualquier
-                  diferencia la deja intacta y te la reporta.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => handleMigracion('clear-vehicle-costs', false)}
-                    disabled={migLoading || !migAgencyId}
-                    className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
-                  >
-                    {migLoading ? "Procesando..." : "1. Simular"}
-                  </button>
-                  <button
-                    onClick={() => handleMigracion('clear-vehicle-costs', true)}
-                    disabled={migLoading || migSimulada !== 'clear-vehicle-costs'}
-                    className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
-                  >
-                    2. Borrar
-                  </button>
-                </div>
-              </div>
 
               {migResult && (
                 <div className="mt-5 border border-gray-200 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50">
@@ -894,10 +723,9 @@ export function Integrations() {
                     Modo: {migResult.modo}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                    Agencia: <code>{migResult.agencia}</code>
+                    Alcance: <code>{migResult.agencia}</code>
                   </p>
-                  {/* El resumen se dibuja a partir de lo que devuelve cada
-                      migracion, para que la misma tarjeta sirva a todas. */}
+                  {/* Cada revision describe su resumen a su manera. */}
                   <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1 mb-4">
                     {Object.entries(migResult.resumen || {}).map(([clave, valor]) => {
                       const etiqueta = clave
