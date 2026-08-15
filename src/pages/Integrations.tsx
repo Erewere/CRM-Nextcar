@@ -280,7 +280,7 @@ export function Integrations() {
   }, [isMaster]);
 
   // Revisa toda la plataforma, no una agencia, y no escribe nada.
-  const handleRevisionUsuarios = async () => {
+  const handleRevision = async (ruta: string) => {
     if (!currentUser) {
       alert("No hay una sesión activa. Vuelve a iniciar sesión.");
       return;
@@ -288,7 +288,7 @@ export function Integrations() {
     setMigLoading(true);
     try {
       const token = await currentUser.getIdToken();
-      const res = await fetch("/api/admin/audit-users", {
+      const res = await fetch(`/api/admin/${ruta}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -296,7 +296,7 @@ export function Integrations() {
       setMigResult(data);
       setMigSimulada('');
     } catch (e: any) {
-      alert(e.message || "No se pudo revisar los usuarios.");
+      alert(e.message || "No se pudo completar la revisión.");
     } finally {
       setMigLoading(false);
     }
@@ -776,11 +776,29 @@ export function Integrations() {
                   sesión, y señala las que sobran. Solo lee, no cambia nada.
                 </p>
                 <button
-                  onClick={() => handleRevisionUsuarios()}
+                  onClick={() => handleRevision('audit-users')}
                   disabled={migLoading}
                   className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
                 >
                   {migLoading ? "Procesando..." : "Revisar"}
+                </button>
+              </div>
+
+              {/* Comprobacion final: cubre todas las agencias de una vez. */}
+              <div className="mb-6 pb-5 border-b border-gray-200 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                  Revisar que ningún auto guarde su costo
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Recorre todas las agencias y señala las que aún tienen el precio de
+                  compra dentro del vehículo. Solo lee, no cambia nada.
+                </p>
+                <button
+                  onClick={() => handleRevision('audit-costs')}
+                  disabled={migLoading}
+                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                >
+                  {migLoading ? "Procesando..." : "Revisar todas"}
                 </button>
               </div>
 

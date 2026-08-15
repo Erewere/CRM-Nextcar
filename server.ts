@@ -1505,6 +1505,99 @@ Return a JSON array of recommendation objects with the following schema:
   // de usuarios, aparentando un acceso que ya no existe.
   //
   // Solo lee. No modifica ni borra nada.
+  // Comprobacion final de toda la plataforma: que ningun vehiculo, de ninguna
+  // agencia, siga guardando el precio de compra dentro de si mismo.
+  //
+  // Las migraciones se corren agencia por agencia, asi que es facil dejar una
+  // sin hacer y creer que el costo esta protegido cuando en esa agencia sigue
+  // siendo legible por cualquiera que pueda ver el inventario. Solo lee.
+  app.get("/api/admin/audit-costs", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Se requiere rol master" });
+      }
+
+      const [vehiculos, financieros, agencias] = await Promise.all([
+        adminDb.collection("vehicles").get(),
+        adminDb.collection("vehicleFinancials").get(),
+        adminDb.collection("agencies").get(),
+      ]);
+
+      const nombreAgencia = new Map<string, string>();
+      agencias.docs.forEach((d: any) => nombreAgencia.set(d.id, d.data().name || d.id));
+
+      const conCopia = new Set(financieros.docs.map((d: any) => d.id));
+
+      // Por agencia: cuantos siguen con el campo dentro y cuantos no tienen
+      // copia en ninguna parte.
+      const porAgencia = new Map<string, { conCampo: number; sinCopia: number; total: number }>();
+
+      vehiculos.docs.forEach((d: any) => {
+        const v = d.data() || {};
+        const ag = v.agencyId || "(sin agencia)";
+        const acc = porAgencia.get(ag) || { conCampo: 0, sinCopia: 0, total: 0 };
+        acc.total++;
+        if (v.purchasePrice !== undefined && v.purchasePrice !== null) acc.conCampo++;
+        if (!conCopia.has(d.id)) acc.sinCopia++;
+        porAgencia.set(ag, acc);
+      });
+
+      const detalle: any[] = [];
+      let totalConCampo = 0;
+
+      porAgencia.forEach((acc, ag) => {
+        totalConCampo += acc.conCampo;
+        const nombre = nombreAgencia.get(ag) || ag;
+        if (acc.conCampo > 0) {
+          detalle.push({
+            nombre,
+            texto: `FALTA MIGRAR — ${acc.conCampo} de ${acc.total} vehiculos siguen con el costo dentro. Correr las dos migraciones en esta agencia (${ag}).`,
+          });
+        } else {
+          detalle.push({
+            nombre,
+            texto: `limpia — ${acc.total} vehiculos, ninguno guarda el costo dentro de si mismo`,
+          });
+        }
+      });
+
+      res.json({
+        modo: totalConCampo === 0
+          ? "TODO LIMPIO (solo lectura)"
+          : "FALTAN AGENCIAS POR MIGRAR (solo lectura)",
+        agencia: "todas",
+        resumen: {
+          agenciasConVehiculos: porAgencia.size,
+          vehiculosTotales: vehiculos.size,
+          vehiculosQueAunGuardanElCosto: totalConCampo,
+          registrosDeCostoAparte: financieros.size,
+        },
+        detalle,
+      });
+    } catch (e: any) {
+      console.error("Audit costs error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
   app.get("/api/admin/audit-users", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
