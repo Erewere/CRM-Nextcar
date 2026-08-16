@@ -74,7 +74,6 @@ import {
   isValid,
 } from "date-fns";
 
-import { MasterDashboard } from "../components/MasterDashboard";
 import { LeadScoringEngine } from "../modules/lead-intelligence/services/scoringEngine";
 
 import { Link, Navigate } from "react-router";
@@ -505,10 +504,6 @@ export function Dashboard() {
   }, [wonContacts.length, filteredClients.length]);
 
   if (loading) return <div>Cargando dashboard...</div>;
-
-  if (userData?.role === "master") {
-    return <MasterDashboard />;
-  }
 
   if (userData?.role === "unassigned") {
     return (

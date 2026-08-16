@@ -40,8 +40,17 @@ service cloud.firestore {
       return userExists() ? userDoc().agencyId : null;
     }
 
+    // Antes empezaba con "isMaster() ||", de modo que el master leia y escribia
+    // los datos de todas las agencias. Ese permiso era el origen de que viera
+    // los contactos, los tratos y el inventario de todo el mundo.
+    //
+    // El master opera la plataforma; no atiende clientes. Sus estadisticas se
+    // calculan en el servidor y le llegan como numeros, asi que saber cuantos
+    // contactos tiene una agencia ya no exige poder leerlos. Sigue pudiendo
+    // administrar agencias y usuarios: eso se concede abajo, colección por
+    // colección, donde corresponde.
     function belongsToMyAgency(data) {
-      return isMaster() || (data.agencyId != null && data.agencyId == getUserAgencyId());
+      return data.agencyId != null && data.agencyId == getUserAgencyId();
     }
 
     // Quien puede ver cuanto costo un auto. Debe coincidir con los roles que

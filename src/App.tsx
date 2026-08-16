@@ -23,6 +23,20 @@ import { ClosedSales } from './pages/ClosedSales';
 import { PaymentInventory } from './pages/PaymentInventory';
 import { hasActiveAccess } from './lib/subscription';
 
+/**
+ * A donde entra cada quien.
+ *
+ * El master no monta el Dashboard: sus efectos consultan contactos y tratos
+ * sin filtrar por agencia, y desde que el master dejo de tener acceso a los
+ * datos de las agencias esas consultas serian rechazadas. Su lugar es el
+ * panel de la plataforma, que recibe todo calculado del servidor.
+ */
+const Inicio = () => {
+  const { userData } = useAuth();
+  if (userData?.role === 'master') return <Navigate to="/platform" replace />;
+  return <Dashboard />;
+};
+
 const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, requireRole?: ('master' | 'admin' | 'seller' | 'taller')[] }) => {
   const { currentUser, userData, agencyData, loading } = useAuth();
 
@@ -80,23 +94,23 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['master', 'admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
+          <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Dashboard />} />
-            <Route path="intelligence" element={<ProtectedRoute requireRole={['master', 'admin']}><IntelligenceDashboard /></ProtectedRoute>} />
+            <Route index element={<Inicio />} />
+            <Route path="intelligence" element={<ProtectedRoute requireRole={['admin']}><IntelligenceDashboard /></ProtectedRoute>} />
             <Route path="platform" element={<ProtectedRoute requireRole={['master']}><PlatformPanel /></ProtectedRoute>} />
-            <Route path="inventory" element={<ProtectedRoute requireRole={['master', 'admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
+            <Route path="inventory" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
-            <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Persons /></ProtectedRoute>} />
+            <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />
-            <Route path="emails" element={<ProtectedRoute requireRole={['admin', 'seller', 'master']}><Emails /></ProtectedRoute>} />
+            <Route path="emails" element={<ProtectedRoute requireRole={['admin', 'seller']}><Emails /></ProtectedRoute>} />
             <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin']}><Chats /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute requireRole={['master', 'admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
-            <Route path="closed-sales" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><ClosedSales /></ProtectedRoute>} />
-            <Route path="payments" element={<ProtectedRoute requireRole={['master', 'admin']}><PaymentInventory /></ProtectedRoute>} />
+            <Route path="closed-sales" element={<ProtectedRoute requireRole={['admin', 'seller']}><ClosedSales /></ProtectedRoute>} />
+            <Route path="payments" element={<ProtectedRoute requireRole={['admin']}><PaymentInventory /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

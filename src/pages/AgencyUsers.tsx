@@ -167,20 +167,32 @@ export function AgencyUsers() {
       const agencyData = { name: newAgencyName, createdAt: new Date().toISOString() };
       await setDoc(newAgencyRef, agencyData);
       
-      // Copy current tags to the new agency
+      // Copiar las etiquetas a la agencia nueva es una comodidad, no un
+      // requisito: la propia agencia crea las suyas por omision la primera vez
+      // que alguien de ahi abre esta pantalla. Desde que el master no escribe
+      // en los datos de otras agencias, esta copia puede ser rechazada, y eso
+      // no debe estropear la creacion de la agencia.
+      let etiquetasCopiadas = 0;
       for (const tag of agencyTags) {
-        const newTagRef = doc(collection(db, 'agency_tags'));
-        await setDoc(newTagRef, {
-          id: newTagRef.id,
-          name: tag.name,
-          agencyId: newAgencyRef.id,
-          createdAt: new Date().toISOString()
-        });
+        try {
+          const newTagRef = doc(collection(db, 'agency_tags'));
+          await setDoc(newTagRef, {
+            id: newTagRef.id,
+            name: tag.name,
+            agencyId: newAgencyRef.id,
+            createdAt: new Date().toISOString()
+          });
+          etiquetasCopiadas++;
+        } catch {
+          break;
+        }
       }
 
       setAgencies([...agencies, { id: newAgencyRef.id, ...agencyData }]);
       setNewAgencyName('');
-      alert('Agencia creada exitosamente con las etiquetas actuales.');
+      alert(etiquetasCopiadas > 0
+        ? 'Agencia creada con las etiquetas actuales.'
+        : 'Agencia creada. Sus etiquetas se crearán solas la primera vez que entren.');
     } catch (e) {
       console.error(e);
       alert('Error al crear agencia.');
