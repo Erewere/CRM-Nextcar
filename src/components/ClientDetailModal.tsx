@@ -7,6 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
 import { useReadOnly } from "../hooks/useReadOnly";
 import { usePermissions } from "../hooks/usePermissions";
+import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
 import {
   doc,
   onSnapshot,
@@ -71,6 +72,39 @@ export function ClientDetailModal({
    * Firestore lo rechazaba por eso, con un "permisos insuficientes" que no
    * decia nada. Un trato borrado debe quedarse borrado.
    */
+  /**
+   * Devuelve el trato donde registrar una venta, creandolo si el contacto no
+   * tiene ninguno.
+   *
+   * Una venta cerrada desde el embudo siempre queda en un trato, pero cerrada
+   * desde esta ficha o desde el celular podia quedar solo en el contacto. Esa
+   * es la razon de que la misma venta viva en dos sitios distintos segun por
+   * donde se cerro. Solo se crea al cerrar una venta: un contacto sin
+   * operacion sigue pudiendo existir sin trato.
+   */
+  const asegurarTratoDeVenta = async (clientId: string): Promise<string> => {
+    const q = (userData?.role !== "master" && userData?.agencyId)
+      ? query(collection(db, "deals"), where("clientId", "==", clientId), where("agencyId", "==", userData.agencyId))
+      : query(collection(db, "deals"), where("clientId", "==", clientId));
+    const snap = await getDocs(q);
+    if (!snap.empty) return snap.docs[0].id;
+
+    const ref = doc(collection(db, "deals"));
+    await setDoc(ref, {
+      id: ref.id,
+      clientId,
+      agencyId: userData?.agencyId,
+      sellerId: formData.sellerId || client.sellerId || userData?.id,
+      title: `Trato con ${formData.name || client.name || "cliente"}`,
+      value: Number(formData.dealValue) || 0,
+      vehicleId: formData.vehicleId || client.vehicleId || null,
+      vehicle: formData.vehicle || client.vehicle || null,
+      status: "new",
+      createdAt: new Date().toISOString(),
+    });
+    return ref.id;
+  };
+
   const guardarTratoSiExiste = async (dealId: string, datos: any) => {
     const ref = doc(db, "deals", dealId);
     const actual = await getDoc(ref);
@@ -752,6 +786,21 @@ export function ClientDetailModal({
 
     if (!isNew && client.id) {
       try {
+        // Un auto solo se vende una vez: si otro trato ya registra esta venta,
+        // no se duplica.
+        const idTratoActual = (client.originalClientId && client.originalClientId !== client.id)
+          ? (client.id as string)
+          : null;
+        const conflicto = await ventaYaRegistrada(
+          formData.vehicleId || client.vehicleId,
+          userData?.agencyId,
+          idTratoActual
+        );
+        if (conflicto) {
+          alert(avisoDeVentaDuplicada(conflicto));
+          return;
+        }
+
         const dealUpdates: any = {
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
@@ -771,17 +820,13 @@ export function ClientDetailModal({
         const finalClientId = client.originalClientId || client.id;
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
-        if (!finalDealId) {
-          const q = (userData?.role !== "master" && userData?.agencyId)
-            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
-            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            finalDealId = snap.docs[0].id;
-          }
+        // La venta tiene que quedar registrada en un trato. Si el que traiamos
+        // ya no existe, o el contacto no tiene ninguno, se crea.
+        if (finalDealId && !(await guardarTratoSiExiste(finalDealId, dealUpdates))) {
+          finalDealId = null;
         }
-
-        if (finalDealId) {
+        if (!finalDealId) {
+          finalDealId = await asegurarTratoDeVenta(finalClientId as string);
           await guardarTratoSiExiste(finalDealId, dealUpdates);
         }
 

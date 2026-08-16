@@ -38,6 +38,7 @@ import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
 import { DealWonModal } from "../components/DealWonModal";
 import { LostReasonModal } from "../components/LostReasonModal";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
+import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { Settings, ChevronUp, ChevronDown, Archive, X, Search } from "lucide-react";
 import clsx from "clsx";
@@ -575,6 +576,17 @@ export function Kanban() {
     const { client } = clientToMarkWon;
     
     try {
+      // Varios tratos pueden traer el mismo auto asignado; vendido, solo uno.
+      const conflicto = await ventaYaRegistrada(
+        client.vehicleId,
+        userData?.agencyId,
+        client.id
+      );
+      if (conflicto) {
+        alert(avisoDeVentaDuplicada(conflicto));
+        return;
+      }
+
       const updates: any = {
         status: "won",
         soldAt: new Date().toISOString().split('T')[0],
