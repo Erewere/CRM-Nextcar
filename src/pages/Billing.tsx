@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db, auth } from '../lib/firebase';
 import { Agency } from '../types';
 import { getApiUrl } from '../lib/api';
+import { PRECIO_POR_USUARIO } from '../lib/subscription';
 
 export function Billing() {
   const { userData } = useAuth();
@@ -15,7 +16,7 @@ export function Billing() {
   const [userCount, setUserCount] = useState(0);
   const [agency, setAgency] = useState<Agency | null>(null);
   
-  const PRICE_PER_USER = 199;
+  const PRICE_PER_USER = PRECIO_POR_USUARIO;
 
   useEffect(() => {
     // Clean up any legacy localStorage override

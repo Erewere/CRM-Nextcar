@@ -1,4 +1,16 @@
 /**
+ * Lo que se cobra al mes por cada usuario.
+ *
+ * Estaba escrito por separado en la pantalla de facturacion, en el panel de la
+ * plataforma y en el servidor, de modo que corregirlo en un sitio dejaba a los
+ * otros dos mintiendo. La cifra que de verdad se cobra la fija el precio
+ * configurado en Stripe; esta solo se muestra, y tiene que coincidir con
+ * aquella.
+ */
+export const PRECIO_POR_USUARIO =
+  Number((import.meta as any).env?.VITE_STRIPE_PRICE_AMOUNT) || 200;
+
+/**
  * Reglas de acceso por suscripcion, en un solo lugar.
  *
  * Antes este calculo estaba repetido en useReadOnly, App y Layout, y en las

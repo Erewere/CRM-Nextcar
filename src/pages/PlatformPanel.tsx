@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, AlertTriangle, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { PRECIO_POR_USUARIO } from '../lib/subscription';
 
 /**
  * Panel de control de la plataforma, para el usuario master.
@@ -71,7 +72,7 @@ export function PlatformPanel() {
   }, [currentUser]);
 
   const t = datos?.totales;
-  const precio = datos?.precioPorUsuario || 199;
+  const precio = datos?.precioPorUsuario || PRECIO_POR_USUARIO;
   const agencias: AgenciaFila[] = datos?.agencias || [];
 
   return (
