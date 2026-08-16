@@ -1735,7 +1735,7 @@ Return a JSON array of recommendation objects with the following schema:
 
       res.json({
         generadoEl: new Date().toISOString(),
-        precioPorUsuario: Number(process.env.VITE_STRIPE_PRICE_AMOUNT) || 200,
+        precioPorUsuario: Number(process.env.VITE_STRIPE_PRICE_AMOUNT) || 199,
         totales: {
           agencias: agencias.length,
           activas: activas.length,

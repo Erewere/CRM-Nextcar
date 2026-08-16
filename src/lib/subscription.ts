@@ -8,7 +8,7 @@
  * aquella.
  */
 export const PRECIO_POR_USUARIO =
-  Number((import.meta as any).env?.VITE_STRIPE_PRICE_AMOUNT) || 200;
+  Number((import.meta as any).env?.VITE_STRIPE_PRICE_AMOUNT) || 199;
 
 /**
  * Reglas de acceso por suscripcion, en un solo lugar.
