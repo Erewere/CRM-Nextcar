@@ -1830,7 +1830,18 @@ Return a JSON array of recommendation objects with the following schema:
 
       const apply = req.body?.apply === true;
       const VINCULADAS = ["deals", "tasks", "notes", "files"];
-      const NO_COPIAR = new Set(["id", "agencyId", "createdAt", "originalClientId"]);
+      // Solo se completan datos de la persona. Una lista de lo permitido, no de
+      // lo prohibido: con una lista negra, cualquier campo nuevo que aparezca
+      // en el futuro se copiaria sin que nadie lo haya decidido.
+      //
+      // Queda fuera todo lo que es estado y no identidad. lostReason y lostAt
+      // marcan al contacto como perdido; visibility decide quien puede verlo;
+      // vehicleId le asigna un auto, que pudo haberse quitado a proposito;
+      // status, sellerId y saleDetails describen la operacion, no a la persona.
+      const DATOS_DE_LA_PERSONA = new Set([
+        "phone", "email", "address", "street", "exteriorNumber",
+        "neighborhood", "city", "zipCode", "organization", "wantedVehicle",
+      ]);
 
       const porAgencia = (col: string) =>
         adminDb.collection(col).where("agencyId", "==", agencyId).get();
@@ -1878,7 +1889,7 @@ Return a JSON array of recommendation objects with the following schema:
         const completar: Record<string, any> = {};
         for (const otro of sobran) {
           for (const [k, v] of Object.entries(otro.data() || {})) {
-            if (NO_COPIAR.has(k)) continue;
+            if (!DATOS_DE_LA_PERSONA.has(k)) continue;
             const actual = datosSobrevive[k];
             const vacio = actual === undefined || actual === null || actual === "";
             const aporta = v !== undefined && v !== null && v !== "";
