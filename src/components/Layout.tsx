@@ -441,6 +441,13 @@ export function Layout() {
                   {NOMBRE_ROL[(userData?.role as Rol)] || 'Usuario'}
                 </span>
               </div>
+              {agencyData?.hasFreeAccess && (
+                <div className="hidden sm:flex items-center gap-2 rounded-full bg-sky-100 dark:bg-sky-900/40 border border-sky-200 dark:border-sky-800/50 px-2 py-0.5 shrink-0">
+                  <span className="text-[10px] md:text-[11px] font-medium text-sky-700 dark:text-sky-300">
+                    Cortesía
+                  </span>
+                </div>
+              )}
               {trialDaysLeft !== null && (
                 <div className="hidden sm:flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800/50 px-2 py-0.5 shrink-0 transition-colors">
                   <span className="text-[10px] md:text-[11px] font-medium text-orange-700 dark:text-orange-300">

@@ -54,6 +54,10 @@ export function getTrialEnd(agencyData: any): Date | null {
 
 /** Dias que faltan para que termine la prueba; null si no esta en prueba. */
 export function getTrialDaysLeft(agencyData: any): number | null {
+  // Una agencia con cortesia no esta a prueba, aunque conserve el estatus de
+  // cuando se dio de alta. Sin esto, el CRM le anunciaba una cuenta regresiva
+  // que no le aplica y que nunca la iba a dejar sin acceso.
+  if (agencyData?.hasFreeAccess) return null;
   if (agencyData?.subscriptionStatus !== "trialing") return null;
   const fin = getTrialEnd(agencyData);
   if (!fin) return null;
