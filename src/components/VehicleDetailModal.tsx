@@ -14,6 +14,7 @@ import { sanitizeFirestoreData } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials';
+import { SeleccionarTratoVenta } from './SeleccionarTratoVenta';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 
@@ -333,6 +334,11 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   const [expDate, setExpDate] = useState(getLocalDateString());
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  // A que trato pertenece la venta. Marcar un auto como vendido sin decirlo
+  // dejaba la venta sin dueño, sin nombre y sin seguimiento.
+  const [tratoVentaId, setTratoVentaId] = useState<string>('');
+  const [tratoVentaEtiqueta, setTratoVentaEtiqueta] = useState<string>('');
+  const [mostrarSelectorTrato, setMostrarSelectorTrato] = useState(false);
 
   useEffect(() => {
     if (!isNew && vehicle) {
@@ -626,7 +632,31 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
          }
       }
 
+      // Una venta sin trato queda huerfana: aparece en el inventario de pagos
+      // sin nombre y sin forma de darle seguimiento.
+      if (payload.status === 'sold' && !isNew && !tratoVentaId) {
+        setErrorStatus('Elige a qué trato pertenece esta venta antes de guardar.');
+        setLoading(false);
+        setMostrarSelectorTrato(true);
+        return;
+      }
+      if (payload.status === 'sold' && tratoVentaId) {
+        payload.soldDealId = tratoVentaId;
+      }
+
       await setDoc(docRef, payload, { merge: true });
+
+      // El trato elegido es el que registra la venta.
+      if (payload.status === 'sold' && tratoVentaId) {
+        await setDoc(doc(db, 'deals', tratoVentaId), {
+          status: 'won',
+          vehicleId: docRef.id,
+          vehicle: `${formData.year || ''} ${formData.make || ''} ${formData.model || ''}`.trim(),
+          value: payload.price || 0,
+          soldAt: payload.soldAt || new Date().toISOString().split('T')[0],
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
 
       if (puedeVerCosto) {
         await guardarCosto(docRef.id, formData.agencyId!, costoIngresado);
@@ -1083,6 +1113,13 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                           newFormData.soldAt = new Date().toISOString().split('T')[0];
                         }
                         setFormData(newFormData);
+                        if (newStatus === 'sold' && !isNew && !tratoVentaId) {
+                          setMostrarSelectorTrato(true);
+                        }
+                        if (newStatus !== 'sold') {
+                          setTratoVentaId('');
+                          setTratoVentaEtiqueta('');
+                        }
                       }}
                       className="w-full px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 dark:text-slate-300"
                     >
@@ -1091,6 +1128,20 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                       <option value="sold">Vendido</option>
                     </select>
                   </div>
+                  {formData.status === 'sold' && !isNew && (
+                    <div className="col-span-2">
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Trato de la venta</label>
+                      <button
+                        type="button"
+                        onClick={() => setMostrarSelectorTrato(true)}
+                        className={`w-full text-left px-3 py-2 border rounded text-sm ${tratoVentaEtiqueta
+                          ? 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
+                          : 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300'}`}
+                      >
+                        {tratoVentaEtiqueta || 'Elegir a qué trato pertenece esta venta…'}
+                      </button>
+                    </div>
+                  )}
                   {formData.status === 'sold' && (
                     <div className="col-span-2 sm:col-span-1">
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Fecha de Venta</label>
@@ -2226,6 +2277,22 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
             return Math.max(0, actualPrice - totalPaid);
           })()}
+        />
+      )}
+
+      {mostrarSelectorTrato && vehicle?.id && (
+        <SeleccionarTratoVenta
+          vehicleId={vehicle.id}
+          vehiculoNombre={`${formData.year || ''} ${formData.make || ''} ${formData.model || ''}`.trim()}
+          agencyId={formData.agencyId || userData?.agencyId || ''}
+          sellerId={userData?.id}
+          onElegido={(id, etiqueta) => {
+            setTratoVentaId(id);
+            setTratoVentaEtiqueta(etiqueta);
+            setMostrarSelectorTrato(false);
+            setErrorStatus(null);
+          }}
+          onCerrar={() => setMostrarSelectorTrato(false)}
         />
       )}
     </div>
