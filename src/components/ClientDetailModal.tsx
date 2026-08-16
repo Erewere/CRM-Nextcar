@@ -2595,6 +2595,25 @@ export function ClientDetailModal({
                     >
                       <Upload className="w-4 h-4" /> Archivos
                     </button>
+                    {/* Esta pestaña existia en el codigo pero no habia forma de
+                        llegar a ella: la seccion de tratos, con renombrar,
+                        marcar ganado y eliminar, quedaba inalcanzable. */}
+                    <button
+                      onClick={() => setActiveTab("deals")}
+                      className={clsx(
+                        "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
+                        activeTab === "deals"
+                          ? "border-blue-600 text-blue-700 bg-blue-50/50"
+                          : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900",
+                      )}
+                    >
+                      <Target className="w-4 h-4" /> Tratos
+                      {deals.length > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold">
+                          {deals.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
 
                   <div className="p-4 bg-white dark:bg-slate-800">
