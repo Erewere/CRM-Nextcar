@@ -141,8 +141,9 @@ service cloud.firestore {
 
     match /agencies/{id} {
       // La lectura amplia es necesaria para el inventario compartido entre
-      // agencias. Por eso el documento de agencia no debe guardar secretos:
-      // la clave del MCP sigue ahi y hay que sacarla de este documento.
+      // agencias, que recorre esta coleccion para saber cuales comparten. Por
+      // eso este documento no debe guardar secretos: cualquier usuario con
+      // sesion, de cualquier agencia, puede leerlo entero.
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update: if isMaster() || (isAuthenticated() && getUserAgencyId() == id);
