@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle, Copy, Bot, Key, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 
 export function Integrations() {
   const { userData, googleToken, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
@@ -64,26 +62,11 @@ export function Integrations() {
           }
         }
       } catch (err) {
-        console.warn("API route for MCP key unavailable, falling back to Firestore:", err);
-      }
-
-      // Fallback: Read directly from Firestore
-      try {
-        const agencySnap = await getDoc(doc(db, "agencies", userData.agencyId));
-        if (agencySnap.exists()) {
-          const agencyData = agencySnap.data();
-          const apiKey = agencyData?.mcpApiKey || null;
-          if (apiKey) {
-            setMcpKeyInfo({
-              hasKey: true,
-              maskedKey: "••••••••" + apiKey.slice(-4)
-            });
-          } else {
-            setMcpKeyInfo({ hasKey: false, maskedKey: null });
-          }
-        }
-      } catch (fsErr) {
-        console.error("Error loading MCP key info from Firestore:", fsErr);
+        // La clave ya no vive en el documento de la agencia, asi que no hay
+        // nada que consultar desde aqui: si el servidor no responde, no se
+        // sabe si hay clave. Antes se leia de la agencia, que es justamente lo
+        // que la dejaba al alcance de cualquier usuario con sesion.
+        console.error("No se pudo consultar el estado de la clave MCP:", err);
       }
     };
 
@@ -125,22 +108,16 @@ export function Integrations() {
             }
           }
         } catch (apiErr) {
-          console.warn("API route failed, using direct Firestore key generation:", apiErr);
+          console.error("No se pudo generar la clave MCP:", apiErr);
         }
       }
 
-      // Fallback: Generate key client-side and store directly in Firestore
+      // La clave la genera y la guarda el servidor. Antes, si esa llamada
+      // fallaba, el navegador creaba una y la escribia en el documento de la
+      // agencia, que cualquier usuario con sesion puede leer.
       if (!generatedKey) {
-        const randomArray = new Uint8Array(24);
-        window.crypto.getRandomValues(randomArray);
-        const randomHex = Array.from(randomArray).map(b => b.toString(16).padStart(2, '0')).join('');
-        generatedKey = `erewere_mcp_${randomHex}`;
-        maskedKey = "••••••••" + generatedKey.slice(-4);
-
-        await updateDoc(doc(db, "agencies", userData.agencyId), {
-          mcpApiKey: generatedKey,
-          mcpApiKeyCreatedAt: serverTimestamp()
-        });
+        alert("No se pudo generar la clave. Vuelve a intentarlo en un momento.");
+        return;
       }
 
       setNewGeneratedKey(generatedKey);

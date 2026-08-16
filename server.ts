@@ -122,6 +122,50 @@ function camposQueFaltan(existente: any, entrante: Record<string, any>) {
   return relleno;
 }
 
+/**
+ * La clave del MCP de una agencia.
+ *
+ * Vivia dentro del documento de la agencia, y ese documento tiene que ser
+ * legible por cualquier usuario con sesion: el inventario compartido necesita
+ * recorrer las agencias para saber cuales comparten. O sea que la clave que da
+ * acceso a los datos de una agencia la podia leer un vendedor de otra.
+ *
+ * Ahora vive en agencySecrets, una coleccion sin regla alguna. En Firestore lo
+ * que no se permite queda prohibido, asi que ningun navegador la alcanza; solo
+ * el servidor, que usa el SDK de administrador y no pasa por las reglas.
+ *
+ * El traslado ocurre solo, la primera vez que cada clave se usa. Asi no hace
+ * falta una migracion ni existe un momento en que la clave este a medias.
+ */
+async function leerClaveMcp(adminDb: any, agencyId: string): Promise<{ clave: string | null; creada: any }> {
+  const secreto = await adminDb.collection("agencySecrets").doc(agencyId).get();
+  if (secreto.exists && secreto.data()?.mcpApiKey) {
+    return { clave: secreto.data().mcpApiKey, creada: secreto.data().mcpApiKeyCreatedAt || null };
+  }
+
+  const agencia = await adminDb.collection("agencies").doc(agencyId).get();
+  const vieja = agencia.exists ? agencia.data()?.mcpApiKey : null;
+  if (!vieja) return { clave: null, creada: null };
+
+  const creada = agencia.data()?.mcpApiKeyCreatedAt || null;
+  await guardarClaveMcp(adminDb, agencyId, vieja, creada);
+  return { clave: vieja, creada };
+}
+
+/** Guarda la clave en su sitio y la borra del documento de la agencia. */
+async function guardarClaveMcp(adminDb: any, agencyId: string, clave: string, creada?: any) {
+  await adminDb.collection("agencySecrets").doc(agencyId).set({
+    agencyId,
+    mcpApiKey: clave,
+    mcpApiKeyCreatedAt: creada || FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await adminDb.collection("agencies").doc(agencyId).update({
+    mcpApiKey: FieldValue.delete(),
+    mcpApiKeyCreatedAt: FieldValue.delete(),
+  }).catch(() => {});
+}
+
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
@@ -1393,23 +1437,20 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(403).json({ error: "No tienes permiso para esta agencia" });
       }
 
-      const agencyDocRef = adminDb.collection("agencies").doc(agencyId);
-      const agencySnap = await agencyDocRef.get();
+      const agencySnap = await adminDb.collection("agencies").doc(agencyId).get();
       if (!agencySnap.exists) {
         return res.status(404).json({ error: "Agencia no encontrada" });
       }
-      const agencyData = agencySnap.data();
-      const apiKey = agencyData?.mcpApiKey || null;
 
-      if (apiKey) {
+      const { clave, creada } = await leerClaveMcp(adminDb, agencyId);
+      if (clave) {
         return res.json({
           hasKey: true,
-          maskedKey: "••••••••" + apiKey.slice(-4),
-          createdAt: agencyData?.mcpApiKeyCreatedAt || null
+          maskedKey: "••••••••" + clave.slice(-4),
+          createdAt: creada
         });
-      } else {
-        return res.json({ hasKey: false, maskedKey: null });
       }
+      return res.json({ hasKey: false, maskedKey: null });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -1447,10 +1488,7 @@ Return a JSON array of recommendation objects with the following schema:
 
       const newKey = `erewere_mcp_` + crypto.randomBytes(24).toString("hex");
 
-      await adminDb.collection("agencies").doc(targetAgencyId).update({
-        mcpApiKey: newKey,
-        mcpApiKeyCreatedAt: FieldValue.serverTimestamp()
-      });
+      await guardarClaveMcp(adminDb, targetAgencyId, newKey);
 
       return res.json({
         success: true,
@@ -2215,20 +2253,42 @@ Return a JSON array of recommendation objects with the following schema:
     }
 
     try {
-      const agenciesRef = db.collection("agencies");
-      const q = agenciesRef.where("mcpApiKey", "==", apiKey.trim());
-      const snapshot = await q.get();
+      const limpia = apiKey.trim();
 
-      if (snapshot.empty) {
+      // Sitio actual de las claves.
+      const enSecretos = await db
+        .collection("agencySecrets")
+        .where("mcpApiKey", "==", limpia)
+        .limit(1)
+        .get();
+      if (!enSecretos.empty) {
+        const id = enSecretos.docs[0].id;
+        const agencia = await db.collection("agencies").doc(id).get();
+        return {
+          agencyId: id,
+          agencyName: (agencia.exists && agencia.data()?.name) || "Agencia",
+          mcpApiKey: limpia
+        };
+      }
+
+      // Claves que todavia no se han trasladado: se atienden y se mueven, de
+      // modo que ninguna conexion se cae por el cambio de sitio.
+      const enAgencias = await db
+        .collection("agencies")
+        .where("mcpApiKey", "==", limpia)
+        .limit(1)
+        .get();
+      if (enAgencias.empty) {
         return null;
       }
 
-      const agencyDoc = snapshot.docs[0];
+      const agencyDoc = enAgencias.docs[0];
       const data = agencyDoc.data();
+      await guardarClaveMcp(db, agencyDoc.id, limpia, data.mcpApiKeyCreatedAt);
       return {
         agencyId: agencyDoc.id,
         agencyName: data.name || "Agencia",
-        mcpApiKey: data.mcpApiKey || apiKey.trim()
+        mcpApiKey: limpia
       };
     } catch (err) {
       console.error("Error authenticating MCP API key:", err);

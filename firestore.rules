@@ -132,6 +132,13 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
+    // La clave del MCP vive en agencySecrets y esa coleccion no aparece en
+    // este archivo a proposito: sin regla, Firestore la niega a todos. Solo el
+    // servidor la alcanza, con el SDK de administrador, que no pasa por aqui.
+    // Estuvo dentro del documento de agencia, que tiene que ser legible por
+    // cualquiera con sesion, de modo que la clave de una agencia la podia leer
+    // un vendedor de otra.
+
     match /agencies/{id} {
       // La lectura amplia es necesaria para el inventario compartido entre
       // agencias. Por eso el documento de agencia no debe guardar secretos:
