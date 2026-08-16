@@ -55,21 +55,6 @@ export function checkIsLost(status: string = "", pipelineStages: {id: string, ti
 }
 
 import { Client } from "../types";
-export function deduplicateClients(clients: Client[]): Client[] {
-  const uniqueClients: Client[] = [];
-  const seenNames = new Set<string>();
-  for (const c of clients) {
-    const nm = String(c.name || "").trim().toLowerCase();
-    if (nm && !seenNames.has(nm)) {
-      seenNames.add(nm);
-      uniqueClients.push(c);
-    } else if (!nm) {
-      uniqueClients.push(c);
-    }
-  }
-  return uniqueClients;
-}
-
 export function getVehicleOfInterestText(client: Client): string {
   // If they have a specific vehicle selected/assigned already (and it's not a placeholder/Otro pendiente)
   if (client.vehicle && client.vehicle !== 'Otro pendiente' && client.vehicle !== 'Sin vehículo de interés') {

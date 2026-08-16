@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { checkIsWon, deduplicateClients } from "../lib/clientUtils";
+import { checkIsWon } from "../lib/clientUtils";
 import { db } from "../lib/firebase";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { Client, Vehicle, VehicleExpense } from "../types";
@@ -58,7 +58,7 @@ export function ClosedSales() {
       const rawClients = snap.docs
         .map(d => ({ ...d.data(), id: d.id } as Client))
         .filter(c => !c.isDeleted);
-      setClients(deduplicateClients(rawClients));
+      setClients(rawClients);
     }, (err) => console.error("ClosedSales clients snapshot error:", err));
 
     const unsubVehicles = onSnapshot(vehiclesQ, (snap) => {

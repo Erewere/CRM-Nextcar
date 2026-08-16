@@ -7,7 +7,6 @@ import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
 import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
 import { Task, Client } from '../types';
-import { deduplicateClients } from '../lib/clientUtils';
 import { ROLES_ASIGNABLES, NOMBRE_ROL, DESCRIPCION_ROL, type Rol } from '../lib/permissions';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -148,7 +147,7 @@ export function AgencyUsers() {
             getDocs(tasksQ)
           ]);
           const rawClients = clientsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-          setClients(deduplicateClients(rawClients));
+          setClients(rawClients);
           setTasks(tasksSnap.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
         }
       } catch (e) {

@@ -9,7 +9,6 @@ import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { deduplicateClients } from '../lib/clientUtils';
 import { useSharedInventoryMatches, useInventarioCompartido } from '../hooks/useSharedInventoryMatches';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
@@ -453,7 +452,7 @@ export function Inventory() {
 
     const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
       const rawClients = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-      setClients(deduplicateClients(rawClients));
+      setClients(rawClients);
     });
 
     const unsubscribeExpenses = onSnapshot(expensesQ, (snapshot) => {

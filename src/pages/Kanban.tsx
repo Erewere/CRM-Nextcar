@@ -13,7 +13,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, PipelineStage, Task, Deal, Vehicle } from "../types";
-import { deduplicateClients } from "../lib/clientUtils";
 import confetti from "canvas-confetti";
 import {
   DndContext,
@@ -261,9 +260,6 @@ export function Kanban() {
         let data = snapshot.docs.map(
           (d) => ({ ...d.data(), id: d.id }) as Client,
         ).filter(c => !c.isDeleted);
-        
-        data = deduplicateClients(data);
-
         if (userData.role === "seller") {
           data = data.filter(
             (c) => c.sellerId === userData.id || c.visibility === "all",

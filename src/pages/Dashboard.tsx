@@ -20,7 +20,6 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { MobileHome } from "./mobile/MobileHome";
 import { MobileClientDetail } from "./mobile/MobileClientDetail";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { deduplicateClients } from "../lib/clientUtils";
 import { BadgeCheck, ExternalLink } from "lucide-react";
 import { useReadOnly } from "../hooks/useReadOnly";
 import {
@@ -253,7 +252,7 @@ export function Dashboard() {
           .map((doc) => ({ ...doc.data(), id: doc.id }) as Client)
           .filter((c) => !c.isDeleted);
         
-        setClients(deduplicateClients(rawClients));
+        setClients(rawClients);
         setVehicles(
           vehiclesSnap.docs.map(
             (doc) => ({ ...doc.data(), id: doc.id }) as Vehicle,

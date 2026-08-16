@@ -6,7 +6,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { Client, Vehicle } from '../types';
-import { deduplicateClients } from '../lib/clientUtils';
 import clsx from 'clsx';
 
 interface Props {
@@ -41,7 +40,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
         
         const snap = await getDocs(q);
         const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-        setClients(deduplicateClients(list));
+        setClients(list);
       } catch (err) {
         console.error(err);
       } finally {

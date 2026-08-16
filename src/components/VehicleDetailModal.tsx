@@ -10,7 +10,7 @@ import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client, Task } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { deduplicateClients, sanitizeFirestoreData } from '../lib/clientUtils';
+import { sanitizeFirestoreData } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials';
@@ -357,7 +357,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       );
       getDocs(q).then(snap => {
         const rawClients = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-        setClients(deduplicateClients(rawClients));
+        setClients(rawClients);
       });
     }
   }, [userData]);
