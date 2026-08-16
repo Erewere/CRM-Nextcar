@@ -4,10 +4,10 @@ import { getApiUrl } from '../lib/api';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc, addDoc } from 'firebase/firestore';
 import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
 import { Task, Client } from '../types';
-import { ROLES_ASIGNABLES, NOMBRE_ROL, DESCRIPCION_ROL, type Rol } from '../lib/permissions';
+import { deduplicateClients } from '../lib/clientUtils';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 export function AgencyUsers() {
@@ -147,7 +147,7 @@ export function AgencyUsers() {
             getDocs(tasksQ)
           ]);
           const rawClients = clientsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-          setClients(rawClients);
+          setClients(deduplicateClients(rawClients));
           setTasks(tasksSnap.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
         }
       } catch (e) {
@@ -166,32 +166,20 @@ export function AgencyUsers() {
       const agencyData = { name: newAgencyName, createdAt: new Date().toISOString() };
       await setDoc(newAgencyRef, agencyData);
       
-      // Copiar las etiquetas a la agencia nueva es una comodidad, no un
-      // requisito: la propia agencia crea las suyas por omision la primera vez
-      // que alguien de ahi abre esta pantalla. Desde que el master no escribe
-      // en los datos de otras agencias, esta copia puede ser rechazada, y eso
-      // no debe estropear la creacion de la agencia.
-      let etiquetasCopiadas = 0;
+      // Copy current tags to the new agency
       for (const tag of agencyTags) {
-        try {
-          const newTagRef = doc(collection(db, 'agency_tags'));
-          await setDoc(newTagRef, {
-            id: newTagRef.id,
-            name: tag.name,
-            agencyId: newAgencyRef.id,
-            createdAt: new Date().toISOString()
-          });
-          etiquetasCopiadas++;
-        } catch {
-          break;
-        }
+        const newTagRef = doc(collection(db, 'agency_tags'));
+        await setDoc(newTagRef, {
+          id: newTagRef.id,
+          name: tag.name,
+          agencyId: newAgencyRef.id,
+          createdAt: new Date().toISOString()
+        });
       }
 
       setAgencies([...agencies, { id: newAgencyRef.id, ...agencyData }]);
       setNewAgencyName('');
-      alert(etiquetasCopiadas > 0
-        ? 'Agencia creada con las etiquetas actuales.'
-        : 'Agencia creada. Sus etiquetas se crearán solas la primera vez que entren.');
+      alert('Agencia creada exitosamente con las etiquetas actuales.');
     } catch (e) {
       console.error(e);
       alert('Error al crear agencia.');
@@ -307,31 +295,15 @@ export function AgencyUsers() {
                     canManageExpenses: isSellerRole ? inviteCanManageExpenses : false,
                 };
 
-                // El documento debe llevar el identificador real de la cuenta,
-                // porque es el que se consulta al iniciar sesion. Solo el
-                // servidor puede averiguarlo a partir del correo.
-                const reactRes = await fetch(getApiUrl('/api/admin/reactivate-user'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${await getAuth().currentUser?.getIdToken()}`
-                    },
-                    body: JSON.stringify({
-                        email: targetEmail,
-                        name: inviteName.trim(),
-                        role: inviteRole,
-                        agencyId: targetAgencyId,
-                        extras: extraPermissions
-                    })
+                // Create user document in Firestore so they appear in CRM
+                const docRef = await addDoc(collection(db, 'users'), {
+                    email: targetEmail,
+                    name: inviteName.trim(),
+                    role: inviteRole,
+                    agencyId: targetAgencyId,
+                    createdAt: new Date().toISOString(),
+                    ...extraPermissions
                 });
-                const reactData = await reactRes.json();
-                if (!reactRes.ok) {
-                    throw new Error(reactData?.error || 'No se pudo reactivar el usuario');
-                }
-                const docRef = { id: reactData.uid };
-                if (reactData.duplicados?.length) {
-                    console.warn('Documentos duplicados para este correo:', reactData.duplicados);
-                }
 
                 // Send password reset email so user can set a new password
                 try {
@@ -658,13 +630,10 @@ export function AgencyUsers() {
               onChange={(e) => setInviteRole(e.target.value)}
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
             >
-              {ROLES_ASIGNABLES.map((r) => (
-                <option key={`invite-${r}`} value={r}>{NOMBRE_ROL[r]}</option>
-              ))}
+              <option value="seller">Vendedor</option>
+              <option value="taller">Taller</option>
+              <option value="admin">Administrador</option>
             </select>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {DESCRIPCION_ROL[inviteRole as Rol] || ""}
-            </p>
           </div>
         </div>
 
@@ -1106,9 +1075,9 @@ export function AgencyUsers() {
                       disabled={(!isMaster && u.role === 'master') || (u.role === 'master' && u.id === userData?.id)}
                     >
                       {isMaster && u.role === 'master' && <option value="master">Master</option>}
-                      {ROLES_ASIGNABLES.map((r) => (
-                        <option key={`rol-${r}`} value={r}>{NOMBRE_ROL[r]}</option>
-                      ))}
+                      <option value="admin">Administrador</option>
+                      <option value="seller">Vendedor</option>
+                      <option value="taller">Taller</option>
                       <option value="unassigned">Desasignado</option>
                     </select>
                   </div>

@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, PipelineStage, Task, Deal, Vehicle } from "../types";
+import { deduplicateClients } from "../lib/clientUtils";
 import confetti from "canvas-confetti";
 import {
   DndContext,
@@ -39,7 +40,7 @@ import { DealWonModal } from "../components/DealWonModal";
 import { LostReasonModal } from "../components/LostReasonModal";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { createPaymentTasks } from "../lib/paymentTasks";
-import { Settings, ChevronUp, ChevronDown, Archive, X } from "lucide-react";
+import { Settings, ChevronUp, ChevronDown, Archive, X, Search } from "lucide-react";
 import clsx from "clsx";
 
 const DEFAULT_COLUMNS: PipelineStage[] = [
@@ -208,6 +209,7 @@ export function Kanban() {
     return localStorage.getItem("kanban_filterSeller") || "all";
   });
   const [showArchived, setShowArchived] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -260,6 +262,9 @@ export function Kanban() {
         let data = snapshot.docs.map(
           (d) => ({ ...d.data(), id: d.id }) as Client,
         ).filter(c => !c.isDeleted);
+        
+        data = deduplicateClients(data);
+
         if (userData.role === "seller") {
           data = data.filter(
             (c) => c.sellerId === userData.id || c.visibility === "all",
@@ -415,17 +420,54 @@ export function Kanban() {
         vehicle: deal.vehicle || person.vehicle,
       } as Client;
     }),
-    // El embudo representa tratos, no contactos. Un contacto sin trato vive
-    // en Personas; para incorporarlo al embudo se usa "+ NUEVO TRATO", que
-    // permite buscar a la persona existente y reutilizarla.
+    ...clients.filter(c => !deals.some(d => d.clientId === c.id)).map(c => ({
+      ...c,
+      originalClientId: c.id,
+      dealTitle: c.name ? `Trato con ${c.name}` : "Trato",
+    }))
   ];
 
   const deduplicatedClients = Array.from(new Map(displayClients.map(c => [c.id, c])).values());
 
   const activeClient = activeId ? deduplicatedClients.find((c) => c.id === activeId) : null;
 
-  const filteredClients =
-    selectedSellerId === "all" ? deduplicatedClients : deduplicatedClients.filter((c) => c.sellerId === selectedSellerId);
+  const filteredClients = deduplicatedClients.filter((c) => {
+    if (selectedSellerId !== "all" && c.sellerId !== selectedSellerId) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const name = (c.name || "").toLowerCase();
+      const dealTitle = (c.dealTitle || "").toLowerCase();
+      const phone = (c.phone || "").toLowerCase();
+      const email = (c.email || "").toLowerCase();
+      const vehicle = (c.vehicle || "").toLowerCase();
+      const notes = (c.notes || "").toLowerCase();
+      const vehicleInterest = ((c as any).vehicleOfInterest || "").toLowerCase();
+
+      let vehicleMatched = false;
+      if (c.vehicleId) {
+        const v = vehicles.find((veh) => veh.id === c.vehicleId);
+        if (v) {
+          const vStr = `${v.year || ""} ${v.make || ""} ${v.model || ""} ${v.vin || ""} ${v.color || ""}`.toLowerCase();
+          if (vStr.includes(q)) vehicleMatched = true;
+        }
+      }
+
+      const matches =
+        name.includes(q) ||
+        dealTitle.includes(q) ||
+        phone.includes(q) ||
+        email.includes(q) ||
+        vehicle.includes(q) ||
+        vehicleInterest.includes(q) ||
+        notes.includes(q) ||
+        vehicleMatched;
+
+      if (!matches) return false;
+    }
+    return true;
+  });
 
   const activeColumns = columns.filter((c) => !isTerminalColumn(c));
   const terminalColumns = columns.filter((c) => isTerminalColumn(c));
@@ -469,20 +511,13 @@ export function Kanban() {
     const originalStatus = activeOriginalStatusRef.current;
     
     if (client && originalStatus !== overColumnId) {
-      // Un administrador supervisa el embudo completo de su agencia: puede mover
-      // el trato de cualquier asesor, igual que ya podia reasignarlo desde la
-      // ficha del contacto. Antes esta regla contradecia a la del modal, de modo
-      // que un mismo trato se podia reasignar pero no arrastrar.
-      if (userData?.role !== "admin" && userData?.role !== "master") {
-        // Un asesor mueve lo que trae asignado, lo que creo el mismo y lo que
-        // esta sin asignar. Todo lo demas se lo reasigna un administrador.
-        const esSuyo =
-          !client.id ||
-          client.sellerId === userData?.id ||
-          !client.sellerId ||
-          client.creatorId === userData?.id;
-        if (!esSuyo) {
-          alert("Este trato está asignado a otro asesor. Pide a un administrador que te lo reasigne.");
+      if (userData?.role === "admin") {
+        const canModify = !client.id ||
+          (client.creatorId === userData?.id) ||
+          (client.createdByAdmin === true) ||
+          (!client.creatorId && (client.sellerId === userData?.id || !client.sellerId));
+        if (!canModify) {
+          alert("Como administrador, no puedes modificar el embudo de otro vendedor. Solo puedes modificar contactos o tratos creados por ti.");
           // Revert locally modified state
           setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus as string } : c));
           activeOriginalStatusRef.current = null; activeColumnRef.current = null;
@@ -598,6 +633,7 @@ export function Kanban() {
         const currentVehicle = vehicles.find(v => v.id === client.vehicleId);
         const originalPrice = currentVehicle?.price || client.dealValue || 0;
         const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
+        const purchasePrice = currentVehicle?.purchasePrice || 0;
         const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
         await updateDoc(doc(db, "vehicles", client.vehicleId), {
@@ -610,8 +646,7 @@ export function Kanban() {
             clientName: client.name,
             originalPrice,
             proposedPrice,
-            // El costo no se copia aqui: nadie lo leia de este registro, y
-            // quien cierra una venta no necesariamente puede verlo.
+            purchasePrice,
             hasPriceChange,
             saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
             vehicle: client.vehicle || (currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}` : null),
@@ -703,12 +738,37 @@ export function Kanban() {
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="mb-4 flex flex-col sm:flex-row sm:justify-end items-start sm:items-center gap-4 shrink-0">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+        {/* Search Bar - Filtro directo sobre las tarjetas del embudo */}
+        <div className="relative w-full md:w-80 lg:w-96">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar trato, cliente, teléfono, auto..."
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 shadow-sm transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right action controls */}
+        <div className="flex flex-wrap items-center gap-3 justify-end">
           {userData?.role === "admin" && (
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors ml-2"
+              className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors"
               title="Configurar Etapas del Pipeline"
             >
               <Settings className="w-5 h-5" />
@@ -716,14 +776,14 @@ export function Kanban() {
           )}
           <button
             onClick={() => setShowArchived(true)}
-            className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors ml-2"
+            className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors"
             title="Ver Ganados y Perdidos"
           >
             <Archive className="w-5 h-5" />
           </button>
           {["admin", "master"].includes(userData?.role || "") &&
             users.length > 0 && (
-              <div className="ml-4">
+              <div>
                 <select
                   value={selectedSellerId}
                   onChange={(e) => {
@@ -743,13 +803,13 @@ export function Kanban() {
                 </select>
               </div>
             )}
+          <button
+            onClick={() => setSelectedClient({} as Client)}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded text-xs font-bold shadow-sm shadow-blue-200"
+          >
+            + NUEVO TRATO
+          </button>
         </div>
-        <button
-          onClick={() => setSelectedClient({} as Client)}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded text-xs font-bold shadow-sm shadow-blue-200"
-        >
-          + NUEVO TRATO
-        </button>
       </div>
 
       <div className="flex flex-col flex-1 min-h-0">

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Client, PipelineStage } from '../../types';
+import { deduplicateClients } from '../../lib/clientUtils';
 import { Search, Phone, MessageCircle, User, Car, Calendar, FileText, ChevronRight, Activity, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MobileClientDetail } from './MobileClientDetail';
@@ -55,7 +56,7 @@ export function MobilePersons() {
       const snap = await getDocs(q);
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
       
-      setClients(list);
+      setClients(deduplicateClients(list));
       setSelectedClient(prev => prev ? (list.find(c => c.id === prev.id) || prev) : null);
     } catch (err) {
       console.error(err);

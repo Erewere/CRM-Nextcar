@@ -578,6 +578,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           const vData = vDoc.data() as Vehicle;
           const originalPrice = vData.price || client.dealValue || 0;
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
+          const purchasePrice = vData.purchasePrice || 0;
           const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
           await updateDoc(doc(db, 'vehicles', client.vehicleId), {
@@ -590,8 +591,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
               clientName: client.name,
               originalPrice,
               proposedPrice,
-              // El costo no se copia aqui: nadie lo leia de este registro, y
-              // quien cierra una venta no necesariamente puede verlo.
+              purchasePrice,
               hasPriceChange,
               saleDetails: saleDetails ? { ...saleDetails, price: proposedPrice } : { price: proposedPrice, method: 'contado' },
               vehicle: client.vehicle || (vData ? `${vData.year} ${vData.make} ${vData.model}` : null),

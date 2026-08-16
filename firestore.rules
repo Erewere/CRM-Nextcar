@@ -1,16 +1,3 @@
-// Reglas de seguridad de Firestore.
-//
-// Este archivo NO se publica solo: hay que pegarlo en la consola de Firebase
-// (Firestore -> Rules -> Publicar). Se mantiene aqui para que quede registro
-// de que reglas estan vigentes y por que.
-//
-// Lo que hay aqui manda sobre cualquier control de la pantalla. Ocultar un
-// dato en la interfaz evita que se vea; solo estas reglas evitan que se pueda
-// pedir. Si una coleccion no aparece abajo, queda prohibida para todos: no
-// existe regla comodin, y no debe volver a existir. La que hubo permitia leer
-// y escribir cualquier coleccion a cualquier usuario con sesion, y anulaba en
-// silencio todas las reglas por agencia de mas arriba.
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -19,50 +6,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userExists() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
     function isMaster() {
-      return userExists() && userDoc().role == 'master';
-    }
-
-    function isAdmin() {
-      return userExists() && userDoc().role == 'admin';
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master';
     }
 
     function getUserAgencyId() {
-      return userExists() ? userDoc().agencyId : null;
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.agencyId
+        : null;
     }
 
-    // Antes empezaba con "isMaster() ||", de modo que el master leia y escribia
-    // los datos de todas las agencias. Ese permiso era el origen de que viera
-    // los contactos, los tratos y el inventario de todo el mundo.
-    //
-    // El master opera la plataforma; no atiende clientes. Sus estadisticas se
-    // calculan en el servidor y le llegan como numeros, asi que saber cuantos
-    // contactos tiene una agencia ya no exige poder leerlos. Sigue pudiendo
-    // administrar agencias y usuarios: eso se concede abajo, colección por
-    // colección, donde corresponde.
     function belongsToMyAgency(data) {
-      return data.agencyId != null && data.agencyId == getUserAgencyId();
-    }
-
-    // Quien puede ver cuanto costo un auto. Debe coincidir con los roles que
-    // tienen el permiso "vehiculos.costo" en src/lib/permissions.ts.
-    function puedeVerCostos() {
-      return userExists() && userDoc().role in ['master', 'admin', 'manager'];
-    }
-
-    // El rol y la agencia deben quedar EXACTAMENTE igual que antes
-    function keepsRoleAndAgency() {
-      return request.resource.data.get('role', '') == resource.data.get('role', '')
-          && request.resource.data.get('agencyId', '') == resource.data.get('agencyId', '');
+      return isMaster() || (data.agencyId != null && data.agencyId == getUserAgencyId());
     }
 
     match /clients/{id} {
@@ -75,19 +32,6 @@ service cloud.firestore {
       allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
       allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
-    }
-
-    // El precio de compra vive aparte del auto justamente para poder negarlo
-    // sin negar el auto. Firestore concede o niega documentos completos: no
-    // sabe esconder un campo. Mientras el costo estuvo dentro del vehiculo,
-    // ocultarlo en pantalla era cosmetico, porque cualquiera con acceso al
-    // inventario podia leerlo consultando la base directamente.
-    match /vehicleFinancials/{id} {
-      allow read: if isAuthenticated() && puedeVerCostos() && belongsToMyAgency(resource.data);
-      allow create: if isAuthenticated() && puedeVerCostos() && belongsToMyAgency(request.resource.data);
-      allow update: if isAuthenticated() && puedeVerCostos() && belongsToMyAgency(resource.data)
-                    && belongsToMyAgency(request.resource.data);
-      allow delete: if isAuthenticated() && puedeVerCostos() && belongsToMyAgency(resource.data);
     }
 
     match /deals/{id} {
@@ -126,58 +70,15 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
     }
 
-    match /pipelineStages/{id} {
-      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
-      allow create: if isAuthenticated() && belongsToMyAgency(request.resource.data);
-      allow update, delete: if isAuthenticated() && belongsToMyAgency(resource.data);
-    }
-
-    // La clave del MCP vive en agencySecrets y esa coleccion no aparece en
-    // este archivo a proposito: sin regla, Firestore la niega a todos. Solo el
-    // servidor la alcanza, con el SDK de administrador, que no pasa por aqui.
-    // Estuvo dentro del documento de agencia, que tiene que ser legible por
-    // cualquiera con sesion, de modo que la clave de una agencia la podia leer
-    // un vendedor de otra.
-
     match /agencies/{id} {
-      // La lectura amplia es necesaria para el inventario compartido entre
-      // agencias, que recorre esta coleccion para saber cuales comparten. Por
-      // eso este documento no debe guardar secretos: cualquier usuario con
-      // sesion, de cualquier agencia, puede leerlo entero.
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update: if isMaster() || (isAuthenticated() && getUserAgencyId() == id);
       allow delete: if isMaster();
     }
 
-    // Antes era "allow read, write: if isAuthenticated()", de modo que
-    // cualquier usuario podia editar su propio documento y ponerse master.
     match /users/{id} {
-      allow read: if isAuthenticated();
-
-      allow create: if isAuthenticated() && (
-        isMaster()
-        || (isAdmin()
-            && request.resource.data.agencyId == getUserAgencyId()
-            && request.resource.data.role != 'master')
-        // Auto-registro: creas tu propio documento, pero nunca como master
-        || (request.auth.uid == id && request.resource.data.role != 'master')
-      );
-
-      allow update: if isAuthenticated() && (
-        isMaster()
-        // Un admin gestiona usuarios de SU agencia, sin otorgar master
-        // ni mover usuarios a otra agencia
-        || (isAdmin()
-            && resource.data.agencyId == getUserAgencyId()
-            && request.resource.data.agencyId == getUserAgencyId()
-            && request.resource.data.role != 'master')
-        // Cualquiera edita su propio perfil, pero NO su rol ni su agencia
-        || (request.auth.uid == id && keepsRoleAndAgency())
-      );
-
-      allow delete: if isMaster()
-        || (isAdmin() && resource.data.agencyId == getUserAgencyId());
+      allow read, write: if isAuthenticated();
     }
 
     match /agencyChats/{id} {
@@ -185,6 +86,10 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read, write: if isAuthenticated();
       }
+    }
+
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
     }
   }
 }

@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { Client, Vehicle } from '../types';
 import { Search, User, Car } from 'lucide-react';
-import { checkIsWon } from '../lib/clientUtils';
+import { checkIsWon, deduplicateClients } from '../lib/clientUtils';
 import clsx from 'clsx';
 import { ClientDetailModal } from '../components/ClientDetailModal';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
@@ -54,7 +54,7 @@ export function PaymentInventory() {
 
     const unsubClients = onSnapshot(clientsQ, (snap) => {
       const raw = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
-      setClients(raw);
+      setClients(deduplicateClients(raw));
     }, (err) => console.error("PaymentInventory clients snapshot error:", err));
 
     const unsubVehicles = onSnapshot(vehiclesQ, (snap) => {

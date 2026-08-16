@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { Client, Vehicle } from '../types';
+import { deduplicateClients } from '../lib/clientUtils';
 import clsx from 'clsx';
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export function ShareVehicleModal({ vehicle, onClose }: Props) {
-  const { userData, currentUser } = useAuth();
+  const { userData } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -40,7 +41,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
         
         const snap = await getDocs(q);
         const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-        setClients(list);
+        setClients(deduplicateClients(list));
       } catch (err) {
         console.error(err);
       } finally {
@@ -65,13 +66,9 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
       if (phone.length === 10) phone = '52' + phone;
 
       // Send Template
-      const idToken = await currentUser?.getIdToken();
       const res = await fetch(getApiUrl('/api/meta/send-template'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: phone,
           templateName: 'vehicle_recommendation',

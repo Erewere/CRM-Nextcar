@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -9,12 +9,11 @@ import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { useSharedInventoryMatches, useInventarioCompartido } from '../hooks/useSharedInventoryMatches';
+import { deduplicateClients } from '../lib/clientUtils';
+import { useSharedInventoryMatches } from '../hooks/useSharedInventoryMatches';
 import clsx from 'clsx';
 import * as XLSX from "xlsx";
 import { useReadOnly } from '../hooks/useReadOnly';
-import { usePermissions } from '../hooks/usePermissions';
-import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -144,15 +143,8 @@ export function Inventory() {
   const { userData, currentUser } = useAuth();
   const isMobile = useIsMobile();
   const isReadOnly = useReadOnly();
-  const { can } = usePermissions();
-  const puedeVerCompartido = can('vehiculos.compartido');
-  const puedeVerPagos = can('pagos.gestionar');
   const navigate = useNavigate();
-  const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
-  // El costo llega por separado y se vuelve a unir al auto aqui, de modo
-  // que el resto de la pantalla siga leyendo vehicle.purchasePrice.
-  const { conCosto, puedeVerCostos } = useCostosVehiculos();
-  const vehicles = useMemo(() => conCosto(vehiculosCrudos), [vehiculosCrudos, conCosto]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -197,9 +189,7 @@ export function Inventory() {
   }, [location.state, vehicles]);
 
   useEffect(() => {
-    // Quien no tiene permiso sobre el inventario compartido se queda en el
-    // propio, aunque llegue con ?tab=shared en la direccion.
-    if (!puedeVerCompartido) {
+    if (userData?.role === 'seller') {
       setActiveTab('my');
       return;
     }
@@ -210,10 +200,11 @@ export function Inventory() {
     } else if (tabParam === 'my') {
       setActiveTab('my');
     }
-  }, [window.location.search, puedeVerCompartido]);
+  }, [window.location.search, userData?.role]);
 
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
   const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
+  const [sharedVehicles, setSharedVehicles] = useState<Vehicle[]>([]);
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>({});
 
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
@@ -341,6 +332,7 @@ export function Inventory() {
             model: vModel,
             year: vYear,
             price: vPrice,
+            purchasePrice: vCost,
             vin: vVin,
             color: vColor,
             transmission: vTransmission,
@@ -351,12 +343,6 @@ export function Inventory() {
             updatedAt: new Date().toISOString(),
           };
           await setDoc(doc(db, "vehicles", newRef.id), newVehicle);
-          // El costo no viaja dentro del vehiculo: va a su coleccion aparte.
-          // Quien no puede verlo tampoco puede escribirlo, y la regla
-          // rechazaria la escritura interrumpiendo toda la importacion.
-          if (puedeVerCostos) {
-            await guardarCosto(newRef.id, userData?.agencyId || "", vCost);
-          }
           importedCount++;
         }
       }
@@ -452,7 +438,7 @@ export function Inventory() {
 
     const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
       const rawClients = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-      setClients(rawClients);
+      setClients(deduplicateClients(rawClients));
     });
 
     const unsubscribeExpenses = onSnapshot(expensesQ, (snapshot) => {
@@ -498,14 +484,50 @@ export function Inventory() {
     };
   }, [userData]);
 
-  // Inventario compartido: lo pide el mismo mecanismo que usa el resto de la
-  // aplicacion, de modo que esta pantalla no abre una consulta aparte.
-  const sharedVehicles = useInventarioCompartido(
-    sharingAgencies.slice(0, 10),
-    ownAgencySharing &&
-      userData?.role !== 'master' &&
-      userData?.role !== 'seller'
-  );
+  // Subscribe to shared vehicles when eligible
+  useEffect(() => {
+    if (userData?.role === 'master' || userData?.role === 'seller') return;
+    if (!ownAgencySharing || sharingAgencies.length === 0) {
+      setSharedVehicles([]);
+      return;
+    }
+
+    const sliceAgencies = sharingAgencies.slice(0, 10);
+    let cancelled = false;
+
+    const fetchSharedVehicles = async () => {
+      try {
+        const results = await Promise.all(
+          sliceAgencies.map(async (agencyId) => {
+            try {
+              const res = await fetch(
+                getApiUrl(`/api/public/v1/inventory?agencyId=${encodeURIComponent(agencyId)}`)
+              );
+              if (!res.ok) return [];
+              const data = await res.json();
+              return (data.vehicles || []).map((v: any) => ({ ...v, agencyId }));
+            } catch (err) {
+              console.error(`Error loading shared vehicles from agency ${agencyId}:`, err);
+              return [];
+            }
+          })
+        );
+        if (!cancelled) {
+          setSharedVehicles(results.flat() as Vehicle[]);
+        }
+      } catch (err) {
+        console.error("Error loading shared vehicles:", err);
+      }
+    };
+
+    fetchSharedVehicles();
+    const intervalId = setInterval(fetchSharedVehicles, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [ownAgencySharing, sharingAgencies, userData]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -914,11 +936,8 @@ export function Inventory() {
             </select>
           </div>
 
-          {/* Pestañas de inventario. Antes se decidia por lista negra de roles
-              -"todos menos master y vendedor"- de modo que cualquier rol nuevo
-              quedaba dentro sin quererlo: el taller veia el inventario de otras
-              agencias y el acceso a Pagos. */}
-          {userData?.role !== 'master' && (puedeVerCompartido || puedeVerPagos) && (
+          {/* TAB CONTROL FOR COLLABORATIVE INVENTORY */}
+          {userData?.role !== 'master' && userData?.role !== 'seller' && (
             <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded border border-gray-200 dark:border-slate-700">
               <button
                 type="button"
@@ -932,7 +951,6 @@ export function Inventory() {
               >
                 Mi Inventario
               </button>
-              {puedeVerCompartido && (
               <button
                 type="button"
                 onClick={() => {
@@ -957,8 +975,7 @@ export function Inventory() {
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Hay vehículos que coinciden con clientes activos"></span>
                 )}
               </button>
-              )}
-              {puedeVerPagos && (
+              {(userData?.role as string) !== 'seller' && (
                 <button
                   type="button"
                   onClick={() => navigate('/payments')}

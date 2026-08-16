@@ -1,7 +1,7 @@
 export interface User {
   id: string; // The uid created in Firebase Auth
   email: string;
-  role: "master" | "admin" | "manager" | "seller" | "taller" | "unassigned";
+  role: "master" | "admin" | "seller" | "taller" | "unassigned";
   agencyId: string;
   name: string;
   createdAt: string | Date;
@@ -168,6 +168,7 @@ export interface Client {
   soldAt?: string;
   saleDetails?: SaleDetails;
   origin: "manual" | "whatsapp" | "web" | "website" | "google_contacts" | "excel_import" | "facebook" | "instagram";
+  notes?: string;
   tags?: string[];
   dismissedMatches?: string[];
   wantedVehicle?: {

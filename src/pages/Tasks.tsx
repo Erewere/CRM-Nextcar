@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Client, Deal } from "../types";
+import { deduplicateClients } from "../lib/clientUtils";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -253,7 +254,7 @@ export function Tasks() {
 
         const cSnap = await getDocs(cq);
         const list = cSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter((c) => !c.isDeleted);
-        setClients(list);
+        setClients(deduplicateClients(list));
 
         try {
           const dSnap = await getDocs(dq);

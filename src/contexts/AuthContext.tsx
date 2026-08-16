@@ -104,28 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               try {
                 if (user.email) {
                   const qSnap = await getDocs(query(collection(db, 'users'), where('email', '==', user.email)));
-
-                  // Con dos o mas documentos para el mismo correo no hay forma
-                  // de saber cual es el bueno, y la eleccion decide en que
-                  // agencia entras. Antes se tomaba el primero que devolvia la
-                  // consulta -- el de identificador menor en orden alfabetico --
-                  // y se borraba el otro, de modo que la agencia asignada podia
-                  // quedar sustituida en silencio por una anterior. Ante la
-                  // duda no se elige ninguna.
-                  if (qSnap.size > 1) {
-                    console.error(
-                      "AuthContext: hay",
-                      qSnap.size,
-                      "documentos de usuario con el correo",
-                      user.email,
-                      "->",
-                      qSnap.docs.map((d) => ({ id: d.id, agencyId: d.data().agencyId }))
-                    );
-                    setUserData(null);
-                    setLoading(false);
-                    return;
-                  }
-
                   if (!qSnap.empty) {
                     const existingDoc = qSnap.docs[0];
                     const existingData = existingDoc.data();

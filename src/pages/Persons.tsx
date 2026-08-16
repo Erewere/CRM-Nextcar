@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task, Vehicle } from "../types";
-import { getVehicleOfInterestText } from "../lib/clientUtils";
+import { deduplicateClients, getVehicleOfInterestText } from "../lib/clientUtils";
 import {
   Users,
   Search,
@@ -368,7 +368,7 @@ export function Persons() {
         const allClients = clientsDocs.map(
           (d) => ({ ...d.data(), id: d.id }) as Client,
         ).filter((c) => !c.isDeleted);
-        setPersons(allClients);
+        setPersons(deduplicateClients(allClients));
 
         setDeals(
           dealsDocs

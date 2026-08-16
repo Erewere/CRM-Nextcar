@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Client, Deal } from '../types';
+import { deduplicateClients } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 
 export function MobileFab() {
@@ -51,7 +52,7 @@ export function MobileFab() {
 
     const unsubClients = onSnapshot(q, (snap) => {
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-      setClients(list);
+      setClients(deduplicateClients(list));
     });
     
     const unsubDeals = onSnapshot(dq, (snap) => {

@@ -20,6 +20,7 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { MobileHome } from "./mobile/MobileHome";
 import { MobileClientDetail } from "./mobile/MobileClientDetail";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { deduplicateClients } from "../lib/clientUtils";
 import { BadgeCheck, ExternalLink } from "lucide-react";
 import { useReadOnly } from "../hooks/useReadOnly";
 import {
@@ -73,11 +74,11 @@ import {
   isValid,
 } from "date-fns";
 
+import { MasterDashboard } from "../components/MasterDashboard";
 import { LeadScoringEngine } from "../modules/lead-intelligence/services/scoringEngine";
 
 import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
-import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 
 
 
@@ -116,9 +117,7 @@ export function Dashboard() {
   const isMobile = useIsMobile();
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
-  const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
-  const { conCosto } = useCostosVehiculos();
-  const vehicles = useMemo(() => conCosto(vehiculosCrudos), [vehiculosCrudos, conCosto]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
@@ -252,7 +251,7 @@ export function Dashboard() {
           .map((doc) => ({ ...doc.data(), id: doc.id }) as Client)
           .filter((c) => !c.isDeleted);
         
-        setClients(rawClients);
+        setClients(deduplicateClients(rawClients));
         setVehicles(
           vehiclesSnap.docs.map(
             (doc) => ({ ...doc.data(), id: doc.id }) as Vehicle,
@@ -503,6 +502,10 @@ export function Dashboard() {
   }, [wonContacts.length, filteredClients.length]);
 
   if (loading) return <div>Cargando dashboard...</div>;
+
+  if (userData?.role === "master") {
+    return <MasterDashboard />;
+  }
 
   if (userData?.role === "unassigned") {
     return (
