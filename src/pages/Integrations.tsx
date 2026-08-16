@@ -29,8 +29,9 @@ export function Integrations() {
   // Herramienta temporal de migracion (Fase 1: crear tratos faltantes)
   const [migLoading, setMigLoading] = useState<boolean>(false);
   const [migResult, setMigResult] = useState<any>(null);
-  // Que migracion fue la ultima simulada. Sin esto, simular una habilitaba el
-  // boton de aplicar de la otra, que escribe cosas distintas.
+  // Revision de contactos repetidos, del administrador sobre su agencia.
+  const [dupCargando, setDupCargando] = useState<boolean>(false);
+  const [dupResultado, setDupResultado] = useState<any>(null);
 
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
@@ -257,6 +258,27 @@ export function Integrations() {
       alert(e.message || "No se pudo generar el respaldo.");
     } finally {
       setBackupLoading(false);
+    }
+  };
+
+  const handleRevisionDuplicados = async () => {
+    if (!currentUser) {
+      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    setDupCargando(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/admin/audit-duplicate-clients", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      setDupResultado(data);
+    } catch (e: any) {
+      alert(e.message || "No se pudo revisar los contactos.");
+    } finally {
+      setDupCargando(false);
     }
   };
 
@@ -624,6 +646,98 @@ export function Integrations() {
         </div>
 
         {/* Respaldo de la base de datos (exclusivo del rol master) */}
+        {userData?.role === 'admin' && (
+          <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
+            <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Contactos repetidos
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                El CRM muestra un solo contacto por nombre y esconde los demás. Aquí se
+                ven todos, con lo que tiene cada copia. Solo lee, no cambia nada.
+              </p>
+            </div>
+            <div className="p-6">
+              <button
+                onClick={handleRevisionDuplicados}
+                disabled={dupCargando}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+              >
+                {dupCargando ? "Revisando..." : "Revisar contactos"}
+              </button>
+
+              {dupResultado && (
+                <div className="mt-5">
+                  <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1 mb-4">
+                    <li>Contactos totales: <strong>{dupResultado.resumen.contactosTotales}</strong></li>
+                    <li>Nombres repetidos: <strong>{dupResultado.resumen.nombresRepetidos}</strong></li>
+                    <li>Copias de más: <strong>{dupResultado.resumen.copiasDeMas}</strong></li>
+                    <li className={dupResultado.resumen.casosDondeVesLaCopiaVacia > 0 ? "text-amber-700 dark:text-amber-400" : ""}>
+                      Casos donde ves la copia vacía:{" "}
+                      <strong>{dupResultado.resumen.casosDondeVesLaCopiaVacia}</strong>
+                    </li>
+                  </ul>
+
+                  {dupResultado.repetidos.length === 0 && (
+                    <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                      No hay contactos repetidos.
+                    </p>
+                  )}
+
+                  <div className="space-y-4">
+                    {dupResultado.repetidos.map((g: any) => (
+                      <div key={g.nombre} className="border border-gray-200 dark:border-slate-700 rounded p-4">
+                        <p className="font-bold text-slate-900 dark:text-white text-sm mb-1">
+                          {g.nombre}{" "}
+                          <span className="font-normal text-slate-500">
+                            — {g.copias.length} copias
+                          </span>
+                        </p>
+                        {g.laQueVesEstaVacia && (
+                          <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                            La copia que ves en el CRM no es la que tiene la historia.
+                          </p>
+                        )}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs min-w-[520px]">
+                            <thead className="text-slate-500 dark:text-slate-400">
+                              <tr>
+                                <th className="text-left font-medium py-1">Copia</th>
+                                <th className="text-left font-medium py-1">Teléfono</th>
+                                <th className="text-right font-medium py-1">Tratos</th>
+                                <th className="text-right font-medium py-1">Tareas</th>
+                                <th className="text-right font-medium py-1">Notas</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {g.copias.map((c: any) => (
+                                <tr key={c.id} className="border-t border-gray-100 dark:border-slate-800">
+                                  <td className="py-1.5 pr-2">
+                                    <code className="text-[11px] text-slate-600 dark:text-slate-400">{c.id}</code>
+                                    {c.esLaQueVes && (
+                                      <span className="ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                        la que ves
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-1.5 pr-2 text-slate-600 dark:text-slate-400">{c.telefono || "—"}</td>
+                                  <td className="py-1.5 text-right text-slate-700 dark:text-slate-300">{c.tratos}</td>
+                                  <td className="py-1.5 text-right text-slate-700 dark:text-slate-300">{c.tareas}</td>
+                                  <td className="py-1.5 text-right text-slate-700 dark:text-slate-300">{c.notas}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {isMaster && (
           <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
             <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">

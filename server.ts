@@ -1651,6 +1651,141 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // Contactos repetidos dentro de una agencia.
+  //
+  // La aplicacion los esconde: deduplicateClients descarta, en catorce
+  // pantallas, cualquier contacto cuyo nombre ya haya aparecido. Eso deja tres
+  // problemas fuera de la vista. Dos personas distintas que se llamen igual
+  // desaparecen una a la otra. La copia que se muestra es la del identificador
+  // menor, no la que tiene la historia, de modo que se puede estar editando la
+  // equivocada. Y como no se ven, se siguen creando.
+  //
+  // Esta revision es para el administrador de su propia agencia, no para el
+  // master: listarle nombres de clientes reabriria el acceso que se le quito.
+  // Solo lee.
+  app.get("/api/admin/audit-duplicate-clients", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || llamante.role !== "admin") {
+        return res.status(403).json({
+          error: "Solo el administrador de una agencia puede revisar sus contactos",
+        });
+      }
+      const agencyId = llamante.agencyId;
+      if (!agencyId || agencyId === "unassigned") {
+        return res.status(400).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+
+      const porAgencia = (col: string) =>
+        adminDb.collection(col).where("agencyId", "==", agencyId).get();
+
+      const [clientes, tratos, tareas, notas] = await Promise.all([
+        porAgencia("clients"),
+        porAgencia("deals"),
+        porAgencia("tasks"),
+        porAgencia("notes"),
+      ]);
+
+      const contarPorCliente = (snap: any) => {
+        const mapa = new Map<string, number>();
+        snap.docs.forEach((d: any) => {
+          const cid = d.data().clientId;
+          if (cid) mapa.set(cid, (mapa.get(cid) || 0) + 1);
+        });
+        return mapa;
+      };
+      const nTratos = contarPorCliente(tratos);
+      const nTareas = contarPorCliente(tareas);
+      const nNotas = contarPorCliente(notas);
+
+      // Se agrupa con el mismo criterio con el que la pantalla los esconde:
+      // el nombre en minusculas y sin espacios sobrantes.
+      const grupos = new Map<string, any[]>();
+      clientes.docs.forEach((d: any) => {
+        const c = d.data() || {};
+        const clave = String(c.name || "").trim().toLowerCase();
+        if (!clave) return;
+        const lista = grupos.get(clave) || [];
+        lista.push({
+          id: d.id,
+          nombre: c.name,
+          telefono: c.phone || null,
+          correo: c.email || null,
+          creado: c.createdAt || null,
+          tratos: nTratos.get(d.id) || 0,
+          tareas: nTareas.get(d.id) || 0,
+          notas: nNotas.get(d.id) || 0,
+        });
+        grupos.set(clave, lista);
+      });
+
+      const repetidos: any[] = [];
+      let copiasDeMas = 0;
+      let copiasConHistoriaOcultas = 0;
+
+      grupos.forEach((copias) => {
+        if (copias.length < 2) return;
+        copiasDeMas += copias.length - 1;
+
+        // Firestore devuelve por identificador ascendente cuando no se pide
+        // otro orden, asi que la copia visible hoy es la del id menor.
+        const visible = [...copias].sort((a, b) => (a.id < b.id ? -1 : 1))[0].id;
+
+        const conActividad = copias.map((c) => ({
+          ...c,
+          actividad: c.tratos + c.tareas + c.notas,
+          esLaQueVes: c.id === visible,
+        }));
+        conActividad.sort((a, b) => b.actividad - a.actividad);
+
+        const masCompleta = conActividad[0];
+        if (!masCompleta.esLaQueVes && masCompleta.actividad > 0) {
+          copiasConHistoriaOcultas++;
+        }
+
+        repetidos.push({
+          nombre: copias[0].nombre,
+          copias: conActividad,
+          laQueVesEstaVacia: !masCompleta.esLaQueVes && masCompleta.actividad > 0,
+        });
+      });
+
+      repetidos.sort((a, b) => b.copias.length - a.copias.length);
+
+      res.json({
+        agencia: agencyId,
+        resumen: {
+          contactosTotales: clientes.size,
+          nombresRepetidos: repetidos.length,
+          copiasDeMas,
+          casosDondeVesLaCopiaVacia: copiasConHistoriaOcultas,
+        },
+        repetidos,
+      });
+    } catch (e: any) {
+      console.error("Audit duplicate clients error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
   app.get("/api/admin/audit-costs", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
