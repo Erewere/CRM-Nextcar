@@ -73,6 +73,99 @@ function getAdminDb() {
   return getAdminFirestore(adminApp, "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a");
 }
 
+/**
+ * Busca un contacto de la agencia por su telefono.
+ *
+ * Las dos vias automaticas de captura -- el endpoint publico de leads y la
+ * herramienta del asistente -- creaban un contacto nuevo cada vez, sin mirar
+ * si esa persona ya estaba. De ahi salieron diez fichas de la misma persona
+ * con el mismo numero. Duplicar al cliente parte su historial: los tratos
+ * quedan repartidos entre fichas y ninguna cuenta la historia completa.
+ *
+ * Primero se intenta la coincidencia exacta, que es lo normal cuando los leads
+ * entran siempre por la misma via y cuesta una sola lectura. Solo si falla se
+ * comparan los digitos, porque el mismo numero puede venir escrito de formas
+ * distintas. Ese segundo paso recorre los contactos de la agencia; con unas
+ * decenas no se nota, pero si algun dia son miles convendra guardar el
+ * telefono ya normalizado y consultarlo directo.
+ */
+async function buscarContactoPorTelefono(adminDb: any, agencyId: string, phone: string) {
+  const bruto = String(phone || "").trim();
+  const digitos = bruto.replace(/\D/g, "");
+  if (!digitos) return null;
+
+  const exacta = await adminDb
+    .collection("clients")
+    .where("agencyId", "==", agencyId)
+    .where("phone", "==", bruto)
+    .limit(1)
+    .get();
+  if (!exacta.empty) return exacta.docs[0];
+
+  const todos = await adminDb.collection("clients").where("agencyId", "==", agencyId).get();
+  return (
+    todos.docs.find(
+      (d: any) => String(d.data().phone || "").replace(/\D/g, "") === digitos
+    ) || null
+  );
+}
+
+/** Completa los datos de contacto que le falten, sin pisar los que ya tiene. */
+function camposQueFaltan(existente: any, entrante: Record<string, any>) {
+  const relleno: Record<string, any> = {};
+  for (const [k, v] of Object.entries(entrante)) {
+    const actual = existente[k];
+    if ((actual === undefined || actual === null || actual === "") && v) {
+      relleno[k] = v;
+    }
+  }
+  return relleno;
+}
+
+/**
+ * La clave del MCP de una agencia.
+ *
+ * Vivia dentro del documento de la agencia, y ese documento tiene que ser
+ * legible por cualquier usuario con sesion: el inventario compartido necesita
+ * recorrer las agencias para saber cuales comparten. O sea que la clave que da
+ * acceso a los datos de una agencia la podia leer un vendedor de otra.
+ *
+ * Ahora vive en agencySecrets, una coleccion sin regla alguna. En Firestore lo
+ * que no se permite queda prohibido, asi que ningun navegador la alcanza; solo
+ * el servidor, que usa el SDK de administrador y no pasa por las reglas.
+ *
+ * El traslado ocurre solo, la primera vez que cada clave se usa. Asi no hace
+ * falta una migracion ni existe un momento en que la clave este a medias.
+ */
+async function leerClaveMcp(adminDb: any, agencyId: string): Promise<{ clave: string | null; creada: any }> {
+  const secreto = await adminDb.collection("agencySecrets").doc(agencyId).get();
+  if (secreto.exists && secreto.data()?.mcpApiKey) {
+    return { clave: secreto.data().mcpApiKey, creada: secreto.data().mcpApiKeyCreatedAt || null };
+  }
+
+  const agencia = await adminDb.collection("agencies").doc(agencyId).get();
+  const vieja = agencia.exists ? agencia.data()?.mcpApiKey : null;
+  if (!vieja) return { clave: null, creada: null };
+
+  const creada = agencia.data()?.mcpApiKeyCreatedAt || null;
+  await guardarClaveMcp(adminDb, agencyId, vieja, creada);
+  return { clave: vieja, creada };
+}
+
+/** Guarda la clave en su sitio y la borra del documento de la agencia. */
+async function guardarClaveMcp(adminDb: any, agencyId: string, clave: string, creada?: any) {
+  await adminDb.collection("agencySecrets").doc(agencyId).set({
+    agencyId,
+    mcpApiKey: clave,
+    mcpApiKeyCreatedAt: creada || FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await adminDb.collection("agencies").doc(agencyId).update({
+    mcpApiKey: FieldValue.delete(),
+    mcpApiKeyCreatedAt: FieldValue.delete(),
+  }).catch(() => {});
+}
+
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
@@ -304,9 +397,30 @@ async function startServer() {
         return res.status(401).json({ error: "Token inválido" });
       }
 
+      const adminDbAuth = getAdminDb();
+      if (!adminDbAuth) {
+        return res.status(500).json({ error: "Base de datos no disponible" });
+      }
+
+      // Verificar tener sesion no basta: sin esto, cualquier usuario con
+      // cuenta -- un vendedor, alguien de taller -- podia crear una cuenta con
+      // el rol que quisiera en la agencia que quisiera, master incluido.
+      const llamanteDoc = await adminDbAuth.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || (llamante.role !== "master" && llamante.role !== "admin")) {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+
       const { email, password, name, role, agencyId } = req.body;
       if (!email || !password || !role || !agencyId) {
         return res.status(400).json({ error: "Faltan parámetros requeridos" });
+      }
+
+      if (llamante.role === "admin" && agencyId !== llamante.agencyId) {
+        return res.status(403).json({ error: "Solo puedes crear usuarios en tu propia agencia" });
+      }
+      if (role === "master" && llamante.role !== "master") {
+        return res.status(403).json({ error: "No puedes otorgar el rol master" });
       }
 
       const auth = getAuth(getAdminApp()!);
@@ -331,6 +445,81 @@ async function startServer() {
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
     } catch (err: any) {
       console.error("Create User Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Reactivar en el CRM a alguien que ya existe en la autenticacion.
+  //
+  // Antes esto se resolvia en el navegador creando el documento con un
+  // identificador al azar, porque el cliente no tiene manera de averiguar el
+  // identificador real de la cuenta. Ese documento no era el que se consulta
+  // al entrar -- la sesion busca users/{uid} -- asi que la asignacion de
+  // agencia que se veia en pantalla no era la que se aplicaba al iniciar
+  // sesion. Aqui si se puede resolver el identificador correcto.
+  app.post("/api/admin/reactivate-user", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.split("Bearer ")[1]);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || (llamante.role !== "master" && llamante.role !== "admin")) {
+        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      }
+
+      const { email, name, role, agencyId, extras } = req.body || {};
+      if (!email || !role || !agencyId) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos" });
+      }
+      if (llamante.role === "admin" && agencyId !== llamante.agencyId) {
+        return res.status(403).json({ error: "Solo puedes dar de alta usuarios en tu propia agencia" });
+      }
+      if (role === "master" && llamante.role !== "master") {
+        return res.status(403).json({ error: "No puedes otorgar el rol master" });
+      }
+
+      let userRecord;
+      try {
+        userRecord = await getAuth(adminApp).getUserByEmail(email);
+      } catch (err) {
+        return res.status(404).json({ error: "Ese correo no existe en la autenticación" });
+      }
+
+      await adminDb.collection("users").doc(userRecord.uid).set({
+        email,
+        name: name || email.split("@")[0],
+        role,
+        agencyId,
+        createdAt: new Date().toISOString(),
+        ...(extras && typeof extras === "object" ? extras : {}),
+      }, { merge: true });
+
+      // Documentos sueltos con ese mismo correo pero otro identificador: son
+      // los que quedaron del metodo anterior. No se borran aqui; se informan
+      // para poder revisarlos antes de tocar nada.
+      const sueltos = await adminDb.collection("users").where("email", "==", email).get();
+      const duplicados = sueltos.docs
+        .filter((d) => d.id !== userRecord.uid)
+        .map((d) => ({ id: d.id, agencyId: d.data().agencyId, role: d.data().role }));
+
+      res.json({ uid: userRecord.uid, duplicados });
+    } catch (err: any) {
+      console.error("Reactivate User Error:", err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -593,6 +782,116 @@ async function startServer() {
 
   // === Meta (WhatsApp/Messenger) Webhook Integration ===
 
+  // === Agency WhatsApp Config (Admin/Master only) ===
+  app.get("/api/agencies/whatsapp-config", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      const decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      const agencyId = (req.query.agencyId as string) || userData?.agencyId;
+
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden consultar la configuración de WhatsApp" });
+      }
+      if (userData?.role !== "master" && userData?.agencyId !== agencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(agencyId);
+      const agencySnap = await agencyDocRef.get();
+      if (!agencySnap.exists) {
+        return res.status(404).json({ error: "Agencia no encontrada" });
+      }
+      const whatsappConfig = agencySnap.data()?.whatsappConfig || {};
+
+      const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
+      const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
+
+      return res.json({
+        phoneNumberId: whatsappConfig.phoneNumberId || "",
+        accountId: whatsappConfig.accountId || "",
+        hasAccessToken: !!accessToken,
+        maskedAccessToken: accessToken ? "••••••••" + accessToken.slice(-4) : null,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/agencies/whatsapp-config", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      const decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const userData = userDoc.data();
+      const { agencyId: bodyAgencyId, phoneNumberId, accountId, accessToken } = req.body;
+      const targetAgencyId = bodyAgencyId || userData?.agencyId;
+
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden configurar WhatsApp" });
+      }
+      if (userData?.role !== "master" && userData?.agencyId !== targetAgencyId) {
+        return res.status(403).json({ error: "No tienes permiso para esta agencia" });
+      }
+      if (!phoneNumberId || !accountId) {
+        return res.status(400).json({ error: "Faltan phoneNumberId o accountId" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(targetAgencyId);
+      await agencyDocRef.set({
+        whatsappConfig: {
+          phoneNumberId,
+          accountId,
+          updatedAt: FieldValue.serverTimestamp(),
+          // Legacy field: tokens used to be stored here in plaintext, readable by
+          // any authenticated user. Always strip it — the token now lives in the
+          // secrets subcollection, reachable only via the Admin SDK.
+          accessToken: FieldValue.delete(),
+        }
+      }, { merge: true });
+
+      if (accessToken) {
+        await agencyDocRef.collection("secrets").doc("whatsapp").set({
+          accessToken,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/meta/send-template", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -625,23 +924,62 @@ async function startServer() {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
 
+      // Any user attached to an agency may send (sellers share vehicles with their
+      // own clients); the credentials used are always their own agency's.
       const userData = userDoc.data();
-      if (userData?.role !== "master" && userData?.role !== "admin") {
-        return res.status(403).json({ error: "Se requiere rol admin o master" });
+      if (!userData?.agencyId || userData.agencyId === "unassigned") {
+        return res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
       }
 
-      const { to, templateName, variables } = req.body;
-      const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-      const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
-
-      if (!META_ACCESS_TOKEN || !PHONE_NUMBER_ID) {
-        // Return success even if not configured, for demo purposes, so it doesn't break
-        console.warn("WhatsApp API not configured, simulating success");
-        return res.json({ success: true, simulated: true });
+      const { to, templateName, variables, agencyId: bodyAgencyId } = req.body;
+      if (!to || !templateName) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos (to, templateName)" });
       }
 
-      console.log(`Sending WhatsApp template ${templateName} to ${to}`);
-      res.json({ success: true, simulated: true });
+      const targetAgencyId = (userData?.role === "master" && bodyAgencyId) ? bodyAgencyId : userData?.agencyId;
+      if (!targetAgencyId) {
+        return res.status(400).json({ error: "No se pudo determinar la agencia" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(targetAgencyId);
+      const agencySnap = await agencyDocRef.get();
+      if (!agencySnap.exists) {
+        return res.status(404).json({ error: "Agencia no encontrada" });
+      }
+      const phoneNumberId = agencySnap.data()?.whatsappConfig?.phoneNumberId;
+
+      const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
+      const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
+
+      if (!phoneNumberId || !accessToken) {
+        return res.status(400).json({ error: "WhatsApp no está configurado para esta agencia. Ve a Integraciones para conectarlo." });
+      }
+
+      const metaRes = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: "es_MX" },
+            ...(variables && variables.length ? { components: [{ type: "body", parameters: variables }] } : {}),
+          },
+        }),
+      });
+
+      const metaData: any = await metaRes.json();
+      if (!metaRes.ok) {
+        console.error("Meta API error:", metaData);
+        return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje de WhatsApp" });
+      }
+
+      res.json({ success: true, messageId: metaData?.messages?.[0]?.id });
     } catch (e: any) {
       console.error(e);
       res.status(500).json({ error: e.message || "Error al enviar plantilla" });
@@ -679,25 +1017,25 @@ async function startServer() {
         }
         for (const entry of body.entry) {
           const entryId = entry.id; // page_id for Messenger, waba_id for WhatsApp
-          let agencyId = "DEFAULT_AGENCY";
-          
-          // Consultar la agencia correspondiente al page_id o waba_id
-          const agenciesRef = adminDb.collection("agencies");
-          // Para soportar múltiples agencias, buscamos cuál tiene este facebookPageId
-          const q = agenciesRef.where("facebookPageId", "==", entryId);
-          const snapshot = await q.get();
-          if (!snapshot.empty) {
-            agencyId = snapshot.docs[0].id;
-          } else if (entryId === "604166786115980") {
-             // Fallback default for testing specifically asked by user
-             agencyId = "k77PpUc4SKDVCps2qSDw";
-          }
 
-          // For WhatsApp
+          // For WhatsApp: resolve the owning agency by the phone_number_id that
+          // received the message (the value configured per-agency in Integraciones),
+          // not by the WABA id — a single WhatsApp Business Account can host
+          // multiple phone numbers belonging to different agencies.
           if (body.object === "whatsapp_business_account" && entry.changes) {
             for (const change of entry.changes) {
               const value = change.value;
               if (value && value.messages && value.messages[0]) {
+                const phoneNumberId = value.metadata?.phone_number_id;
+                const agenciesRef = adminDb.collection("agencies");
+                const q = agenciesRef.where("whatsappConfig.phoneNumberId", "==", phoneNumberId);
+                const snapshot = await q.get();
+                if (snapshot.empty) {
+                  console.warn(`No agency configured for WhatsApp phone_number_id ${phoneNumberId}, skipping message`);
+                  continue;
+                }
+                const agencyId = snapshot.docs[0].id;
+
                 const phone = value.contacts?.[0]?.wa_id || "";
                 const name =
                   value.contacts?.[0]?.profile?.name || "Unknown WA Lead";
@@ -709,8 +1047,16 @@ async function startServer() {
               }
             }
           }
-          // For Messenger
+          // For Messenger: resolve the owning agency by the Facebook Page id.
           if (body.object === "page" && entry.messaging) {
+            const agenciesRef = adminDb.collection("agencies");
+            const q = agenciesRef.where("facebookPageId", "==", entryId);
+            const snapshot = await q.get();
+            if (snapshot.empty) {
+              console.warn(`No agency configured for Messenger page ${entryId}, skipping messages`);
+              continue;
+            }
+            const agencyId = snapshot.docs[0].id;
             for (const event of entry.messaging) {
               const senderId = event.sender?.id || "";
               const text = event.message?.text || "";
@@ -935,11 +1281,23 @@ Return a JSON array of recommendation objects with the following schema:
   
 
   // === Public API for Virtual Assistants ===
+  // El inventario publico se consulta en bucle desde el navegador para mostrar
+  // el inventario compartido entre agencias. Se guarda la respuesta un rato
+  // para que un cliente insistente no se traduzca en lecturas repetidas de
+  // Firestore: el inventario de otra agencia no cambia de un segundo a otro.
+  const CACHE_INVENTARIO_MS = 60 * 1000;
+  const cacheInventario = new Map<string, { momento: number; vehicles: any[] }>();
+
   app.get("/api/public/v1/inventory", async (req, res) => {
     try {
       const agencyId = req.query.agencyId as string;
       if (!agencyId) {
         return res.status(400).json({ error: "agencyId is required" });
+      }
+
+      const guardado = cacheInventario.get(agencyId);
+      if (guardado && Date.now() - guardado.momento < CACHE_INVENTARIO_MS) {
+        return res.json({ vehicles: guardado.vehicles, cached: true });
       }
 
       const adminDb = getAdminDb();
@@ -971,6 +1329,7 @@ Return a JSON array of recommendation objects with the following schema:
           ...(data.description !== undefined ? { description: data.description } : {})
         };
       });
+      cacheInventario.set(agencyId, { momento: Date.now(), vehicles });
       res.json({ vehicles });
     } catch (e: any) {
       console.error("Error fetching public inventory:", e);
@@ -1021,6 +1380,25 @@ Return a JSON array of recommendation objects with the following schema:
         updatedAt: FieldValue.serverTimestamp()
       };
       
+      // Si ya tenemos a esa persona, se le completa lo que falte en vez de
+      // crearle otra ficha. Un mismo cliente que vuelve a escribir no es un
+      // cliente nuevo.
+      const yaEstaba = await buscarContactoPorTelefono(adminDb, agencyId, phone);
+      if (yaEstaba) {
+        const relleno = camposQueFaltan(yaEstaba.data() || {}, {
+          name, email: email || "", vehicle: vehicle || "",
+        });
+        await yaEstaba.ref.set(
+          { ...relleno, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        return res.status(200).json({
+          success: true,
+          leadId: yaEstaba.id,
+          yaExistia: true,
+        });
+      }
+
       const docRef = await adminDb.collection("clients").add(newClient);
 
       res.status(201).json({ success: true, leadId: docRef.id });
@@ -1059,23 +1437,20 @@ Return a JSON array of recommendation objects with the following schema:
         return res.status(403).json({ error: "No tienes permiso para esta agencia" });
       }
 
-      const agencyDocRef = adminDb.collection("agencies").doc(agencyId);
-      const agencySnap = await agencyDocRef.get();
+      const agencySnap = await adminDb.collection("agencies").doc(agencyId).get();
       if (!agencySnap.exists) {
         return res.status(404).json({ error: "Agencia no encontrada" });
       }
-      const agencyData = agencySnap.data();
-      const apiKey = agencyData?.mcpApiKey || null;
 
-      if (apiKey) {
+      const { clave, creada } = await leerClaveMcp(adminDb, agencyId);
+      if (clave) {
         return res.json({
           hasKey: true,
-          maskedKey: "••••••••" + apiKey.slice(-4),
-          createdAt: agencyData?.mcpApiKeyCreatedAt || null
+          maskedKey: "••••••••" + clave.slice(-4),
+          createdAt: creada
         });
-      } else {
-        return res.json({ hasKey: false, maskedKey: null });
       }
+      return res.json({ hasKey: false, maskedKey: null });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -1113,10 +1488,7 @@ Return a JSON array of recommendation objects with the following schema:
 
       const newKey = `erewere_mcp_` + crypto.randomBytes(24).toString("hex");
 
-      await adminDb.collection("agencies").doc(targetAgencyId).update({
-        mcpApiKey: newKey,
-        mcpApiKeyCreatedAt: FieldValue.serverTimestamp()
-      });
+      await guardarClaveMcp(adminDb, targetAgencyId, newKey);
 
       return res.json({
         success: true,
@@ -1128,6 +1500,739 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // === Respaldo completo de la base (exclusivo del rol master) ===
+  // Descarga un JSON con todas las colecciones de todas las agencias.
+  app.get("/api/admin/backup", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (tokenErr) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Usuario no encontrado" });
+      }
+      const requester = userDoc.data() || {};
+      if (requester.role !== "master") {
+        return res.status(403).json({ error: "Solo el usuario master puede descargar el respaldo" });
+      }
+
+      const collectionNames = [
+        "agencies",
+        "clients",
+        "deals",
+        "vehicles",
+        "vehicleExpenses",
+        "tasks",
+        "notes",
+        "files",
+        "agency_tags",
+        "users",
+      ];
+
+      const backup: Record<string, any[]> = {};
+
+      for (const name of collectionNames) {
+        const snapshot = await adminDb.collection(name).get();
+        backup[name] = snapshot.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+      }
+
+      // La clave MCP no debe viajar dentro del respaldo
+      backup.agencies = backup.agencies.map((a: any) => {
+        const { mcpApiKey, ...rest } = a;
+        return rest;
+      });
+
+      const totals: Record<string, number> = {};
+      for (const key of Object.keys(backup)) {
+        totals[key] = backup[key].length;
+      }
+
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: decodedToken.uid,
+        scope: "todas las agencias",
+        totals,
+        data: backup,
+      };
+
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="respaldo-crm-${stamp}.json"`
+      );
+      return res.status(200).send(JSON.stringify(payload, null, 2));
+    } catch (err: any) {
+      console.error("Backup error:", err);
+      return res.status(500).json({ error: err.message || "Error generando el respaldo" });
+    }
+  });
+
+  // === Fase 1 de la separacion contacto/trato: crear los tratos faltantes ===
+  // Hoy muchos contactos guardan dentro de si mismos los datos de su trato.
+  // Esta rutina crea el documento correspondiente en "deals" cuando no existe,
+  // sin modificar ni borrar nada del contacto.
+  //
+  // Por defecto corre en modo simulacion. Solo escribe si se envia
+  // { "apply": true } en el cuerpo de la peticion.
+  // === Separacion de los datos financieros del vehiculo ===
+  // Copia el precio de compra a la coleccion vehicleFinancials, que se puede
+  // cerrar por reglas de forma independiente. Firestore no sabe ocultar campos
+  // sueltos de un documento: o deja leer el vehiculo entero, o no lo deja. Por
+  // eso, mientras el costo viva dentro del vehiculo, ocultarlo en pantalla es
+  // solo cosmetico.
+  //
+  // Esta rutina no borra nada del vehiculo. La limpieza es un paso posterior,
+  // una vez verificado que la aplicacion lee del lugar nuevo.
+  // Revision de usuarios: compara cada ficha del CRM contra la cuenta real de
+  // la autenticacion.
+  //
+  // Son dos cosas distintas y desde la base de datos no se distinguen: la
+  // ficha guarda el rol y la agencia, la cuenta es con lo que se inicia
+  // sesion. Al entrar se busca la ficha cuyo identificador coincide con el de
+  // la cuenta. Si una cuenta se borra y se vuelve a crear, la nueva recibe
+  // otro identificador y la ficha anterior se queda ahi, visible en la lista
+  // de usuarios, aparentando un acceso que ya no existe.
+  //
+  // Solo lee. No modifica ni borra nada.
+  // Comprobacion final de toda la plataforma: que ningun vehiculo, de ninguna
+  // agencia, siga guardando el precio de compra dentro de si mismo.
+  //
+  // Las migraciones se corren agencia por agencia, asi que es facil dejar una
+  // sin hacer y creer que el costo esta protegido cuando en esa agencia sigue
+  // siendo legible por cualquiera que pueda ver el inventario. Solo lee.
+  // Panel de control de la plataforma.
+  //
+  // Todo se calcula aqui, con el SDK de administrador, y al navegador solo
+  // viajan numeros. Asi el master puede ver como va cada agencia sin que su
+  // sesion tenga que leer los contactos, los tratos ni el inventario de nadie:
+  // saber cuantos hay no exige poder verlos.
+  //
+  // Se usan conteos agregados en vez de traer los documentos. Firestore los
+  // cobra a una lectura por cada mil, de modo que el panel entero cuesta unas
+  // pocas lecturas en lugar de una por registro.
+  app.get("/api/admin/platform-stats", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Se requiere rol master" });
+      }
+
+      const agenciasSnap = await adminDb.collection("agencies").get();
+
+      const contar = async (coleccion: string, agencyId: string) => {
+        try {
+          const agg = await adminDb
+            .collection(coleccion)
+            .where("agencyId", "==", agencyId)
+            .count()
+            .get();
+          return agg.data().count as number;
+        } catch {
+          return -1; // -1 distingue "fallo el conteo" de "hay cero"
+        }
+      };
+
+      const ahora = Date.now();
+      const agencias: any[] = [];
+
+      for (const doc of agenciasSnap.docs) {
+        const a: any = doc.data() || {};
+
+        const [usuarios, vehiculos, contactos, tratos] = await Promise.all([
+          contar("users", doc.id),
+          contar("vehicles", doc.id),
+          contar("clients", doc.id),
+          contar("deals", doc.id),
+        ]);
+
+        // Estado real de acceso, con la misma logica que usa la aplicacion:
+        // la fecha de fin de prueba manda sobre la de creacion.
+        const finPrueba = a.trialEndsAt ? new Date(a.trialEndsAt).getTime() : null;
+        const enPrueba = finPrueba !== null && finPrueba > ahora;
+        const estado = a.hasFreeAccess
+          ? "cortesia"
+          : a.subscriptionStatus === "active"
+          ? "activa"
+          : enPrueba
+          ? "prueba"
+          : "sin acceso";
+
+        // Cuantos usuarios paga contra cuantos tiene. Stripe fija la cantidad
+        // al contratar y nadie la actualiza despues, asi que una agencia que
+        // crece sigue pagando por los que tenia el primer dia.
+        let usuariosFacturados: number | null = null;
+        if (a.stripeCustomerId) {
+          try {
+            const subs = await getStripe().subscriptions.list({
+              customer: a.stripeCustomerId,
+              status: "active",
+              limit: 1,
+            });
+            const linea = subs.data[0]?.items?.data?.[0];
+            if (linea) usuariosFacturados = linea.quantity ?? null;
+          } catch (e) {
+            usuariosFacturados = null;
+          }
+        }
+
+        agencias.push({
+          id: doc.id,
+          nombre: a.name || doc.id,
+          estado,
+          diasDePruebaRestantes:
+            enPrueba && finPrueba ? Math.ceil((finPrueba - ahora) / 86400000) : null,
+          usuarios,
+          usuariosFacturados,
+          sinFacturar:
+            usuariosFacturados !== null && usuarios > usuariosFacturados
+              ? usuarios - usuariosFacturados
+              : 0,
+          vehiculos,
+          contactos,
+          tratos,
+        });
+      }
+
+      agencias.sort((x, y) => y.usuarios - x.usuarios);
+
+      const activas = agencias.filter((a) => a.estado === "activa");
+      const totalSinFacturar = agencias.reduce((s, a) => s + a.sinFacturar, 0);
+      const facturados = agencias.reduce((s, a) => s + (a.usuariosFacturados || 0), 0);
+
+      res.json({
+        generadoEl: new Date().toISOString(),
+        precioPorUsuario: Number(process.env.VITE_STRIPE_PRICE_AMOUNT) || 199,
+        totales: {
+          agencias: agencias.length,
+          activas: activas.length,
+          enPrueba: agencias.filter((a) => a.estado === "prueba").length,
+          cortesia: agencias.filter((a) => a.estado === "cortesia").length,
+          sinAcceso: agencias.filter((a) => a.estado === "sin acceso").length,
+          usuarios: agencias.reduce((s, a) => s + Math.max(a.usuarios, 0), 0),
+          usuariosFacturados: facturados,
+          usuariosSinFacturar: totalSinFacturar,
+          vehiculos: agencias.reduce((s, a) => s + Math.max(a.vehiculos, 0), 0),
+          contactos: agencias.reduce((s, a) => s + Math.max(a.contactos, 0), 0),
+          tratos: agencias.reduce((s, a) => s + Math.max(a.tratos, 0), 0),
+        },
+        agencias,
+      });
+    } catch (e: any) {
+      console.error("Platform stats error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
+  // Contactos repetidos dentro de una agencia.
+  //
+  // La aplicacion los esconde: deduplicateClients descarta, en catorce
+  // pantallas, cualquier contacto cuyo nombre ya haya aparecido. Eso deja tres
+  // problemas fuera de la vista. Dos personas distintas que se llamen igual
+  // desaparecen una a la otra. La copia que se muestra es la del identificador
+  // menor, no la que tiene la historia, de modo que se puede estar editando la
+  // equivocada. Y como no se ven, se siguen creando.
+  //
+  // Esta revision es para el administrador de su propia agencia, no para el
+  // master: listarle nombres de clientes reabriria el acceso que se le quito.
+  // Solo lee.
+  app.get("/api/admin/audit-duplicate-clients", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || llamante.role !== "admin") {
+        return res.status(403).json({
+          error: "Solo el administrador de una agencia puede revisar sus contactos",
+        });
+      }
+      const agencyId = llamante.agencyId;
+      if (!agencyId || agencyId === "unassigned") {
+        return res.status(400).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+
+      const porAgencia = (col: string) =>
+        adminDb.collection(col).where("agencyId", "==", agencyId).get();
+
+      const [clientes, tratos, tareas, notas] = await Promise.all([
+        porAgencia("clients"),
+        porAgencia("deals"),
+        porAgencia("tasks"),
+        porAgencia("notes"),
+      ]);
+
+      const contarPorCliente = (snap: any) => {
+        const mapa = new Map<string, number>();
+        snap.docs.forEach((d: any) => {
+          const cid = d.data().clientId;
+          if (cid) mapa.set(cid, (mapa.get(cid) || 0) + 1);
+        });
+        return mapa;
+      };
+      const nTratos = contarPorCliente(tratos);
+      const nTareas = contarPorCliente(tareas);
+      const nNotas = contarPorCliente(notas);
+
+      // Se agrupa con el mismo criterio con el que la pantalla los esconde:
+      // el nombre en minusculas y sin espacios sobrantes.
+      const grupos = new Map<string, any[]>();
+      clientes.docs.forEach((d: any) => {
+        const c = d.data() || {};
+        const clave = String(c.name || "").trim().toLowerCase();
+        if (!clave) return;
+        const lista = grupos.get(clave) || [];
+        lista.push({
+          id: d.id,
+          nombre: c.name,
+          telefono: c.phone || null,
+          correo: c.email || null,
+          creado: c.createdAt || null,
+          tratos: nTratos.get(d.id) || 0,
+          tareas: nTareas.get(d.id) || 0,
+          notas: nNotas.get(d.id) || 0,
+        });
+        grupos.set(clave, lista);
+      });
+
+      const repetidos: any[] = [];
+      let copiasDeMas = 0;
+      let copiasConHistoriaOcultas = 0;
+
+      grupos.forEach((copias) => {
+        if (copias.length < 2) return;
+        copiasDeMas += copias.length - 1;
+
+        // Firestore devuelve por identificador ascendente cuando no se pide
+        // otro orden, asi que la copia visible hoy es la del id menor.
+        const visible = [...copias].sort((a, b) => (a.id < b.id ? -1 : 1))[0].id;
+
+        const conActividad = copias.map((c) => ({
+          ...c,
+          actividad: c.tratos + c.tareas + c.notas,
+          esLaQueVes: c.id === visible,
+        }));
+        conActividad.sort((a, b) => b.actividad - a.actividad);
+
+        // Lo que importa es si hay TRATOS fuera de la copia visible. Antes se
+        // comparaba la suma de tratos, tareas y notas, y unas cuantas notas en
+        // la copia visible tapaban una venta escondida en otra.
+        const tratosOcultos = conActividad
+          .filter((c) => !c.esLaQueVes)
+          .reduce((s, c) => s + c.tratos, 0);
+        if (tratosOcultos > 0) copiasConHistoriaOcultas++;
+
+        repetidos.push({
+          nombre: copias[0].nombre,
+          copias: conActividad,
+          tratosOcultos,
+        });
+      });
+
+      repetidos.sort((a, b) => b.copias.length - a.copias.length);
+
+      res.json({
+        agencia: agencyId,
+        resumen: {
+          contactosTotales: clientes.size,
+          nombresRepetidos: repetidos.length,
+          copiasDeMas,
+          casosConTratosEnCopiasOcultas: copiasConHistoriaOcultas,
+        },
+        repetidos,
+      });
+    } catch (e: any) {
+      console.error("Audit duplicate clients error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
+  // Fusionar los contactos repetidos de una agencia.
+  //
+  // Sobrevive la copia que el CRM muestra hoy -- la del identificador menor --
+  // porque es la que el equipo abre y edita. Todo lo que cuelga de las demas
+  // (tratos, tareas, notas y archivos) se le reasigna antes de borrarlas: hay
+  // tratos enteros colgando de contactos que no aparecen en pantalla, y
+  // borrarlos sin mas seria perder ventas.
+  //
+  // Los campos vacios de la que sobrevive se completan con lo que tengan las
+  // otras, nunca al reves: nada de lo que ya tiene se sobrescribe.
+  app.post("/api/admin/merge-duplicate-clients", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || llamante.role !== "admin") {
+        return res.status(403).json({ error: "Solo el administrador de una agencia puede fusionar sus contactos" });
+      }
+      const agencyId = llamante.agencyId;
+      if (!agencyId || agencyId === "unassigned") {
+        return res.status(400).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+
+      const apply = req.body?.apply === true;
+      const VINCULADAS = ["deals", "tasks", "notes", "files"];
+      // Solo se completan datos de la persona. Una lista de lo permitido, no de
+      // lo prohibido: con una lista negra, cualquier campo nuevo que aparezca
+      // en el futuro se copiaria sin que nadie lo haya decidido.
+      //
+      // Queda fuera todo lo que es estado y no identidad. lostReason y lostAt
+      // marcan al contacto como perdido; visibility decide quien puede verlo;
+      // vehicleId le asigna un auto, que pudo haberse quitado a proposito;
+      // status, sellerId y saleDetails describen la operacion, no a la persona.
+      const DATOS_DE_LA_PERSONA = new Set([
+        "phone", "email", "address", "street", "exteriorNumber",
+        "neighborhood", "city", "zipCode", "organization", "wantedVehicle",
+      ]);
+
+      const porAgencia = (col: string) =>
+        adminDb.collection(col).where("agencyId", "==", agencyId).get();
+
+      const [clientes, ...vinculadas] = await Promise.all([
+        porAgencia("clients"),
+        ...VINCULADAS.map(porAgencia),
+      ]);
+
+      const grupos = new Map<string, any[]>();
+      clientes.docs.forEach((d: any) => {
+        const clave = String((d.data() || {}).name || "").trim().toLowerCase();
+        if (!clave) return;
+        const lista = grupos.get(clave) || [];
+        lista.push(d);
+        grupos.set(clave, lista);
+      });
+
+      const detalle: any[] = [];
+      let gruposFusionados = 0;
+      let registrosMovidos = 0;
+      let copiasBorradas = 0;
+      let camposCompletados = 0;
+
+      for (const [, docs] of grupos) {
+        if (docs.length < 2) continue;
+        gruposFusionados++;
+
+        const ordenados = [...docs].sort((a, b) => (a.id < b.id ? -1 : 1));
+        const sobrevive = ordenados[0];
+        const sobran = ordenados.slice(1);
+        const idsSobran = new Set(sobran.map((d) => d.id));
+
+        // Que se le reasigna
+        const movimientos: Record<string, number> = {};
+        const pendientes: { ref: any }[] = [];
+        VINCULADAS.forEach((col, i) => {
+          const encontrados = vinculadas[i].docs.filter((d: any) => idsSobran.has(d.data().clientId));
+          if (encontrados.length) movimientos[col] = encontrados.length;
+          encontrados.forEach((d: any) => pendientes.push({ ref: d.ref }));
+        });
+
+        // Que campos vacios se le completan
+        const datosSobrevive = sobrevive.data() || {};
+        const completar: Record<string, any> = {};
+        for (const otro of sobran) {
+          for (const [k, v] of Object.entries(otro.data() || {})) {
+            if (!DATOS_DE_LA_PERSONA.has(k)) continue;
+            const actual = datosSobrevive[k];
+            const vacio = actual === undefined || actual === null || actual === "";
+            const aporta = v !== undefined && v !== null && v !== "";
+            if (vacio && aporta && completar[k] === undefined) completar[k] = v;
+          }
+        }
+
+        if (apply) {
+          for (const p of pendientes) {
+            await p.ref.update({ clientId: sobrevive.id });
+            registrosMovidos++;
+          }
+          if (Object.keys(completar).length) {
+            await sobrevive.ref.set(completar, { merge: true });
+            camposCompletados += Object.keys(completar).length;
+          }
+          for (const otro of sobran) {
+            await otro.ref.delete();
+            copiasBorradas++;
+          }
+        } else {
+          registrosMovidos += pendientes.length;
+          camposCompletados += Object.keys(completar).length;
+          copiasBorradas += sobran.length;
+        }
+
+        detalle.push({
+          nombre: datosSobrevive.name,
+          texto:
+            `se queda ${sobrevive.id} · se borran ${sobran.length} copias · ` +
+            `se le pasan ${Object.entries(movimientos).map(([c, n]) => `${n} de ${c}`).join(", ") || "ningún registro"}` +
+            (Object.keys(completar).length ? ` · se le completan: ${Object.keys(completar).join(", ")}` : ""),
+        });
+      }
+
+      res.json({
+        modo: apply ? "APLICADO" : "SIMULACION (no se escribió nada)",
+        agencia: agencyId,
+        resumen: {
+          nombresRepetidos: gruposFusionados,
+          registrosReasignados: registrosMovidos,
+          camposCompletados,
+          copiasBorradas,
+        },
+        detalle,
+      });
+    } catch (e: any) {
+      console.error("Merge duplicate clients error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
+  app.get("/api/admin/audit-costs", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists || userDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Se requiere rol master" });
+      }
+
+      const [vehiculos, financieros, agencias] = await Promise.all([
+        adminDb.collection("vehicles").get(),
+        adminDb.collection("vehicleFinancials").get(),
+        adminDb.collection("agencies").get(),
+      ]);
+
+      const nombreAgencia = new Map<string, string>();
+      agencias.docs.forEach((d: any) => nombreAgencia.set(d.id, d.data().name || d.id));
+
+      const conCopia = new Set(financieros.docs.map((d: any) => d.id));
+
+      // Por agencia: cuantos siguen con el campo dentro y cuantos no tienen
+      // copia en ninguna parte.
+      const porAgencia = new Map<string, { conCampo: number; sinCopia: number; total: number }>();
+
+      vehiculos.docs.forEach((d: any) => {
+        const v = d.data() || {};
+        const ag = v.agencyId || "(sin agencia)";
+        const acc = porAgencia.get(ag) || { conCampo: 0, sinCopia: 0, total: 0 };
+        acc.total++;
+        if (v.purchasePrice !== undefined && v.purchasePrice !== null) acc.conCampo++;
+        if (!conCopia.has(d.id)) acc.sinCopia++;
+        porAgencia.set(ag, acc);
+      });
+
+      const detalle: any[] = [];
+      let totalConCampo = 0;
+
+      porAgencia.forEach((acc, ag) => {
+        totalConCampo += acc.conCampo;
+        const nombre = nombreAgencia.get(ag) || ag;
+        if (acc.conCampo > 0) {
+          detalle.push({
+            nombre,
+            texto: `FALTA MIGRAR — ${acc.conCampo} de ${acc.total} vehiculos siguen con el costo dentro. Correr las dos migraciones en esta agencia (${ag}).`,
+          });
+        } else {
+          detalle.push({
+            nombre,
+            texto: `limpia — ${acc.total} vehiculos, ninguno guarda el costo dentro de si mismo`,
+          });
+        }
+      });
+
+      res.json({
+        modo: totalConCampo === 0
+          ? "TODO LIMPIO (solo lectura)"
+          : "FALTAN AGENCIAS POR MIGRAR (solo lectura)",
+        agencia: "todas",
+        resumen: {
+          agenciasConVehiculos: porAgencia.size,
+          vehiculosTotales: vehiculos.size,
+          vehiculosQueAunGuardanElCosto: totalConCampo,
+          registrosDeCostoAparte: financieros.size,
+        },
+        detalle,
+      });
+    } catch (e: any) {
+      console.error("Audit costs error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
+  app.get("/api/admin/audit-users", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.split("Bearer ")[1]);
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!llamanteDoc.exists || llamanteDoc.data()?.role !== "master") {
+        return res.status(403).json({ error: "Se requiere rol master" });
+      }
+
+      const fichas = await adminDb.collection("users").get();
+
+      // Un correo puede repetirse en varias fichas; su cuenta se busca una vez.
+      const correos = [...new Set(fichas.docs.map((d) => d.data().email).filter(Boolean))];
+      const uidPorCorreo = new Map<string, string | null>();
+      for (const correo of correos) {
+        try {
+          const cuenta = await getAuth(adminApp).getUserByEmail(correo);
+          uidPorCorreo.set(correo, cuenta.uid);
+        } catch {
+          uidPorCorreo.set(correo, null);
+        }
+      }
+
+      let correctas = 0;
+      const problemas: any[] = [];
+      const avisos: any[] = [];
+
+      for (const d of fichas.docs) {
+        const datos = d.data();
+        const uidVivo = datos.email ? uidPorCorreo.get(datos.email) : null;
+
+        if (uidVivo && uidVivo === d.id) {
+          correctas++;
+          continue;
+        }
+
+        // Una ficha sin correo no se puede buscar por correo, pero su propio
+        // identificador si puede corresponder a una cuenta real. Sin esta
+        // comprobacion se reportaba como huerfana sin haberlo verificado.
+        let cuentaPorUid: string | null = null;
+        try {
+          const cuenta = await getAuth(adminApp).getUser(d.id);
+          cuentaPorUid = cuenta.email || "(cuenta sin correo)";
+        } catch {
+          cuentaPorUid = null;
+        }
+
+        const comun = `ficha ${d.id} · rol ${datos.role || "?"} · agencia ${datos.agencyId || "?"}`;
+
+        // Esta ficha esta sana; se lista solo para dejar ver de quien es. No
+        // se cuenta como problema, o los totales no cuadrarian.
+        if (cuentaPorUid && !datos.email) {
+          correctas++;
+          avisos.push({
+            nombre: datos.name || d.id,
+            texto: `FICHA SIN CORREO — ${comun} · la cuenta existe y su correo es ${cuentaPorUid}`,
+          });
+          continue;
+        }
+
+        problemas.push({
+          nombre: datos.name || datos.email || d.id,
+          texto: uidVivo
+            ? `IDENTIFICADOR VIEJO — ${comun} · ${datos.email} · la cuenta viva es ${uidVivo}`
+            : `SIN CUENTA — ${comun} · ${datos.email || "sin correo"}`,
+        });
+      }
+
+      res.json({
+        modo: "REVISION (solo lectura)",
+        agencia: "todas",
+        resumen: {
+          fichasTotales: fichas.size,
+          fichasCorrectas: correctas,
+          fichasConProblema: problemas.length,
+        },
+        detalle: [...problemas, ...avisos],
+      });
+    } catch (err: any) {
+      console.error("Audit Users Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
   // === Model Context Protocol (MCP) Server Implementation ===
   const sseSessions = new Map<string, { res: express.Response; agencyId: string }>();
 
@@ -1148,20 +2253,42 @@ Return a JSON array of recommendation objects with the following schema:
     }
 
     try {
-      const agenciesRef = db.collection("agencies");
-      const q = agenciesRef.where("mcpApiKey", "==", apiKey.trim());
-      const snapshot = await q.get();
+      const limpia = apiKey.trim();
 
-      if (snapshot.empty) {
+      // Sitio actual de las claves.
+      const enSecretos = await db
+        .collection("agencySecrets")
+        .where("mcpApiKey", "==", limpia)
+        .limit(1)
+        .get();
+      if (!enSecretos.empty) {
+        const id = enSecretos.docs[0].id;
+        const agencia = await db.collection("agencies").doc(id).get();
+        return {
+          agencyId: id,
+          agencyName: (agencia.exists && agencia.data()?.name) || "Agencia",
+          mcpApiKey: limpia
+        };
+      }
+
+      // Claves que todavia no se han trasladado: se atienden y se mueven, de
+      // modo que ninguna conexion se cae por el cambio de sitio.
+      const enAgencias = await db
+        .collection("agencies")
+        .where("mcpApiKey", "==", limpia)
+        .limit(1)
+        .get();
+      if (enAgencias.empty) {
         return null;
       }
 
-      const agencyDoc = snapshot.docs[0];
+      const agencyDoc = enAgencias.docs[0];
       const data = agencyDoc.data();
+      await guardarClaveMcp(db, agencyDoc.id, limpia, data.mcpApiKeyCreatedAt);
       return {
         agencyId: agencyDoc.id,
         agencyName: data.name || "Agencia",
-        mcpApiKey: data.mcpApiKey || apiKey.trim()
+        mcpApiKey: limpia
       };
     } catch (err) {
       console.error("Error authenticating MCP API key:", err);
@@ -1373,7 +2500,9 @@ Return a JSON array of recommendation objects with the following schema:
           .where("agencyId", "==", targetAgencyId)
           .where("status", "==", "available");
         const snapshot = await q.get();
-        const vehicles = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        // El id del documento va al final para que no lo pise un campo "id"
+        // guardado dentro de los datos.
+        const vehicles = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
 
         return {
           jsonrpc: "2.0",
@@ -1396,7 +2525,9 @@ Return a JSON array of recommendation objects with the following schema:
           .where("agencyId", "==", targetAgencyId)
           .limit(limitCount);
         const snapshot = await q.get();
-        const clients = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        // El id del documento va al final para que no lo pise un campo "id"
+        // guardado dentro de los datos.
+        const clients = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
 
         return {
           jsonrpc: "2.0",
@@ -1434,7 +2565,17 @@ Return a JSON array of recommendation objects with the following schema:
           updatedAt: FieldValue.serverTimestamp()
         };
 
-        const docRef = await db.collection("clients").add(newClient);
+        const yaEstaba = await buscarContactoPorTelefono(db, targetAgencyId, phone);
+        if (yaEstaba) {
+          const relleno = camposQueFaltan(yaEstaba.data() || {}, {
+            name, email: email || "", vehicle: vehicle || "",
+          });
+          await yaEstaba.ref.set(
+            { ...relleno, updatedAt: FieldValue.serverTimestamp() },
+            { merge: true }
+          );
+        }
+        const docRef = yaEstaba || (await db.collection("clients").add(newClient));
 
         return {
           jsonrpc: "2.0",
@@ -1443,7 +2584,16 @@ Return a JSON array of recommendation objects with the following schema:
             content: [
               {
                 type: "text",
-                text: JSON.stringify({ success: true, leadId: docRef.id, message: `Lead '${name}' creado correctamente con ID ${docRef.id}` })
+                // El asistente debe saber si creo a alguien o si esa persona
+                // ya estaba, para no anunciar un alta que no ocurrio.
+                text: JSON.stringify({
+                  success: true,
+                  leadId: docRef.id,
+                  yaExistia: !!yaEstaba,
+                  message: yaEstaba
+                    ? `'${name}' ya estaba registrado con ese teléfono; se actualizó su ficha (ID ${docRef.id}) en vez de crear otra.`
+                    : `Lead '${name}' creado correctamente con ID ${docRef.id}`
+                })
               }
             ]
           }

@@ -12,7 +12,6 @@ import { ShareVehicleModal } from '../../components/ShareVehicleModal';
 import { getVehicleMatches } from '../Inventory';
 import { useSharedInventoryMatches } from '../../hooks/useSharedInventoryMatches';
 import { VehicleDetailModal } from '../../components/VehicleDetailModal';
-import { deduplicateClients } from '../../lib/clientUtils';
 import { motion, PanInfo } from "motion/react";
 
 export function MobileInventory() {
@@ -93,7 +92,7 @@ export function MobileInventory() {
 
     const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
       const rawClients = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Client));
-      setClients(deduplicateClients(rawClients));
+      setClients(rawClients);
     });
 
     return () => {

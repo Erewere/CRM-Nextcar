@@ -24,6 +24,7 @@ import {
   TrendingUp,
   MessageSquare,
   DollarSign,
+  Building2,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -38,27 +39,12 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
 import { NextcarLogo } from "./NextcarLogo";
-
-const safeDate = (val: any) => {
-  if (!val) return new Date();
-  if (typeof val.toDate === 'function') return val.toDate();
-  if (val.seconds) return new Date(val.seconds * 1000);
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? new Date() : d;
-};
+import { getTrialDaysLeft } from "../lib/subscription";
+import { NOMBRE_ROL, type Rol } from "../lib/permissions";
 
 export function Layout() {
   const { userData, agencyData } = useAuth();
-  let trialDaysLeft = null;
-  if (agencyData?.subscriptionStatus === "trialing") {
-    if (agencyData.createdAt) {
-      const createdDate = safeDate(agencyData.createdAt);
-      const daysSinceCreation = Math.floor((new Date().getTime() - createdDate.getTime()) / (1000 * 3600 * 24));
-      trialDaysLeft = Math.max(0, 30 - daysSinceCreation);
-    } else if (agencyData.trialEndsAt) {
-      trialDaysLeft = Math.max(0, Math.ceil((safeDate(agencyData.trialEndsAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
-    }
-  }
+  const trialDaysLeft = getTrialDaysLeft(agencyData);
   const isGlobalReadOnly = useReadOnly();
   const navigate = useNavigate();
   const location = useLocation();
@@ -164,28 +150,34 @@ export function Layout() {
 
   const navItems = [
     {
+      name: "Plataforma",
+      path: "/platform",
+      icon: Building2,
+      roles: ["master"],
+    },
+    {
       name: "Dashboard",
       path: "/",
       icon: LayoutDashboard,
-      roles: ["master", "admin", "seller"],
+      roles: ["admin", "seller"],
     },
     {
       name: "Inteligencia",
       path: "/intelligence",
       icon: TrendingUp,
-      roles: ["master", "admin"],
+      roles: ["admin"],
     },
     {
       name: "Inventario",
       path: "/inventory",
       icon: Car,
-      roles: ["admin", "seller", "master", "taller"],
+      roles: ["admin", "seller", "taller"],
     },
     {
       name: "Inv. de Pagos",
       path: "/payments",
       icon: DollarSign,
-      roles: ["admin", "master"],
+      roles: ["admin"],
     },
     {
       name: "Embudo",
@@ -203,13 +195,13 @@ export function Layout() {
       name: "Personas",
       path: "/persons",
       icon: Users,
-      roles: ["admin", "seller", "master"],
+      roles: ["admin", "seller"],
     },
     {
       name: "Correos",
       path: "/emails",
       icon: Mail,
-      roles: ["admin", "seller", "master"],
+      roles: ["admin", "seller"],
     },
     {
       name: "Agencias & Usuarios",
@@ -446,8 +438,7 @@ export function Layout() {
               )}
               <div className="hidden sm:flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 shrink-0 transition-colors">
                 <span className="text-[10px] md:text-[11px] font-medium text-slate-600 dark:text-slate-400 capitalize">
-                  {userData?.role === 'master' ? 'Master' : 
-                   userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
+                  {NOMBRE_ROL[(userData?.role as Rol)] || 'Usuario'}
                 </span>
               </div>
               {trialDaysLeft !== null && (
