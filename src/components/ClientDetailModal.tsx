@@ -82,34 +82,6 @@ export function ClientDetailModal({
    * donde se cerro. Solo se crea al cerrar una venta: un contacto sin
    * operacion sigue pudiendo existir sin trato.
    */
-  /**
-   * Trae la venta desde el trato cuando la ficha se abre sin contexto de trato.
-   *
-   * Desde el embudo se escucha el trato directamente, pero desde Personas no
-   * habia a quien escuchar y la venta se leia del contacto. Ahora que el
-   * dinero solo vive en el trato, hay que ir por el: primero el que la ficha
-   * señala como suyo, y si no, el que este marcado como ganado.
-   */
-  useEffect(() => {
-    if (isNew) return;
-    const esContextoDeTrato = Boolean(client.originalClientId && client.originalClientId !== client.id);
-    if (esContextoDeTrato || deals.length === 0) return;
-
-    const referencia = (client as any).ventaDealId;
-    const tratoDeLaVenta =
-      deals.find((d) => d.id === referencia) ||
-      deals.find((d: any) => checkIsWon(d.status) || d.saleDetails?.price);
-    if (!tratoDeLaVenta) return;
-
-    const v: any = tratoDeLaVenta;
-    setFormData((prev) => ({
-      ...prev,
-      saleDetails: prev.saleDetails || v.saleDetails,
-      dealValue: prev.dealValue ?? (v.saleDetails?.price ?? v.value),
-      soldAt: prev.soldAt || v.soldAt,
-    }));
-  }, [deals, isNew]);
-
   const asegurarTratoDeVenta = async (clientId: string): Promise<string> => {
     const q = (userData?.role !== "master" && userData?.agencyId)
       ? query(collection(db, "deals"), where("clientId", "==", clientId), where("agencyId", "==", userData.agencyId))
@@ -244,6 +216,34 @@ export function ClientDetailModal({
   };
 
   const [deals, setDeals] = useState<Deal[]>([]);
+
+  /**
+   * Trae la venta desde el trato cuando la ficha se abre sin contexto de trato.
+   *
+   * Desde el embudo se escucha el trato directamente, pero desde Personas no
+   * habia a quien escuchar y la venta se leia del contacto. Ahora que el
+   * dinero solo vive en el trato, hay que ir por el: primero el que la ficha
+   * señala como suyo, y si no, el que este marcado como ganado.
+   */
+  useEffect(() => {
+    if (isNew) return;
+    const esContextoDeTrato = Boolean(client.originalClientId && client.originalClientId !== client.id);
+    if (esContextoDeTrato || deals.length === 0) return;
+
+    const referencia = (client as any).ventaDealId;
+    const tratoDeLaVenta =
+      deals.find((d) => d.id === referencia) ||
+      deals.find((d: any) => checkIsWon(d.status) || d.saleDetails?.price);
+    if (!tratoDeLaVenta) return;
+
+    const v: any = tratoDeLaVenta;
+    setFormData((prev) => ({
+      ...prev,
+      saleDetails: prev.saleDetails || v.saleDetails,
+      dealValue: prev.dealValue ?? (v.saleDetails?.price ?? v.value),
+      soldAt: prev.soldAt || v.soldAt,
+    }));
+  }, [deals, isNew]);
   const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files" | "deals">("activity");
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
   
