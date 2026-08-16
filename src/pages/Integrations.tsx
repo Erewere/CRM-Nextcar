@@ -765,9 +765,9 @@ export function Integrations() {
                     <li>Contactos totales: <strong>{dupResultado.resumen.contactosTotales}</strong></li>
                     <li>Nombres repetidos: <strong>{dupResultado.resumen.nombresRepetidos}</strong></li>
                     <li>Copias de más: <strong>{dupResultado.resumen.copiasDeMas}</strong></li>
-                    <li className={dupResultado.resumen.casosDondeVesLaCopiaVacia > 0 ? "text-amber-700 dark:text-amber-400" : ""}>
-                      Casos donde ves la copia vacía:{" "}
-                      <strong>{dupResultado.resumen.casosDondeVesLaCopiaVacia}</strong>
+                    <li className={dupResultado.resumen.casosConTratosEnCopiasOcultas > 0 ? "text-amber-700 dark:text-amber-400" : ""}>
+                      Nombres con tratos en copias que no ves:{" "}
+                      <strong>{dupResultado.resumen.casosConTratosEnCopiasOcultas}</strong>
                     </li>
                   </ul>
 
@@ -786,9 +786,10 @@ export function Integrations() {
                             — {g.copias.length} copias
                           </span>
                         </p>
-                        {g.laQueVesEstaVacia && (
+                        {g.tratosOcultos > 0 && (
                           <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
-                            La copia que ves en el CRM no es la que tiene la historia.
+                            {g.tratosOcultos} trato{g.tratosOcultos === 1 ? '' : 's'} cuelga
+                            {g.tratosOcultos === 1 ? '' : 'n'} de copias que no aparecen en el CRM.
                           </p>
                         )}
                         <div className="overflow-x-auto">

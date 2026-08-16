@@ -1756,15 +1756,18 @@ Return a JSON array of recommendation objects with the following schema:
         }));
         conActividad.sort((a, b) => b.actividad - a.actividad);
 
-        const masCompleta = conActividad[0];
-        if (!masCompleta.esLaQueVes && masCompleta.actividad > 0) {
-          copiasConHistoriaOcultas++;
-        }
+        // Lo que importa es si hay TRATOS fuera de la copia visible. Antes se
+        // comparaba la suma de tratos, tareas y notas, y unas cuantas notas en
+        // la copia visible tapaban una venta escondida en otra.
+        const tratosOcultos = conActividad
+          .filter((c) => !c.esLaQueVes)
+          .reduce((s, c) => s + c.tratos, 0);
+        if (tratosOcultos > 0) copiasConHistoriaOcultas++;
 
         repetidos.push({
           nombre: copias[0].nombre,
           copias: conActividad,
-          laQueVesEstaVacia: !masCompleta.esLaQueVes && masCompleta.actividad > 0,
+          tratosOcultos,
         });
       });
 
@@ -1776,7 +1779,7 @@ Return a JSON array of recommendation objects with the following schema:
           contactosTotales: clientes.size,
           nombresRepetidos: repetidos.length,
           copiasDeMas,
-          casosDondeVesLaCopiaVacia: copiasConHistoriaOcultas,
+          casosConTratosEnCopiasOcultas: copiasConHistoriaOcultas,
         },
         repetidos,
       });
