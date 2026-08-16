@@ -158,7 +158,10 @@ export function Inventory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOwnership, setFilterOwnership] = useState<string>('all');
   const [filterBodyType, setFilterBodyType] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  // Por omision se ocultan los vendidos: en un inventario grande estorban
+  // para trabajar el dia a dia. Los apartados y los pendientes de
+  // aprobacion si se quedan, porque siguen requiriendo atencion.
+  const [filterStatus, setFilterStatus] = useState<string>('activos');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPendingMinimized, setIsPendingMinimized] = useState(false);
@@ -681,7 +684,11 @@ export function Inventory() {
     }
 
     if (filterStatus !== 'all') {
-      if (filterStatus === 'pending') {
+      if (filterStatus === 'activos') {
+        // Todo lo que sigue en juego: disponibles, apartados y los que esperan
+        // aprobacion. Un auto pendiente de venta aun no esta vendido.
+        result = result.filter(v => (v.status || 'available') !== 'sold' || !!(v as any).pendingValidation);
+      } else if (filterStatus === 'pending') {
         result = result.filter(v => !!(v as any).pendingValidation);
       } else {
         result = result.filter(v => (v.status || 'available') === filterStatus && !(v as any).pendingValidation);
@@ -906,7 +913,8 @@ export function Inventory() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">Todos los estados</option>
+              <option value="activos">En inventario (sin vendidos)</option>
+              <option value="all">Todos, incluidos vendidos</option>
               <option value="available">Disponibles</option>
               <option value="reserved">Reservados</option>
               <option value="sold">Vendidos</option>

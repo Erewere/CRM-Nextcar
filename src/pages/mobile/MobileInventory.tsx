@@ -59,7 +59,9 @@ export function MobileInventory() {
   // Filters state
   const [filterOwnership, setFilterOwnership] = useState<string>('all');
   const [filterBodyType, setFilterBodyType] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  // Mismo criterio que en el inventario de escritorio: los vendidos no
+  // aparecen salvo que se pidan.
+  const [filterStatus, setFilterStatus] = useState<string>('activos');
 
   // Shared matches state
   const { 
@@ -130,7 +132,9 @@ export function MobileInventory() {
 
     let matchesStatus = true;
     if (filterStatus !== 'all') {
-      if (filterStatus === 'pending') {
+      if (filterStatus === 'activos') {
+        matchesStatus = (v.status || 'available') !== 'sold' || !!(v as any).pendingValidation;
+      } else if (filterStatus === 'pending') {
         matchesStatus = !!(v as any).pendingValidation;
       } else {
         matchesStatus = (v.status || 'available') === filterStatus && !(v as any).pendingValidation;
@@ -251,6 +255,7 @@ export function MobileInventory() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="flex-1 text-xs bg-[#f4f5f5] dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 font-medium"
             >
+              <option value="activos">Sin vendidos</option>
               <option value="all">Estado: Todos</option>
               <option value="available">Disponibles</option>
               <option value="reserved">Reservados</option>
