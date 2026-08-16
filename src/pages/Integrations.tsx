@@ -32,6 +32,8 @@ export function Integrations() {
   // Revision de contactos repetidos, del administrador sobre su agencia.
   const [dupCargando, setDupCargando] = useState<boolean>(false);
   const [dupResultado, setDupResultado] = useState<any>(null);
+  const [fusionResultado, setFusionResultado] = useState<any>(null);
+  const [fusionSimulada, setFusionSimulada] = useState<boolean>(false);
 
   const mcpServerUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : '';
   const isAdminOrMaster = userData?.role === 'master' || userData?.role === 'admin';
@@ -277,6 +279,41 @@ export function Integrations() {
       setDupResultado(data);
     } catch (e: any) {
       alert(e.message || "No se pudo revisar los contactos.");
+    } finally {
+      setDupCargando(false);
+    }
+  };
+
+  const handleFusionar = async (apply: boolean) => {
+    if (!currentUser) {
+      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    if (apply && !window.confirm(
+      "Se van a BORRAR las copias repetidas, después de pasarle sus tratos, " +
+      "tareas y notas al contacto que se queda. Esto NO SE PUEDE DESHACER. " +
+      "¿Continuar?"
+    )) {
+      return;
+    }
+    setDupCargando(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/admin/merge-duplicate-clients", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ apply })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      setFusionResultado(data);
+      setFusionSimulada(!apply);
+      if (apply) setDupResultado(null);
+    } catch (e: any) {
+      alert(e.message || "No se pudo fusionar.");
     } finally {
       setDupCargando(false);
     }
@@ -665,6 +702,62 @@ export function Integrations() {
               >
                 {dupCargando ? "Revisando..." : "Revisar contactos"}
               </button>
+
+              {/* Unico paso que escribe. Exige simular antes. */}
+              <div className="mt-6 pt-5 border-t border-red-200 dark:border-red-900">
+                <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
+                  Fusionar los repetidos
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Se queda la copia que ves hoy en el CRM y se le pasan los tratos,
+                  tareas y notas de las demás antes de borrarlas. Sus campos vacíos se
+                  completan con lo que tengan las otras; nada de lo que ya tiene se
+                  sobrescribe.
+                  <strong className="text-red-700 dark:text-red-400"> No se puede deshacer.</strong>
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => handleFusionar(false)}
+                    disabled={dupCargando}
+                    className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                  >
+                    {dupCargando ? "Procesando..." : "1. Simular"}
+                  </button>
+                  <button
+                    onClick={() => handleFusionar(true)}
+                    disabled={dupCargando || !fusionSimulada}
+                    className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40"
+                  >
+                    2. Fusionar
+                  </button>
+                </div>
+
+                {fusionResultado && (
+                  <div className="mt-5 border border-gray-200 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900/50">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mb-3">
+                      Modo: {fusionResultado.modo}
+                    </p>
+                    <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1 mb-4">
+                      <li>Nombres repetidos: <strong>{fusionResultado.resumen.nombresRepetidos}</strong></li>
+                      <li className="text-indigo-700 dark:text-indigo-400">
+                        Registros reasignados: <strong>{fusionResultado.resumen.registrosReasignados}</strong>
+                      </li>
+                      <li>Campos completados: <strong>{fusionResultado.resumen.camposCompletados}</strong></li>
+                      <li className="text-red-700 dark:text-red-400">
+                        Copias borradas: <strong>{fusionResultado.resumen.copiasBorradas}</strong>
+                      </li>
+                    </ul>
+                    <div className="space-y-1">
+                      {fusionResultado.detalle.map((d: any, i: number) => (
+                        <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
+                          <strong className="text-slate-800 dark:text-slate-200">{d.nombre}</strong>
+                          {" — "}{d.texto}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {dupResultado && (
                 <div className="mt-5">

@@ -1786,6 +1786,148 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // Fusionar los contactos repetidos de una agencia.
+  //
+  // Sobrevive la copia que el CRM muestra hoy -- la del identificador menor --
+  // porque es la que el equipo abre y edita. Todo lo que cuelga de las demas
+  // (tratos, tareas, notas y archivos) se le reasigna antes de borrarlas: hay
+  // tratos enteros colgando de contactos que no aparecen en pantalla, y
+  // borrarlos sin mas seria perder ventas.
+  //
+  // Los campos vacios de la que sobrevive se completan con lo que tengan las
+  // otras, nunca al reves: nada de lo que ya tiene se sobrescribe.
+  app.post("/api/admin/merge-duplicate-clients", express.json(), async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (err) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const llamanteDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      const llamante = llamanteDoc.exists ? llamanteDoc.data() : null;
+      if (!llamante || llamante.role !== "admin") {
+        return res.status(403).json({ error: "Solo el administrador de una agencia puede fusionar sus contactos" });
+      }
+      const agencyId = llamante.agencyId;
+      if (!agencyId || agencyId === "unassigned") {
+        return res.status(400).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+
+      const apply = req.body?.apply === true;
+      const VINCULADAS = ["deals", "tasks", "notes", "files"];
+      const NO_COPIAR = new Set(["id", "agencyId", "createdAt", "originalClientId"]);
+
+      const porAgencia = (col: string) =>
+        adminDb.collection(col).where("agencyId", "==", agencyId).get();
+
+      const [clientes, ...vinculadas] = await Promise.all([
+        porAgencia("clients"),
+        ...VINCULADAS.map(porAgencia),
+      ]);
+
+      const grupos = new Map<string, any[]>();
+      clientes.docs.forEach((d: any) => {
+        const clave = String((d.data() || {}).name || "").trim().toLowerCase();
+        if (!clave) return;
+        const lista = grupos.get(clave) || [];
+        lista.push(d);
+        grupos.set(clave, lista);
+      });
+
+      const detalle: any[] = [];
+      let gruposFusionados = 0;
+      let registrosMovidos = 0;
+      let copiasBorradas = 0;
+      let camposCompletados = 0;
+
+      for (const [, docs] of grupos) {
+        if (docs.length < 2) continue;
+        gruposFusionados++;
+
+        const ordenados = [...docs].sort((a, b) => (a.id < b.id ? -1 : 1));
+        const sobrevive = ordenados[0];
+        const sobran = ordenados.slice(1);
+        const idsSobran = new Set(sobran.map((d) => d.id));
+
+        // Que se le reasigna
+        const movimientos: Record<string, number> = {};
+        const pendientes: { ref: any }[] = [];
+        VINCULADAS.forEach((col, i) => {
+          const encontrados = vinculadas[i].docs.filter((d: any) => idsSobran.has(d.data().clientId));
+          if (encontrados.length) movimientos[col] = encontrados.length;
+          encontrados.forEach((d: any) => pendientes.push({ ref: d.ref }));
+        });
+
+        // Que campos vacios se le completan
+        const datosSobrevive = sobrevive.data() || {};
+        const completar: Record<string, any> = {};
+        for (const otro of sobran) {
+          for (const [k, v] of Object.entries(otro.data() || {})) {
+            if (NO_COPIAR.has(k)) continue;
+            const actual = datosSobrevive[k];
+            const vacio = actual === undefined || actual === null || actual === "";
+            const aporta = v !== undefined && v !== null && v !== "";
+            if (vacio && aporta && completar[k] === undefined) completar[k] = v;
+          }
+        }
+
+        if (apply) {
+          for (const p of pendientes) {
+            await p.ref.update({ clientId: sobrevive.id });
+            registrosMovidos++;
+          }
+          if (Object.keys(completar).length) {
+            await sobrevive.ref.set(completar, { merge: true });
+            camposCompletados += Object.keys(completar).length;
+          }
+          for (const otro of sobran) {
+            await otro.ref.delete();
+            copiasBorradas++;
+          }
+        } else {
+          registrosMovidos += pendientes.length;
+          camposCompletados += Object.keys(completar).length;
+          copiasBorradas += sobran.length;
+        }
+
+        detalle.push({
+          nombre: datosSobrevive.name,
+          texto:
+            `se queda ${sobrevive.id} · se borran ${sobran.length} copias · ` +
+            `se le pasan ${Object.entries(movimientos).map(([c, n]) => `${n} de ${c}`).join(", ") || "ningún registro"}` +
+            (Object.keys(completar).length ? ` · se le completan: ${Object.keys(completar).join(", ")}` : ""),
+        });
+      }
+
+      res.json({
+        modo: apply ? "APLICADO" : "SIMULACION (no se escribió nada)",
+        agencia: agencyId,
+        resumen: {
+          nombresRepetidos: gruposFusionados,
+          registrosReasignados: registrosMovidos,
+          camposCompletados,
+          copiasBorradas,
+        },
+        detalle,
+      });
+    } catch (e: any) {
+      console.error("Merge duplicate clients error:", e);
+      res.status(500).json({ error: "Error interno", details: e.message });
+    }
+  });
+
   app.get("/api/admin/audit-costs", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
