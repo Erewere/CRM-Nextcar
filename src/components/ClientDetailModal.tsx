@@ -17,6 +17,7 @@ import {
   where,
   getDocs,
   deleteDoc,
+  getDoc,
   orderBy,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -61,6 +62,23 @@ export function ClientDetailModal({
   onUpdated,
 }: Props) {
   const { userData } = useAuth();
+  /**
+   * Escribe sobre un trato solo si sigue existiendo.
+   *
+   * setDoc con merge crea el documento cuando no esta, asi que guardar la
+   * ficha despues de borrar un trato lo resucitaba -- y sin agencyId, porque
+   * estos guardados solo mandan los campos que cambiaron. La regla de
+   * Firestore lo rechazaba por eso, con un "permisos insuficientes" que no
+   * decia nada. Un trato borrado debe quedarse borrado.
+   */
+  const guardarTratoSiExiste = async (dealId: string, datos: any) => {
+    const ref = doc(db, "deals", dealId);
+    const actual = await getDoc(ref);
+    if (!actual.exists()) return false;
+    await setDoc(ref, datos, { merge: true });
+    return true;
+  };
+
   const isReadOnly = useReadOnly();
   const { can } = usePermissions();
   // Borrar un trato pierde su historial, asi que no lo hace cualquiera.
@@ -652,7 +670,7 @@ export function ClientDetailModal({
         }
 
         if (finalDealId) {
-          await setDoc(doc(db, "deals", finalDealId), updates, { merge: true });
+          await guardarTratoSiExiste(finalDealId, updates);
         }
 
         await setDoc(doc(db, "clients", finalClientId), {
@@ -700,7 +718,7 @@ export function ClientDetailModal({
         }
 
         if (finalDealId) {
-          await setDoc(doc(db, "deals", finalDealId), updates, { merge: true });
+          await guardarTratoSiExiste(finalDealId, updates);
         }
 
         await setDoc(doc(db, "clients", finalClientId), {
@@ -764,7 +782,7 @@ export function ClientDetailModal({
         }
 
         if (finalDealId) {
-          await setDoc(doc(db, "deals", finalDealId), dealUpdates, { merge: true });
+          await guardarTratoSiExiste(finalDealId, dealUpdates);
         }
 
         await setDoc(doc(db, "clients", finalClientId), clientUpdates, { merge: true });
@@ -873,7 +891,7 @@ export function ClientDetailModal({
       const sanitizedData = sanitizeFirestoreData(updateData);
 
       if (finalDealId) {
-        await setDoc(doc(db, "deals", finalDealId), sanitizedData, { merge: true });
+        await guardarTratoSiExiste(finalDealId, sanitizedData);
       }
       if (finalClientId) {
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
@@ -957,7 +975,7 @@ export function ClientDetailModal({
       const sanitizedData = sanitizeFirestoreData(updateData);
 
       if (finalDealId) {
-        await setDoc(doc(db, "deals", finalDealId), sanitizedData, { merge: true });
+        await guardarTratoSiExiste(finalDealId, sanitizedData);
       }
       if (finalClientId) {
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
@@ -1028,7 +1046,7 @@ export function ClientDetailModal({
           updatedAt: new Date().toISOString()
         };
         if (client.originalClientId && client.originalClientId !== client.id) {
-          await setDoc(doc(db, "deals", client.id as string), { sellerId: updates.sellerId, updatedAt: updates.updatedAt }, { merge: true });
+          await guardarTratoSiExiste(client.id as string, { sellerId: updates.sellerId, updatedAt: updates.updatedAt });
         }
         await updateDoc(doc(db, "clients", actualClientId as string), updates);
         onUpdated?.();
@@ -1192,7 +1210,7 @@ export function ClientDetailModal({
 
         if (finalDealId && Object.keys(dealDataToUpdate).length > 0) {
           dealDataToUpdate.updatedAt = new Date().toISOString();
-          await setDoc(doc(db, "deals", finalDealId), sanitizeFirestoreData(dealDataToUpdate), { merge: true });
+          await guardarTratoSiExiste(finalDealId, sanitizeFirestoreData(dealDataToUpdate));
         }
 
         await setDoc(doc(db, "clients", finalClientId as string), sanitizeFirestoreData(dataToUpdate), { merge: true });
@@ -2768,7 +2786,7 @@ export function ClientDetailModal({
                   <button
                     onClick={async () => {
                       if (confirm("¿Marcar trato como ganado?")) {
-                        await setDoc(doc(db, "deals", deal.id), { status: "won" }, { merge: true });
+                        await guardarTratoSiExiste(deal.id, { status: "won" });
                       }
                     }}
                     className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
