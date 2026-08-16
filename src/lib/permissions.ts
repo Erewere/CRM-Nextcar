@@ -42,6 +42,7 @@ export type Permiso =
   | "tratos.ver"
   | "tratos.gestionar"
   | "tratos.ajenos"           // operar tratos de otros asesores
+  | "tratos.eliminar"         // borrar un trato: se pierde su historial
   | "ventas.cerrar"
   // Administracion de la agencia
   | "pagos.gestionar"
@@ -57,7 +58,8 @@ const TODOS: Permiso[] = [
   "vehiculos.compartido",
   "gastos.ver", "gastos.crear",
   "contactos.ver", "contactos.editar", "contactos.reasignar",
-  "tratos.ver", "tratos.gestionar", "tratos.ajenos", "ventas.cerrar",
+  "tratos.ver", "tratos.gestionar", "tratos.ajenos", "tratos.eliminar",
+  "ventas.cerrar",
   "pagos.gestionar", "reportes.ver", "usuarios.gestionar",
   "facturacion.gestionar", "integraciones.gestionar",
 ];
@@ -76,7 +78,8 @@ const PERMISOS_POR_ROL: Record<Rol, Permiso[]> = {
     "vehiculos.compartido",
     "gastos.ver", "gastos.crear",
     "contactos.ver", "contactos.editar", "contactos.reasignar",
-    "tratos.ver", "tratos.gestionar", "tratos.ajenos", "ventas.cerrar",
+    "tratos.ver", "tratos.gestionar", "tratos.ajenos", "tratos.eliminar",
+    "ventas.cerrar",
     "pagos.gestionar", "reportes.ver",
   ],
 

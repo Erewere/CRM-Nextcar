@@ -6,6 +6,7 @@ import { getClientMatches } from "../services/matchingEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
 import { useReadOnly } from "../hooks/useReadOnly";
+import { usePermissions } from "../hooks/usePermissions";
 import {
   doc,
   onSnapshot,
@@ -61,6 +62,9 @@ export function ClientDetailModal({
 }: Props) {
   const { userData } = useAuth();
   const isReadOnly = useReadOnly();
+  const { can } = usePermissions();
+  // Borrar un trato pierde su historial, asi que no lo hace cualquiera.
+  const puedeEliminarTratos = can('tratos.eliminar') && !isReadOnly;
   const isNew = !client.id;
   const canModify = !isReadOnly && (isNew ||
     (userData?.role === "admin" || userData?.role === "master") ||
@@ -2721,6 +2725,27 @@ export function ClientDetailModal({
                   >
                     Renombrar
                   </button>
+                  {puedeEliminarTratos && (
+                    <button
+                      onClick={async () => {
+                        const pagos = (deal as any).saleDetails?.payments?.length || 0;
+                        const aviso = pagos > 0
+                          ? `Este trato tiene ${pagos} pago${pagos === 1 ? '' : 's'} registrado${pagos === 1 ? '' : 's'}. ` +
+                            "Al borrarlo se pierden. Esto no se puede deshacer. ¿Continuar?"
+                          : "Se va a borrar este trato y su historial. " +
+                            "Esto no se puede deshacer. ¿Continuar?";
+                        if (!confirm(aviso)) return;
+                        try {
+                          await deleteDoc(doc(db, "deals", deal.id));
+                        } catch (e: any) {
+                          alert("No se pudo borrar el trato: " + (e?.message || e));
+                        }
+                      }}
+                      className="text-xs bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-1 rounded hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      Eliminar
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       if (confirm("¿Marcar trato como ganado?")) {
