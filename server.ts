@@ -73,6 +73,55 @@ function getAdminDb() {
   return getAdminFirestore(adminApp, "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a");
 }
 
+/**
+ * Busca un contacto de la agencia por su telefono.
+ *
+ * Las dos vias automaticas de captura -- el endpoint publico de leads y la
+ * herramienta del asistente -- creaban un contacto nuevo cada vez, sin mirar
+ * si esa persona ya estaba. De ahi salieron diez fichas de la misma persona
+ * con el mismo numero. Duplicar al cliente parte su historial: los tratos
+ * quedan repartidos entre fichas y ninguna cuenta la historia completa.
+ *
+ * Primero se intenta la coincidencia exacta, que es lo normal cuando los leads
+ * entran siempre por la misma via y cuesta una sola lectura. Solo si falla se
+ * comparan los digitos, porque el mismo numero puede venir escrito de formas
+ * distintas. Ese segundo paso recorre los contactos de la agencia; con unas
+ * decenas no se nota, pero si algun dia son miles convendra guardar el
+ * telefono ya normalizado y consultarlo directo.
+ */
+async function buscarContactoPorTelefono(adminDb: any, agencyId: string, phone: string) {
+  const bruto = String(phone || "").trim();
+  const digitos = bruto.replace(/\D/g, "");
+  if (!digitos) return null;
+
+  const exacta = await adminDb
+    .collection("clients")
+    .where("agencyId", "==", agencyId)
+    .where("phone", "==", bruto)
+    .limit(1)
+    .get();
+  if (!exacta.empty) return exacta.docs[0];
+
+  const todos = await adminDb.collection("clients").where("agencyId", "==", agencyId).get();
+  return (
+    todos.docs.find(
+      (d: any) => String(d.data().phone || "").replace(/\D/g, "") === digitos
+    ) || null
+  );
+}
+
+/** Completa los datos de contacto que le falten, sin pisar los que ya tiene. */
+function camposQueFaltan(existente: any, entrante: Record<string, any>) {
+  const relleno: Record<string, any> = {};
+  for (const [k, v] of Object.entries(entrante)) {
+    const actual = existente[k];
+    if ((actual === undefined || actual === null || actual === "") && v) {
+      relleno[k] = v;
+    }
+  }
+  return relleno;
+}
+
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
@@ -1287,6 +1336,25 @@ Return a JSON array of recommendation objects with the following schema:
         updatedAt: FieldValue.serverTimestamp()
       };
       
+      // Si ya tenemos a esa persona, se le completa lo que falte en vez de
+      // crearle otra ficha. Un mismo cliente que vuelve a escribir no es un
+      // cliente nuevo.
+      const yaEstaba = await buscarContactoPorTelefono(adminDb, agencyId, phone);
+      if (yaEstaba) {
+        const relleno = camposQueFaltan(yaEstaba.data() || {}, {
+          name, email: email || "", vehicle: vehicle || "",
+        });
+        await yaEstaba.ref.set(
+          { ...relleno, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        return res.status(200).json({
+          success: true,
+          leadId: yaEstaba.id,
+          yaExistia: true,
+        });
+      }
+
       const docRef = await adminDb.collection("clients").add(newClient);
 
       res.status(201).json({ success: true, leadId: docRef.id });
@@ -2437,7 +2505,17 @@ Return a JSON array of recommendation objects with the following schema:
           updatedAt: FieldValue.serverTimestamp()
         };
 
-        const docRef = await db.collection("clients").add(newClient);
+        const yaEstaba = await buscarContactoPorTelefono(db, targetAgencyId, phone);
+        if (yaEstaba) {
+          const relleno = camposQueFaltan(yaEstaba.data() || {}, {
+            name, email: email || "", vehicle: vehicle || "",
+          });
+          await yaEstaba.ref.set(
+            { ...relleno, updatedAt: FieldValue.serverTimestamp() },
+            { merge: true }
+          );
+        }
+        const docRef = yaEstaba || (await db.collection("clients").add(newClient));
 
         return {
           jsonrpc: "2.0",
@@ -2446,7 +2524,16 @@ Return a JSON array of recommendation objects with the following schema:
             content: [
               {
                 type: "text",
-                text: JSON.stringify({ success: true, leadId: docRef.id, message: `Lead '${name}' creado correctamente con ID ${docRef.id}` })
+                // El asistente debe saber si creo a alguien o si esa persona
+                // ya estaba, para no anunciar un alta que no ocurrio.
+                text: JSON.stringify({
+                  success: true,
+                  leadId: docRef.id,
+                  yaExistia: !!yaEstaba,
+                  message: yaEstaba
+                    ? `'${name}' ya estaba registrado con ese teléfono; se actualizó su ficha (ID ${docRef.id}) en vez de crear otra.`
+                    : `Lead '${name}' creado correctamente con ID ${docRef.id}`
+                })
               }
             ]
           }
