@@ -104,7 +104,15 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         await setDoc(doc(db, "deals", finalDealId), sanitizedData, { merge: true });
       }
       if (finalClientId) {
-        await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
+        // Al contacto solo va la referencia: el dinero y los abonos viven en
+        // el trato, para que no queden dos versiones de la misma venta.
+        const referencia: any = { updatedAt: new Date().toISOString() };
+        if (payment.markSaleAsWon) {
+          referencia.status = newStatus;
+          referencia.soldAt = todayIso;
+        }
+        if (finalDealId) referencia.ventaDealId = finalDealId;
+        await setDoc(doc(db, "clients", finalClientId), referencia, { merge: true });
       }
       const vId = clientData?.vehicleId || client.vehicleId;
       const isThisClientTheBuyer = Boolean(payment.markSaleAsWon || currentStatus === 'won' || clientData?.status === 'won' || client?.status === 'won');
@@ -539,12 +547,12 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           updatedAt: new Date().toISOString()
         });
         
+        // Al contacto solo la referencia; el dinero queda en el trato.
         const clientRef = doc(db, 'clients', actualClientId!);
         await updateDoc(clientRef, {
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
-          saleDetails,
-          dealValue: saleDetails?.price || client.dealValue || 0,
+          ventaDealId: client.id,
           updatedAt: new Date().toISOString()
         });
       } else {
@@ -552,8 +560,6 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         await updateDoc(clientRef, {
           status: targetStatus,
           soldAt: new Date().toISOString().split('T')[0],
-          saleDetails,
-          dealValue: saleDetails?.price || client.dealValue || 0,
           updatedAt: new Date().toISOString()
         });
         

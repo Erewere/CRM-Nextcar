@@ -597,10 +597,13 @@ export function Kanban() {
 
       const isExistingDeal = deals.some(d => d.id === client.id);
       const actualClientId = client.originalClientId || client.id;
+      let idTrato: string;
       if (isExistingDeal) {
-        await setDoc(doc(db, "deals", client.id), updates, { merge: true });
+        idTrato = client.id as string;
+        await setDoc(doc(db, "deals", idTrato), updates, { merge: true });
       } else {
         const dealRef = doc(collection(db, "deals"));
+        idTrato = dealRef.id;
         await setDoc(dealRef, {
           ...updates,
           id: dealRef.id,
@@ -616,11 +619,14 @@ export function Kanban() {
       }
       
       if (actualClientId) {
+        // El contacto guarda la referencia -- que compro y de que trato fue --
+        // pero el dinero vive solo en el trato. Cuando la venta se guardaba
+        // completa en los dos, borrar el trato dejaba al contacto anunciando
+        // una venta que ya no existia, con su saldo y todo.
         await updateDoc(doc(db, "clients", actualClientId), {
           status: "won",
           soldAt: new Date().toISOString().split('T')[0],
-          saleDetails,
-          dealValue: saleDetails?.price || client.dealValue || 0,
+          ventaDealId: idTrato,
           updatedAt: new Date().toISOString()
         });
       }
