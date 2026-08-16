@@ -3099,6 +3099,58 @@ export function ClientDetailModal({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {puedeEliminarTratos && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const idCliente = (client.originalClientId || client.id) as string;
+                            const pagos = formData.saleDetails?.payments?.length || 0;
+                            const aviso =
+                              "Se va a descartar esta venta: el contacto deja de contar como " +
+                              "vendido y desaparece del inventario de pagos." +
+                              (pagos > 0
+                                ? ` Se pierden ${pagos} pago${pagos === 1 ? '' : 's'} registrado${pagos === 1 ? '' : 's'}.`
+                                : "") +
+                              " El auto, si lo tiene asignado, vuelve a quedar disponible. ¿Continuar?";
+                            if (!confirm(aviso)) return;
+                            try {
+                              const limpieza = {
+                                saleDetails: null,
+                                dealValue: null,
+                                soldAt: null,
+                                status: "new",
+                                updatedAt: new Date().toISOString(),
+                              };
+                              await setDoc(doc(db, "clients", idCliente), limpieza, { merge: true });
+
+                              // La venta puede estar guardada tambien en el trato
+                              for (const d of deals) {
+                                await guardarTratoSiExiste(d.id, limpieza);
+                              }
+
+                              // Y el auto pudo quedar marcado como vendido a esta persona
+                              const idAuto = formData.vehicleId || client.vehicleId;
+                              if (idAuto) {
+                                await updateDoc(doc(db, "vehicles", idAuto), {
+                                  status: "available",
+                                  saleDetails: null,
+                                  soldAt: null,
+                                  buyerId: null,
+                                  soldToClientId: null,
+                                  updatedAt: new Date().toISOString(),
+                                }).catch(() => {});
+                              }
+                              onClose();
+                            } catch (e: any) {
+                              alert("No se pudo descartar la venta: " + (e?.message || e));
+                            }
+                          }}
+                          className="text-xs px-3 py-1.5 bg-white/15 text-white hover:bg-white/25 font-bold rounded-lg transition-all flex items-center gap-1 shrink-0 border border-white/30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Descartar venta</span>
+                        </button>
+                      )}
                       {canRegisterPayments && (
                         <button
                           type="button"
