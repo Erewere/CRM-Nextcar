@@ -1,3 +1,16 @@
+/**
+ * Quita los contactos borrados de una lista.
+ *
+ * Borrar un contacto no lo elimina de la base: le pone isDeleted y lo
+ * esconde. Once pantallas respetaban esa marca y once no, asi que un contacto
+ * borrado seguia apareciendo en el buscador de la ficha del auto, en el movil
+ * y en las coincidencias, mientras en Personas ya no estaba. Al intentar
+ * volver a crearlo, el CRM decia que ya existia.
+ */
+export function sinBorrados<T extends { isDeleted?: boolean }>(lista: T[]): T[] {
+  return lista.filter((c) => !c.isDeleted);
+}
+
 export function sanitizeFirestoreData<T>(obj: T): T {
   if (obj === undefined) return null as unknown as T;
   if (obj === null || typeof obj !== 'object') return obj;

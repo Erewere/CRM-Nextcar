@@ -53,7 +53,7 @@ export function MobilePersons() {
       }
 
       const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
       
       setClients(list);
       setSelectedClient(prev => prev ? (list.find(c => c.id === prev.id) || prev) : null);

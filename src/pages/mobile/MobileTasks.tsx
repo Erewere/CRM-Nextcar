@@ -57,7 +57,8 @@ export function MobileTasks() {
           );
           const cSnap = await getDocs(cq);
           cSnap.forEach(d => {
-            clientsMap.set(d.id, { ...d.data(), id: d.id } as Client);
+            const c = { ...d.data(), id: d.id } as Client;
+            if (!c.isDeleted) clientsMap.set(d.id, c);
           });
         }
       }

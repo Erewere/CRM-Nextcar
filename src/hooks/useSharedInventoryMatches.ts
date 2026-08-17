@@ -192,6 +192,7 @@ export function useSharedInventoryMatches() {
       snap.forEach((d) => {
         const c = { id: d.id, ...d.data() } as Client;
         if (
+          !c.isDeleted &&
           c.status !== "won" &&
           c.status !== "lost" &&
           c.status !== "Ganado" &&

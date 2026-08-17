@@ -454,7 +454,7 @@ export function Inventory() {
     });
 
     const unsubscribeClients = onSnapshot(clientsQ, (snapshot) => {
-      const rawClients = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+      const rawClients = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
       setClients(rawClients);
     });
 

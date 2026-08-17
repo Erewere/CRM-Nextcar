@@ -50,7 +50,7 @@ export function MobileFab() {
     }
 
     const unsubClients = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
       setClients(list);
     });
     

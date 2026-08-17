@@ -362,7 +362,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         where('sellerId', '==', userData.id)
       );
       getDocs(q).then(snap => {
-        const rawClients = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+        const rawClients = snap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
         setClients(rawClients);
       });
     }

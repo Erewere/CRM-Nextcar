@@ -146,7 +146,7 @@ export function AgencyUsers() {
             getDocs(clientsQ),
             getDocs(tasksQ)
           ]);
-          const rawClients = clientsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client));
+          const rawClients = clientsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Client)).filter(c => !c.isDeleted);
           setClients(rawClients);
           setTasks(tasksSnap.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
         }
