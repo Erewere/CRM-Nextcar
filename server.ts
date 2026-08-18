@@ -2579,6 +2579,68 @@ Return a JSON array of recommendation objects with the following schema:
       }
     },
     {
+      name: "buscar",
+      description: "Busca en todo el CRM a la vez: contactos, vehículos y tratos. Úsala cuando el usuario mencione un nombre, un teléfono, una marca, un modelo o un VIN sin decir dónde buscarlo.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          texto: { type: "string", description: "Lo que se busca: nombre, teléfono, marca, modelo, VIN o título del trato" }
+        },
+        required: ["texto"]
+      }
+    },
+    {
+      name: "pendientes_de_hoy",
+      description: "Tareas y citas vencidas o de hoy, con el cliente al que pertenecen. Sirve para responder qué hay que hacer hoy o qué se quedó atrás.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          dias: { type: "number", description: "Días hacia adelante a incluir además de hoy (por omisión 0)" }
+        }
+      }
+    },
+    {
+      name: "quien_me_debe",
+      description: "Ventas con saldo pendiente, de la más antigua a la más reciente, con lo pagado y lo que falta.",
+      inputSchema: {
+        type: "object",
+        properties: {}
+      }
+    },
+    {
+      name: "historial_del_cliente",
+      description: "Todo lo de una persona en un solo lugar: sus datos, sus tratos, sus tareas y sus notas.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          nombre: { type: "string", description: "Nombre del contacto, o parte de él" },
+          clientId: { type: "string", description: "Identificador exacto del contacto, si se conoce" }
+        }
+      }
+    },
+    {
+      name: "ver_tratos",
+      description: "Los tratos del embudo, con su etapa, su valor, el auto y a quién pertenecen.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          etapa: { type: "string", description: "Filtra por etapa: new, contacted, negotiation, won, lost" },
+          limite: { type: "number", description: "Cuántos devolver (por omisión 30)" }
+        }
+      }
+    },
+    {
+      name: "ver_notas",
+      description: "Las notas registradas de un contacto, de la más reciente a la más antigua.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          nombre: { type: "string", description: "Nombre del contacto, o parte de él" },
+          clientId: { type: "string", description: "Identificador exacto del contacto, si se conoce" }
+        }
+      }
+    },
+    {
       name: "get_sales_stats",
       description: "Obtiene estadísticas de ventas, cierres e ingresos del CRM Erewere para la agencia autenticada",
       inputSchema: {
@@ -2661,6 +2723,192 @@ Return a JSON array of recommendation objects with the following schema:
       // SECURITY ASSURANCE:
       // targetAgencyId comes exclusively from the authenticated mcpApiKey doc.
       // We ignore caller-supplied agencyId or any defaults.
+
+      // Herramientas de consulta. Todas se limitan a la agencia de la sesion, y
+      // quien no tiene "tratos.ajenos" solo alcanza lo suyo: la misma regla que
+      // aplica la pantalla, tomada del mismo catalogo.
+      const veTodo = sesionPuede(sesion, "tratos.ajenos");
+      const miUid = sesion?.userId || null;
+      const esMio = (x: any) => veTodo || !miUid || x?.sellerId === miUid;
+
+      const deLaAgencia = (col: string) =>
+        db.collection(col).where("agencyId", "==", targetAgencyId).get();
+
+      const texto = (respuesta: any) => ({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: JSON.stringify(respuesta, null, 2) }] }
+      });
+
+      /** Encuentra un contacto por id o por nombre parecido. */
+      const ubicarContacto = async (args: any) => {
+        const snap = await deLaAgencia("clients");
+        const vivos = snap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((c: any) => !c.isDeleted && esMio(c));
+        if (args.clientId) return vivos.find((c: any) => c.id === args.clientId) || null;
+        const q = String(args.nombre || "").trim().toLowerCase();
+        if (!q) return null;
+        return vivos.find((c: any) => String(c.name || "").toLowerCase().includes(q)) || null;
+      };
+
+      if (toolName === "buscar") {
+        if (!sesionPuede(sesion, "vehiculos.ver")) return sinPermiso(id, "el CRM");
+        const q = String(toolArgs.texto || "").trim().toLowerCase();
+        if (!q) return texto({ error: "Falta qué buscar" });
+
+        // Firestore no busca por texto libre, asi que se filtra en memoria.
+        // A esta escala -- decenas de registros por agencia -- no se nota.
+        const [cSnap, vSnap, dSnap] = await Promise.all([
+          sesionPuede(sesion, "contactos.ver") ? deLaAgencia("clients") : null,
+          deLaAgencia("vehicles"),
+          sesionPuede(sesion, "tratos.ver") ? deLaAgencia("deals") : null,
+        ]);
+
+        const contactos = (cSnap?.docs || [])
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((c: any) => !c.isDeleted && esMio(c))
+          .filter((c: any) => [c.name, c.phone, c.email].some((x: any) => String(x || "").toLowerCase().includes(q)))
+          .slice(0, 10)
+          .map((c: any) => ({ id: c.id, nombre: c.name, telefono: c.phone, correo: c.email, estatus: c.status }));
+
+        const vehiculos = vSnap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((v: any) => [v.make, v.model, v.vin, v.color, String(v.year)].some((x: any) => String(x || "").toLowerCase().includes(q)))
+          .slice(0, 10)
+          .map((v: any) => ({ id: v.id, auto: `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(), precio: v.price, estatus: v.status, vin: v.vin }));
+
+        const tratos = (dSnap?.docs || [])
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((x: any) => !x.isDeleted && esMio(x))
+          .filter((x: any) => [x.title, x.vehicle].some((y: any) => String(y || "").toLowerCase().includes(q)))
+          .slice(0, 10)
+          .map((x: any) => ({ id: x.id, trato: x.title, etapa: x.status, valor: x.value, auto: x.vehicle }));
+
+        return texto({ busqueda: q, contactos, vehiculos, tratos });
+      }
+
+      if (toolName === "pendientes_de_hoy") {
+        if (!sesionPuede(sesion, "tratos.ver")) return sinPermiso(id, "las tareas");
+        const dias = Number(toolArgs.dias) || 0;
+        const limite = new Date();
+        limite.setHours(23, 59, 59, 999);
+        limite.setDate(limite.getDate() + dias);
+
+        const [tSnap, cSnap] = await Promise.all([deLaAgencia("tasks"), deLaAgencia("clients")]);
+        const nombres = new Map<string, string>();
+        cSnap.docs.forEach((d: any) => nombres.set(d.id, d.data().name || "Sin nombre"));
+
+        const pendientes = tSnap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((x: any) => !x.completed && !x.isDeleted && esMio(x))
+          .filter((x: any) => {
+            const f = x.dueDate || x.date;
+            return f && new Date(f) <= limite;
+          })
+          .sort((a: any, b: any) => String(a.dueDate || a.date).localeCompare(String(b.dueDate || b.date)))
+          .slice(0, 40)
+          .map((x: any) => ({
+            tarea: x.title || x.description || "Sin título",
+            cliente: nombres.get(x.clientId) || null,
+            fecha: x.dueDate || x.date,
+            vencida: new Date(x.dueDate || x.date) < new Date(new Date().setHours(0, 0, 0, 0)),
+          }));
+
+        return texto({ total: pendientes.length, pendientes });
+      }
+
+      if (toolName === "quien_me_debe") {
+        if (!sesionPuede(sesion, "tratos.ver")) return sinPermiso(id, "las ventas");
+        const [dSnap, cSnap] = await Promise.all([deLaAgencia("deals"), deLaAgencia("clients")]);
+        const nombres = new Map<string, string>();
+        cSnap.docs.forEach((d: any) => nombres.set(d.id, d.data().name || "Sin nombre"));
+
+        const conSaldo = dSnap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((x: any) => !x.isDeleted && esMio(x))
+          .map((x: any) => {
+            const precio = Number(x.saleDetails?.price || x.value || 0);
+            const pagado = (x.saleDetails?.payments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+            return { x, precio, pagado, saldo: precio - pagado };
+          })
+          .filter((r: any) => r.precio > 0 && r.saldo > 0)
+          .sort((a: any, b: any) => String(a.x.soldAt || "").localeCompare(String(b.x.soldAt || "")))
+          .map((r: any) => ({
+            cliente: nombres.get(r.x.clientId) || "Sin contacto",
+            auto: r.x.vehicle || null,
+            fechaDeVenta: r.x.soldAt || null,
+            precio: r.precio,
+            pagado: r.pagado,
+            saldo: r.saldo,
+          }));
+
+        const total = conSaldo.reduce((s: number, r: any) => s + r.saldo, 0);
+        return texto({ ventasConSaldo: conSaldo.length, saldoTotal: total, detalle: conSaldo });
+      }
+
+      if (toolName === "historial_del_cliente") {
+        if (!sesionPuede(sesion, "contactos.ver")) return sinPermiso(id, "los contactos");
+        const c: any = await ubicarContacto(toolArgs);
+        if (!c) return texto({ error: "No encontré ese contacto entre los que puedes ver." });
+
+        const [dSnap, tSnap, nSnap] = await Promise.all([
+          deLaAgencia("deals"), deLaAgencia("tasks"), deLaAgencia("notes"),
+        ]);
+        const suyos = (snap: any) => snap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((x: any) => x.clientId === c.id && !x.isDeleted);
+
+        return texto({
+          contacto: {
+            id: c.id, nombre: c.name, telefono: c.phone, correo: c.email,
+            estatus: c.status, busca: c.wantedVehicle || null, etiquetas: c.tags || [],
+          },
+          tratos: suyos(dSnap).map((d: any) => ({ trato: d.title, etapa: d.status, valor: d.value, auto: d.vehicle })),
+          tareas: suyos(tSnap).map((x: any) => ({ tarea: x.title, fecha: x.dueDate || x.date, hecha: !!x.completed })),
+          notas: suyos(nSnap)
+            .sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt)))
+            .map((n: any) => ({ nota: n.content || n.text, fecha: n.createdAt })),
+        });
+      }
+
+      if (toolName === "ver_tratos") {
+        if (!sesionPuede(sesion, "tratos.ver")) return sinPermiso(id, "los tratos");
+        const limite = Number(toolArgs.limite) || 30;
+        const etapa = toolArgs.etapa ? String(toolArgs.etapa).toLowerCase() : null;
+
+        const [dSnap, cSnap] = await Promise.all([deLaAgencia("deals"), deLaAgencia("clients")]);
+        const nombres = new Map<string, string>();
+        cSnap.docs.forEach((d: any) => nombres.set(d.id, d.data().name || "Sin nombre"));
+
+        const tratos = dSnap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((x: any) => !x.isDeleted && esMio(x))
+          .filter((x: any) => !etapa || String(x.status || "").toLowerCase() === etapa)
+          .slice(0, limite)
+          .map((x: any) => ({
+            id: x.id, trato: x.title, cliente: nombres.get(x.clientId) || "Sin contacto",
+            etapa: x.status, valor: x.saleDetails?.price ?? x.value, auto: x.vehicle,
+          }));
+
+        return texto({ total: tratos.length, tratos });
+      }
+
+      if (toolName === "ver_notas") {
+        if (!sesionPuede(sesion, "contactos.ver")) return sinPermiso(id, "las notas");
+        const c: any = await ubicarContacto(toolArgs);
+        if (!c) return texto({ error: "No encontré ese contacto entre los que puedes ver." });
+
+        const nSnap = await deLaAgencia("notes");
+        const notas = nSnap.docs
+          .map((d: any) => ({ ...d.data(), id: d.id }))
+          .filter((n: any) => n.clientId === c.id && !n.isDeleted)
+          .sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt)))
+          .slice(0, 30)
+          .map((n: any) => ({ nota: n.content || n.text, fecha: n.createdAt, autor: n.createdByName || null }));
+
+        return texto({ contacto: c.name, total: notas.length, notas });
+      }
 
       if (toolName === "mi_cuenta") {
         // Sin esto, cuando una consulta regresa vacia no hay forma de saber si
