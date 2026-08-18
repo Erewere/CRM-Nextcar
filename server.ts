@@ -2163,11 +2163,37 @@ Return a JSON array of recommendation objects with the following schema:
       const datos = await leerClaveMcpDeUsuario(adminDb, decoded.uid);
       if (!datos?.mcpApiKey) return res.json({ hasKey: false, maskedKey: null });
 
+      // Se resuelve la clave por el mismo camino que usa el MCP, para poder
+      // ver que agencia y que rol quedan detras de ella. Cuando el asistente
+      // responde "no hay nada", esto dice si el problema es la clave, la
+      // agencia que resuelve o que de verdad no hay datos.
+      const sesion = await buscarSesionMcp(adminDb, datos.mcpApiKey);
+      let disponibles: number | null = null;
+      if (sesion?.agencyId) {
+        try {
+          const agg = await adminDb
+            .collection("vehicles")
+            .where("agencyId", "==", sesion.agencyId)
+            .where("status", "==", "available")
+            .count()
+            .get();
+          disponibles = agg.data().count as number;
+        } catch {
+          disponibles = null;
+        }
+      }
+
       return res.json({
         hasKey: true,
         maskedKey: "••••••••" + String(datos.mcpApiKey).slice(-4),
         createdAt: datos.createdAt || null,
         lastUsedAt: datos.lastUsedAt || null,
+        resuelve: sesion ? {
+          agencyId: sesion.agencyId,
+          agencia: sesion.agencyName,
+          rol: sesion.role,
+          autosDisponibles: disponibles,
+        } : null,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });

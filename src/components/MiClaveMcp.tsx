@@ -15,7 +15,7 @@ import { NOMBRE_ROL, DESCRIPCION_ROL, type Rol } from "../lib/permissions";
 export function MiClaveMcp({ onClose }: { onClose: () => void }) {
   const { currentUser, userData } = useAuth();
   const [cargando, setCargando] = useState(true);
-  const [info, setInfo] = useState<{ hasKey: boolean; maskedKey: string | null; lastUsedAt?: string } | null>(null);
+  const [info, setInfo] = useState<any>(null);
   const [claveNueva, setClaveNueva] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -161,6 +161,27 @@ export function MiClaveMcp({ onClose }: { onClose: () => void }) {
               </p>
             )}
           </div>
+
+          {info?.resuelve && (
+            <div className="p-3 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/40">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
+                Lo que ve tu asistente con esta clave
+              </p>
+              <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
+                <li>Agencia: <strong>{info.resuelve.agencia}</strong></li>
+                <li>Rol: <strong>{NOMBRE_ROL[(info.resuelve.rol as Rol)] || info.resuelve.rol}</strong></li>
+                <li className={info.resuelve.autosDisponibles === 0 ? "text-amber-700 dark:text-amber-400" : ""}>
+                  Autos disponibles: <strong>{info.resuelve.autosDisponibles ?? "—"}</strong>
+                </li>
+              </ul>
+              {info.resuelve.autosDisponibles === 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Si tu agencia sí tiene autos, es que esta clave está resolviendo otra
+                  agencia. Avísale a tu administrador.
+                </p>
+              )}
+            </div>
+          )}
 
           <button
             onClick={generar}
