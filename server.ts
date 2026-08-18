@@ -2642,6 +2642,106 @@ Return a JSON array of recommendation objects with the following schema:
       }
     },
     {
+      name: "actualizar_contacto",
+      description: "Corrige o completa los datos de un contacto: teléfono, correo, domicilio, empresa y qué auto busca. No cambia su etapa ni a qué vendedor pertenece.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          nombre: { type: "string", description: "Nombre del contacto, o parte de él" },
+          clientId: { type: "string", description: "Identificador exacto, si se conoce" },
+          telefono: { type: "string" },
+          correo: { type: "string" },
+          calle: { type: "string" },
+          numero: { type: "string" },
+          colonia: { type: "string" },
+          ciudad: { type: "string" },
+          codigoPostal: { type: "string" },
+          empresa: { type: "string" },
+          busca: {
+            type: "object",
+            description: "Qué auto busca",
+            properties: {
+              marca: { type: "string" },
+              modelo: { type: "string" },
+              anioMinimo: { type: "number" },
+              anioMaximo: { type: "number" },
+              precioMaximo: { type: "number" },
+              carroceria: { type: "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      name: "actualizar_trato",
+      description: "Cambia el nombre, el valor o la etapa de un trato dentro del embudo. No sirve para cerrarlo como ganado ni para darlo por perdido: eso se hace en el CRM, donde se registran la venta y sus pagos.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          dealId: { type: "string", description: "Identificador del trato" },
+          titulo: { type: "string", description: "Nuevo nombre del trato" },
+          valor: { type: "number", description: "Valor estimado del trato" },
+          etapa: { type: "string", description: "Etapa del embudo: new, contacted, negotiation" }
+        },
+        required: ["dealId"]
+      }
+    },
+    {
+      name: "agendar_tarea",
+      description: "Agenda una tarea o cita para un contacto: llamarle, mandarle fotos, prueba de manejo, entrega.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          nombre: { type: "string", description: "Nombre del contacto, o parte de él" },
+          clientId: { type: "string", description: "Identificador exacto, si se conoce" },
+          titulo: { type: "string", description: "Qué hay que hacer" },
+          fecha: { type: "string", description: "Fecha en formato AAAA-MM-DD" },
+          hora: { type: "string", description: "Hora en formato HH:MM, opcional" },
+          notas: { type: "string", description: "Detalle adicional, opcional" }
+        },
+        required: ["titulo", "fecha"]
+      }
+    },
+    {
+      name: "agregar_nota",
+      description: "Registra una nota en el historial de un contacto: lo que dijo, lo que quedó pendiente, el resultado de una llamada.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          nombre: { type: "string", description: "Nombre del contacto, o parte de él" },
+          clientId: { type: "string", description: "Identificador exacto, si se conoce" },
+          texto: { type: "string", description: "Contenido de la nota" }
+        },
+        required: ["texto"]
+      }
+    },
+    {
+      name: "actualizar_precio",
+      description: "Cambia el precio de venta de un vehículo del inventario.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          vehicleId: { type: "string", description: "Identificador del vehículo" },
+          precio: { type: "number", description: "Nuevo precio de venta" }
+        },
+        required: ["vehicleId", "precio"]
+      }
+    },
+    {
+      name: "agregar_gasto",
+      description: "Registra un gasto de un vehículo: hojalatería, pintura, servicio, detallado. Se suma al costo de la unidad.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          vehicleId: { type: "string", description: "Identificador del vehículo" },
+          concepto: { type: "string", description: "En qué se gastó" },
+          importe: { type: "number", description: "Cuánto costó" },
+          fecha: { type: "string", description: "Fecha en formato AAAA-MM-DD, opcional" }
+        },
+        required: ["vehicleId", "concepto", "importe"]
+      }
+    },
+    {
       name: "get_sales_stats",
       description: "Obtiene estadísticas de ventas, cierres e ingresos del CRM Erewere para la agencia autenticada",
       inputSchema: {
@@ -2913,6 +3013,180 @@ Return a JSON array of recommendation objects with the following schema:
           .map((n: any) => ({ nota: n.content || n.text, fecha: n.createdAt, autor: n.createdByName || null }));
 
         return texto({ contacto: c.name, total: notas.length, notas });
+      }
+
+      // --- Escrituras -------------------------------------------------
+      // Cada una toca campos concretos. Ninguna acepta "actualiza el campo que
+      // sea": con eso, un malentendido del asistente podria marcar un trato
+      // como ganado, reasignarlo a otro vendedor o vaciar un dato. Ninguna
+      // borra nada, y todas dejan constancia de quien las uso.
+
+      const marcaDeAutor = () => ({
+        updatedAt: new Date().toISOString(),
+        ...(sesion?.userId ? { updatedBy: sesion.userId } : {}),
+      });
+
+      if (toolName === "actualizar_contacto") {
+        if (!sesionPuede(sesion, "contactos.editar")) return sinPermiso(id, "editar contactos");
+        const c: any = await ubicarContacto(toolArgs);
+        if (!c) return texto({ error: "No encontré ese contacto entre los que puedes editar." });
+
+        const cambios: any = {};
+        const mapa: Record<string, string> = {
+          telefono: "phone", correo: "email", calle: "street", numero: "exteriorNumber",
+          colonia: "neighborhood", ciudad: "city", codigoPostal: "zipCode", empresa: "organization",
+        };
+        for (const [entrada, campo] of Object.entries(mapa)) {
+          if (toolArgs[entrada] !== undefined && toolArgs[entrada] !== null && toolArgs[entrada] !== "") {
+            cambios[campo] = toolArgs[entrada];
+          }
+        }
+        if (toolArgs.busca && typeof toolArgs.busca === "object") {
+          const b = toolArgs.busca;
+          cambios.wantedVehicle = {
+            ...(c.wantedVehicle || {}),
+            ...(b.marca ? { make: b.marca } : {}),
+            ...(b.modelo ? { model: b.modelo } : {}),
+            ...(b.anioMinimo ? { yearMin: Number(b.anioMinimo) } : {}),
+            ...(b.anioMaximo ? { yearMax: Number(b.anioMaximo) } : {}),
+            ...(b.precioMaximo ? { priceMax: Number(b.precioMaximo) } : {}),
+            ...(b.carroceria ? { bodyType: b.carroceria } : {}),
+          };
+        }
+        if (Object.keys(cambios).length === 0) {
+          return texto({ error: "No indicaste ningún dato que cambiar." });
+        }
+
+        await db.collection("clients").doc(c.id).set({ ...cambios, ...marcaDeAutor() }, { merge: true });
+        return texto({ ok: true, contacto: c.name, actualizado: Object.keys(cambios) });
+      }
+
+      if (toolName === "actualizar_trato") {
+        if (!sesionPuede(sesion, "tratos.gestionar")) return sinPermiso(id, "modificar tratos");
+        const ref = db.collection("deals").doc(String(toolArgs.dealId || ""));
+        const snap = await ref.get();
+        if (!snap.exists) return texto({ error: "No existe ese trato." });
+        const d: any = snap.data();
+        if (d.agencyId !== targetAgencyId || !esMio(d)) {
+          return texto({ error: "Ese trato no es tuyo." });
+        }
+
+        const cambios: any = {};
+        if (toolArgs.titulo) cambios.title = String(toolArgs.titulo);
+        if (toolArgs.valor !== undefined) cambios.value = Number(toolArgs.valor);
+        if (toolArgs.etapa) {
+          const etapa = String(toolArgs.etapa).toLowerCase();
+          // Cerrar una venta enlaza el auto, registra pagos y comprueba que esa
+          // unidad no se haya vendido ya. Darla por perdida pide un motivo.
+          // Nada de eso cabe aqui, y hacerlo a medias deja datos incoherentes.
+          if (["won", "ganado", "lost", "perdido"].includes(etapa)) {
+            return texto({
+              error: "Desde aquí no se cierra ni se pierde un trato.",
+              detalle: "Cerrar una venta enlaza el auto y registra los pagos; darla por perdida pide un motivo. Ambas cosas se hacen en el CRM.",
+            });
+          }
+          cambios.status = etapa;
+        }
+        if (Object.keys(cambios).length === 0) {
+          return texto({ error: "No indicaste nada que cambiar." });
+        }
+
+        await ref.set({ ...cambios, ...marcaDeAutor() }, { merge: true });
+        return texto({ ok: true, trato: d.title, actualizado: Object.keys(cambios) });
+      }
+
+      if (toolName === "agendar_tarea") {
+        if (!sesionPuede(sesion, "tratos.gestionar")) return sinPermiso(id, "agendar tareas");
+        const c: any = await ubicarContacto(toolArgs);
+        const ref = db.collection("tasks").doc();
+        await ref.set({
+          id: ref.id,
+          agencyId: targetAgencyId,
+          sellerId: sesion?.userId || null,
+          clientId: c?.id || null,
+          title: String(toolArgs.titulo),
+          dueDate: String(toolArgs.fecha),
+          ...(toolArgs.hora ? { dueTime: String(toolArgs.hora) } : {}),
+          ...(toolArgs.notas ? { notes: String(toolArgs.notas) } : {}),
+          completed: false,
+          createdAt: new Date().toISOString(),
+          ...marcaDeAutor(),
+        });
+        return texto({
+          ok: true, tarea: toolArgs.titulo, fecha: toolArgs.fecha,
+          cliente: c?.name || null,
+          aviso: c ? undefined : "Se agendó sin contacto: no encontré a esa persona.",
+        });
+      }
+
+      if (toolName === "agregar_nota") {
+        if (!sesionPuede(sesion, "contactos.editar")) return sinPermiso(id, "agregar notas");
+        const c: any = await ubicarContacto(toolArgs);
+        if (!c) return texto({ error: "No encontré ese contacto entre los que puedes ver." });
+
+        const ref = db.collection("notes").doc();
+        await ref.set({
+          clientId: c.id,
+          agencyId: targetAgencyId,
+          content: String(toolArgs.texto),
+          type: "ia",
+          createdAt: new Date().toISOString(),
+          ...(sesion?.userId ? { createdBy: sesion.userId } : {}),
+          ...(sesion?.userName ? { createdByName: sesion.userName } : {}),
+        });
+        return texto({ ok: true, contacto: c.name });
+      }
+
+      if (toolName === "actualizar_precio") {
+        // Ver el precio y poder cambiarlo no son lo mismo: en la pantalla, un
+        // vendedor lo consulta pero no lo edita.
+        if (!sesionPuede(sesion, "vehiculos.editar") || !sesionPuede(sesion, "vehiculos.precio")) {
+          return sinPermiso(id, "cambiar precios");
+        }
+        const ref = db.collection("vehicles").doc(String(toolArgs.vehicleId || ""));
+        const snap = await ref.get();
+        if (!snap.exists || snap.data()?.agencyId !== targetAgencyId) {
+          return texto({ error: "No existe ese vehículo en tu agencia." });
+        }
+        const precio = Number(toolArgs.precio);
+        if (!(precio > 0)) return texto({ error: "El precio debe ser mayor que cero." });
+
+        const v: any = snap.data();
+        await ref.set({ price: precio, ...marcaDeAutor() }, { merge: true });
+        return texto({
+          ok: true,
+          auto: `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(),
+          precioAnterior: v.price ?? null,
+          precioNuevo: precio,
+        });
+      }
+
+      if (toolName === "agregar_gasto") {
+        if (!sesionPuede(sesion, "gastos.crear")) return sinPermiso(id, "registrar gastos");
+        const vRef = db.collection("vehicles").doc(String(toolArgs.vehicleId || ""));
+        const vSnap = await vRef.get();
+        if (!vSnap.exists || vSnap.data()?.agencyId !== targetAgencyId) {
+          return texto({ error: "No existe ese vehículo en tu agencia." });
+        }
+        const importe = Number(toolArgs.importe);
+        if (!(importe > 0)) return texto({ error: "El importe debe ser mayor que cero." });
+
+        const ref = db.collection("vehicleExpenses").doc();
+        await ref.set({
+          vehicleId: toolArgs.vehicleId,
+          description: String(toolArgs.concepto),
+          amount: importe,
+          date: String(toolArgs.fecha || new Date().toISOString().split("T")[0]),
+          addedBy: sesion?.userId || "",
+          agencyId: targetAgencyId,
+        });
+        const v: any = vSnap.data();
+        return texto({
+          ok: true,
+          auto: `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(),
+          concepto: toolArgs.concepto,
+          importe,
+        });
       }
 
       if (toolName === "mi_cuenta") {
