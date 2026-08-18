@@ -25,6 +25,7 @@ import {
   MessageSquare,
   DollarSign,
   Building2,
+  Bot,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -42,6 +43,7 @@ import { NextcarLogo } from "./NextcarLogo";
 import { getTrialDaysLeft } from "../lib/subscription";
 import { NOMBRE_ROL, type Rol } from "../lib/permissions";
 
+import { MiClaveMcp } from "./MiClaveMcp";
 export function Layout() {
   const { userData, agencyData } = useAuth();
   const trialDaysLeft = getTrialDaysLeft(agencyData);
@@ -53,6 +55,8 @@ export function Layout() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showClaveMcp, setShowClaveMcp] = useState(false);
+  const [menuPerfilAbierto, setMenuPerfilAbierto] = useState(false);
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
   const isMobile = useIsMobile();
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
@@ -349,9 +353,9 @@ export function Layout() {
 
         <div className="mt-auto border-t border-gray-200 dark:border-slate-800 p-4">
           <button
-            onClick={() => setShowUserSettingsModal(true)}
+            onClick={() => setMenuPerfilAbierto((v) => !v)}
             className={clsx(
-              "tour-profile-button w-full flex items-center rounded bg-[#f4f5f5] dark:bg-slate-800/50 mb-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left border border-gray-200 dark:border-transparent",
+              "tour-profile-button w-full flex items-center rounded bg-[#f4f5f5] dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left border border-gray-200 dark:border-transparent",
               isSidebarCollapsed ? "justify-center p-2" : "gap-3 p-3",
             )}
           >
@@ -375,48 +379,55 @@ export function Layout() {
                 <span className="text-sm font-semibold text-slate-800 dark:text-white truncate">
                   {userData?.name}
                 </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">
-                  {userData?.role}
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {NOMBRE_ROL[(userData?.role as Rol)] || "Usuario"}
                 </span>
               </div>
             )}
           </button>
-          <button
-            onClick={() => setShowPasswordModal(true)}
-            title={isSidebarCollapsed ? "Cambiar Contraseña" : undefined}
-            className={clsx(
-              "w-full flex items-center rounded text-sm text-slate-500 hover:bg-[#f4f5f5] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors mb-1",
-              isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2",
-            )}
-          >
-            <Key
-              className={clsx(
-                "shrink-0",
-                isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5",
-              )}
-            />
-            {!isSidebarCollapsed && (
-              <span className="truncate">Cambiar Contraseña</span>
-            )}
-          </button>
-          <button
-            onClick={handleLogout}
-            title={isSidebarCollapsed ? "Cerrar Sesión" : undefined}
-            className={clsx(
-              "w-full flex items-center rounded text-sm text-slate-500 hover:bg-[#f4f5f5] hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors",
-              isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2",
-            )}
-          >
-            <LogOut
-              className={clsx(
-                "shrink-0",
-                isSidebarCollapsed ? "w-6 h-6" : "w-5 h-5",
-              )}
-            />
-            {!isSidebarCollapsed && (
-              <span className="truncate">Cerrar Sesión</span>
-            )}
-          </button>
+          {/* Las acciones de la persona viven en un menu, no sueltas en la
+              barra: asi la barra no crece cada vez que se agrega una, y el
+              lugar donde buscarlas es el mismo de siempre, tu nombre. */}
+          {menuPerfilAbierto && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setMenuPerfilAbierto(false)}
+              />
+              <div className="relative z-50">
+                <div className="absolute bottom-1 left-0 right-0 mb-1 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
+                  <button
+                    onClick={() => { setMenuPerfilAbierto(false); setShowUserSettingsModal(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <Users className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Mi perfil</span>
+                  </button>
+                  <button
+                    onClick={() => { setMenuPerfilAbierto(false); setShowClaveMcp(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700"
+                  >
+                    <Bot className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Mi clave para IA</span>
+                  </button>
+                  <button
+                    onClick={() => { setMenuPerfilAbierto(false); setShowPasswordModal(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700"
+                  >
+                    <Key className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Cambiar contraseña</span>
+                  </button>
+                  <button
+                    onClick={() => { setMenuPerfilAbierto(false); handleLogout(); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-t border-gray-100 dark:border-slate-700"
+                  >
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Cerrar sesión</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -588,6 +599,7 @@ export function Layout() {
       )}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
+      {showClaveMcp && <MiClaveMcp onClose={() => setShowClaveMcp(false)} />}
       <UserSettingsModal isOpen={showUserSettingsModal} onClose={() => setShowUserSettingsModal(false)} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
+import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 import express from "express";
 import cors from "cors";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -89,6 +90,95 @@ function getAdminDb() {
  * decenas no se nota, pero si algun dia son miles convendra guardar el
  * telefono ya normalizado y consultarlo directo.
  */
+/**
+ * La clave de MCP de una persona.
+ *
+ * Vive en userSecrets, una coleccion que no aparece en firestore.rules: sin
+ * regla, Firestore la niega a todos y solo el servidor la alcanza. Igual que
+ * la de la agencia, y por la misma razon.
+ *
+ * Que la clave sea de la persona y no de la agencia es lo que permite que el
+ * asistente quede sujeto a los mismos permisos que la pantalla: un vendedor
+ * ve lo suyo, el taller no ve clientes, y nadie ve costos si su rol no los
+ * tiene. Con una sola clave por agencia eso era imposible: no habia a quien
+ * atribuirle la peticion.
+ */
+async function leerClaveMcpDeUsuario(adminDb: any, uid: string) {
+  const doc = await adminDb.collection("userSecrets").doc(uid).get();
+  if (!doc.exists) return null;
+  return doc.data();
+}
+
+async function guardarClaveMcpDeUsuario(adminDb: any, uid: string, agencyId: string, clave: string) {
+  await adminDb.collection("userSecrets").doc(uid).set({
+    userId: uid,
+    agencyId,
+    mcpApiKey: clave,
+    createdAt: new Date().toISOString(),
+  }, { merge: true });
+}
+
+/**
+ * Quien esta detras de una clave de MCP.
+ *
+ * Primero se busca entre las claves personales. Si no aparece, se acepta la
+ * clave de agencia que ya existia, tratandola como de un administrador, para
+ * no tumbar las conexiones en uso mientras cada quien saca la suya.
+ */
+async function buscarSesionMcp(adminDb: any, clave: string) {
+  const limpia = String(clave || "").trim();
+  if (!limpia) return null;
+
+  const personal = await adminDb
+    .collection("userSecrets")
+    .where("mcpApiKey", "==", limpia)
+    .limit(1)
+    .get();
+
+  if (!personal.empty) {
+    const uid = personal.docs[0].id;
+    const usuario = await adminDb.collection("users").doc(uid).get();
+    if (!usuario.exists) return null;
+    const u: any = usuario.data();
+    const agencia = await adminDb.collection("agencies").doc(u.agencyId).get();
+    await personal.docs[0].ref.set({ lastUsedAt: new Date().toISOString() }, { merge: true });
+    return {
+      userId: uid,
+      role: u.role || "unassigned",
+      userName: u.name || u.email || "Usuario",
+      agencyId: u.agencyId,
+      agencyName: (agencia.exists && agencia.data()?.name) || "Agencia",
+      esClaveDeAgencia: false,
+    };
+  }
+
+  const deAgencia = await adminDb
+    .collection("agencySecrets")
+    .where("mcpApiKey", "==", limpia)
+    .limit(1)
+    .get();
+
+  if (!deAgencia.empty) {
+    const agencyId = deAgencia.docs[0].id;
+    const agencia = await adminDb.collection("agencies").doc(agencyId).get();
+    return {
+      userId: null,
+      role: "admin",
+      userName: "Clave de la agencia",
+      agencyId,
+      agencyName: (agencia.exists && agencia.data()?.name) || "Agencia",
+      esClaveDeAgencia: true,
+    };
+  }
+
+  return null;
+}
+
+/** Atajo para leer permisos dentro de las herramientas del MCP. */
+function sesionPuede(sesion: any, permiso: Permiso): boolean {
+  return puedeRol(sesion?.role, permiso);
+}
+
 async function buscarContactoPorTelefono(adminDb: any, agencyId: string, phone: string) {
   const bruto = String(phone || "").trim();
   const digitos = bruto.replace(/\D/g, "");
@@ -2048,6 +2138,85 @@ Return a JSON array of recommendation objects with the following schema:
     }
   });
 
+  // Clave de MCP personal. Cada quien genera y consulta la suya; nadie ve la
+  // de otro, ni siquiera un administrador. Lo que la clave permite hacer lo
+  // decide el rol de su dueño, con el mismo catalogo que usan las pantallas.
+  app.get("/api/mcp-key/mine", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decoded;
+      try {
+        decoded = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const datos = await leerClaveMcpDeUsuario(adminDb, decoded.uid);
+      if (!datos?.mcpApiKey) return res.json({ hasKey: false, maskedKey: null });
+
+      return res.json({
+        hasKey: true,
+        maskedKey: "••••••••" + String(datos.mcpApiKey).slice(-4),
+        createdAt: datos.createdAt || null,
+        lastUsedAt: datos.lastUsedAt || null,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/mcp-key/mine", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decoded;
+      try {
+        decoded = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const usuario = await adminDb.collection("users").doc(decoded.uid).get();
+      if (!usuario.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const u: any = usuario.data();
+      if (!u.agencyId || u.agencyId === "unassigned") {
+        return res.status(400).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+      if (u.role === "unassigned") {
+        return res.status(403).json({ error: "Tu usuario aún no tiene un rol asignado" });
+      }
+
+      const nueva = "erewere_mcp_" + crypto.randomBytes(24).toString("hex");
+      await guardarClaveMcpDeUsuario(adminDb, decoded.uid, u.agencyId, nueva);
+
+      // Se muestra completa una sola vez: despues solo queda enmascarada.
+      return res.json({
+        mcpApiKey: nueva,
+        maskedKey: "••••••••" + nueva.slice(-4),
+        rol: u.role,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/admin/audit-costs", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -2310,7 +2479,7 @@ Return a JSON array of recommendation objects with the following schema:
       apiKey = (req.headers["x-api-key"] as string) || (req.query?.apiKey as string) || (req.query?.token as string) || "";
     }
 
-    return await findAgencyByMcpKey(apiKey, db);
+    return await buscarSesionMcp(db, apiKey);
   };
 
   const verifyPkce = (codeVerifier: string, codeChallenge: string, method: string): boolean => {
@@ -2436,7 +2605,23 @@ Return a JSON array of recommendation objects with the following schema:
     }
   ];
 
-  const processJsonRpc = async (req: express.Request, db: any, targetAgencyId: string) => {
+  /** Respuesta de "no te toca", en el formato que espera el asistente. */
+  const sinPermiso = (id: any, queFalta: string) => ({
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: "Sin permiso",
+          detalle: `Tu usuario no tiene acceso a ${queFalta}.`,
+        })
+      }]
+    }
+  });
+
+  const processJsonRpc = async (req: express.Request, db: any, sesion: any) => {
+    const targetAgencyId = sesion?.agencyId;
     const reqBody = req.body || {};
     const { jsonrpc, id, method, params } = reqBody;
 
@@ -2495,14 +2680,27 @@ Return a JSON array of recommendation objects with the following schema:
       // We ignore caller-supplied agencyId or any defaults.
 
       if (toolName === "get_inventory") {
+        if (!sesionPuede(sesion, "vehiculos.ver")) return sinPermiso(id, "el inventario");
+
         const q = db
           .collection("vehicles")
           .where("agencyId", "==", targetAgencyId)
           .where("status", "==", "available");
         const snapshot = await q.get();
-        // El id del documento va al final para que no lo pise un campo "id"
-        // guardado dentro de los datos.
-        const vehicles = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
+
+        // Se enumeran los campos en vez de mandar el documento entero: asi lo
+        // que se agregue al vehiculo el dia de mañana no sale por aqui sin que
+        // nadie lo haya decidido.
+        const vehicles = snapshot.docs.map((doc: any) => {
+          const v: any = doc.data();
+          return {
+            id: doc.id,
+            make: v.make, model: v.model, year: v.year, color: v.color,
+            transmission: v.transmission, bodyType: v.bodyType, km: v.km,
+            vin: v.vin, price: v.price, status: v.status,
+            equipment: v.equipment, photoUrl: v.photoUrl,
+          };
+        });
 
         return {
           jsonrpc: "2.0",
@@ -2519,15 +2717,23 @@ Return a JSON array of recommendation objects with the following schema:
       }
 
       if (toolName === "get_clients") {
+        if (!sesionPuede(sesion, "contactos.ver")) return sinPermiso(id, "los contactos");
+
         const limitCount = toolArgs.limit || 20;
-        const q = db
-          .collection("clients")
-          .where("agencyId", "==", targetAgencyId)
-          .limit(limitCount);
-        const snapshot = await q.get();
+        let q = db.collection("clients").where("agencyId", "==", targetAgencyId);
+
+        // Quien no puede ver los tratos ajenos tampoco ve la cartera de sus
+        // compañeros: la misma regla que en la pantalla.
+        if (!sesionPuede(sesion, "tratos.ajenos") && sesion?.userId) {
+          q = q.where("sellerId", "==", sesion.userId);
+        }
+
+        const snapshot = await q.limit(limitCount).get();
         // El id del documento va al final para que no lo pise un campo "id"
         // guardado dentro de los datos.
-        const clients = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
+        const clients = snapshot.docs
+          .map((doc: any) => ({ ...doc.data(), id: doc.id }))
+          .filter((c: any) => !c.isDeleted);
 
         return {
           jsonrpc: "2.0",
@@ -2544,6 +2750,7 @@ Return a JSON array of recommendation objects with the following schema:
       }
 
       if (toolName === "create_lead") {
+        if (!sesionPuede(sesion, "contactos.editar")) return sinPermiso(id, "dar de alta contactos");
         const { name, phone, email, vehicle, origin } = toolArgs;
         if (!name) {
           return {
@@ -2560,6 +2767,8 @@ Return a JSON array of recommendation objects with the following schema:
           email: email || "",
           vehicle: vehicle || "",
           origin: origin || "mcp_ai",
+          // Queda a nombre de quien uso su clave, no de "la agencia".
+          sellerId: sesion?.userId || null,
           status: "new",
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp()
@@ -2601,6 +2810,7 @@ Return a JSON array of recommendation objects with the following schema:
       }
 
       if (toolName === "get_sales_stats") {
+        if (!sesionPuede(sesion, "reportes.ver")) return sinPermiso(id, "los reportes");
         const qClients = db.collection("clients").where("agencyId", "==", targetAgencyId);
         const qVehicles = db.collection("vehicles").where("agencyId", "==", targetAgencyId);
 
@@ -3000,7 +3210,7 @@ Return a JSON array of recommendation objects with the following schema:
     }
 
     try {
-      const responseJson = await processJsonRpc(req, adminDb, authResult.agencyId);
+      const responseJson = await processJsonRpc(req, adminDb, authResult);
 
       if (sessionId && sseSessions.has(sessionId)) {
         const sseSession = sseSessions.get(sessionId)!;
