@@ -16,6 +16,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
 import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
@@ -74,7 +75,7 @@ import {
 import { es } from "date-fns/locale";
 
 export function Tasks() {
-  const { userData, connectGoogleServices, googleToken } = useAuth();
+  const { userData, connectGoogleServices, googleToken, googleAccount } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<{ task: Task; client: Client | null }[]>(
@@ -884,15 +885,22 @@ export function Tasks() {
       }
 
       let syncedCount = 0;
+      let faltaronPermisos = false;
       for (const { task } of tasks) {
         if (task.googleEventId) {
           try {
             const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${task.googleEventId}`, {
               headers: { Authorization: `Bearer ${token}` }
             });
+            if (permisoDeGoogleVencido(res)) throw new Error(AVISO_RECONECTAR);
+            if (permisoNoAlcanza(res)) faltaronPermisos = true;
+            // Un 404 puede ser un evento borrado a proposito o, si el usuario
+            // conecto otro Gmail, un evento que si existe pero en otra cuenta.
             if (res.status === 404) {
-              await deleteDoc(doc(db, "tasks", task.id));
-              syncedCount++;
+              if (esLaMismaCuentaDeGoogle(task.googleAccount, googleAccount)) {
+                await deleteDoc(doc(db, "tasks", task.id));
+                syncedCount++;
+              }
             } else if (res.ok) {
               const data = await res.json();
               if (data.status === 'cancelled') {
@@ -901,6 +909,7 @@ export function Tasks() {
               }
             }
           } catch (e) {
+            if ((e as any)?.message === AVISO_RECONECTAR) throw e;
             console.error("Error fetching event", e);
           }
         }
@@ -909,6 +918,7 @@ export function Tasks() {
             const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/@default/tasks/${task.googleTaskId}`, {
               headers: { Authorization: `Bearer ${token}` }
             });
+            if (permisoDeGoogleVencido(res)) throw new Error(AVISO_RECONECTAR);
             if (res.status === 200) {
               const data = await res.json();
               if (data.status === 'completed') {
@@ -916,10 +926,13 @@ export function Tasks() {
                 syncedCount++;
               }
             } else if (res.status === 404) {
-              await deleteDoc(doc(db, "tasks", task.id));
-              syncedCount++;
+              if (esLaMismaCuentaDeGoogle(task.googleAccount, googleAccount)) {
+                await deleteDoc(doc(db, "tasks", task.id));
+                syncedCount++;
+              }
             }
           } catch (e) {
+            if ((e as any)?.message === AVISO_RECONECTAR) throw e;
             console.error("Error fetching task", e);
           }
         }
@@ -956,6 +969,10 @@ export function Tasks() {
               })
             ]);
 
+            if (permisoDeGoogleVencido(calRes) || permisoDeGoogleVencido(taskRes)) {
+              throw new Error(AVISO_RECONECTAR);
+            }
+            if (permisoNoAlcanza(calRes)) faltaronPermisos = true;
             let updates: any = {};
             if (calRes.ok) {
               const calData = await calRes.json();
@@ -965,21 +982,31 @@ export function Tasks() {
               const taskData = await taskRes.json();
               updates.googleTaskId = taskData.id;
             }
+            // Queda anotado en que cuenta de Google vive el evento.
+            if (Object.keys(updates).length > 0 && googleAccount) {
+              updates.googleAccount = googleAccount;
+            }
 
             if (Object.keys(updates).length > 0) {
               await updateDoc(doc(db, "tasks", task.id), updates);
               syncedCount++;
             }
           } catch (e) {
+            if ((e as any)?.message === AVISO_RECONECTAR) throw e;
             console.error("Error creating Google items", e);
           }
         }
       }
 
-      alert(syncedCount > 0 ? `¡Sincronización completada! ${syncedCount} elementos actualizados.` : "¡Calendario conectado! Todo está al día.");
+      const resumen = syncedCount > 0
+        ? `¡Sincronización completada! ${syncedCount} elementos actualizados.`
+        : "¡Calendario conectado! Todo está al día.";
+      alert(faltaronPermisos ? resumen + "\n\n" + AVISO_FALTAN_PERMISOS : resumen);
       setShowSyncBanner(false);
     } catch (error: any) {
-      alert("Error al sincronizar: " + (error.message || "Error desconocido"));
+      alert(error?.message === AVISO_RECONECTAR
+        ? AVISO_RECONECTAR
+        : "Error al sincronizar: " + (error.message || "Error desconocido"));
     } finally {
       setIsSyncing(false);
     }
@@ -2748,14 +2775,26 @@ export function Tasks() {
                     const taskData = await taskRes.json();
                     updates.googleTaskId = taskData.id;
                   }
+                  if (Object.keys(updates).length > 0 && googleAccount) {
+                    updates.googleAccount = googleAccount;
+                  }
 
                   if (Object.keys(updates).length > 0) {
                     await updateDoc(newRef, updates);
                   }
 
-                  alert(
-                    "¡Actividad guardada y evento agregado a tu Calendario y Tareas de Google con éxito!",
-                  );
+                  // Antes se avisaba de exito aunque Google hubiera rechazado
+                  // las dos llamadas, asi que un permiso caducado parecia una
+                  // sincronizacion buena y el usuario no tenia como enterarse.
+                  if (permisoDeGoogleVencido(calRes) || permisoDeGoogleVencido(taskRes)) {
+                    alert("La actividad se guardó en el CRM, pero no se pudo agregar a Google.\n\n" + AVISO_RECONECTAR);
+                  } else if (permisoNoAlcanza(calRes)) {
+                    alert("La actividad se guardó en el CRM.\n\n" + AVISO_FALTAN_PERMISOS);
+                  } else if (calRes.ok) {
+                    alert("¡Actividad guardada y agregada a tu Calendario de Google!");
+                  } else {
+                    alert("La actividad se guardó en el CRM, pero Google no la aceptó. Revisa tu conexión en Integraciones.");
+                  }
                 } catch (calendarError) {
                   console.error("Error syncing to calendar/tasks", calendarError);
                   alert(

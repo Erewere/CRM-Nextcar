@@ -200,6 +200,8 @@ export interface Task {
   status?: string;
   googleEventId?: string;
   googleTaskId?: string;
+  /** Cuenta de Google donde vive el evento; ver esLaMismaCuentaDeGoogle. */
+  googleAccount?: string;
   createdAt: any;
   updatedAt?: any;
 }

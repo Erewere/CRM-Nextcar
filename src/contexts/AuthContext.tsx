@@ -6,12 +6,20 @@ import { User, Agency } from '../types';
 
 let cachedAccessToken: string | null = null;
 
+/** Correo de la cuenta de Google conectada; ver esLaMismaCuentaDeGoogle. */
+function leerCuentaGoogle(uid: string) {
+  return localStorage.getItem(`google_account_${uid}`);
+}
+
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/calendar.events');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
 provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
-provider.addScope('https://www.googleapis.com/auth/gmail.send');
-provider.addScope('https://www.googleapis.com/auth/tasks');
+// Pendiente: el CRM tambien llama a Tareas de Google y a enviar correo, pero
+// esos permisos no se piden aqui todavia. Antes de agregarlos hay que darlos de
+// alta en la pantalla de consentimiento de Google Cloud; si se piden sin estar
+// dados de alta, Google rechaza la conexion entera y deja de funcionar hasta
+// el calendario, que hoy si sirve.
 provider.setCustomParameters({ prompt: 'select_account' });
 
 interface AuthContextType {
@@ -23,6 +31,7 @@ interface AuthContextType {
   connectGoogleServices: () => Promise<string | null>;
   disconnectGoogleServices: () => void;
   googleToken: string | null;
+  googleAccount: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [agencyData, setAgencyData] = useState<Agency | null>(null);
   const [loading, setLoading] = useState(true);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [googleAccount, setGoogleAccount] = useState<string | null>(null);
 
   useEffect(() => {
     let userUnsubscribe: (() => void) | undefined;
@@ -57,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           cachedAccessToken = null;
           setGoogleToken(null);
         }
+        setGoogleAccount(leerCuentaGoogle(user.uid));
         setLoading(true);
         try {
           console.log("AuthContext: Setting up user snapshot for UID:", user.uid);
@@ -251,61 +262,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserData({ ...newDoc.data(), id: newDoc.id } as User);
   };
 
+  /**
+   * Conecta la cuenta de Google de quien ya esta dentro del CRM.
+   *
+   * Antes esto llamaba a signInWithPopup, que es iniciar sesion, no vincular:
+   * si el usuario habia entrado con su correo y contraseña, Google intentaba
+   * abrir una sesion distinta y chocaba con la suya. Por eso marcaba error.
+   *
+   * Lo correcto es enlazar la cuenta de Google a la sesion que ya existe. Si
+   * ya estaba enlazada, basta con volver a autenticarse para obtener un token
+   * fresco: los de Google caducan en una hora y no traen forma de renovarse
+   * solos, asi que de vez en cuando hay que reconectar.
+   */
   const connectGoogleServices = async () => {
-    try {
-      let result;
-      if (auth.currentUser) {
-        try {
-          result = await signInWithPopup(auth, provider);
-        } catch (popupErr: any) {
-          if (popupErr.code === 'auth/credential-already-in-use' || popupErr.code === 'auth/email-already-in-use') {
-            const credential = GoogleAuthProvider.credentialFromError(popupErr);
-            if (credential?.accessToken) {
-              const token = credential.accessToken;
-              if (auth.currentUser?.uid) {
-                localStorage.setItem(`google_token_${auth.currentUser.uid}`, token);
-              }
-              cachedAccessToken = token;
-              setGoogleToken(token);
-              return token;
-            }
-          }
-          throw popupErr;
-        }
-      } else {
-        result = await signInWithPopup(auth, provider);
+    const guardarToken = (token: string, cuenta: string | null) => {
+      if (auth.currentUser?.uid) {
+        localStorage.setItem(`google_token_${auth.currentUser.uid}`, token);
+        if (cuenta) localStorage.setItem(`google_account_${auth.currentUser.uid}`, cuenta);
       }
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        const token = credential.accessToken;
-        if (auth.currentUser?.uid) {
-          localStorage.setItem(`google_token_${auth.currentUser.uid}`, token);
+      cachedAccessToken = token;
+      setGoogleToken(token);
+      if (cuenta) setGoogleAccount(cuenta);
+      return token;
+    };
+
+    // De que cuenta de Google salio el permiso. No tiene por que ser el correo
+    // con el que se entra al CRM: cada usuario conecta el Gmail que quiera.
+    const cuentaDeGoogle = (result: any): string | null =>
+      result?.user?.providerData?.find((p: any) => p?.providerId === 'google.com')?.email
+      ?? result?.user?.email
+      ?? null;
+
+    const tokenDe = (result: any) => {
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      return cred?.accessToken ? guardarToken(cred.accessToken, cuentaDeGoogle(result)) : null;
+    };
+
+    try {
+      if (!auth.currentUser) {
+        const result = await signInWithPopup(auth, provider);
+        return tokenDe(result);
+      }
+
+      try {
+        const result = await linkWithPopup(auth.currentUser, provider);
+        return tokenDe(result);
+      } catch (err: any) {
+        // Ya enlazada: solo hace falta un token nuevo.
+        if (err?.code === 'auth/provider-already-linked'
+            || err?.code === 'auth/credential-already-in-use'
+            || err?.code === 'auth/requires-recent-login') {
+          const result = await reauthenticateWithPopup(auth.currentUser, provider);
+          return tokenDe(result);
         }
-        cachedAccessToken = token;
-        setGoogleToken(token);
-        return token;
+        throw err;
       }
     } catch (e: any) {
-      if (e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-closed-by-user') {
-        console.log('Google services sync cancelled by user.');
-      } else {
-        console.error('Google connect error:', e);
-        throw e; // re-throw to allow component to display error
+      if (e?.code === 'auth/cancelled-popup-request' || e?.code === 'auth/popup-closed-by-user') {
+        return null;
       }
+      if (e?.code === 'auth/popup-blocked') {
+        throw new Error('El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de este sitio e inténtalo de nuevo.');
+      }
+      if (e?.code === 'auth/account-exists-with-different-credential') {
+        throw new Error('Esa cuenta de Google ya está usada por otro usuario del CRM. Entra con la cuenta de Google que corresponde a este usuario.');
+      }
+      console.error('Google connect error:', e);
+      throw new Error(e?.message || 'No se pudo conectar con Google.');
     }
-    return null;
   };
 
   const disconnectGoogleServices = () => {
     if (auth.currentUser?.uid) {
       localStorage.removeItem(`google_token_${auth.currentUser.uid}`);
+      localStorage.removeItem(`google_account_${auth.currentUser.uid}`);
     }
     cachedAccessToken = null;
     setGoogleToken(null);
+    setGoogleAccount(null);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, userData, agencyData, loading, bootstrapUser, connectGoogleServices, disconnectGoogleServices, googleToken }}>
+    <AuthContext.Provider value={{ currentUser, userData, agencyData, loading, bootstrapUser, connectGoogleServices, disconnectGoogleServices, googleToken, googleAccount }}>
       {children}
     </AuthContext.Provider>
   );
