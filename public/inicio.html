@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nextcar CRM</title>
+<meta name="description" content="Nextcar CRM es el sistema de administración de clientes, inventario y ventas para agencias de automóviles seminuevos.">
+<style>
+  :root{
+    --fondo:#ffffff; --papel:#f7f8fa; --texto:#15181d; --suave:#5b6470;
+    --linea:#e3e6ea; --acento:#d32027; --tinta:#12161b; --oscuro:#12161b; --sobreOscuro:#ffffff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --fondo:#0f1216; --papel:#171b21; --texto:#e8eaed; --suave:#9aa3ae;
+           --linea:#2a2f37; --tinta:#ffffff; --oscuro:#000000; --sobreOscuro:#ffffff; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fondo);color:var(--texto);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .marco{max-width:960px;margin:0 auto;padding:0 20px}
+  nav{display:flex;align-items:center;justify-content:space-between;gap:16px;
+      padding:20px 0;border-bottom:1px solid var(--linea);flex-wrap:wrap}
+  .logo{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--tinta)}
+  .logo span{color:var(--acento)}
+  .boton{display:inline-block;background:var(--acento);color:#fff;text-decoration:none;
+         padding:11px 20px;border-radius:9px;font-weight:600;font-size:15px}
+  .boton.claro{background:transparent;color:var(--acento);border:1px solid var(--acento)}
+  .heroe{padding:64px 0 52px;text-align:center}
+  .heroe h1{font-size:clamp(30px,5.2vw,46px);line-height:1.12;letter-spacing:-1px;margin:0 0 18px}
+  .heroe p{font-size:clamp(17px,2.3vw,19px);color:var(--suave);max-width:620px;margin:0 auto 28px}
+  .rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin:22px 0}
+  .caja{background:var(--papel);border:1px solid var(--linea);border-radius:14px;padding:22px}
+  .caja h3{margin:0 0 8px;font-size:17px}
+  .caja p{margin:0;color:var(--suave);font-size:15px}
+  section{padding:44px 0;border-top:1px solid var(--linea)}
+  h2{font-size:clamp(22px,3.4vw,28px);letter-spacing:-.4px;margin:0 0 10px}
+  .entrada{color:var(--suave);margin:0 0 20px;max-width:660px}
+  .precio{background:var(--oscuro);color:var(--sobreOscuro);border-radius:16px;
+          padding:34px 28px;text-align:center;margin:22px 0}
+  .precio .cifra{font-size:44px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
+  .precio .nota{opacity:.72;font-size:15px;margin-top:6px}
+  ul.limpia{margin:14px 0;padding-left:20px}
+  ul.limpia li{margin:7px 0}
+  a{color:var(--acento)}
+  footer{border-top:1px solid var(--linea);padding:30px 0 60px;color:var(--suave);font-size:14px}
+  footer a{color:var(--suave)}
+  .filaBotones{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div class="marco">
+  <nav>
+    <div class="logo">NEXT<span>CAR</span> CRM</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="boton claro" href="https://wa.me/524612399969">Hablar por WhatsApp</a>
+      <a class="boton" href="/login">Entrar al sistema</a>
+    </div>
+  </nav>
+
+  <div class="heroe">
+    <h1>El CRM hecho para agencias de autos seminuevos</h1>
+    <p><strong>Nextcar CRM</strong> reúne en un solo lugar tu inventario, tus clientes, tus tratos, tus ventas y tus cobros. Sabes qué auto tienes, quién lo está viendo, quién te debe y qué te falta hacer hoy.</p>
+    <div class="filaBotones">
+      <a class="boton" href="https://wa.me/524612399969">Pedir una demostración</a>
+      <a class="boton claro" href="#funciones">Ver qué incluye</a>
+    </div>
+  </div>
+</div>
+
+<div class="marco">
+<section id="funciones">
+  <h2>Qué hace</h2>
+  <p class="entrada">Todo lo que hoy vive en libretas, grupos de WhatsApp y hojas de cálculo, ordenado y accesible desde el celular o la computadora.</p>
+
+  <div class="rejilla">
+    <div class="caja">
+      <h3>Inventario con fotos</h3>
+      <p>Cada auto con sus fotografías, su precio, sus gastos y sus documentos. Ves al instante qué está disponible y qué ya se vendió.</p>
+    </div>
+    <div class="caja">
+      <h3>Clientes y prospectos</h3>
+      <p>Un directorio único, sin contactos repetidos, con todo el historial de cada persona: qué preguntó, qué se le ofreció y en qué quedó.</p>
+    </div>
+    <div class="caja">
+      <h3>Embudo de ventas</h3>
+      <p>Arrastra cada trato por sus etapas y ve de un vistazo dónde se están atorando las oportunidades.</p>
+    </div>
+    <div class="caja">
+      <h3>Ventas y cobranza</h3>
+      <p>La venta se registra desde el trato y queda ligada al auto. Cada pago queda asentado y sabes en todo momento quién te debe y cuánto.</p>
+    </div>
+    <div class="caja">
+      <h3>Actividades y recordatorios</h3>
+      <p>Agenda llamadas, citas y entregas. Nada de seguimientos que se pierden porque nadie los anotó.</p>
+    </div>
+    <div class="caja">
+      <h3>Permisos por puesto</h3>
+      <p>Cada quien ve lo que le toca. El taller trabaja con los autos sin conocer el precio de compra; los vendedores ven sus propios tratos.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Conecta tu cuenta de Google</h2>
+  <p class="entrada">De forma opcional, cada usuario puede enlazar su propia cuenta de Google desde el apartado de Integraciones:</p>
+  <ul class="limpia">
+    <li><strong>Google Calendar</strong> — las actividades que agendas en el CRM aparecen en tu calendario, y si cancelas o completas un evento ahí, el CRM se entera.</li>
+    <li><strong>Contactos de Google</strong> — importa tu directorio como clientes del CRM, sin recapturar nada.</li>
+  </ul>
+  <p class="entrada" style="margin-top:16px">Es voluntario y se desconecta cuando quieras. Nextcar <strong>no accede a tu correo electrónico</strong>. Lo que hacemos con tu información de Google está detallado en el <a href="/privacidad.html">Aviso de Privacidad</a>.</p>
+</section>
+
+<section>
+  <h2>Tu asistente de inteligencia artificial, conectado</h2>
+  <p class="entrada">Cada usuario puede generar una clave personal para consultar el CRM desde su propio asistente de IA: «¿qué pendientes tengo hoy?», «¿quién me debe?», «¿qué autos hay de menos de 200 mil?». El asistente respeta exactamente los mismos permisos que la persona tiene dentro del sistema.</p>
+</section>
+
+<section>
+  <h2>Precio</h2>
+  <div class="precio">
+    <div class="cifra">$199</div>
+    <div class="nota">por usuario, al mes</div>
+  </div>
+  <p class="entrada">Sin contratos forzosos y sin costo de instalación. Das de alta a los usuarios que necesites y cancelas cuando quieras.</p>
+</section>
+
+<section>
+  <h2>Empezar</h2>
+  <p class="entrada">Escríbenos y te mostramos el sistema funcionando con autos de tu propio lote.</p>
+  <ul class="limpia">
+    <li><strong>WhatsApp:</strong> <a href="https://wa.me/524612399969">461 239 9969</a></li>
+    <li><strong>Correo:</strong> <a href="mailto:luisfj@gmail.com">luisfj@gmail.com</a></li>
+    <li><strong>Acceso al sistema:</strong> <a href="https://crm.erewere.com/login">crm.erewere.com</a></li>
+  </ul>
+</section>
+</div>
+
+<footer>
+  <div class="marco">
+    <p><strong>Nextcar CRM</strong> — Sistema de administración para agencias de automóviles seminuevos.</p>
+    <p><a href="/privacidad.html">Aviso de Privacidad</a> · <a href="/terminos.html">Condiciones del Servicio</a> · <a href="https://wa.me/524612399969">WhatsApp</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
