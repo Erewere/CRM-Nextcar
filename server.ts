@@ -1,5 +1,6 @@
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
+import { checkIsWon } from "./src/lib/clientUtils.ts";
 import express from "express";
 import cors from "cors";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -2601,7 +2602,7 @@ Return a JSON array of recommendation objects with the following schema:
     },
     {
       name: "quien_me_debe",
-      description: "Ventas con saldo pendiente, de la más antigua a la más reciente, con lo pagado y lo que falta.",
+      description: "Cobranza real: solo ventas ya cerradas (tratos ganados) que aún tienen saldo, de la más antigua a la más reciente. No incluye cotizaciones ni tratos abiertos o perdidos.",
       inputSchema: {
         type: "object",
         properties: {}
@@ -2827,6 +2828,10 @@ Return a JSON array of recommendation objects with the following schema:
         const conSaldo = dSnap.docs
           .map((d: any) => ({ ...d.data(), id: d.id }))
           .filter((x: any) => !x.isDeleted && esMio(x))
+          // Solo las ventas cerradas. Antes entraba cualquier trato con precio,
+          // asi que las cotizaciones abiertas y hasta los tratos perdidos
+          // salian como deuda: un cliente que todavia no compra no debe nada.
+          .filter((x: any) => checkIsWon(x.status))
           .map((x: any) => {
             const precio = Number(x.saleDetails?.price || x.value || 0);
             const pagado = (x.saleDetails?.payments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
