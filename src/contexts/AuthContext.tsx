@@ -14,7 +14,6 @@ function leerCuentaGoogle(uid: string) {
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/calendar.events');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
-provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
 // Pendiente: el CRM tambien llama a Tareas de Google y a enviar correo, pero
 // esos permisos no se piden aqui todavia. Antes de agregarlos hay que darlos de
 // alta en la pantalla de consentimiento de Google Cloud; si se piden sin estar

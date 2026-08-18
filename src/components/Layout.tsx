@@ -17,7 +17,6 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
-  Mail,
   CreditCard,
   Blocks,
   Key,
@@ -199,12 +198,6 @@ export function Layout() {
       name: "Personas",
       path: "/persons",
       icon: Users,
-      roles: ["admin", "seller"],
-    },
-    {
-      name: "Correos",
-      path: "/emails",
-      icon: Mail,
       roles: ["admin", "seller"],
     },
     {
@@ -473,7 +466,6 @@ export function Layout() {
                location.pathname === '/kanban' ? 'Arrastra los prospectos para avanzar su proceso' :
                location.pathname === '/persons' ? 'Directorio de contactos y prospectos' :
                location.pathname === '/tasks' ? 'Gestiona tus tareas y recordatorios' :
-               location.pathname === '/emails' ? 'Gestiona tu bandeja de entrada sincronizada' :
                location.pathname === '/users' ? 'Administra los accesos y roles de usuarios' :
                location.pathname === '/billing' ? 'Gestiona el plan y facturación de la agencia' :
                location.pathname === '/integrations' ? 'Conecta tus herramientas favoritas al CRM' :
