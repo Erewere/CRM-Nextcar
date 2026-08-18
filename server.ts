@@ -2414,57 +2414,6 @@ Return a JSON array of recommendation objects with the following schema:
     codeChallengeMethod: string;
     expiresAt: number;
   }>();
-
-  // Helper function to find agency by MCP API Key directly
-  const findAgencyByMcpKey = async (apiKey: string, db: any): Promise<{ agencyId: string; agencyName?: string; mcpApiKey?: string } | null> => {
-    if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
-      return null;
-    }
-
-    try {
-      const limpia = apiKey.trim();
-
-      // Sitio actual de las claves.
-      const enSecretos = await db
-        .collection("agencySecrets")
-        .where("mcpApiKey", "==", limpia)
-        .limit(1)
-        .get();
-      if (!enSecretos.empty) {
-        const id = enSecretos.docs[0].id;
-        const agencia = await db.collection("agencies").doc(id).get();
-        return {
-          agencyId: id,
-          agencyName: (agencia.exists && agencia.data()?.name) || "Agencia",
-          mcpApiKey: limpia
-        };
-      }
-
-      // Claves que todavia no se han trasladado: se atienden y se mueven, de
-      // modo que ninguna conexion se cae por el cambio de sitio.
-      const enAgencias = await db
-        .collection("agencies")
-        .where("mcpApiKey", "==", limpia)
-        .limit(1)
-        .get();
-      if (enAgencias.empty) {
-        return null;
-      }
-
-      const agencyDoc = enAgencias.docs[0];
-      const data = agencyDoc.data();
-      await guardarClaveMcp(db, agencyDoc.id, limpia, data.mcpApiKeyCreatedAt);
-      return {
-        agencyId: agencyDoc.id,
-        agencyName: data.name || "Agencia",
-        mcpApiKey: limpia
-      };
-    } catch (err) {
-      console.error("Error authenticating MCP API key:", err);
-      return null;
-    }
-  };
-
   // Helper function to validate MCP API Key from request against Firestore agencies
   const authenticateMcpKey = async (req: express.Request, db: any): Promise<{ agencyId: string; agencyName?: string; mcpApiKey?: string } | null> => {
     let apiKey = "";
@@ -2536,7 +2485,7 @@ Return a JSON array of recommendation objects with the following schema:
       <span class="logo-badge">MCP</span>
     </div>
     <h1>Autorización de Cliente MCP</h1>
-    <p>Ingresa la <strong>Clave API de MCP</strong> de tu agencia (obtenida en Ajustes &gt; Integraciones) para permitir la conexión de tu asistente o cliente remoto.</p>
+    <p>Ingresa tu <strong>clave de MCP</strong> para conectar tu asistente. La generas dentro del CRM, haciendo clic en tu nombre &gt; Mi clave para IA. Tu asistente verá lo mismo que tú, según tu rol.</p>
     
     ${errorMessage ? `<div class="error-box">${errorMessage}</div>` : ""}
 
@@ -2548,7 +2497,7 @@ Return a JSON array of recommendation objects with the following schema:
       <input type="hidden" name="code_challenge_method" value="${encodeURIComponent(code_challenge_method)}">
       <input type="hidden" name="response_type" value="${encodeURIComponent(response_type)}">
 
-      <label for="mcpApiKey">Clave API de MCP de la Agencia</label>
+      <label for="mcpApiKey">Tu clave de MCP</label>
       <input type="password" id="mcpApiKey" name="mcpApiKey" placeholder="mcp_live_..." required autofocus autocomplete="off">
 
       <button type="submit">Autorizar Conexión</button>
@@ -2999,7 +2948,9 @@ Return a JSON array of recommendation objects with the following schema:
     if (!adminDb) {
       return res.status(500).send("Base de datos no disponible");
     }
-    const agency = await findAgencyByMcpKey(mcpApiKey, adminDb);
+    // Acepta tanto la clave personal como la de agencia: es la misma busqueda
+    // que usa el MCP al recibir peticiones.
+    const agency = await buscarSesionMcp(adminDb, mcpApiKey);
 
     if (!agency) {
       const html = renderOauthAuthorizeHtml({
@@ -3009,7 +2960,7 @@ Return a JSON array of recommendation objects with the following schema:
         code_challenge,
         code_challenge_method,
         response_type,
-        errorMessage: "Clave de API de MCP inválida. Verifíquela en Ajustes > Integraciones."
+        errorMessage: "Esa clave no es válida. Genérala en el CRM: clic en tu nombre > Mi clave para IA."
       });
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(html);
@@ -3019,7 +2970,7 @@ Return a JSON array of recommendation objects with the following schema:
     const code = crypto.randomBytes(32).toString("hex");
     oauthAuthCodes.set(code, {
       agencyId: agency.agencyId,
-      mcpApiKey: agency.mcpApiKey || mcpApiKey,
+      mcpApiKey: mcpApiKey,
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,
       codeChallengeMethod: code_challenge_method,
