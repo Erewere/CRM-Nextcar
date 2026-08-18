@@ -2538,6 +2538,14 @@ Return a JSON array of recommendation objects with the following schema:
 
   const mcpTools = [
     {
+      name: "mi_cuenta",
+      description: "Dice con qué usuario, rol y agencia está conectado el asistente, y qué puede consultar. Útil cuando una consulta regresa vacía, para saber si es por permisos o porque no hay datos.",
+      inputSchema: {
+        type: "object",
+        properties: {}
+      }
+    },
+    {
       name: "get_inventory",
       description: "Obtiene los vehículos disponibles en el inventario de la agencia autenticada en el CRM Erewere",
       inputSchema: {
@@ -2653,6 +2661,41 @@ Return a JSON array of recommendation objects with the following schema:
       // SECURITY ASSURANCE:
       // targetAgencyId comes exclusively from the authenticated mcpApiKey doc.
       // We ignore caller-supplied agencyId or any defaults.
+
+      if (toolName === "mi_cuenta") {
+        // Sin esto, cuando una consulta regresa vacia no hay forma de saber si
+        // es por el rol, por la agencia o porque de verdad no hay nada.
+        let disponibles: number | null = null;
+        try {
+          const agg = await db.collection("vehicles")
+            .where("agencyId", "==", targetAgencyId)
+            .where("status", "==", "available")
+            .count().get();
+          disponibles = agg.data().count as number;
+        } catch { disponibles = null; }
+
+        const esMaster = sesion?.role === "master";
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                usuario: sesion?.userName,
+                rol: sesion?.role,
+                agencia: sesion?.agencyName,
+                agencyId: targetAgencyId,
+                claveDeAgencia: !!sesion?.esClaveDeAgencia,
+                autosDisponiblesEnEstaAgencia: disponibles,
+                nota: esMaster
+                  ? "El usuario master opera la plataforma, no una agencia: por diseño no ve inventario ni clientes de las agencias. Un inventario vacío aquí es lo esperado."
+                  : "Si el inventario o los contactos regresan vacíos y la agencia sí tiene datos, avísale al administrador: la clave puede estar resolviendo otra agencia.",
+              }, null, 2)
+            }]
+          }
+        };
+      }
 
       if (toolName === "get_inventory") {
         if (!sesionPuede(sesion, "vehiculos.ver")) return sinPermiso(id, "el inventario");

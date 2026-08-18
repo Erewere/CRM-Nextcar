@@ -92,6 +92,13 @@ export function MiClaveMcp({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-slate-700 dark:text-slate-300">
               Tu asistente verá <strong>lo mismo que tú</strong>, ni más ni menos.
             </p>
+            {rol === "master" && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                Como master operas la plataforma, no una agencia: tu asistente no verá
+                inventario ni clientes. Si quieres probar lo que ve un vendedor, usa la
+                clave de su usuario.
+              </p>
+            )}
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Entras como <strong>{NOMBRE_ROL[rol] || "Usuario"}</strong>: {DESCRIPCION_ROL[rol] || ""}
             </p>
