@@ -336,9 +336,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Reautenticar no arregla esto: haria falta soltarla del otro usuario.
         if (err?.code === 'auth/credential-already-in-use') {
           // Firebase trae en customData el correo que se eligio en la ventana.
-          // Nombrarlo evita el ir y venir de adivinar cual de las cuentas de
-          // la maquina fue la que se pulso.
           const elegida = err?.customData?.email ?? null;
+
+          // Si la cuenta elegida es la que este mismo usuario ya tiene, no hay
+          // nada que enlazar: lo que falta es un permiso nuevo. Firebase no
+          // siempre responde 'provider-already-linked' en ese caso -- a veces
+          // dice que la credencial esta en uso, que es cierto pero enganioso,
+          // porque quien la usa es este usuario. Se pide el permiso y ya.
+          if (elegida && yaEnlazada && elegida.toLowerCase() === yaEnlazada.toLowerCase()) {
+            try {
+              const result = await reauthenticateWithPopup(auth.currentUser, provider);
+              return tokenDe(result);
+            } catch (err3: any) {
+              if (err3?.code !== 'auth/user-mismatch') throw err3;
+              // Mismo correo pero otra cuenta de Google detras: sigue de largo
+              // y se explica abajo.
+            }
+          }
+
           throw new Error(
             elegida
               ? `La cuenta de Google ${elegida} ya está enlazada con otro usuario del CRM.${yaEnlazada ? ` Este usuario usa ${yaEnlazada}.` : ''} Vuelve a intentarlo y elige la cuenta correcta, o entra al CRM con el usuario que ya tiene esa.`
