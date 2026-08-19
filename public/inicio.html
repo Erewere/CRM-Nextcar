@@ -71,6 +71,10 @@
   .tablero{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.11);
            border-radius:16px;padding:16px;backdrop-filter:blur(8px);
            box-shadow:0 30px 70px -30px rgba(0,0,0,.85);animation:flotar 6.5s ease-in-out infinite}
+  /* La entrada vive en el envoltorio y el flotar en el tablero. Si ambas
+     cuelgan del mismo elemento, la segunda regla de animation borra a la
+     primera y el tablero se queda invisible. */
+  .envoltorioTablero{animation-delay:.27s}
   @keyframes flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
   .tableroTitulo{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--suaveOscuro);
                  margin:2px 4px 13px;letter-spacing:.4px;text-transform:uppercase;font-weight:650}
@@ -188,7 +192,8 @@
       <p class="apunte sube d4">Sin contratos forzosos · Se cancela cuando quieras</p>
     </div>
 
-    <div class="tablero sube d3" aria-hidden="true">
+    <div class="envoltorioTablero sube" aria-hidden="true">
+      <div class="tablero">
       <div class="tableroTitulo"><span class="punto"></span> Embudo de ventas</div>
       <div class="columnas">
         <div class="columna">
@@ -209,6 +214,7 @@
           <h4>Cerrado</h4>
           <div class="ficha"><b>Paty G.</b><i>March 2018</i><span class="monto">$159,000</span></div>
         </div>
+      </div>
       </div>
     </div>
   </div>
