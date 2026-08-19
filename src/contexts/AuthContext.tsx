@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, unlink, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User, Agency } from '../types';
@@ -28,7 +28,7 @@ interface AuthContextType {
   loading: boolean;
   bootstrapUser: (role: 'master' | 'admin' | 'seller', agencyId: string, name: string) => Promise<void>;
   connectGoogleServices: () => Promise<string | null>;
-  disconnectGoogleServices: () => void;
+  disconnectGoogleServices: () => Promise<{ desvinculada: boolean; aviso: string }>;
   googleToken: string | null;
   googleAccount: string | null;
 }
@@ -362,14 +362,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const disconnectGoogleServices = () => {
-    if (auth.currentUser?.uid) {
-      localStorage.removeItem(`google_token_${auth.currentUser.uid}`);
-      localStorage.removeItem(`google_account_${auth.currentUser.uid}`);
+  /**
+   * Suelta la cuenta de Google de este usuario del CRM.
+   *
+   * Antes esto solo borraba el permiso guardado en el navegador, que es la
+   * parte menos importante: la app seguia autorizada en la cuenta de Google y
+   * el usuario seguia atado a ese Gmail para siempre. Desconectar de verdad
+   * son tres cosas, y las tres pasan aqui.
+   */
+  const disconnectGoogleServices = async (): Promise<{ desvinculada: boolean; aviso: string }> => {
+    const uid = auth.currentUser?.uid;
+    const token = cachedAccessToken ?? (uid ? localStorage.getItem(`google_token_${uid}`) : null);
+
+    // 1. Retirar el permiso en Google. Sin esto la app sigue apareciendo en la
+    //    cuenta del usuario y la siguiente conexion ya no vuelve a preguntar.
+    if (token) {
+      try {
+        await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
+          method: 'POST',
+          mode: 'no-cors',
+        });
+      } catch {
+        // Mejor esfuerzo: si no se logra, siempre queda quitarlo a mano desde
+        // myaccount.google.com/permissions.
+      }
+    }
+
+    // 2. Soltar la cuenta del usuario, que es lo que permite enlazar otra
+    //    despues. Pero solo si le queda otra forma de entrar: si Google es su
+    //    unica manera de iniciar sesion, desvincularla lo dejaria fuera.
+    let desvinculada = false;
+    let aviso = '';
+    const user = auth.currentUser;
+    const proveedores = user?.providerData?.map((p) => p.providerId) ?? [];
+    const tieneGoogle = proveedores.includes('google.com');
+    const tieneOtraEntrada = proveedores.some((p) => p !== 'google.com');
+
+    if (user && tieneGoogle && tieneOtraEntrada) {
+      try {
+        await unlink(user, 'google.com');
+        desvinculada = true;
+      } catch (e) {
+        console.error('No se pudo desvincular Google:', e);
+        aviso = 'Se quitó el permiso, pero no se pudo soltar la cuenta de Google. Inténtalo de nuevo.';
+      }
+    } else if (tieneGoogle && !tieneOtraEntrada) {
+      aviso = 'Se quitó el permiso, pero la cuenta de Google sigue enlazada porque es tu única forma de entrar al CRM. Ponte una contraseña antes de cambiar de cuenta.';
+    }
+
+    // 3. Limpiar lo guardado en este navegador.
+    if (uid) {
+      localStorage.removeItem(`google_token_${uid}`);
+      localStorage.removeItem(`google_account_${uid}`);
     }
     cachedAccessToken = null;
     setGoogleToken(null);
     setGoogleAccount(null);
+
+    return { desvinculada, aviso };
   };
 
   return (

@@ -20,6 +20,7 @@ import {
   CreditCard,
   Blocks,
   Key,
+  Unlink,
   TrendingUp,
   MessageSquare,
   DollarSign,
@@ -44,7 +45,7 @@ import { NOMBRE_ROL, type Rol } from "../lib/permissions";
 
 import { MiClaveMcp } from "./MiClaveMcp";
 export function Layout() {
-  const { userData, agencyData } = useAuth();
+  const { userData, agencyData, googleAccount, googleToken, disconnectGoogleServices } = useAuth();
   const trialDaysLeft = getTrialDaysLeft(agencyData);
   const isGlobalReadOnly = useReadOnly();
   const navigate = useNavigate();
@@ -410,6 +411,28 @@ export function Layout() {
                     <Key className="w-4 h-4 shrink-0" />
                     <span className="truncate">Cambiar contraseña</span>
                   </button>
+                  {(googleAccount || googleToken) && (
+                    <button
+                      onClick={async () => {
+                        setMenuPerfilAbierto(false);
+                        const cuenta = googleAccount ?? 'tu cuenta de Google';
+                        if (!confirm(`¿Desconectar ${cuenta}?\n\nSe retira el permiso en Google y se suelta la cuenta de este usuario, para que puedas conectar otra. Tus actividades y contactos del CRM no se tocan.`)) return;
+                        try {
+                          const { desvinculada, aviso } = await disconnectGoogleServices();
+                          alert(aviso || (desvinculada
+                            ? 'Cuenta de Google desconectada. Ya puedes conectar otra desde Integraciones.'
+                            : 'Cuenta de Google desconectada.'));
+                        } catch (e: any) {
+                          alert(e?.message || 'No se pudo desconectar la cuenta de Google.');
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700"
+                      title={googleAccount ? `Conectado con ${googleAccount}` : undefined}
+                    >
+                      <Unlink className="w-4 h-4 shrink-0" />
+                      <span className="truncate">Desconectar Google</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => { setMenuPerfilAbierto(false); handleLogout(); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-t border-gray-100 dark:border-slate-700"

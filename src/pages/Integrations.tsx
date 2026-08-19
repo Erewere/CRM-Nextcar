@@ -3,7 +3,7 @@ import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, 
 import { useAuth } from '../contexts/AuthContext';
 
 export function Integrations() {
-  const { userData, googleToken, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
+  const { userData, googleToken, googleAccount, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [accessToken, setAccessToken] = useState('');
@@ -482,10 +482,17 @@ export function Integrations() {
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-full border border-emerald-200 dark:border-emerald-800">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    Conectado ({currentUser?.email})
+                    Conectado ({googleAccount ?? currentUser?.email})
                   </span>
                   <button
-                    onClick={() => disconnectGoogleServices()}
+                    onClick={async () => {
+                      const cuenta = googleAccount ?? 'tu cuenta de Google';
+                      if (!confirm(`¿Desconectar ${cuenta}?`)) return;
+                      const { desvinculada, aviso } = await disconnectGoogleServices();
+                      alert(aviso || (desvinculada
+                        ? 'Cuenta de Google desconectada. Ya puedes conectar otra.'
+                        : 'Cuenta de Google desconectada.'));
+                    }}
                     className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded border border-red-200 transition-colors"
                   >
                     Desconectar
