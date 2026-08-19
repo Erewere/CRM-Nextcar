@@ -4,144 +4,357 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nextcar CRM</title>
-<meta name="description" content="Nextcar CRM es el sistema de administración de clientes, inventario y ventas para agencias de automóviles seminuevos.">
+<meta name="description" content="Nextcar CRM es el sistema de administración de clientes, inventario y ventas hecho para agencias de automóviles seminuevos.">
 <style>
   :root{
-    --fondo:#ffffff; --papel:#f7f8fa; --texto:#15181d; --suave:#5b6470;
-    --linea:#e3e6ea; --acento:#d32027; --tinta:#12161b; --oscuro:#12161b; --sobreOscuro:#ffffff;
+    --tinta:#0d1117; --humo:#161b22; --papel:#ffffff; --hueso:#f6f7f9;
+    --texto:#15181d; --suave:#5b6470; --linea:#e5e8ec;
+    --rojo:#d32027; --rojoVivo:#f0353d;
+    --sobreOscuro:#ffffff; --suaveOscuro:#9aa5b4;
   }
   @media (prefers-color-scheme: dark){
-    :root{ --fondo:#0f1216; --papel:#171b21; --texto:#e8eaed; --suave:#9aa3ae;
-           --linea:#2a2f37; --tinta:#ffffff; --oscuro:#000000; --sobreOscuro:#ffffff; }
+    :root{ --papel:#12161c; --hueso:#0d1117; --texto:#e8eaed; --suave:#98a2ae; --linea:#252b34; }
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--fondo);color:var(--texto);
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--hueso);color:var(--texto);overflow-x:hidden;
        font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-  .marco{max-width:960px;margin:0 auto;padding:0 20px}
-  nav{display:flex;align-items:center;justify-content:space-between;gap:16px;
-      padding:20px 0;border-bottom:1px solid var(--linea);flex-wrap:wrap}
-  .logo{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--tinta)}
-  .logo span{color:var(--acento)}
-  .boton{display:inline-block;background:var(--acento);color:#fff;text-decoration:none;
-         padding:11px 20px;border-radius:9px;font-weight:600;font-size:15px}
-  .boton.claro{background:transparent;color:var(--acento);border:1px solid var(--acento)}
-  .heroe{padding:64px 0 52px;text-align:center}
-  .heroe h1{font-size:clamp(30px,5.2vw,46px);line-height:1.12;letter-spacing:-1px;margin:0 0 18px}
-  .heroe p{font-size:clamp(17px,2.3vw,19px);color:var(--suave);max-width:620px;margin:0 auto 28px}
-  .rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin:22px 0}
-  .caja{background:var(--papel);border:1px solid var(--linea);border-radius:14px;padding:22px}
-  .caja h3{margin:0 0 8px;font-size:17px}
+  .marco{max-width:1060px;margin:0 auto;padding:0 22px}
+  a{color:var(--rojo)}
+
+  /* ---------- barra ---------- */
+  nav{position:sticky;top:0;z-index:60;background:rgba(13,17,23,.82);
+      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      border-bottom:1px solid rgba(255,255,255,.08);transition:padding .25s ease}
+  nav .marco{display:flex;align-items:center;justify-content:space-between;gap:14px;
+             padding-top:16px;padding-bottom:16px;flex-wrap:wrap;transition:padding .25s ease}
+  nav.encogida .marco{padding-top:9px;padding-bottom:9px}
+  .logo{font-size:21px;font-weight:800;letter-spacing:-.6px;color:#fff;white-space:nowrap}
+  .logo span{color:var(--rojoVivo)}
+  .logo small{display:block;font-size:9.5px;font-weight:600;letter-spacing:2.4px;
+              color:var(--suaveOscuro);margin-top:1px}
+  .accion{display:inline-block;text-decoration:none;font-weight:650;font-size:14.5px;
+          padding:10px 18px;border-radius:10px;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+  .primaria{background:var(--rojo);color:#fff;box-shadow:0 6px 18px -6px rgba(211,32,39,.7)}
+  .primaria:hover{background:var(--rojoVivo);transform:translateY(-2px);box-shadow:0 12px 26px -8px rgba(240,53,61,.8)}
+  .fantasma{border:1px solid rgba(255,255,255,.28);color:#fff}
+  .fantasma:hover{border-color:#fff;transform:translateY(-2px)}
+
+  /* ---------- encabezado ---------- */
+  .heroe{position:relative;background:var(--tinta);color:#fff;overflow:hidden;
+         padding:74px 0 88px}
+  .brillo{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;pointer-events:none}
+  .brillo.a{width:520px;height:520px;background:#8f1116;top:-190px;left:-130px;animation:vaiven 15s ease-in-out infinite}
+  .brillo.b{width:440px;height:440px;background:#1d3a6b;bottom:-200px;right:-110px;animation:vaiven 19s ease-in-out infinite reverse}
+  @keyframes vaiven{0%,100%{transform:translate(0,0)}50%{transform:translate(34px,-26px)}}
+  .rejillaHeroe{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr .95fr;
+                gap:46px;align-items:center}
+  @media (max-width:880px){ .rejillaHeroe{grid-template-columns:1fr;gap:38px} }
+  .etiqueta{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;
+            letter-spacing:.3px;color:#ffd9da;background:rgba(211,32,39,.16);
+            border:1px solid rgba(240,53,61,.35);padding:6px 13px;border-radius:999px}
+  .punto{width:7px;height:7px;border-radius:50%;background:var(--rojoVivo);animation:latir 2.1s ease-in-out infinite}
+  @keyframes latir{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+  .heroe h1{font-size:clamp(32px,5.4vw,52px);line-height:1.08;letter-spacing:-1.5px;
+            margin:20px 0 16px;font-weight:800}
+  .heroe h1 em{font-style:normal;color:var(--rojoVivo)}
+  .bajada{font-size:clamp(16.5px,2.1vw,18.5px);color:#c3ccd8;max-width:540px;margin:0 0 28px}
+  .botonera{display:flex;gap:12px;flex-wrap:wrap}
+  .apunte{margin-top:20px;font-size:13.5px;color:var(--suaveOscuro)}
+
+  /* entrada escalonada */
+  .sube{opacity:0;transform:translateY(18px);animation:subir .75s cubic-bezier(.2,.7,.3,1) forwards}
+  .d1{animation-delay:.05s}.d2{animation-delay:.16s}.d3{animation-delay:.27s}.d4{animation-delay:.38s}
+  @keyframes subir{to{opacity:1;transform:none}}
+
+  /* ---------- el embudo animado ---------- */
+  .tablero{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.11);
+           border-radius:16px;padding:16px;backdrop-filter:blur(8px);
+           box-shadow:0 30px 70px -30px rgba(0,0,0,.85);animation:flotar 6.5s ease-in-out infinite}
+  @keyframes flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
+  .tableroTitulo{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--suaveOscuro);
+                 margin:2px 4px 13px;letter-spacing:.4px;text-transform:uppercase;font-weight:650}
+  .columnas{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .columna{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.07);
+           border-radius:11px;padding:9px;min-height:154px}
+  .columna h4{margin:0 0 9px;font-size:10.5px;font-weight:700;color:var(--suaveOscuro);
+              letter-spacing:.7px;text-transform:uppercase}
+  .ficha{background:#1b2230;border:1px solid rgba(255,255,255,.1);border-radius:8px;
+         padding:8px 9px;margin-bottom:7px}
+  .ficha b{display:block;font-size:12px;color:#eef2f7;font-weight:650;margin-bottom:3px}
+  .ficha i{display:block;font-style:normal;font-size:10.5px;color:#8b97a8}
+  .ficha .monto{color:#7ee0a6;font-size:11px;font-weight:700;margin-top:4px;display:block}
+  /* la ficha que viaja de columna en columna */
+  .viajera{animation:viajar 9s cubic-bezier(.65,0,.35,1) infinite;position:relative;
+           border-color:rgba(240,53,61,.55);box-shadow:0 8px 20px -8px rgba(240,53,61,.6)}
+  @keyframes viajar{
+    0%,22%   {transform:translate(0,0)}
+    33%,55%  {transform:translate(calc(100% + 9px),14px)}
+    66%,88%  {transform:translate(calc(200% + 18px),28px)}
+    100%     {transform:translate(0,0)}
+  }
+  .palomita{position:absolute;top:-7px;right:-7px;width:17px;height:17px;border-radius:50%;
+            background:#22a35c;color:#fff;font-size:10px;display:flex;align-items:center;
+            justify-content:center;opacity:0;animation:aparecer 9s ease infinite}
+  @keyframes aparecer{0%,60%{opacity:0;transform:scale(.4)}70%,88%{opacity:1;transform:scale(1)}100%{opacity:0}}
+
+  /* ---------- secciones ---------- */
+  section{padding:74px 0}
+  .claro{background:var(--papel);border-top:1px solid var(--linea);border-bottom:1px solid var(--linea)}
+  .rotulo{font-size:12px;font-weight:750;letter-spacing:2px;text-transform:uppercase;
+          color:var(--rojo);margin:0 0 10px}
+  h2{font-size:clamp(24px,3.7vw,34px);letter-spacing:-.9px;margin:0 0 12px;font-weight:800;line-height:1.16}
+  .entrada{color:var(--suave);margin:0 0 28px;max-width:640px;font-size:17px}
+  .rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:16px}
+  .caja{background:var(--papel);border:1px solid var(--linea);border-radius:15px;padding:24px 22px;
+        transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
+  .caja:hover{transform:translateY(-5px);border-color:var(--rojo);
+              box-shadow:0 18px 38px -22px rgba(13,17,23,.55)}
+  .claro .caja{background:var(--hueso)}
+  .icono{width:38px;height:38px;border-radius:10px;background:rgba(211,32,39,.1);
+         display:flex;align-items:center;justify-content:center;margin-bottom:13px;font-size:19px}
+  .caja h3{margin:0 0 7px;font-size:17.5px;letter-spacing:-.3px}
   .caja p{margin:0;color:var(--suave);font-size:15px}
-  section{padding:44px 0;border-top:1px solid var(--linea)}
-  h2{font-size:clamp(22px,3.4vw,28px);letter-spacing:-.4px;margin:0 0 10px}
-  .entrada{color:var(--suave);margin:0 0 20px;max-width:660px}
-  .precio{background:var(--oscuro);color:var(--sobreOscuro);border-radius:16px;
-          padding:34px 28px;text-align:center;margin:22px 0}
-  .precio .cifra{font-size:44px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
-  .precio .nota{opacity:.72;font-size:15px;margin-top:6px}
-  ul.limpia{margin:14px 0;padding-left:20px}
-  ul.limpia li{margin:7px 0}
-  a{color:var(--acento)}
-  footer{border-top:1px solid var(--linea);padding:30px 0 60px;color:var(--suave);font-size:14px}
-  footer a{color:var(--suave)}
-  .filaBotones{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+  /* aparecer al bajar */
+  .revela{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.3,1)}
+  .revela.dentro{opacity:1;transform:none}
+
+  /* ---------- contraste ---------- */
+  .franja{background:var(--tinta);color:#fff;padding:70px 0}
+  .franja h2{color:#fff}
+  .franja .entrada{color:#c3ccd8}
+  .contraste{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+  @media (max-width:760px){ .contraste{grid-template-columns:1fr} }
+  .lado{border-radius:14px;padding:22px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
+  .lado.bueno{border-color:rgba(240,53,61,.45);background:rgba(211,32,39,.09)}
+  .lado h4{margin:0 0 12px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--suaveOscuro)}
+  .lado.bueno h4{color:#ffb9bc}
+  .lado ul{margin:0;padding-left:19px;color:#cfd7e2;font-size:15px}
+  .lado li{margin:8px 0}
+
+  /* ---------- precio ---------- */
+  .precio{background:linear-gradient(150deg,#1a212c,#0d1117);color:#fff;border-radius:20px;
+          padding:44px 30px;text-align:center;border:1px solid rgba(255,255,255,.1);
+          box-shadow:0 30px 70px -40px rgba(0,0,0,.9)}
+  .cifra{font-size:clamp(46px,8vw,64px);font-weight:800;letter-spacing:-3px;line-height:1;
+         background:linear-gradient(100deg,#fff,#ffc9cb);-webkit-background-clip:text;
+         background-clip:text;color:transparent}
+  .nota{color:#aab5c3;margin-top:8px;font-size:15.5px}
+  .sinLetras{margin-top:20px;display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+  .pastilla{font-size:12.5px;color:#cfd7e2;border:1px solid rgba(255,255,255,.17);
+            padding:6px 13px;border-radius:999px}
+
+  ul.limpia{margin:14px 0;padding-left:20px;color:var(--suave)}
+  ul.limpia li{margin:8px 0}
+  ul.limpia strong{color:var(--texto)}
+
+  footer{background:var(--tinta);color:var(--suaveOscuro);padding:44px 0 60px;font-size:14.5px}
+  footer a{color:#c3ccd8;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.2)}
+  footer a:hover{color:#fff}
+  .piePartes{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:flex-end}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .sube,.revela{opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
 </style>
 </head>
 <body>
 
-<div class="marco">
-  <nav>
-    <div class="logo">NEXT<span>CAR</span> CRM</div>
+<nav id="barra">
+  <div class="marco">
+    <div class="logo">NEXT<span>CAR</span><small>CRM PARA SEMINUEVOS</small></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <a class="boton claro" href="https://wa.me/524612399969">Hablar por WhatsApp</a>
-      <a class="boton" href="/login">Entrar al sistema</a>
-    </div>
-  </nav>
-
-  <div class="heroe">
-    <h1>El CRM hecho para agencias de autos seminuevos</h1>
-    <p><strong>Nextcar CRM</strong> reúne en un solo lugar tu inventario, tus clientes, tus tratos, tus ventas y tus cobros. Sabes qué auto tienes, quién lo está viendo, quién te debe y qué te falta hacer hoy.</p>
-    <div class="filaBotones">
-      <a class="boton" href="https://wa.me/524612399969">Pedir una demostración</a>
-      <a class="boton claro" href="#funciones">Ver qué incluye</a>
+      <a class="accion fantasma" href="https://wa.me/524612399969">WhatsApp</a>
+      <a class="accion primaria" href="/login">Entrar al sistema</a>
     </div>
   </div>
-</div>
+</nav>
 
-<div class="marco">
-<section id="funciones">
-  <h2>Qué hace</h2>
-  <p class="entrada">Todo lo que hoy vive en libretas, grupos de WhatsApp y hojas de cálculo, ordenado y accesible desde el celular o la computadora.</p>
+<header class="heroe">
+  <div class="brillo a"></div>
+  <div class="brillo b"></div>
+  <div class="marco rejillaHeroe">
+    <div>
+      <span class="etiqueta sube d1"><span class="punto"></span> Hecho en México para agencias mexicanas</span>
+      <h1 class="sube d2">Deja de perder autos<br>y clientes <em>en la libreta</em>.</h1>
+      <p class="bajada sube d3">Nextcar CRM junta tu inventario, tus prospectos, tus tratos y tus cobros en un solo lugar. Sabes qué auto tienes, quién lo está viendo, quién te debe y qué te toca hacer hoy.</p>
+      <div class="botonera sube d4">
+        <a class="accion primaria" href="https://wa.me/524612399969">Pedir una demostración</a>
+        <a class="accion fantasma" href="#funciones">Ver qué incluye</a>
+      </div>
+      <p class="apunte sube d4">Sin contratos forzosos · Se cancela cuando quieras</p>
+    </div>
 
-  <div class="rejilla">
-    <div class="caja">
-      <h3>Inventario con fotos</h3>
-      <p>Cada auto con sus fotografías, su precio, sus gastos y sus documentos. Ves al instante qué está disponible y qué ya se vendió.</p>
+    <div class="tablero sube d3" aria-hidden="true">
+      <div class="tableroTitulo"><span class="punto"></span> Embudo de ventas</div>
+      <div class="columnas">
+        <div class="columna">
+          <h4>Prospecto</h4>
+          <div class="ficha viajera">
+            <b>Ricardo M.</b>
+            <i>Jetta 2019</i>
+            <span class="monto">$248,000</span>
+            <span class="palomita">✓</span>
+          </div>
+          <div class="ficha"><b>Ana L.</b><i>Kia Rio 2021</i></div>
+        </div>
+        <div class="columna">
+          <h4>Cita</h4>
+          <div class="ficha"><b>Miguel S.</b><i>Versa 2020</i></div>
+        </div>
+        <div class="columna">
+          <h4>Cerrado</h4>
+          <div class="ficha"><b>Paty G.</b><i>March 2018</i><span class="monto">$159,000</span></div>
+        </div>
+      </div>
     </div>
-    <div class="caja">
-      <h3>Clientes y prospectos</h3>
-      <p>Un directorio único, sin contactos repetidos, con todo el historial de cada persona: qué preguntó, qué se le ofreció y en qué quedó.</p>
+  </div>
+</header>
+
+<section id="funciones" class="claro">
+  <div class="marco">
+    <p class="rotulo revela">Qué hace</p>
+    <h2 class="revela">Todo el lote, en una sola pantalla</h2>
+    <p class="entrada revela">Lo que hoy vive repartido entre libretas, grupos de WhatsApp y hojas de cálculo, ordenado y a la mano desde el celular o la computadora.</p>
+
+    <div class="rejilla">
+      <div class="caja revela"><div class="icono">🚗</div><h3>Inventario con fotos</h3>
+        <p>Cada auto con sus fotografías, su precio, sus gastos y sus documentos. De un vistazo sabes qué está disponible y qué ya se vendió.</p></div>
+      <div class="caja revela"><div class="icono">👥</div><h3>Clientes y prospectos</h3>
+        <p>Un directorio único, sin contactos repetidos, con el historial completo de cada persona: qué preguntó, qué se le ofreció y en qué quedó.</p></div>
+      <div class="caja revela"><div class="icono">📊</div><h3>Embudo de ventas</h3>
+        <p>Arrastra cada trato por sus etapas y ve dónde se están atorando las oportunidades antes de que se enfríen.</p></div>
+      <div class="caja revela"><div class="icono">💵</div><h3>Ventas y cobranza</h3>
+        <p>La venta nace del trato y queda amarrada al auto. Cada pago queda asentado, y sabes en todo momento quién te debe y cuánto.</p></div>
+      <div class="caja revela"><div class="icono">🔔</div><h3>Actividades y recordatorios</h3>
+        <p>Llamadas, citas y entregas agendadas. Se acabaron los seguimientos que se pierden porque nadie los anotó.</p></div>
+      <div class="caja revela"><div class="icono">🔒</div><h3>Permisos por puesto</h3>
+        <p>Cada quien ve lo que le toca. El taller trabaja los autos sin conocer el precio de compra; cada vendedor ve sus propios tratos.</p></div>
     </div>
-    <div class="caja">
-      <h3>Embudo de ventas</h3>
-      <p>Arrastra cada trato por sus etapas y ve de un vistazo dónde se están atorando las oportunidades.</p>
+  </div>
+</section>
+
+<section class="franja">
+  <div class="marco">
+    <p class="rotulo revela" style="color:#ff8b90">Por qué es distinto</p>
+    <h2 class="revela">No es un CRM genérico al que le pusimos la palabra "auto"</h2>
+    <p class="entrada revela">Los sistemas de venta comunes están pensados para vender productos que se repiten. Un seminuevo es único: tiene un costo de compra, gastos de preparación, un dueño anterior y un solo comprador posible.</p>
+    <div class="contraste">
+      <div class="lado revela">
+        <h4>Un CRM cualquiera</h4>
+        <ul>
+          <li>Un "producto" con existencias, como si tuvieras diez autos iguales</li>
+          <li>No sabe qué te costó ese coche ni cuánto llevas gastado en él</li>
+          <li>Todos ven todo, incluido lo que pagaste por la unidad</li>
+          <li>La venta y el pago viven aparte del auto</li>
+        </ul>
+      </div>
+      <div class="lado bueno revela">
+        <h4>Nextcar CRM</h4>
+        <ul>
+          <li>Cada unidad es única, con su historia y su expediente</li>
+          <li>Costo de compra y gastos por unidad, con su utilidad real</li>
+          <li>El precio de compra se le oculta a quien no debe verlo</li>
+          <li>Trato, auto, venta y pagos amarrados entre sí</li>
+        </ul>
+      </div>
     </div>
-    <div class="caja">
-      <h3>Ventas y cobranza</h3>
-      <p>La venta se registra desde el trato y queda ligada al auto. Cada pago queda asentado y sabes en todo momento quién te debe y cuánto.</p>
-    </div>
-    <div class="caja">
-      <h3>Actividades y recordatorios</h3>
-      <p>Agenda llamadas, citas y entregas. Nada de seguimientos que se pierden porque nadie los anotó.</p>
-    </div>
-    <div class="caja">
-      <h3>Permisos por puesto</h3>
-      <p>Cada quien ve lo que le toca. El taller trabaja con los autos sin conocer el precio de compra; los vendedores ven sus propios tratos.</p>
+  </div>
+</section>
+
+<section class="claro">
+  <div class="marco">
+    <p class="rotulo revela">Se conecta con lo que ya usas</p>
+    <h2 class="revela">Tu agenda de Google, sin capturar dos veces</h2>
+    <p class="entrada revela">De forma opcional, cada usuario enlaza su propia cuenta de Google desde Integraciones:</p>
+    <ul class="limpia revela">
+      <li><strong>Google Calendar</strong> — las actividades que agendas en el CRM aparecen en tu calendario, y si cancelas o completas un evento ahí, el CRM se entera.</li>
+      <li><strong>Contactos de Google</strong> — importa tu directorio como clientes del CRM, sin recapturar nada.</li>
+    </ul>
+    <p class="entrada revela" style="margin-top:16px">Es voluntario y se desconecta cuando quieras. Nextcar <strong>no accede a tu correo electrónico</strong>. Lo que hacemos con tu información está detallado en el <a href="/privacidad.html">Aviso de Privacidad</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="marco">
+    <p class="rotulo revela">Lo que viene</p>
+    <h2 class="revela">Pregúntale a tu asistente de IA</h2>
+    <p class="entrada revela">Cada usuario genera una clave personal y consulta el CRM desde su propio asistente: «¿qué pendientes tengo hoy?», «¿quién me debe?», «¿qué autos hay de menos de 200 mil?». El asistente respeta exactamente los mismos permisos que la persona tiene dentro del sistema — un vendedor no alcanza nada que no pudiera ver en pantalla.</p>
+  </div>
+</section>
+
+<section class="claro">
+  <div class="marco">
+    <div class="precio revela">
+      <div class="cifra">$199</div>
+      <div class="nota">por usuario, al mes</div>
+      <div class="sinLetras">
+        <span class="pastilla">Sin contratos forzosos</span>
+        <span class="pastilla">Sin costo de instalación</span>
+        <span class="pastilla">Cancelas cuando quieras</span>
+      </div>
     </div>
   </div>
 </section>
 
 <section>
-  <h2>Conecta tu cuenta de Google</h2>
-  <p class="entrada">De forma opcional, cada usuario puede enlazar su propia cuenta de Google desde el apartado de Integraciones:</p>
-  <ul class="limpia">
-    <li><strong>Google Calendar</strong> — las actividades que agendas en el CRM aparecen en tu calendario, y si cancelas o completas un evento ahí, el CRM se entera.</li>
-    <li><strong>Contactos de Google</strong> — importa tu directorio como clientes del CRM, sin recapturar nada.</li>
-  </ul>
-  <p class="entrada" style="margin-top:16px">Es voluntario y se desconecta cuando quieras. Nextcar <strong>no accede a tu correo electrónico</strong>. Lo que hacemos con tu información de Google está detallado en el <a href="/privacidad.html">Aviso de Privacidad</a>.</p>
-</section>
-
-<section>
-  <h2>Tu asistente de inteligencia artificial, conectado</h2>
-  <p class="entrada">Cada usuario puede generar una clave personal para consultar el CRM desde su propio asistente de IA: «¿qué pendientes tengo hoy?», «¿quién me debe?», «¿qué autos hay de menos de 200 mil?». El asistente respeta exactamente los mismos permisos que la persona tiene dentro del sistema.</p>
-</section>
-
-<section>
-  <h2>Precio</h2>
-  <div class="precio">
-    <div class="cifra">$199</div>
-    <div class="nota">por usuario, al mes</div>
+  <div class="marco">
+    <p class="rotulo revela">Empezar</p>
+    <h2 class="revela">Te lo mostramos con los autos de tu propio lote</h2>
+    <p class="entrada revela">Escríbenos y en una llamada corta ves el sistema funcionando con tu inventario, no con datos de ejemplo.</p>
+    <div class="botonera revela">
+      <a class="accion primaria" href="https://wa.me/524612399969">Escribir por WhatsApp</a>
+      <a class="accion" style="border:1px solid var(--linea);color:var(--texto)" href="mailto:contacto@erewere.com">contacto@erewere.com</a>
+    </div>
   </div>
-  <p class="entrada">Sin contratos forzosos y sin costo de instalación. Das de alta a los usuarios que necesites y cancelas cuando quieras.</p>
 </section>
-
-<section>
-  <h2>Empezar</h2>
-  <p class="entrada">Escríbenos y te mostramos el sistema funcionando con autos de tu propio lote.</p>
-  <ul class="limpia">
-    <li><strong>WhatsApp:</strong> <a href="https://wa.me/524612399969">461 239 9969</a></li>
-    <li><strong>Correo:</strong> <a href="mailto:contacto@erewere.com">contacto@erewere.com</a></li>
-    <li><strong>Acceso al sistema:</strong> <a href="https://crm.erewere.com/login">crm.erewere.com</a></li>
-  </ul>
-</section>
-</div>
 
 <footer>
-  <div class="marco">
-    <p><strong>Nextcar CRM</strong> — Sistema de administración para agencias de automóviles seminuevos.</p>
-    <p><a href="/privacidad.html">Aviso de Privacidad</a> · <a href="/terminos.html">Condiciones del Servicio</a> · <a href="https://wa.me/524612399969">WhatsApp</a></p>
+  <div class="marco piePartes">
+    <div>
+      <div class="logo" style="margin-bottom:8px">NEXT<span>CAR</span><small>CRM PARA SEMINUEVOS</small></div>
+      <p style="margin:0;max-width:420px">Sistema de administración de clientes, inventario y ventas para agencias de automóviles seminuevos.</p>
+    </div>
+    <div style="text-align:right">
+      <p style="margin:0 0 6px"><a href="https://wa.me/524612399969">461 239 9969</a></p>
+      <p style="margin:0 0 6px"><a href="mailto:contacto@erewere.com">contacto@erewere.com</a></p>
+      <p style="margin:14px 0 0">
+        <a href="/privacidad.html">Aviso de Privacidad</a> ·
+        <a href="/terminos.html">Condiciones del Servicio</a>
+      </p>
+    </div>
   </div>
 </footer>
+
+<script>
+  // Las secciones aparecen al entrar en pantalla. Si el navegador no trae
+  // IntersectionObserver, todo se muestra de una vez: nunca queda invisible.
+  (function () {
+    var piezas = document.querySelectorAll('.revela');
+    if (!('IntersectionObserver' in window)) {
+      piezas.forEach(function (p) { p.classList.add('dentro'); });
+      return;
+    }
+    var vigia = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (e, i) {
+        if (!e.isIntersecting) return;
+        setTimeout(function () { e.target.classList.add('dentro'); }, i * 70);
+        vigia.unobserve(e.target);
+      });
+    }, { rootMargin: '0px 0px -60px 0px', threshold: 0.08 });
+    piezas.forEach(function (p) { vigia.observe(p); });
+
+    var barra = document.getElementById('barra');
+    var alBajar = function () {
+      barra.classList.toggle('encogida', window.scrollY > 40);
+    };
+    window.addEventListener('scroll', alBajar, { passive: true });
+    alBajar();
+  })();
+</script>
 
 </body>
 </html>
