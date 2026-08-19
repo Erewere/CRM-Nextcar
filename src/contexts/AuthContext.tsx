@@ -335,7 +335,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // La cuenta de Google que eligio pertenece a OTRO usuario del CRM.
         // Reautenticar no arregla esto: haria falta soltarla del otro usuario.
         if (err?.code === 'auth/credential-already-in-use') {
-          throw new Error('Esa cuenta de Google ya está enlazada con otro usuario del CRM. Elige una cuenta distinta, o entra al CRM con el usuario que ya la tiene.');
+          // Firebase trae en customData el correo que se eligio en la ventana.
+          // Nombrarlo evita el ir y venir de adivinar cual de las cuentas de
+          // la maquina fue la que se pulso.
+          const elegida = err?.customData?.email ?? null;
+          throw new Error(
+            elegida
+              ? `La cuenta de Google ${elegida} ya está enlazada con otro usuario del CRM.${yaEnlazada ? ` Este usuario usa ${yaEnlazada}.` : ''} Vuelve a intentarlo y elige la cuenta correcta, o entra al CRM con el usuario que ya tiene esa.`
+              : 'Esa cuenta de Google ya está enlazada con otro usuario del CRM. Elige una cuenta distinta, o entra al CRM con el usuario que ya la tiene.'
+          );
         }
         throw err;
       }
