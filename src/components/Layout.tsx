@@ -416,12 +416,10 @@ export function Layout() {
                       onClick={async () => {
                         setMenuPerfilAbierto(false);
                         const cuenta = googleAccount ?? 'tu cuenta de Google';
-                        if (!confirm(`¿Desconectar ${cuenta}?\n\nSe retira el permiso en Google y se suelta la cuenta de este usuario, para que puedas conectar otra. Tus actividades y contactos del CRM no se tocan.`)) return;
+                        if (!confirm(`¿Desconectar ${cuenta}?\n\nSe retira el permiso en Google. Podrás volver a conectar con esta o con otra cuenta cuando quieras. Tus actividades y contactos del CRM no se tocan.`)) return;
                         try {
-                          const { desvinculada, aviso } = await disconnectGoogleServices();
-                          alert(aviso || (desvinculada
-                            ? 'Cuenta de Google desconectada. Ya puedes conectar otra desde Integraciones.'
-                            : 'Cuenta de Google desconectada.'));
+                          await disconnectGoogleServices();
+                          alert('Cuenta de Google desconectada. Ya puedes conectar otra desde Integraciones.');
                         } catch (e: any) {
                           alert(e?.message || 'No se pudo desconectar la cuenta de Google.');
                         }

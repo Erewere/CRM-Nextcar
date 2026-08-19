@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, linkWithPopup, reauthenticateWithPopup, unlink, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { User, Agency } from '../types';
 
 let cachedAccessToken: string | null = null;
@@ -11,15 +12,64 @@ function leerCuentaGoogle(uid: string) {
   return localStorage.getItem(`google_account_${uid}`);
 }
 
-const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/calendar.events');
-provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
-// Pendiente: el CRM tambien llama a Tareas de Google y a enviar correo, pero
-// esos permisos no se piden aqui todavia. Antes de agregarlos hay que darlos de
-// alta en la pantalla de consentimiento de Google Cloud; si se piden sin estar
-// dados de alta, Google rechaza la conexion entera y deja de funcionar hasta
-// el calendario, que hoy si sirve.
-provider.setCustomParameters({ prompt: 'select_account' });
+/**
+ * Pedir permiso a Google, no vincular identidades.
+ *
+ * Antes esto usaba el sistema de Firebase para enlazar la cuenta de Google al
+ * usuario del CRM. Enlazar significa "esta cuenta de Google ES este usuario", y
+ * arrastra reglas de uno a uno: una cuenta no puede estar en dos usuarios, no
+ * se puede cambiar, y segun el estado en que quedara Google devolvia un error
+ * distinto -- de ahi que a veces conectara y a veces no.
+ *
+ * Pero el CRM no necesita declarar quien eres: ya lo sabe, entraste con tu
+ * usuario. Solo necesita permiso para ver tu calendario y tus contactos. Eso
+ * es lo que se pide aqui, y por eso cada quien puede conectar el Gmail que
+ * quiera, las veces que quiera, sin tocar su forma de entrar al sistema.
+ */
+const CLIENTE_GOOGLE = (firebaseConfig as any).oAuthClientId as string;
+const PERMISOS_GOOGLE = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/contacts.readonly',
+].join(' ');
+
+let cargaDeGoogle: Promise<void> | null = null;
+function cargarGoogle(): Promise<void> {
+  if (cargaDeGoogle) return cargaDeGoogle;
+  cargaDeGoogle = new Promise<void>((listo, falla) => {
+    if ((window as any).google?.accounts?.oauth2) return listo();
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.onload = () => listo();
+    s.onerror = () => {
+      cargaDeGoogle = null; // que un fallo de red no deje el boton muerto
+      falla(new Error('No se pudo cargar Google. Revisa tu conexión e inténtalo de nuevo.'));
+    };
+    document.head.appendChild(s);
+  });
+  return cargaDeGoogle;
+}
+
+/**
+ * De que cuenta salio el permiso. El calendario principal lleva por nombre el
+ * correo de su dueño, asi que se averigua sin pedir ningun permiso extra.
+ * Sirve para no borrar actividades cuando alguien conecta otro Gmail; ver
+ * esLaMismaCuentaDeGoogle en lib/google.ts.
+ */
+async function correoDeLaCuenta(token: string): Promise<string | null> {
+  try {
+    const r = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    return typeof d?.summary === 'string' && d.summary.includes('@') ? d.summary : null;
+  } catch {
+    return null;
+  }
+}
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -28,7 +78,7 @@ interface AuthContextType {
   loading: boolean;
   bootstrapUser: (role: 'master' | 'admin' | 'seller', agencyId: string, name: string) => Promise<void>;
   connectGoogleServices: () => Promise<string | null>;
-  disconnectGoogleServices: () => Promise<{ desvinculada: boolean; aviso: string }>;
+  disconnectGoogleServices: () => Promise<void>;
   googleToken: string | null;
   googleAccount: string | null;
 }
@@ -261,171 +311,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserData({ ...newDoc.data(), id: newDoc.id } as User);
   };
 
-  /**
-   * Conecta la cuenta de Google de quien ya esta dentro del CRM.
-   *
-   * Antes esto llamaba a signInWithPopup, que es iniciar sesion, no vincular:
-   * si el usuario habia entrado con su correo y contraseña, Google intentaba
-   * abrir una sesion distinta y chocaba con la suya. Por eso marcaba error.
-   *
-   * Lo correcto es enlazar la cuenta de Google a la sesion que ya existe. Si
-   * ya estaba enlazada, basta con volver a autenticarse para obtener un token
-   * fresco: los de Google caducan en una hora y no traen forma de renovarse
-   * solos, asi que de vez en cuando hay que reconectar.
-   */
-  const connectGoogleServices = async () => {
-    const guardarToken = (token: string, cuenta: string | null) => {
-      if (auth.currentUser?.uid) {
-        localStorage.setItem(`google_token_${auth.currentUser.uid}`, token);
-        if (cuenta) localStorage.setItem(`google_account_${auth.currentUser.uid}`, cuenta);
-      }
-      cachedAccessToken = token;
-      setGoogleToken(token);
-      if (cuenta) setGoogleAccount(cuenta);
-      return token;
-    };
+  /** Pide permiso a Google para el calendario y los contactos. */
+  const connectGoogleServices = async (): Promise<string | null> => {
+    await cargarGoogle();
 
-    // De que cuenta de Google salio el permiso. No tiene por que ser el correo
-    // con el que se entra al CRM: cada usuario conecta el Gmail que quiera.
-    const cuentaDeGoogle = (result: any): string | null =>
-      result?.user?.providerData?.find((p: any) => p?.providerId === 'google.com')?.email
-      ?? result?.user?.email
-      ?? null;
-
-    const tokenDe = (result: any) => {
-      const cred = GoogleAuthProvider.credentialFromResult(result);
-      return cred?.accessToken ? guardarToken(cred.accessToken, cuentaDeGoogle(result)) : null;
-    };
-
-    try {
-      if (!auth.currentUser) {
-        const result = await signInWithPopup(auth, provider);
-        return tokenDe(result);
-      }
-
-      // Con que cuenta de Google quedo enlazado este usuario del CRM. Una vez
-      // enlazado hay que volver siempre a esa misma: Google permite elegir
-      // otra en la ventana, pero entonces la reautenticacion falla.
-      const yaEnlazada = auth.currentUser.providerData
-        ?.find((p: any) => p?.providerId === 'google.com')?.email ?? null;
-
+    const token = await new Promise<string | null>((entrega, falla) => {
+      let cliente: any;
       try {
-        const result = await linkWithPopup(auth.currentUser, provider);
-        return tokenDe(result);
-      } catch (err: any) {
-        // Enlazada de antes: basta con volver a autenticarse para un token nuevo.
-        if (err?.code === 'auth/provider-already-linked' || err?.code === 'auth/requires-recent-login') {
-          try {
-            const result = await reauthenticateWithPopup(auth.currentUser, provider);
-            return tokenDe(result);
-          } catch (err2: any) {
-            // Eligio en la ventana una cuenta distinta de la enlazada. El aviso
-            // de Google ('user-mismatch') no dice cual esperaba; decirlo aqui
-            // ahorra el intento a ciegas.
-            if (err2?.code === 'auth/user-mismatch') {
-              throw new Error(
-                yaEnlazada
-                  ? `Elegiste una cuenta de Google distinta. Este usuario del CRM está enlazado con ${yaEnlazada}; vuelve a intentarlo y elige esa misma cuenta.`
-                  : 'Elegiste una cuenta de Google distinta a la que está enlazada con este usuario del CRM. Vuelve a intentarlo con la cuenta de siempre.'
-              );
-            }
-            throw err2;
-          }
-        }
-        // La cuenta de Google que eligio pertenece a OTRO usuario del CRM.
-        // Reautenticar no arregla esto: haria falta soltarla del otro usuario.
-        if (err?.code === 'auth/credential-already-in-use') {
-          // Firebase trae en customData el correo que se eligio en la ventana.
-          const elegida = err?.customData?.email ?? null;
+        cliente = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: CLIENTE_GOOGLE,
+          scope: PERMISOS_GOOGLE,
+          // Se muestra siempre el selector para que cada quien elija con cual
+          // de sus cuentas conecta, aunque ya haya dado permiso antes.
+          prompt: 'select_account',
+          callback: (r: any) => {
+            if (r?.access_token) return entrega(r.access_token);
+            falla(new Error(r?.error_description || 'Google no entregó el permiso.'));
+          },
+          error_callback: (e: any) => {
+            // Cerrar la ventana no es un error que haya que anunciar.
+            if (e?.type === 'popup_closed' || e?.type === 'popup_failed_to_open') return entrega(null);
+            falla(new Error(e?.message || 'No se pudo conectar con Google.'));
+          },
+        });
+      } catch (e: any) {
+        return falla(new Error(e?.message || 'No se pudo iniciar la conexión con Google.'));
+      }
+      cliente.requestAccessToken();
+    });
 
-          // Si la cuenta elegida es la que este mismo usuario ya tiene, no hay
-          // nada que enlazar: lo que falta es un permiso nuevo. Firebase no
-          // siempre responde 'provider-already-linked' en ese caso -- a veces
-          // dice que la credencial esta en uso, que es cierto pero enganioso,
-          // porque quien la usa es este usuario. Se pide el permiso y ya.
-          if (elegida && yaEnlazada && elegida.toLowerCase() === yaEnlazada.toLowerCase()) {
-            try {
-              const result = await reauthenticateWithPopup(auth.currentUser, provider);
-              return tokenDe(result);
-            } catch (err3: any) {
-              if (err3?.code !== 'auth/user-mismatch') throw err3;
-              // Mismo correo pero otra cuenta de Google detras: sigue de largo
-              // y se explica abajo.
-            }
-          }
+    if (!token) return null;
 
-          throw new Error(
-            elegida
-              ? `La cuenta de Google ${elegida} ya está enlazada con otro usuario del CRM.${yaEnlazada ? ` Este usuario usa ${yaEnlazada}.` : ''} Vuelve a intentarlo y elige la cuenta correcta, o entra al CRM con el usuario que ya tiene esa.`
-              : 'Esa cuenta de Google ya está enlazada con otro usuario del CRM. Elige una cuenta distinta, o entra al CRM con el usuario que ya la tiene.'
-          );
-        }
-        throw err;
-      }
-    } catch (e: any) {
-      if (e?.code === 'auth/cancelled-popup-request' || e?.code === 'auth/popup-closed-by-user') {
-        return null;
-      }
-      if (e?.code === 'auth/popup-blocked') {
-        throw new Error('El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de este sitio e inténtalo de nuevo.');
-      }
-      if (e?.code === 'auth/account-exists-with-different-credential') {
-        throw new Error('Esa cuenta de Google ya está usada por otro usuario del CRM. Entra con la cuenta de Google que corresponde a este usuario.');
-      }
-      console.error('Google connect error:', e);
-      throw new Error(e?.message || 'No se pudo conectar con Google.');
+    const cuenta = await correoDeLaCuenta(token);
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      localStorage.setItem(`google_token_${uid}`, token);
+      if (cuenta) localStorage.setItem(`google_account_${uid}`, cuenta);
+      else localStorage.removeItem(`google_account_${uid}`);
     }
+    cachedAccessToken = token;
+    setGoogleToken(token);
+    setGoogleAccount(cuenta);
+    return token;
   };
 
   /**
-   * Suelta la cuenta de Google de este usuario del CRM.
-   *
-   * Antes esto solo borraba el permiso guardado en el navegador, que es la
-   * parte menos importante: la app seguia autorizada en la cuenta de Google y
-   * el usuario seguia atado a ese Gmail para siempre. Desconectar de verdad
-   * son tres cosas, y las tres pasan aqui.
+   * Retira el permiso en Google y olvida lo guardado aqui. Ya no hace falta
+   * desvincular nada: como no se enlaza ninguna identidad, para cambiar de
+   * cuenta basta con volver a conectar y elegir otra.
    */
-  const disconnectGoogleServices = async (): Promise<{ desvinculada: boolean; aviso: string }> => {
+  const disconnectGoogleServices = async (): Promise<void> => {
     const uid = auth.currentUser?.uid;
     const token = cachedAccessToken ?? (uid ? localStorage.getItem(`google_token_${uid}`) : null);
 
-    // 1. Retirar el permiso en Google. Sin esto la app sigue apareciendo en la
-    //    cuenta del usuario y la siguiente conexion ya no vuelve a preguntar.
     if (token) {
       try {
-        await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
-          method: 'POST',
-          mode: 'no-cors',
-        });
+        await cargarGoogle();
+        (window as any).google?.accounts?.oauth2?.revoke?.(token, () => {});
       } catch {
-        // Mejor esfuerzo: si no se logra, siempre queda quitarlo a mano desde
-        // myaccount.google.com/permissions.
+        // Mejor esfuerzo: siempre queda quitarlo desde la cuenta de Google.
       }
     }
 
-    // 2. Soltar la cuenta del usuario, que es lo que permite enlazar otra
-    //    despues. Pero solo si le queda otra forma de entrar: si Google es su
-    //    unica manera de iniciar sesion, desvincularla lo dejaria fuera.
-    let desvinculada = false;
-    let aviso = '';
-    const user = auth.currentUser;
-    const proveedores = user?.providerData?.map((p) => p.providerId) ?? [];
-    const tieneGoogle = proveedores.includes('google.com');
-    const tieneOtraEntrada = proveedores.some((p) => p !== 'google.com');
-
-    if (user && tieneGoogle && tieneOtraEntrada) {
-      try {
-        await unlink(user, 'google.com');
-        desvinculada = true;
-      } catch (e) {
-        console.error('No se pudo desvincular Google:', e);
-        aviso = 'Se quitó el permiso, pero no se pudo soltar la cuenta de Google. Inténtalo de nuevo.';
-      }
-    } else if (tieneGoogle && !tieneOtraEntrada) {
-      aviso = 'Se quitó el permiso, pero la cuenta de Google sigue enlazada porque es tu única forma de entrar al CRM. Ponte una contraseña antes de cambiar de cuenta.';
-    }
-
-    // 3. Limpiar lo guardado en este navegador.
     if (uid) {
       localStorage.removeItem(`google_token_${uid}`);
       localStorage.removeItem(`google_account_${uid}`);
@@ -433,8 +380,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cachedAccessToken = null;
     setGoogleToken(null);
     setGoogleAccount(null);
-
-    return { desvinculada, aviso };
   };
 
   return (

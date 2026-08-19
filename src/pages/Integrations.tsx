@@ -488,10 +488,8 @@ export function Integrations() {
                     onClick={async () => {
                       const cuenta = googleAccount ?? 'tu cuenta de Google';
                       if (!confirm(`¿Desconectar ${cuenta}?`)) return;
-                      const { desvinculada, aviso } = await disconnectGoogleServices();
-                      alert(aviso || (desvinculada
-                        ? 'Cuenta de Google desconectada. Ya puedes conectar otra.'
-                        : 'Cuenta de Google desconectada.'));
+                      await disconnectGoogleServices();
+                      alert('Cuenta de Google desconectada. Ya puedes conectar otra.');
                     }}
                     className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded border border-red-200 transition-colors"
                   >
