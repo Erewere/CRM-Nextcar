@@ -303,16 +303,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return tokenDe(result);
       }
 
+      // Con que cuenta de Google quedo enlazado este usuario del CRM. Una vez
+      // enlazado hay que volver siempre a esa misma: Google permite elegir
+      // otra en la ventana, pero entonces la reautenticacion falla.
+      const yaEnlazada = auth.currentUser.providerData
+        ?.find((p: any) => p?.providerId === 'google.com')?.email ?? null;
+
       try {
         const result = await linkWithPopup(auth.currentUser, provider);
         return tokenDe(result);
       } catch (err: any) {
-        // Ya enlazada: solo hace falta un token nuevo.
-        if (err?.code === 'auth/provider-already-linked'
-            || err?.code === 'auth/credential-already-in-use'
-            || err?.code === 'auth/requires-recent-login') {
-          const result = await reauthenticateWithPopup(auth.currentUser, provider);
-          return tokenDe(result);
+        // Enlazada de antes: basta con volver a autenticarse para un token nuevo.
+        if (err?.code === 'auth/provider-already-linked' || err?.code === 'auth/requires-recent-login') {
+          try {
+            const result = await reauthenticateWithPopup(auth.currentUser, provider);
+            return tokenDe(result);
+          } catch (err2: any) {
+            // Eligio en la ventana una cuenta distinta de la enlazada. El aviso
+            // de Google ('user-mismatch') no dice cual esperaba; decirlo aqui
+            // ahorra el intento a ciegas.
+            if (err2?.code === 'auth/user-mismatch') {
+              throw new Error(
+                yaEnlazada
+                  ? `Elegiste una cuenta de Google distinta. Este usuario del CRM está enlazado con ${yaEnlazada}; vuelve a intentarlo y elige esa misma cuenta.`
+                  : 'Elegiste una cuenta de Google distinta a la que está enlazada con este usuario del CRM. Vuelve a intentarlo con la cuenta de siempre.'
+              );
+            }
+            throw err2;
+          }
+        }
+        // La cuenta de Google que eligio pertenece a OTRO usuario del CRM.
+        // Reautenticar no arregla esto: haria falta soltarla del otro usuario.
+        if (err?.code === 'auth/credential-already-in-use') {
+          throw new Error('Esa cuenta de Google ya está enlazada con otro usuario del CRM. Elige una cuenta distinta, o entra al CRM con el usuario que ya la tiene.');
         }
         throw err;
       }
