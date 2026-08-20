@@ -190,6 +190,21 @@ export function MiClaveMcp({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
+          {/* Condicion para conectar un asistente, visible antes de generar la
+              clave y no enterrada en el aviso de privacidad. Los datos del CRM
+              pueden incluir contactos importados de Google, y la politica de
+              Google prohibe que acaben entrenando modelos de terceros. */}
+          <div className="rounded border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 p-3">
+            <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+              <strong>Antes de conectar tu asistente.</strong> Conecta únicamente
+              asistentes cuyo proveedor <strong>no entrene sus modelos</strong> con lo
+              que le mandes: normalmente un plan de pago o empresarial, o desactivando
+              el entrenamiento en su configuración. Tu CRM puede contener contactos
+              importados de Google, y usarlos para entrenar va contra las condiciones
+              del servicio.
+            </p>
+          </div>
+
           <button
             onClick={generar}
             disabled={generando}
