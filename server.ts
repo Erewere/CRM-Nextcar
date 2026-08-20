@@ -476,6 +476,12 @@ async function startServer() {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: mode || "subscription",
+        // Deja escribir un codigo promocional en la pantalla de pago. Sirve
+        // para cortesias y descuentos, y sobre todo para poder recorrer el
+        // alta completa -- incluido el aviso que activa la agencia -- con un
+        // cupon del 100%, sin cobrar nada y sin inventar un camino aparte que
+        // no seria el que usan los clientes.
+        allow_promotion_codes: true,
         line_items: [
           {
             price: priceId,
