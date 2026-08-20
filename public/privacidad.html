@@ -95,7 +95,7 @@
   <h3 style="margin-top:0">Uso Limitado de los datos de Google</h3>
   <p style="margin-bottom:0">El uso y la transferencia que Nextcar CRM hace de la información recibida de las APIs de Google se apega a la <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Política de Datos de Usuario de los Servicios de API de Google</a>, incluidos sus requisitos de Uso Limitado.</p>
   <p style="margin-bottom:0"><em>Nextcar CRM's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</em></p>
-  <p style="margin-bottom:0">En concreto: <strong>no vendemos</strong> tu información de Google, <strong>no la usamos con fines publicitarios</strong>, <strong>no la usamos ni la transferimos para crear, entrenar ni mejorar modelos de inteligencia artificial</strong> — ni generalizados ni propios — y <strong>ninguna persona la lee</strong>, salvo que tú lo autorices expresamente para resolver un problema de soporte, cuando lo exija la ley o para investigar un incidente de seguridad. El único servicio de inteligencia artificial que interviene es la API de Gemini de Google en nivel de pago, que según los términos de Google no entrena con lo que recibe; el detalle está en el apartado 4.</p>
+  <p style="margin-bottom:0">En concreto: <strong>no vendemos</strong> tu información de Google, <strong>no la usamos con fines publicitarios</strong>, <strong>no la usamos ni la transferimos para crear, entrenar ni mejorar modelos de inteligencia artificial</strong> — ni generalizados ni propios — y <strong>ninguna persona la lee</strong>, salvo que tú lo autorices expresamente para resolver un problema de soporte, cuando lo exija la ley o para investigar un incidente de seguridad. El CRM no envía tu información a ningún servicio de inteligencia artificial; el detalle está en el apartado 4.</p>
 </div>
 
 <h2>3. Con quién se comparte</h2>
@@ -104,16 +104,14 @@
   <li><strong>Google Cloud / Firebase</strong> — almacenamiento de la base de datos, autenticación y archivos.</li>
   <li><strong>Hostinger</strong> — alojamiento del sitio.</li>
   <li><strong>Stripe</strong> — procesamiento de pagos de la suscripción. Nextcar no almacena números de tarjeta.</li>
-  <li><strong>API de Gemini de Google</strong> — genera las recomendaciones de seguimiento. Contratada en nivel de pago, que según los términos de Google no entrena con lo recibido. Ver el apartado 4.</li>
 </ul>
 <p>También podemos entregar información cuando una autoridad competente lo requiera legalmente.</p>
 
 <h2>4. Inteligencia artificial</h2>
 
-<h3>4.1 El único proveedor que usamos</h3>
-<p>Nextcar CRM utiliza <strong>un solo servicio de inteligencia artificial: la API de Gemini de Google</strong> (modelo <code>gemini-3.1-flash-lite</code>), invocada desde nuestro servidor para generar recomendaciones de seguimiento comercial a partir de la información de la agencia: clientes, actividades, etapas del embudo e inventario.</p>
-<p>Esa API está contratada en <strong>nivel de pago</strong> (Nivel 1, prepago), con facturación habilitada. Conforme a los términos de Google para el nivel de pago de la API de Gemini, <strong>Google no utiliza las peticiones ni las respuestas para entrenar ni mejorar sus modelos</strong>.</p>
-<p>No usamos ningún otro proveedor de inteligencia artificial. No empleamos agregadores, pasarelas ni plataformas de múltiples modelos, ni modelos autoalojados. Ninguna información sale hacia un tercero distinto de Google.</p>
+<h3>4.1 Nextcar no usa ningún servicio de inteligencia artificial</h3>
+<p><strong>El CRM no envía información a ningún proveedor de inteligencia artificial.</strong> No integramos ninguno: ni propio ni de terceros, ni directamente ni a través de agregadores, pasarelas o plataformas de múltiples modelos, ni modelos autoalojados.</p>
+<p>Las recomendaciones de seguimiento que ves en el tablero se calculan <strong>dentro del propio CRM</strong>, con una fórmula que pondera la etapa del embudo, las actividades pendientes y el inventario. Es un cálculo determinista: los mismos datos dan siempre el mismo resultado, y nada sale de nuestros servidores.</p>
 
 <h3>4.2 Asistentes que conecta el propio usuario (MCP)</h3>
 <p>De forma opcional, cada usuario puede generar una clave personal para consultar el CRM desde el asistente de inteligencia artificial <em>que él mismo elija</em>, con su propia cuenta y su propio plan. Nextcar no contrata, no integra ni envía información a ningún proveedor concreto por esa vía: se limita a exponer los datos del propio usuario cuando su asistente los solicita, respetando exactamente los mismos permisos que esa persona tiene dentro del CRM.</p>
