@@ -355,16 +355,38 @@ async function startServer() {
             await agencyRef.set(updates, { merge: true });
           }
           break;
+        case "customer.subscription.created":
         case "customer.subscription.updated": {
           const subscription = event.data.object as Stripe.Subscription;
           const customerId = subscription.customer as string;
           const status = subscription.status;
+
+          // Primero por la agencia que viaja en la suscripcion. Buscar por
+          // stripeCustomerId solo funciona si antes llego
+          // checkout.session.completed, que es justamente el evento que
+          // puede faltar; sin esta via, un pago bueno se quedaba sin efecto
+          // y no habia nada que pudiera repararlo despues.
+          const agencyIdDeLaSuscripcion = subscription.metadata?.agencyId;
+          if (agencyIdDeLaSuscripcion) {
+            await adminDb.collection("agencies").doc(agencyIdDeLaSuscripcion).set(
+              {
+                subscriptionStatus: status,
+                stripeCustomerId: customerId,
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+            break;
+          }
+
           const agenciesQuery = adminDb.collection("agencies").where("stripeCustomerId", "==", customerId);
           const agenciesSnapshot = await agenciesQuery.get();
-          
+
           if (!agenciesSnapshot.empty) {
             const agencyDoc = agenciesSnapshot.docs[0];
             await agencyDoc.ref.set({ subscriptionStatus: status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          } else {
+            console.error("Suscripcion sin agencia identificable:", subscription.id, customerId);
           }
           break;
         }
@@ -461,6 +483,13 @@ async function startServer() {
           },
         ],
         metadata: metadata || undefined,
+        // La agencia viaja tambien dentro de la suscripcion. Antes el unico
+        // sitio donde constaba era client_reference_id, que solo llega en
+        // checkout.session.completed: si ese evento se perdia, no quedaba
+        // forma de saber a quien correspondia el pago.
+        ...((mode || "subscription") === "subscription"
+          ? { subscription_data: { metadata: { agencyId } } }
+          : {}),
         client_reference_id: agencyId,
         success_url: `${origin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/billing?canceled=true`,
