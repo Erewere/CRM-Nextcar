@@ -16,7 +16,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
+import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, eventoDeActividad, tareaDeActividad, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
 import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
@@ -938,38 +938,25 @@ export function Tasks() {
         }
 
         if (!task.completed && !task.googleEventId && !task.googleTaskId) {
-          const eventPayload = {
-            summary: task.title,
-            description: task.notes || "",
-            start: {
-              dateTime: `${task.dueDate}T${task.startTime || "09:00"}:00`,
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-            end: {
-              dateTime: `${task.dueDate}T${task.endTime || task.startTime || "10:00"}:00`,
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-          };
-          const taskPayload = {
-            title: task.title,
-            notes: task.notes || "",
-            due: new Date(`${task.dueDate}T${task.startTime || '00:00'}:00`).toISOString()
-          };
+          // Mismo criterio que al guardar una actividad: sin hora, dia
+          // completo; con hora y sin fin, dura una. Antes aqui se inventaba
+          // 09:00 y alla se mandaba la hora en blanco, asi que el mismo dato
+          // acababa en dos eventos distintos segun por donde se sincronizara.
+          const eventPayload = eventoDeActividad(task);
+          const taskPayload = tareaDeActividad(task);
+          if (!eventPayload) continue;
           try {
+            const cabeceras = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
             const [calRes, taskRes] = await Promise.all([
-              fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify(eventPayload),
-              }),
-              fetch("https://tasks.googleapis.com/tasks/v1/lists/@default/tasks", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify(taskPayload),
-              })
+              fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                { method: "POST", headers: cabeceras, body: JSON.stringify(eventPayload) }),
+              taskPayload
+                ? fetch("https://tasks.googleapis.com/tasks/v1/lists/@default/tasks",
+                    { method: "POST", headers: cabeceras, body: JSON.stringify(taskPayload) })
+                : Promise.resolve(null),
             ]);
 
-            if (permisoDeGoogleVencido(calRes) || permisoDeGoogleVencido(taskRes)) {
+            if (permisoDeGoogleVencido(calRes)) {
               throw new Error(AVISO_RECONECTAR);
             }
             if (permisoNoAlcanza(calRes)) faltaronPermisos = true;
@@ -978,9 +965,9 @@ export function Tasks() {
               const calData = await calRes.json();
               updates.googleEventId = calData.id;
             }
-            if (taskRes.ok) {
-              const taskData = await taskRes.json();
-              updates.googleTaskId = taskData.id;
+            if (taskRes?.ok) {
+              const datosTarea = await taskRes.json();
+              updates.googleTaskId = datosTarea.id;
             }
             // Queda anotado en que cuenta de Google vive el evento.
             if (Object.keys(updates).length > 0 && googleAccount) {
@@ -2721,49 +2708,23 @@ export function Tasks() {
               }
 
               if (taskData.syncToCalendar && token) {
-                const event = {
-                  summary: taskData.title,
-                  description: taskData.notes,
-                  start: {
-                    dateTime: `${taskData.dueDate}T${taskData.startTime}:00`,
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                  },
-                  end: {
-                    dateTime: `${taskData.dueDate}T${taskData.endTime || taskData.startTime}:00`,
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                  },
-                };
+                const evento = eventoDeActividad(taskData);
+                const tarea = tareaDeActividad(taskData);
 
-                const taskPayload = {
-                  title: taskData.title,
-                  notes: taskData.notes,
-                  due: new Date(`${taskData.dueDate}T${taskData.startTime || '00:00'}:00`).toISOString()
-                };
-
-                try {
+                if (!evento) {
+                  alert("La actividad se guardó en el CRM, pero no se pudo agregar al calendario porque le falta la fecha.");
+                } else try {
+                  const cabeceras = {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  };
                   const [calRes, taskRes] = await Promise.all([
-                    fetch(
-                      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-                      {
-                        method: "POST",
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(event),
-                      }
-                    ),
-                    fetch(
-                      "https://tasks.googleapis.com/tasks/v1/lists/@default/tasks",
-                      {
-                        method: "POST",
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(taskPayload),
-                      }
-                    )
+                    fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                      { method: "POST", headers: cabeceras, body: JSON.stringify(evento) }),
+                    tarea
+                      ? fetch("https://tasks.googleapis.com/tasks/v1/lists/@default/tasks",
+                          { method: "POST", headers: cabeceras, body: JSON.stringify(tarea) })
+                      : Promise.resolve(null),
                   ]);
 
                   let updates: any = {};
@@ -2771,9 +2732,9 @@ export function Tasks() {
                     const calData = await calRes.json();
                     updates.googleEventId = calData.id;
                   }
-                  if (taskRes.ok) {
-                    const taskData = await taskRes.json();
-                    updates.googleTaskId = taskData.id;
+                  if (taskRes?.ok) {
+                    const datosTarea = await taskRes.json();
+                    updates.googleTaskId = datosTarea.id;
                   }
                   if (Object.keys(updates).length > 0 && googleAccount) {
                     updates.googleAccount = googleAccount;
@@ -2786,7 +2747,7 @@ export function Tasks() {
                   // Antes se avisaba de exito aunque Google hubiera rechazado
                   // las dos llamadas, asi que un permiso caducado parecia una
                   // sincronizacion buena y el usuario no tenia como enterarse.
-                  if (permisoDeGoogleVencido(calRes) || permisoDeGoogleVencido(taskRes)) {
+                  if (permisoDeGoogleVencido(calRes)) {
                     alert("La actividad se guardó en el CRM, pero no se pudo agregar a Google.\n\n" + AVISO_RECONECTAR);
                   } else if (permisoNoAlcanza(calRes)) {
                     alert("La actividad se guardó en el CRM.\n\n" + AVISO_FALTAN_PERMISOS);
@@ -2798,7 +2759,7 @@ export function Tasks() {
                 } catch (calendarError) {
                   console.error("Error syncing to calendar/tasks", calendarError);
                   alert(
-                    "Actividad guardada, pero ocurrió un error al sincronizar con Google.",
+                    "Actividad guardada, pero ocurrió un error al agregarla a tu Calendario de Google.",
                   );
                 }
               }
