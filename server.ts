@@ -1386,6 +1386,21 @@ async function startServer() {
     }
   }
 
+  /**
+   * Si el servidor esta listo para conectar cuentas de Google.
+   *
+   * Responde solo con dos si-o-no. No revela el secreto ni ningun dato: la
+   * gracia es poder distinguir "falta configurar el servidor" de "el usuario
+   * no ha conectado", que desde fuera se confunden y llevan a buscar el fallo
+   * donde no esta.
+   */
+  app.get("/api/google/estado", (_req, res) => {
+    res.json({
+      clienteConfigurado: !!(firebaseConfig as any)?.oAuthClientId,
+      secretoConfigurado: !!process.env.GOOGLE_CLIENT_SECRET,
+    });
+  });
+
   app.post("/api/google/conectar", express.json(), async (req, res) => {
     const usuario = await quienPide(req);
     if (!usuario) return res.status(401).json({ error: "Inicia sesión para continuar." });
