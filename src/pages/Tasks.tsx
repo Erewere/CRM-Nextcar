@@ -2725,9 +2725,26 @@ export function Tasks() {
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json",
                   };
+
+                  // Si esta actividad ya tiene evento en Google, se actualiza
+                  // ese; crear otro dejaria la cita duplicada en el calendario
+                  // cada vez que se edita. Y si el usuario borro el evento por
+                  // su cuenta, Google responde 404 y entonces si se crea uno.
+                  const eventoPrevio = editingTask?.googleEventId;
+                  const mandarEvento = async () => {
+                    if (eventoPrevio) {
+                      const r = await fetch(
+                        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventoPrevio}`,
+                        { method: "PATCH", headers: cabeceras, body: JSON.stringify(evento) }
+                      );
+                      if (r.status !== 404) return r;
+                    }
+                    return fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                      { method: "POST", headers: cabeceras, body: JSON.stringify(evento) });
+                  };
+
                   const [calRes, taskRes] = await Promise.all([
-                    fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events",
-                      { method: "POST", headers: cabeceras, body: JSON.stringify(evento) }),
+                    mandarEvento(),
                     tarea
                       ? fetch("https://tasks.googleapis.com/tasks/v1/lists/@default/tasks",
                           { method: "POST", headers: cabeceras, body: JSON.stringify(tarea) })
@@ -2759,7 +2776,9 @@ export function Tasks() {
                   } else if (permisoNoAlcanza(calRes)) {
                     alert("La actividad se guardó en el CRM.\n\n" + AVISO_FALTAN_PERMISOS);
                   } else if (calRes.ok) {
-                    alert("¡Actividad guardada y agregada a tu Calendario de Google!");
+                    alert(editingTask?.googleEventId
+                      ? "¡Actividad guardada y actualizada en tu Calendario de Google!"
+                      : "¡Actividad guardada y agregada a tu Calendario de Google!");
                   } else {
                     alert("La actividad se guardó en el CRM, pero Google no la aceptó. Revisa tu conexión en Integraciones.");
                   }

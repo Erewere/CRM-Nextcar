@@ -76,7 +76,8 @@ export function NewActivityModal({
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [clientId, setClientId] = useState(initialData?.clientId || "");
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
-  const { userData } = useAuth(); // We need userData
+  const { userData, googleAccount, googleToken } = useAuth();
+  const googleConectado = Boolean(googleAccount || googleToken);
 
   const handleSaveClick = () => {
     const existingDeal = deals.find(
@@ -208,7 +209,22 @@ export function NewActivityModal({
     initialData?.organization || "",
   );
   const [completed, setCompleted] = useState(initialData?.completed || false);
-  const [syncToCalendar, setSyncToCalendar] = useState(false);
+  // Conectar la cuenta de Google ya es la decision de sincronizar; no tiene
+  // sentido volver a pedirla en cada actividad. La casilla queda encendida
+  // por omision y sigue ahi para la excepcion: una actividad suelta que no
+  // quieres en tu calendario.
+  const [syncToCalendar, setSyncToCalendar] = useState(
+    Boolean(initialData?.googleEventId) || googleConectado
+  );
+  const [casillaTocada, setCasillaTocada] = useState(false);
+
+  // El permiso de Google llega un instante despues de abrir la pantalla, asi
+  // que al primer dibujo todavia no se sabe si hay cuenta. Cuando se sabe, se
+  // ajusta -- salvo que la persona ya la haya movido a mano.
+  useEffect(() => {
+    if (casillaTocada) return;
+    setSyncToCalendar(Boolean(initialData?.googleEventId) || googleConectado);
+  }, [googleConectado, casillaTocada, initialData?.googleEventId]);
   const [disponibilidad, setDisponibilidad] = useState<'ocupado' | 'libre'>(
     initialData?.disponibilidad || 'ocupado'
   );
@@ -773,7 +789,7 @@ export function NewActivityModal({
               <input
                 type="checkbox"
                 checked={syncToCalendar}
-                onChange={(e) => setSyncToCalendar(e.target.checked)}
+                onChange={(e) => { setCasillaTocada(true); setSyncToCalendar(e.target.checked); }}
                 className="w-4 h-4 shrink-0 rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500 text-blue-600 focus:ring-blue-500"
               />
               <CalendarIcon className="w-4 h-4 shrink-0" /> 
