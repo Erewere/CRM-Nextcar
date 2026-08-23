@@ -2714,6 +2714,14 @@ export function Tasks() {
                 await updateDoc(newRef, tempTask);
               }
 
+              // Lo que Google devuelve -- el identificador del evento -- se
+              // guardaba en la base pero no en la actividad que queda en
+              // pantalla. Al reabrirla para editarla, el CRM la veia sin
+              // evento y creaba otro en vez de mover el que ya existia: por
+              // eso una cita cambiada de viernes a miercoles aparecia dos
+              // veces en el calendario.
+              let datosDeGoogle: any = {};
+
               if (taskData.syncToCalendar && token) {
                 const evento = eventoDeActividad(taskData);
                 const tarea = tareaDeActividad(taskData);
@@ -2766,6 +2774,7 @@ export function Tasks() {
 
                   if (Object.keys(updates).length > 0) {
                     await updateDoc(newRef, updates);
+                    datosDeGoogle = updates;
                   }
 
                   // Antes se avisaba de exito aunque Google hubiera rechazado
@@ -2795,13 +2804,13 @@ export function Tasks() {
                 setTasks((prev) =>
                   prev.map((t) =>
                     t.task.id === editingTask.id
-                      ? { task: { ...t.task, ...tempTask } as Task, client: cl }
+                      ? { task: { ...t.task, ...tempTask, ...datosDeGoogle } as Task, client: cl }
                       : t,
                   ),
                 );
               } else {
                 setTasks((prev) => [
-                  { task: { id: newRef.id, ...tempTask } as Task, client: cl },
+                  { task: { id: newRef.id, ...tempTask, ...datosDeGoogle } as Task, client: cl },
                   ...prev,
                 ]);
               }
