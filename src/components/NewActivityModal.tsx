@@ -97,6 +97,7 @@ export function NewActivityModal({
       notes,
       completed,
       syncToCalendar,
+      disponibilidad,
     });
   };
 
@@ -208,6 +209,9 @@ export function NewActivityModal({
   );
   const [completed, setCompleted] = useState(initialData?.completed || false);
   const [syncToCalendar, setSyncToCalendar] = useState(false);
+  const [disponibilidad, setDisponibilidad] = useState<'ocupado' | 'libre'>(
+    initialData?.disponibilidad || 'ocupado'
+  );
   const [clientStatus, setClientStatus] = useState("new");
   const [pipelineStages, setPipelineStages] = useState<
     { id: string; title: string }[]
@@ -449,24 +453,22 @@ export function NewActivityModal({
               </div>
             </div>
 
-            {/* Priority */}
-            <div className="flex items-center gap-4">
-              <CalendarIcon className="w-5 h-5 text-gray-500 dark:text-slate-400 flex-shrink-0" />
-              <select className="border border-gray-300 rounded p-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none">
-                <option>Prioridad</option>
-                <option>Alta</option>
-                <option>Media</option>
-                <option>Baja</option>
-              </select>
-            </div>
-
-            {/* Free/Busy */}
+            {/* Si la actividad bloquea la agenda en Google Calendar */}
             <div className="flex items-center gap-4">
               <CalendarX className="w-5 h-5 text-gray-500 dark:text-slate-400 flex-shrink-0" />
-              <select className="border border-gray-300 rounded p-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                <option>Ocupado</option>
-                <option>Libre</option>
-              </select>
+              <div>
+                <select
+                  value={disponibilidad}
+                  onChange={(e) => setDisponibilidad(e.target.value as 'ocupado' | 'libre')}
+                  className="border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 rounded p-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="ocupado">Ocupado</option>
+                  <option value="libre">Libre</option>
+                </select>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                  Si ocupa, en tu calendario aparecerás como no disponible a esa hora.
+                </p>
+              </div>
             </div>
 
             {/* Notes */}
@@ -479,8 +481,8 @@ export function NewActivityModal({
                   className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 bg-[#fff9db] p-3 min-h-[100px] outline-none focus:ring-2 focus:ring-blue-500"
                 ></textarea>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                  Las notas son visibles dentro de Pipedrive, pero no para los
-                  invitados al evento
+                  Las notas se guardan en el CRM y viajan a tu Google Calendar
+                  como descripción del evento.
                 </p>
               </div>
             </div>

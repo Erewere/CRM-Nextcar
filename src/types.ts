@@ -202,6 +202,8 @@ export interface Task {
   googleTaskId?: string;
   /** Cuenta de Google donde vive el evento; ver esLaMismaCuentaDeGoogle. */
   googleAccount?: string;
+  /** Si la actividad bloquea tu agenda en Google Calendar. Por omision, ocupa. */
+  disponibilidad?: 'ocupado' | 'libre';
   createdAt: any;
   updatedAt?: any;
 }

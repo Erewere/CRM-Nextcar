@@ -2696,6 +2696,7 @@ export function Tasks() {
                 startTime: taskData.startTime,
                 endTime: taskData.endTime,
                 completed: taskData.completed || false,
+                disponibilidad: taskData.disponibilidad || "ocupado",
                 updatedAt: new Date().toISOString(),
               };
 

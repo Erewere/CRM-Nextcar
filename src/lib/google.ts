@@ -60,6 +60,7 @@ type Actividad = {
   dueDate?: string;
   startTime?: string;
   endTime?: string;
+  disponibilidad?: 'ocupado' | 'libre';
 };
 
 const zonaHoraria = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -93,6 +94,10 @@ export function eventoDeActividad(a: Actividad) {
   const base = {
     summary: (a.title || '').trim() || 'Actividad',
     description: a.notes || '',
+    // Google llama 'transparent' a lo que no bloquea la agenda y 'opaque' a
+    // lo que si. Sin esto, toda actividad ocupaba, y un recordatorio de
+    // llamada tapaba la agenda igual que una entrega.
+    transparency: a.disponibilidad === 'libre' ? 'transparent' : 'opaque',
   };
 
   if (!a.startTime) {
