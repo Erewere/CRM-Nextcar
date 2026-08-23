@@ -75,7 +75,7 @@ import {
 import { es } from "date-fns/locale";
 
 export function Tasks() {
-  const { userData, connectGoogleServices, googleToken, googleAccount } = useAuth();
+  const { userData, connectGoogleServices, refrescarTokenGoogle, googleToken, googleAccount } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<{ task: Task; client: Client | null }[]>(
@@ -875,7 +875,10 @@ export function Tasks() {
   const handleSyncCalendar = async () => {
     setIsSyncing(true);
     try {
-      let token = googleToken;
+      // Antes se pedia reconectar en cuanto el permiso caducaba. Ahora el
+      // servidor guarda el pase de renovacion, asi que basta con pedir uno
+      // nuevo; solo si esta persona no ha conectado nunca se abre la ventana.
+      let token = (await refrescarTokenGoogle()) ?? googleToken;
       if (!token) {
         token = await connectGoogleServices();
       }
@@ -2563,6 +2566,9 @@ export function Tasks() {
 
               // Request Google Token directly on user gesture before async database operations
               let token = googleToken;
+              if (taskData.syncToCalendar) {
+                token = (await refrescarTokenGoogle()) ?? token;
+              }
               if (taskData.syncToCalendar && !token) {
                 try {
                   token = await connectGoogleServices();

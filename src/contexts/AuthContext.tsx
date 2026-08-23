@@ -51,26 +51,6 @@ function cargarGoogle(): Promise<void> {
   return cargaDeGoogle;
 }
 
-/**
- * De que cuenta salio el permiso. El calendario principal lleva por nombre el
- * correo de su dueño, asi que se averigua sin pedir ningun permiso extra.
- * Sirve para no borrar actividades cuando alguien conecta otro Gmail; ver
- * esLaMismaCuentaDeGoogle en lib/google.ts.
- */
-async function correoDeLaCuenta(token: string): Promise<string | null> {
-  try {
-    const r = await fetch(
-      'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1',
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!r.ok) return null;
-    const d = await r.json();
-    return typeof d?.summary === 'string' && d.summary.includes('@') ? d.summary : null;
-  } catch {
-    return null;
-  }
-}
-
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   userData: User | null;
@@ -78,6 +58,7 @@ interface AuthContextType {
   loading: boolean;
   bootstrapUser: (role: 'master' | 'admin' | 'seller', agencyId: string, name: string) => Promise<void>;
   connectGoogleServices: () => Promise<string | null>;
+  refrescarTokenGoogle: () => Promise<string | null>;
   disconnectGoogleServices: () => Promise<void>;
   googleToken: string | null;
   googleAccount: string | null;
@@ -92,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [googleAccount, setGoogleAccount] = useState<string | null>(null);
+  const refrescarTokenRef = React.useRef<null | (() => Promise<string | null>)>(null);
 
   useEffect(() => {
     let userUnsubscribe: (() => void) | undefined;
@@ -108,15 +90,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("AuthContext: onAuthStateChanged triggered. User:", user ? user.email : "null");
       setCurrentUser(user);
       if (user) {
-        const savedToken = localStorage.getItem(`google_token_${user.uid}`);
-        if (savedToken) {
-          cachedAccessToken = savedToken;
-          setGoogleToken(savedToken);
-        } else {
-          cachedAccessToken = null;
-          setGoogleToken(null);
-        }
+        // Lo guardado en el navegador se usa solo para que la pantalla no
+        // parpadee mientras el servidor contesta; puede estar caducado.
+        const guardado = localStorage.getItem(`google_token_${user.uid}`);
+        cachedAccessToken = guardado;
+        setGoogleToken(guardado);
         setGoogleAccount(leerCuentaGoogle(user.uid));
+        // Y en seguida se pide uno fresco. Si esta persona conecto su cuenta
+        // desde otro aparato, aqui aparece conectada sin hacer nada.
+        void refrescarTokenRef.current?.();
         setLoading(true);
         try {
           console.log("AuthContext: Setting up user snapshot for UID:", user.uid);
@@ -311,25 +293,87 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserData({ ...newDoc.data(), id: newDoc.id } as User);
   };
 
-  /** Pide permiso a Google para el calendario y los contactos. */
+  /**
+   * El permiso de Google dura una hora. Se renueva antes de que caduque para
+   * que nadie se tope con una sincronizacion que falla a media tarde.
+   */
+  useEffect(() => {
+    if (!currentUser) return;
+    const cada = setInterval(() => { void refrescarTokenRef.current?.(); }, 45 * 60 * 1000);
+    return () => clearInterval(cada);
+  }, [currentUser]);
+
+  /** El identificador de la sesion, para que el servidor sepa quien pide. */
+  const credencialDelUsuario = async () => {
+    const t = await auth.currentUser?.getIdToken();
+    if (!t) throw new Error('Vuelve a iniciar sesión e inténtalo de nuevo.');
+    return t;
+  };
+
+  const recordarToken = (token: string | null, cuenta: string | null) => {
+    cachedAccessToken = token;
+    setGoogleToken(token);
+    setGoogleAccount(cuenta);
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    // Se conserva en el navegador solo para que la pantalla no parpadee al
+    // cargar; la verdad vive en el servidor.
+    if (token) localStorage.setItem(`google_token_${uid}`, token);
+    else localStorage.removeItem(`google_token_${uid}`);
+    if (cuenta) localStorage.setItem(`google_account_${uid}`, cuenta);
+    else localStorage.removeItem(`google_account_${uid}`);
+  };
+
+  /**
+   * Un permiso de Google vigente, sin molestar al usuario.
+   *
+   * El servidor guarda el pase de renovacion y entrega permisos frescos, asi
+   * que basta con pedirselo. Devuelve null si esta persona no tiene ninguna
+   * cuenta conectada, que no es un error: es que aun no ha conectado.
+   */
+  const refrescarTokenGoogle = async (): Promise<string | null> => {
+    if (!auth.currentUser) return null;
+    try {
+      const r = await fetch('/api/google/token', {
+        headers: { Authorization: `Bearer ${await credencialDelUsuario()}` },
+      });
+      if (!r.ok) {
+        if (r.status === 404) recordarToken(null, null);
+        return null;
+      }
+      const d = await r.json();
+      recordarToken(d.accessToken, d.cuenta ?? null);
+      return d.accessToken as string;
+    } catch {
+      return null;
+    }
+  };
+
+  refrescarTokenRef.current = refrescarTokenGoogle;
+
+  /** Conecta una cuenta de Google. Se hace una vez y queda. */
   const connectGoogleServices = async (): Promise<string | null> => {
     await cargarGoogle();
 
-    const token = await new Promise<string | null>((entrega, falla) => {
+    // El navegador solo recoge un codigo de un solo uso; el pase de
+    // renovacion se lo queda el servidor, que es donde puede estar a salvo.
+    const codigo = await new Promise<string | null>((entrega, falla) => {
       let cliente: any;
       try {
-        cliente = (window as any).google.accounts.oauth2.initTokenClient({
+        cliente = (window as any).google.accounts.oauth2.initCodeClient({
           client_id: CLIENTE_GOOGLE,
           scope: PERMISOS_GOOGLE,
-          // Se muestra siempre el selector para que cada quien elija con cual
-          // de sus cuentas conecta, aunque ya haya dado permiso antes.
-          prompt: 'select_account',
+          ux_mode: 'popup',
+          // Sin esto Google entrega el pase de renovacion solo la primera vez
+          // que alguien autoriza, y quien ya habia conectado antes se quedaria
+          // sin renovacion sin enterarse.
+          prompt: 'consent',
+          select_account: true,
           callback: (r: any) => {
-            if (r?.access_token) return entrega(r.access_token);
-            falla(new Error(r?.error_description || 'Google no entregó el permiso.'));
+            if (r?.code) return entrega(r.code);
+            falla(new Error(r?.error_description || 'Google no entregó la autorización.'));
           },
           error_callback: (e: any) => {
-            // Cerrar la ventana no es un error que haya que anunciar.
             if (e?.type === 'popup_closed' || e?.type === 'popup_failed_to_open') return entrega(null);
             falla(new Error(e?.message || 'No se pudo conectar con Google.'));
           },
@@ -337,53 +381,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e: any) {
         return falla(new Error(e?.message || 'No se pudo iniciar la conexión con Google.'));
       }
-      cliente.requestAccessToken();
+      cliente.requestCode();
     });
 
-    if (!token) return null;
+    if (!codigo) return null;
 
-    const cuenta = await correoDeLaCuenta(token);
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-      localStorage.setItem(`google_token_${uid}`, token);
-      if (cuenta) localStorage.setItem(`google_account_${uid}`, cuenta);
-      else localStorage.removeItem(`google_account_${uid}`);
-    }
-    cachedAccessToken = token;
-    setGoogleToken(token);
-    setGoogleAccount(cuenta);
-    return token;
+    const r = await fetch('/api/google/conectar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${await credencialDelUsuario()}`,
+      },
+      body: JSON.stringify({ code: codigo }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || 'No se pudo conectar con Google.');
+
+    recordarToken(d.accessToken, d.cuenta ?? null);
+    return d.accessToken as string;
   };
 
-  /**
-   * Retira el permiso en Google y olvida lo guardado aqui. Ya no hace falta
-   * desvincular nada: como no se enlaza ninguna identidad, para cambiar de
-   * cuenta basta con volver a conectar y elegir otra.
-   */
+  /** Retira el permiso en Google y olvida el pase guardado. */
   const disconnectGoogleServices = async (): Promise<void> => {
-    const uid = auth.currentUser?.uid;
-    const token = cachedAccessToken ?? (uid ? localStorage.getItem(`google_token_${uid}`) : null);
-
-    if (token) {
-      try {
-        await cargarGoogle();
-        (window as any).google?.accounts?.oauth2?.revoke?.(token, () => {});
-      } catch {
-        // Mejor esfuerzo: siempre queda quitarlo desde la cuenta de Google.
-      }
+    try {
+      await fetch('/api/google/desconectar', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await credencialDelUsuario()}` },
+      });
+    } finally {
+      recordarToken(null, null);
     }
-
-    if (uid) {
-      localStorage.removeItem(`google_token_${uid}`);
-      localStorage.removeItem(`google_account_${uid}`);
-    }
-    cachedAccessToken = null;
-    setGoogleToken(null);
-    setGoogleAccount(null);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, userData, agencyData, loading, bootstrapUser, connectGoogleServices, disconnectGoogleServices, googleToken, googleAccount }}>
+    <AuthContext.Provider value={{ currentUser, userData, agencyData, loading, bootstrapUser, connectGoogleServices, refrescarTokenGoogle, disconnectGoogleServices, googleToken, googleAccount }}>
       {children}
     </AuthContext.Provider>
   );

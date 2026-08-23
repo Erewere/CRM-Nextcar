@@ -50,7 +50,7 @@ import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 export function Persons() {
   const isMobile = useIsMobile();
-  const { userData, googleToken, connectGoogleServices } = useAuth();
+  const { userData, googleToken, connectGoogleServices, refrescarTokenGoogle } = useAuth();
   const isReadOnly = useReadOnly();
   const location = useLocation();
   const navigate = useNavigate();
@@ -440,7 +440,10 @@ export function Persons() {
   const handleImportGoogleContacts = async () => {
     try {
       setImportingContacts(true);
-      let token = googleToken;
+      // El servidor guarda el pase de renovacion, asi que primero se pide un
+      // permiso fresco. Solo se abre la ventana de Google si esta persona no
+      // ha conectado nunca su cuenta.
+      let token = (await refrescarTokenGoogle()) ?? googleToken;
       if (!token) {
         token = await connectGoogleServices();
       }
@@ -464,10 +467,11 @@ export function Persons() {
 
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          console.warn("Google token expired or unauthorized. Re-authenticating...");
-          const newToken = await connectGoogleServices();
-          if (newToken) {
-            token = newToken;
+          // Renovar no molesta al usuario; solo si eso falla se le pide que
+          // vuelva a conectar.
+          const renovado = (await refrescarTokenGoogle()) ?? (await connectGoogleServices());
+          if (renovado) {
+            token = renovado;
             res = await fetchContacts(token);
           }
         }

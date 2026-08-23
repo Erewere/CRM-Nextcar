@@ -1,6 +1,7 @@
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 import { checkIsWon } from "./src/lib/clientUtils.ts";
+import firebaseConfig from "./firebase-applet-config.json";
 import express from "express";
 import cors from "cors";
 
@@ -1309,6 +1310,214 @@ async function startServer() {
       console.error("Error fetching public inventory:", e);
       res.status(500).json({ error: "Internal server error", details: e.message });
     }
+  });
+
+  // ===== Permiso de Google que se renueva solo =====
+  //
+  // El permiso que Google entrega al navegador dura una hora y no se puede
+  // alargar: es regla suya. Antes vivia en el navegador y al caducar no habia
+  // de donde sacar otro, asi que el usuario tenia que reconectar a mano cada
+  // hora, y ademas en cada aparato por separado.
+  //
+  // Ahora el navegador consigue un codigo de un solo uso y lo manda aqui. El
+  // servidor lo canjea por un pase de renovacion de larga duracion, que se
+  // queda en userSecrets -- coleccion sin regla en firestore.rules, o sea
+  // negada a todos los clientes -- y desde ahi entrega permisos frescos
+  // cuando hagan falta. El usuario autoriza una vez, y como el pase vive en el
+  // servidor, sirve desde cualquier aparato.
+
+  const PERMISOS_GOOGLE = [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/contacts.readonly",
+  ].join(" ");
+
+  /** Permisos vigentes en memoria, para no pedirle uno nuevo a Google en cada llamada. */
+  const permisosEnMemoria = new Map<string, { token: string; vence: number }>();
+
+  function credencialesDeGoogle() {
+    const id = (firebaseConfig as any)?.oAuthClientId as string | undefined;
+    const secreto = process.env.GOOGLE_CLIENT_SECRET;
+    if (!id || !secreto) return null;
+    return { id, secreto };
+  }
+
+  async function pedirleTokenAGoogle(cuerpo: Record<string, string>) {
+    const r = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(cuerpo).toString(),
+    });
+    const datos: any = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      throw new Error(datos?.error_description || datos?.error || "Google rechazó la petición");
+    }
+    return datos;
+  }
+
+  /**
+   * De que cuenta salio el permiso. El calendario principal lleva por nombre
+   * el correo de su dueño, asi que se averigua sin pedir ningun permiso extra.
+   */
+  async function correoDeLaCuentaGoogle(token: string): Promise<string | null> {
+    try {
+      const r = await fetch(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r.ok) return null;
+      const d: any = await r.json();
+      return typeof d?.summary === "string" && d.summary.includes("@") ? d.summary : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function quienPide(req: any) {
+    const cabecera = req.headers.authorization;
+    if (!cabecera || !cabecera.startsWith("Bearer ")) return null;
+    const token = cabecera.split("Bearer ")[1];
+    if (!token || token === "undefined" || token === "null") return null;
+    try {
+      const app = getAdminApp();
+      if (!app) return null;
+      return await getAuth(app).verifyIdToken(token);
+    } catch {
+      return null;
+    }
+  }
+
+  app.post("/api/google/conectar", express.json(), async (req, res) => {
+    const usuario = await quienPide(req);
+    if (!usuario) return res.status(401).json({ error: "Inicia sesión para continuar." });
+
+    const cred = credencialesDeGoogle();
+    if (!cred) {
+      return res.status(500).json({
+        error: "Falta configurar GOOGLE_CLIENT_SECRET en el servidor.",
+      });
+    }
+
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ error: "Falta el código de autorización." });
+
+    const adminDb = getAdminDb();
+    if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+    try {
+      const datos = await pedirleTokenAGoogle({
+        code,
+        client_id: cred.id,
+        client_secret: cred.secreto,
+        // La ventana emergente devuelve el codigo por mensaje, no por
+        // redireccion; 'postmessage' es como Google nombra ese caso.
+        redirect_uri: "postmessage",
+        grant_type: "authorization_code",
+      });
+
+      const cuenta = await correoDeLaCuentaGoogle(datos.access_token);
+
+      // Google solo entrega el pase de renovacion la primera vez que alguien
+      // autoriza. Si vuelve a conectar y no llega uno nuevo, se conserva el
+      // que ya teniamos en vez de dejar al usuario sin renovacion.
+      const guardar: any = {
+        googleAccount: cuenta || null,
+        googleConectadoEn: new Date().toISOString(),
+      };
+      if (datos.refresh_token) guardar.googleRefreshToken = datos.refresh_token;
+
+      await adminDb.collection("userSecrets").doc(usuario.uid).set(guardar, { merge: true });
+
+      permisosEnMemoria.set(usuario.uid, {
+        token: datos.access_token,
+        vence: Date.now() + (Number(datos.expires_in || 3600) - 120) * 1000,
+      });
+
+      return res.json({ accessToken: datos.access_token, cuenta, renovable: !!datos.refresh_token });
+    } catch (e: any) {
+      console.error("Error al conectar Google:", e?.message);
+      return res.status(400).json({ error: e?.message || "No se pudo conectar con Google." });
+    }
+  });
+
+  app.get("/api/google/token", async (req, res) => {
+    const usuario = await quienPide(req);
+    if (!usuario) return res.status(401).json({ error: "Inicia sesión para continuar." });
+
+    const vigente = permisosEnMemoria.get(usuario.uid);
+    if (vigente && vigente.vence > Date.now()) {
+      return res.json({ accessToken: vigente.token });
+    }
+
+    const adminDb = getAdminDb();
+    if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+    const doc = await adminDb.collection("userSecrets").doc(usuario.uid).get();
+    const guardado = doc.exists ? doc.data() : null;
+    if (!guardado?.googleRefreshToken) {
+      return res.status(404).json({ error: "No hay ninguna cuenta de Google conectada." });
+    }
+
+    const cred = credencialesDeGoogle();
+    if (!cred) return res.status(500).json({ error: "Falta configurar GOOGLE_CLIENT_SECRET en el servidor." });
+
+    try {
+      const datos = await pedirleTokenAGoogle({
+        client_id: cred.id,
+        client_secret: cred.secreto,
+        refresh_token: guardado.googleRefreshToken,
+        grant_type: "refresh_token",
+      });
+
+      permisosEnMemoria.set(usuario.uid, {
+        token: datos.access_token,
+        vence: Date.now() + (Number(datos.expires_in || 3600) - 120) * 1000,
+      });
+
+      return res.json({ accessToken: datos.access_token, cuenta: guardado.googleAccount || null });
+    } catch (e: any) {
+      // El pase deja de servir si el usuario retira el permiso desde su cuenta
+      // de Google. Se olvida aqui para que el CRM ofrezca reconectar en vez de
+      // insistir con una credencial muerta.
+      console.error("El pase de renovación ya no sirve:", e?.message);
+      await adminDb.collection("userSecrets").doc(usuario.uid).set(
+        { googleRefreshToken: FieldValue.delete(), googleAccount: FieldValue.delete() },
+        { merge: true }
+      );
+      permisosEnMemoria.delete(usuario.uid);
+      return res.status(404).json({ error: "La conexión con Google caducó. Vuelve a conectarla." });
+    }
+  });
+
+  app.post("/api/google/desconectar", express.json(), async (req, res) => {
+    const usuario = await quienPide(req);
+    if (!usuario) return res.status(401).json({ error: "Inicia sesión para continuar." });
+
+    const adminDb = getAdminDb();
+    if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+    const doc = await adminDb.collection("userSecrets").doc(usuario.uid).get();
+    const pase = doc.exists ? (doc.data() as any)?.googleRefreshToken : null;
+
+    // Retirar el permiso en Google, no solo olvidarlo aqui: si no, la app
+    // sigue autorizada en la cuenta del usuario aunque el CRM ya no la use.
+    if (pase) {
+      try {
+        await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(pase)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        });
+      } catch {
+        // Mejor esfuerzo: siempre queda quitarlo desde la cuenta de Google.
+      }
+    }
+
+    await adminDb.collection("userSecrets").doc(usuario.uid).set(
+      { googleRefreshToken: FieldValue.delete(), googleAccount: FieldValue.delete() },
+      { merge: true }
+    );
+    permisosEnMemoria.delete(usuario.uid);
+
+    return res.json({ ok: true });
   });
 
   app.post("/api/public/v1/leads", express.json(), async (req, res) => {
