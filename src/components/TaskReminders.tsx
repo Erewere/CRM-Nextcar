@@ -85,6 +85,16 @@ export function TaskReminders() {
   const [isMinimized, setIsMinimized] = useState(false);
   const notifiedIds = useRef<Set<string>>(new Set());
 
+  // Los avisos se calculaban con la hora del ultimo dibujo de la pantalla, y
+  // nada volvia a mirar el reloj. Si abrias el CRM a las nueve y tenias una
+  // cita a las diez, a las diez no pasaba nada: el aviso solo aparecia si algo
+  // ajeno provocaba un redibujo. De ahi que llegaran a veces si y a veces no.
+  const [ahora, setAhora] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(new Date()), 60 * 1000);
+    return () => clearInterval(reloj);
+  }, []);
+
   // Listen to agency pipeline stages
   useEffect(() => {
     if (!userData?.agencyId) return;
@@ -107,6 +117,24 @@ export function TaskReminders() {
       }
     }
   }, []);
+
+  // Lo ya avisado vivia en memoria, asi que cada recarga repetia los avisos
+  // del dia. Ahora se recuerda, con la fecha en la llave para que maniana
+  // vuelva a avisar de lo que siga pendiente.
+  const llaveDeAvisados = () => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `avisados_${userData?.id || 'anon'}_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem(llaveDeAvisados());
+      if (guardado) notifiedIds.current = new Set(JSON.parse(guardado));
+    } catch {
+      // Si no se puede leer, se empieza en blanco: peor es no avisar.
+    }
+  }, [userData?.id]);
 
   // Save dismissed items to sessionStorage and Firestore for matches/stale deals
   const dismissToast = async (alert: ToastAlert) => {
@@ -215,7 +243,7 @@ export function TaskReminders() {
   }, [userData]);
 
   // Generate Toast Alerts
-  const now = new Date();
+  const now = ahora;
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const isSellerToast = userData?.role === 'seller' || (userData?.role === 'admin' && (userData as any)?.adminMobileViewAllContacts === false);
 
@@ -267,16 +295,36 @@ export function TaskReminders() {
             severity: diffDays <= 1 ? 'high' : 'medium',
           });
         } else if (diffDays === 0) {
-          rawAlerts.push({
-            id: toastId,
-            type: 'task-today',
-            title: 'Tarea Pendiente Hoy',
-            subtitle: task.title,
-            detail: task.startTime ? `Programada a las ${task.startTime}` : 'Para atender hoy',
-            taskId: task.id,
-            clientId: task.clientId,
-            severity: 'medium',
-          });
+          // Con hora puesta, el aviso util no es «hoy tienes esto» a primera
+          // hora, sino «esto es dentro de un rato». Se separa en dos avisos
+          // distintos para que el de la cita pueda sonar a su tiempo.
+          const minutosParaLaCita = task.startTime
+            ? (new Date(`${task.dueDate}T${task.startTime}:00`).getTime() - now.getTime()) / 60000
+            : null;
+
+          if (minutosParaLaCita !== null && minutosParaLaCita > -15 && minutosParaLaCita <= 30) {
+            rawAlerts.push({
+              id: `${toastId}-pronto`,
+              type: 'task-today',
+              title: minutosParaLaCita <= 0 ? '🔔 Es la hora' : '🔔 En menos de 30 minutos',
+              subtitle: task.title,
+              detail: `A las ${task.startTime}`,
+              taskId: task.id,
+              clientId: task.clientId,
+              severity: 'high',
+            });
+          } else {
+            rawAlerts.push({
+              id: toastId,
+              type: 'task-today',
+              title: 'Tarea Pendiente Hoy',
+              subtitle: task.title,
+              detail: task.startTime ? `Programada a las ${task.startTime}` : 'Para atender hoy',
+              taskId: task.id,
+              clientId: task.clientId,
+              severity: 'medium',
+            });
+          }
         }
       }
     }
@@ -406,15 +454,27 @@ export function TaskReminders() {
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
 
+    let huboNuevos = false;
     rawAlerts.forEach(alert => {
       if (!notifiedIds.current.has(alert.id)) {
         notifiedIds.current.add(alert.id);
+        huboNuevos = true;
         new Notification(alert.title, {
           body: `${alert.subtitle} - ${alert.detail}`,
           icon: '/favicon.svg',
+          // Con la etiqueta, si el mismo aviso se repite el sistema lo
+          // sustituye en vez de apilar copias.
+          tag: alert.id,
         });
       }
     });
+    if (huboNuevos) {
+      try {
+        localStorage.setItem(llaveDeAvisados(), JSON.stringify([...notifiedIds.current]));
+      } catch {
+        // Sin sitio donde guardar se sigue avisando; solo se repetira al recargar.
+      }
+    }
   }, [rawAlerts]);
 
   if (rawAlerts.length === 0 && !selectedVehicle) return null;

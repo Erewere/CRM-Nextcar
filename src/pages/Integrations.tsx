@@ -30,6 +30,9 @@ export function Integrations() {
   // Revision de contactos repetidos, del administrador sobre su agencia.
   const [dupCargando, setDupCargando] = useState<boolean>(false);
   const [dupResultado, setDupResultado] = useState<any>(null);
+  const [permisoAvisos, setPermisoAvisos] = useState<string>(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported"
+  );
   const [pagosCargando, setPagosCargando] = useState<boolean>(false);
   const [pagosInforme, setPagosInforme] = useState<any>(null);
   // Aplicar solo se habilita despues de simular, para que nadie borre sin
@@ -242,6 +245,21 @@ export function Integrations() {
       alert(e.message || "No se pudo generar el respaldo.");
     } finally {
       setBackupLoading(false);
+    }
+  };
+
+  const pedirPermisoAvisos = async () => {
+    if (!("Notification" in window)) return;
+    // El navegador solo pregunta si nadie ha decidido antes. Si ya se denego,
+    // no hay forma de volver a preguntar desde la pagina: hay que cambiarlo en
+    // los ajustes del sitio, y eso es lo que se explica.
+    const respuesta = await Notification.requestPermission();
+    setPermisoAvisos(respuesta);
+    if (respuesta === "granted") {
+      new Notification("Nextcar CRM", {
+        body: "Listo. Así se verán los avisos de tus citas y pendientes.",
+        icon: "/favicon.svg",
+      });
     }
   };
 
@@ -700,6 +718,55 @@ export function Integrations() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Avisos de escritorio */}
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Avisos en el escritorio</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Para que el CRM te avise cuando se acerca una cita o tienes algo
+              pendiente, el navegador tiene que darle permiso.
+            </p>
+          </div>
+          <div className="p-6">
+            {permisoAvisos === "granted" && (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                ✅ Activados. Recibirás los avisos mientras tengas el CRM abierto en una pestaña.
+              </p>
+            )}
+
+            {permisoAvisos === "default" && (
+              <button
+                onClick={pedirPermisoAvisos}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors"
+              >
+                Activar avisos
+              </button>
+            )}
+
+            {permisoAvisos === "denied" && (
+              <div className="p-3 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+                <p className="text-sm text-amber-900 dark:text-amber-200">
+                  <strong>Están bloqueados en este navegador.</strong> Desde aquí ya no se
+                  puede pedir permiso otra vez: hay que cambiarlo en los ajustes del sitio.
+                  Pulsa el candado que está junto a la dirección, arriba, y activa las
+                  notificaciones para crm.erewere.com.
+                </p>
+              </div>
+            )}
+
+            {permisoAvisos === "unsupported" && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Este navegador no admite avisos de escritorio.
+              </p>
+            )}
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">
+              Los avisos llegan mientras el CRM esté abierto en una pestaña. Con el
+              navegador cerrado no llega nada: eso requiere una aplicación instalada.
+            </p>
           </div>
         </div>
 
