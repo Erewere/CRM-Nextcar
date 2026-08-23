@@ -142,8 +142,14 @@ export function PaymentModal({
     }
   };
 
+  // El boton no se bloqueaba mientras guardaba, asi que un doble clic --
+  // o un clic impaciente en una conexion lenta -- registraba el pago dos
+  // veces. Una vez enviado, no se vuelve a enviar.
+  const [guardando, setGuardando] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardando) return;
     if (userData?.role === 'seller') {
       alert("Solamente los administradores pueden registrar pagos.");
       return;
@@ -156,6 +162,7 @@ export function PaymentModal({
 
     const selectedInstallment = installmentsList.find(i => i.key === selectedInstallmentKey);
 
+    setGuardando(true);
     onConfirm({
       amount: parsed,
       date,
@@ -328,10 +335,11 @@ export function PaymentModal({
           <button
             type="submit"
             form="payment-form"
-            className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+            disabled={guardando}
+            className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Guardar Pago</span>
+            <span>{guardando ? "Guardando…" : "Guardar Pago"}</span>
           </button>
         </div>
       </motion.div>

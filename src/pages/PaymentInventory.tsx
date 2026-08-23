@@ -93,19 +93,43 @@ export function PaymentInventory() {
     const pPayments = pDetails?.payments || [];
     const vPayments = vDetails?.payments || [];
 
-    const paymentMap = new Map();
-    [...dPayments, ...pPayments, ...vPayments].forEach(p => {
-      if (p) {
-        const key = p.id || `${p.date}_${p.amount}_${p.createdAt || ''}`;
-        if (!paymentMap.has(key)) {
-          paymentMap.set(key, p);
-        }
-      }
+    // Un mismo pago vive en el trato, en el contacto y en el vehiculo, y cada
+    // copia se guardo con un id aleatorio distinto -- Math.random() al momento
+    // de registrarlo --, asi que por id no hay forma de reconocerlas: el mismo
+    // pago aparecia dos o tres veces. Se comparan por contenido.
+    //
+    // Pero dos pagos identicos el mismo dia pueden ser reales: dos abonos de
+    // mil en efectivo son dos abonos, no uno repetido. Por eso no basta con
+    // quedarse con uno de cada clave. Se cuenta cuantas veces aparece cada
+    // pago en CADA sitio y se conserva el maximo, no la suma: tres copias del
+    // mismo pago quedan en una, y dos pagos de verdad siguen siendo dos.
+    const claveDePago = (p: any) =>
+      `${p.date || ''}|${Number(p.amount) || 0}|${p.method || ''}|${p.installmentNumber ?? ''}`;
+
+    const porSitio = [dPayments, pPayments, vPayments].map((lista: any[]) => {
+      const agrupados = new Map<string, any[]>();
+      (lista || []).forEach((p: any) => {
+        if (!p) return;
+        const k = claveDePago(p);
+        if (!agrupados.has(k)) agrupados.set(k, []);
+        agrupados.get(k)!.push(p);
+      });
+      return agrupados;
     });
+
+    const fusionados = new Map<string, any[]>();
+    porSitio.forEach((agrupados) => {
+      agrupados.forEach((pagos, k) => {
+        if (pagos.length > (fusionados.get(k)?.length || 0)) fusionados.set(k, pagos);
+      });
+    });
+
+    const pagos = Array.from(fusionados.values()).flat();
+    pagos.sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
 
     return {
       ...baseDetails,
-      payments: Array.from(paymentMap.values())
+      payments: pagos
     };
   };
 
