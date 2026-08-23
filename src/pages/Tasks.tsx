@@ -16,7 +16,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, eventoDeActividad, tareaDeActividad, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
+import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, eventoDeActividad, tareaDeActividad, actividadDesdeEvento, mandaGoogle, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
 import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
@@ -889,6 +889,7 @@ export function Tasks() {
 
       let syncedCount = 0;
       let faltaronPermisos = false;
+      let huboCambios = false;
       for (const { task } of tasks) {
         if (task.googleEventId) {
           try {
@@ -909,6 +910,44 @@ export function Tasks() {
               if (data.status === 'cancelled') {
                 await deleteDoc(doc(db, "tasks", task.id));
                 syncedCount++;
+              } else {
+                // Camino de vuelta: si la cita se movio en el calendario, el
+                // CRM se entera. Antes solo miraba las cancelaciones y la
+                // fecha nueva se perdia, asi que el vendedor veia una cosa y
+                // el calendario otra.
+                const enGoogle = actividadDesdeEvento(data);
+                const cambio =
+                  enGoogle &&
+                  (enGoogle.dueDate !== (task.dueDate || "") ||
+                    enGoogle.startTime !== (task.startTime || "") ||
+                    enGoogle.endTime !== (task.endTime || ""));
+
+                if (cambio) {
+                  if (mandaGoogle(data, task)) {
+                    await updateDoc(doc(db, "tasks", task.id), {
+                      dueDate: enGoogle!.dueDate,
+                      startTime: enGoogle!.startTime,
+                      endTime: enGoogle!.endTime,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  } else {
+                    // El CRM se toco despues, asi que manda el CRM y se
+                    // corrige el evento.
+                    const evento = eventoDeActividad(task);
+                    if (evento) {
+                      await fetch(
+                        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${task.googleEventId}`,
+                        {
+                          method: "PATCH",
+                          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                          body: JSON.stringify(evento),
+                        }
+                      );
+                    }
+                  }
+                  huboCambios = true;
+                  syncedCount++;
+                }
               }
             }
           } catch (e) {
@@ -993,6 +1032,9 @@ export function Tasks() {
         : "¡Calendario conectado! Todo está al día.";
       alert(faltaronPermisos ? resumen + "\n\n" + AVISO_FALTAN_PERMISOS : resumen);
       setShowSyncBanner(false);
+      // Sin esto, una cita movida desde Google se corregia en la base pero la
+      // pantalla seguia enseniando la fecha vieja hasta recargar.
+      if (huboCambios) setRefreshKey((prev) => prev + 1);
     } catch (error: any) {
       alert(error?.message === AVISO_RECONECTAR
         ? AVISO_RECONECTAR

@@ -125,3 +125,61 @@ export function tareaDeActividad(a: Actividad) {
     due: cuando.toISOString(),
   };
 }
+
+/** Una fecha AAAA-MM-DD en la zona horaria de quien mira. */
+function fechaLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Una hora HH:MM en la zona horaria de quien mira. */
+function horaLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/**
+ * Lo que dice un evento de Google, en el lenguaje de una actividad del CRM.
+ *
+ * Hace falta para el camino de vuelta: si alguien mueve la cita desde su
+ * calendario -- porque el cliente llamo y la cambio --, el CRM tiene que
+ * enterarse. Hasta ahora solo miraba si el evento se habia cancelado y la
+ * fecha nueva la ignoraba, de modo que el vendedor veia una cosa y el
+ * calendario otra.
+ */
+export function actividadDesdeEvento(evento: any): { dueDate: string; startTime: string; endTime: string } | null {
+  const inicio = evento?.start;
+  if (!inicio) return null;
+
+  // Evento de dia completo: no lleva hora.
+  if (inicio.date) return { dueDate: inicio.date, startTime: '', endTime: '' };
+
+  if (!inicio.dateTime) return null;
+  const desde = new Date(inicio.dateTime);
+  if (Number.isNaN(desde.getTime())) return null;
+
+  const hasta = new Date(evento?.end?.dateTime || inicio.dateTime);
+  return {
+    dueDate: fechaLocal(desde),
+    startTime: horaLocal(desde),
+    endTime: Number.isNaN(hasta.getTime()) ? '' : horaLocal(hasta),
+  };
+}
+
+/**
+ * Quien manda cuando la cita cambio en los dos lados.
+ *
+ * Gana el que se toco mas tarde. Si al CRM le falta la marca de tiempo -- las
+ * actividades viejas no la tienen -- se respeta lo que diga Google, que si la
+ * trae siempre: es preferible seguir al calendario que descartar un cambio
+ * real por no saber cuando ocurrio.
+ */
+export function mandaGoogle(evento: any, actividad: { updatedAt?: any }): boolean {
+  const enGoogle = Date.parse(evento?.updated || '');
+  const enElCrm = Date.parse(
+    typeof actividad?.updatedAt === 'string' ? actividad.updatedAt : ''
+  );
+  if (!Number.isFinite(enGoogle)) return false;
+  if (!Number.isFinite(enElCrm)) return true;
+  return enGoogle > enElCrm;
+}
