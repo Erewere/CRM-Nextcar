@@ -2351,6 +2351,197 @@ async function startServer() {
     }
   });
 
+  // ===== Pagos repetidos dentro de un mismo registro =====
+  //
+  // Cuando el boton de guardar no se bloqueaba, un doble clic registraba el
+  // mismo pago dos veces en el mismo documento. La pantalla ya los oculta al
+  // deduplicar por contenido, pero siguen guardados: si esa informacion se lee
+  // por otra via, reaparecen.
+  //
+  // Aqui NO se tocan las copias que viven en documentos distintos. Una venta
+  // vive a proposito en el trato, el contacto y el vehiculo; esas copias son
+  // el disenio, no un error. Solo se busca lo repetido DENTRO de un mismo
+  // documento.
+
+  const COLECCIONES_CON_PAGOS = ["clients", "vehicles", "deals"];
+
+  const claveDePago = (p: any) =>
+    `${p?.date || ""}|${Number(p?.amount) || 0}|${p?.method || ""}|${p?.installmentNumber ?? ""}`;
+
+  const momentoDe = (p: any) => {
+    const v = Date.parse(p?.createdAt || "");
+    return Number.isNaN(v) ? null : v;
+  };
+
+  /**
+   * Busca pagos repetidos y, si se pide, los quita.
+   *
+   * Un doble clic deja dos registros identicos con segundos de diferencia. Dos
+   * pagos de verdad iguales -- dos abonos de mil en efectivo el mismo dia --
+   * se registran separados en el tiempo. Por eso solo se marcan como repetidos
+   * los que caen dentro de una ventana corta; fuera de ella se respetan, y se
+   * informan aparte para que una persona decida.
+   */
+  async function revisarPagosRepetidos(
+    adminDb: any,
+    agencyId: string,
+    ventanaSegundos: number,
+    aplicar: boolean
+  ) {
+    const ventanaMs = Math.max(1, ventanaSegundos) * 1000;
+    const hallazgos: any[] = [];
+    const dudosos: any[] = [];
+    let quitados = 0;
+
+    for (const coleccion of COLECCIONES_CON_PAGOS) {
+      const snap = await adminDb
+        .collection(coleccion)
+        .where("agencyId", "==", agencyId)
+        .get();
+
+      for (const doc of snap.docs) {
+        const datos = doc.data() || {};
+        const pagos = datos?.saleDetails?.payments;
+        if (!Array.isArray(pagos) || pagos.length < 2) continue;
+
+        const grupos = new Map<string, any[]>();
+        pagos.forEach((p: any, i: number) => {
+          const k = claveDePago(p);
+          if (!grupos.has(k)) grupos.set(k, []);
+          grupos.get(k)!.push({ ...p, _pos: i });
+        });
+
+        const aQuitar = new Set<number>();
+        grupos.forEach((iguales, k) => {
+          if (iguales.length < 2) return;
+
+          // Se conserva el primero y se examinan los siguientes.
+          const referencia = momentoDe(iguales[0]);
+          const cercanos = iguales.slice(1).filter((p) => {
+            const m = momentoDe(p);
+            if (referencia === null || m === null) return true; // sin fecha de registro, se trata como repetido
+            return Math.abs(m - referencia) <= ventanaMs;
+          });
+          const lejanos = iguales.slice(1).filter((p) => !cercanos.includes(p));
+
+          if (cercanos.length > 0) {
+            cercanos.forEach((p) => aQuitar.add(p._pos));
+            hallazgos.push({
+              coleccion,
+              id: doc.id,
+              nombre: datos.name || datos.title || datos.model || doc.id,
+              pago: k,
+              monto: Number(iguales[0]?.amount) || 0,
+              copias: iguales.length,
+              seQuitan: cercanos.length,
+              registrados: iguales.map((p) => p.createdAt || "(sin fecha de registro)"),
+            });
+          }
+
+          if (lejanos.length > 0) {
+            dudosos.push({
+              coleccion,
+              id: doc.id,
+              nombre: datos.name || datos.title || datos.model || doc.id,
+              pago: k,
+              monto: Number(iguales[0]?.amount) || 0,
+              copias: lejanos.length + 1,
+              registrados: iguales.map((p) => p.createdAt || "(sin fecha de registro)"),
+            });
+          }
+        });
+
+        if (aplicar && aQuitar.size > 0) {
+          const limpios = pagos.filter((_: any, i: number) => !aQuitar.has(i));
+          await doc.ref.set(
+            { saleDetails: { ...datos.saleDetails, payments: limpios } },
+            { merge: true }
+          );
+          quitados += aQuitar.size;
+        }
+      }
+    }
+
+    const importeRepetido = hallazgos.reduce(
+      (s, h) => s + h.monto * h.seQuitan,
+      0
+    );
+
+    return {
+      aplicado: aplicar,
+      ventanaSegundos,
+      repetidos: hallazgos.length,
+      pagosQueSobran: hallazgos.reduce((s, h) => s + h.seQuitan, 0),
+      importeRepetido,
+      quitados,
+      detalle: hallazgos,
+      revisarAMano: dudosos,
+    };
+  }
+
+  async function adminQuePide(req: any, res: any) {
+    const cabecera = req.headers.authorization;
+    if (!cabecera || !cabecera.startsWith("Bearer ")) {
+      res.status(401).json({ error: "No autorizado" });
+      return null;
+    }
+    const adminApp = getAdminApp();
+    const adminDb = getAdminDb();
+    if (!adminApp || !adminDb) {
+      res.status(500).json({ error: "Servidor no disponible" });
+      return null;
+    }
+    let token;
+    try {
+      token = await getAuth(adminApp).verifyIdToken(cabecera.substring(7));
+    } catch {
+      res.status(401).json({ error: "Token inválido" });
+      return null;
+    }
+    const doc = await adminDb.collection("users").doc(token.uid).get();
+    const usuario = doc.exists ? doc.data() : null;
+    if (!usuario || usuario.role !== "admin") {
+      res.status(403).json({ error: "Solo el administrador de una agencia puede revisar sus pagos" });
+      return null;
+    }
+    if (!usuario.agencyId || usuario.agencyId === "unassigned") {
+      res.status(400).json({ error: "Tu usuario no pertenece a una agencia" });
+      return null;
+    }
+    return { adminDb, agencyId: usuario.agencyId };
+  }
+
+  /** Simulacro: dice que se repite, sin tocar nada. */
+  app.get("/api/admin/audit-duplicate-payments", async (req, res) => {
+    const quien = await adminQuePide(req, res);
+    if (!quien) return;
+    try {
+      const ventana = Number(req.query.ventanaSegundos) || 120;
+      const informe = await revisarPagosRepetidos(quien.adminDb, quien.agencyId, ventana, false);
+      return res.json(informe);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Error al revisar los pagos" });
+    }
+  });
+
+  /** Aplica la limpieza. Exige confirmar en el cuerpo, para que no ocurra sola. */
+  app.post("/api/admin/clean-duplicate-payments", express.json(), async (req, res) => {
+    const quien = await adminQuePide(req, res);
+    if (!quien) return;
+    if (req.body?.confirmar !== "quitar los pagos repetidos") {
+      return res.status(400).json({
+        error: 'Falta confirmar. Envía { "confirmar": "quitar los pagos repetidos" }',
+      });
+    }
+    try {
+      const ventana = Number(req.body?.ventanaSegundos) || 120;
+      const informe = await revisarPagosRepetidos(quien.adminDb, quien.agencyId, ventana, true);
+      return res.json(informe);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Error al limpiar los pagos" });
+    }
+  });
+
   app.get("/api/admin/audit-costs", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
