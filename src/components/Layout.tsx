@@ -39,6 +39,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
+import { TaskReminders } from "./TaskReminders";
 import { NextcarLogo } from "./NextcarLogo";
 import { getTrialDaysLeft } from "../lib/subscription";
 import { NOMBRE_ROL, type Rol } from "../lib/permissions";
@@ -544,6 +545,12 @@ export function Layout() {
       
       {/* Global Mobile FAB */}
       {isMobile && location.pathname !== '/chats' && <MobileFab />}
+
+      {/* Los recordatorios existian desde hacia tiempo pero no estaban puestos
+          en ninguna pantalla, asi que nunca llegaron a ejecutarse: los avisos
+          de escritorio no fallaban a veces, no existian. Van aqui para que
+          acompanien a la persona en todo el CRM y no solo en una pantalla. */}
+      <TaskReminders />
       
       {/* Mobile Bottom Navigation */}
       {isMobile && (
