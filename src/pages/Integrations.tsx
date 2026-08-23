@@ -30,6 +30,11 @@ export function Integrations() {
   // Revision de contactos repetidos, del administrador sobre su agencia.
   const [dupCargando, setDupCargando] = useState<boolean>(false);
   const [dupResultado, setDupResultado] = useState<any>(null);
+  const [pagosCargando, setPagosCargando] = useState<boolean>(false);
+  const [pagosInforme, setPagosInforme] = useState<any>(null);
+  // Aplicar solo se habilita despues de simular, para que nadie borre sin
+  // haber visto antes que se va a borrar.
+  const [pagosSimulados, setPagosSimulados] = useState<boolean>(false);
   const [fusionResultado, setFusionResultado] = useState<any>(null);
   const [fusionSimulada, setFusionSimulada] = useState<boolean>(false);
 
@@ -237,6 +242,40 @@ export function Integrations() {
       alert(e.message || "No se pudo generar el respaldo.");
     } finally {
       setBackupLoading(false);
+    }
+  };
+
+  const handlePagosRepetidos = async (aplicar: boolean) => {
+    if (!currentUser) {
+      alert("No hay una sesión activa. Vuelve a iniciar sesión.");
+      return;
+    }
+    if (aplicar && !window.confirm(
+      "Se van a quitar los pagos repetidos que viste en el simulacro.\n\n" +
+      "Esto no se puede deshacer. ¿Continuar?"
+    )) return;
+
+    setPagosCargando(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = aplicar
+        ? await fetch("/api/admin/clean-duplicate-payments", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmar: "quitar los pagos repetidos" }),
+          })
+        : await fetch("/api/admin/audit-duplicate-payments", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      setPagosInforme(data);
+      setPagosSimulados(!aplicar);
+      if (aplicar) alert(`Listo. Se quitaron ${data.quitados} pagos repetidos.`);
+    } catch (e: any) {
+      alert(e?.message || "No se pudo revisar los pagos.");
+    } finally {
+      setPagosCargando(false);
     }
   };
 
@@ -663,6 +702,89 @@ export function Integrations() {
             </div>
           </div>
         </div>
+
+        {/* Pagos repetidos dentro de un mismo registro */}
+        {userData?.role === 'admin' && (
+          <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
+            <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Pagos repetidos</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Cuando el botón de guardar no se bloqueaba, un doble clic registraba el
+                mismo pago dos veces. La pantalla ya los oculta, pero siguen guardados.
+                Aquí se ven y se pueden quitar.
+              </p>
+            </div>
+            <div className="p-6">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => handlePagosRepetidos(false)}
+                  disabled={pagosCargando}
+                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors disabled:opacity-50"
+                >
+                  {pagosCargando ? "Revisando…" : "1. Revisar (no cambia nada)"}
+                </button>
+                <button
+                  onClick={() => handlePagosRepetidos(true)}
+                  disabled={pagosCargando || !pagosSimulados || (pagosInforme?.pagosQueSobran || 0) === 0}
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  2. Quitar los repetidos
+                </button>
+              </div>
+
+              {pagosInforme && (
+                <div className="mt-6 text-sm">
+                  <ul className="space-y-1 text-slate-700 dark:text-slate-300">
+                    <li>Casos de pagos repetidos: <strong>{pagosInforme.repetidos}</strong></li>
+                    <li>Pagos que sobran: <strong>{pagosInforme.pagosQueSobran}</strong></li>
+                    <li>Importe que se está contando de más:{" "}
+                      <strong>${(pagosInforme.importeRepetido || 0).toLocaleString("es-MX")}</strong>
+                    </li>
+                    {pagosInforme.aplicado && (
+                      <li className="text-emerald-700 dark:text-emerald-400">
+                        Quitados: <strong>{pagosInforme.quitados}</strong>
+                      </li>
+                    )}
+                  </ul>
+
+                  {pagosInforme.repetidos === 0 && (
+                    <p className="mt-3 text-slate-500 dark:text-slate-400">
+                      No hay pagos repetidos. No hay nada que limpiar.
+                    </p>
+                  )}
+
+                  {(pagosInforme.detalle || []).length > 0 && (
+                    <div className="mt-4 max-h-72 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded">
+                      {pagosInforme.detalle.map((h: any, i: number) => (
+                        <div key={i} className="p-3 border-b border-gray-100 dark:border-slate-700 last:border-0">
+                          <div className="font-medium text-slate-800 dark:text-slate-100">{h.nombre}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {h.coleccion} · ${Number(h.monto).toLocaleString("es-MX")} ·{" "}
+                            {h.copias} copias, se quitan {h.seQuitan}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1">
+                            registrados: {(h.registrados || []).join("  ·  ")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(pagosInforme.revisarAMano || []).length > 0 && (
+                    <div className="mt-4 p-3 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+                      <p className="text-xs text-amber-900 dark:text-amber-200">
+                        <strong>{pagosInforme.revisarAMano.length} caso(s) que no se tocan.</strong>{" "}
+                        Son pagos idénticos pero registrados con mucha diferencia de tiempo,
+                        así que probablemente son pagos de verdad y no copias. Revísalos tú
+                        en la pantalla del cliente.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Respaldo de la base de datos (exclusivo del rol master) */}
         {userData?.role === 'admin' && (
