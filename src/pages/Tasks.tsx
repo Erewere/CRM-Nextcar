@@ -2738,7 +2738,23 @@ export function Tasks() {
                   // ese; crear otro dejaria la cita duplicada en el calendario
                   // cada vez que se edita. Y si el usuario borro el evento por
                   // su cuenta, Google responde 404 y entonces si se crea uno.
-                  const eventoPrevio = editingTask?.googleEventId;
+                  // Se pregunta a la base cual es el evento de esta actividad,
+                  // en vez de fiarse de lo que hay en pantalla. Lo de pantalla
+                  // puede estar desactualizado por muchas vias -- se guardo en
+                  // otra pestania, se abrio la actividad desde otro sitio, o el
+                  // listado se cargo antes de sincronizar -- y cada una de esas
+                  // dejaba un evento duplicado en el calendario. Preguntar
+                  // cuesta una lectura y quita toda la familia de fallos.
+                  let eventoPrevio = editingTask?.googleEventId;
+                  try {
+                    const guardada = await getDoc(newRef);
+                    if (guardada.exists()) {
+                      eventoPrevio = (guardada.data() as any)?.googleEventId || eventoPrevio;
+                    }
+                  } catch {
+                    // Si no se puede consultar, se sigue con lo que haya en
+                    // pantalla: es lo que se hacia hasta ahora.
+                  }
                   const mandarEvento = async () => {
                     if (eventoPrevio) {
                       const r = await fetch(
