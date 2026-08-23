@@ -18,9 +18,9 @@ export interface SharedMatch {
  * Inventario de las agencias asociadas, pedido una sola vez para toda la
  * aplicacion.
  *
- * Este hook se invoca desde ocho lugares, y cuatro de ellos (Layout,
- * TaskReminders, NotificationsPopover y SharedMatchNotifications) viven en el
- * marco: estan montados a la vez en todas las pantallas. Cada invocacion
+ * Este hook se invoca desde varios lugares, y algunos (Layout y
+ * NotificationsPopover) viven en el marco: estan montados a la vez en todas
+ * las pantallas. Cada invocacion
  * levantaba su propio temporizador de un minuto contra cada agencia asociada,
  * de modo que corrian unas cinco copias del mismo ciclo en paralelo. Eran
  * decenas de miles de lecturas al dia para mostrar un inventario que casi

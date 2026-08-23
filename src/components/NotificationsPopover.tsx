@@ -70,6 +70,20 @@ export function NotificationsPopover() {
   const popoverRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  /**
+   * Un reloj que avanza cada minuto.
+   *
+   * Antes la lista solo se recalculaba cuando Firestore mandaba un cambio, asi
+   * que una cita agendada por la manana no se volvia a revisar en todo el dia y
+   * el aviso no llegaba nunca. Con el reloj, las cuentas de "cuanto falta" se
+   * rehacen cada minuto aunque nadie toque nada.
+   */
+  const [ahora, setAhora] = useState(() => new Date());
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(new Date()), 60 * 1000);
+    return () => clearInterval(reloj);
+  }, []);
+
   // Listen to agency pipeline stages
   useEffect(() => {
     if (!userData?.agencyId) return;
@@ -196,7 +210,7 @@ export function NotificationsPopover() {
     onClick: () => void;
   }> = [];
 
-  const now = new Date();
+  const now = ahora;
   const isSellerNotif = userData?.role === "seller" || (userData?.role === "admin" && (userData as any)?.adminMobileViewAllContacts === false);
 
   // 1. Task & Payment Notifications
@@ -227,7 +241,25 @@ export function NotificationsPopover() {
       task.title?.toLowerCase().includes('mensualidad') || 
       task.title?.toLowerCase().includes('crédito');
     
-    if (diffInMinutes < 0) {
+    // Una cita que empieza dentro de un rato, o que acaba de empezar, no es ni
+    // "vencida" ni "por vencer": es ahora. Merece su propio aviso, y es el que
+    // sale al escritorio. Solo aplica a actividades con hora: las que no la
+    // tienen ocupan el dia entero y no hay momento al que avisar.
+    if (!isPaymentTask && task.startTime && diffInMinutes >= -15 && diffInMinutes <= 30) {
+      const notifId = `task-now-${task.id}`;
+      if (dismissedIds.has(notifId)) return;
+      notifications.push({
+        id: notifId,
+        type: "task-now",
+        title: diffInMinutes <= 0 ? "🔔 Es la hora" : "🔔 En menos de 30 minutos",
+        message: task.title,
+        date: taskDateTime.toISOString(),
+        icon: <Calendar className="w-5 h-5 text-emerald-500 shrink-0 animate-pulse" />,
+        onClick: () => {
+          navigate(`/tasks?taskId=${task.id}`, { state: { taskId: task.id } });
+        },
+      });
+    } else if (diffInMinutes < 0) {
       const notifId = `task-overdue-${task.id}`;
       if (dismissedIds.has(notifId)) return;
       notifications.push({
@@ -499,6 +531,68 @@ export function NotificationsPopover() {
 
   // Sort by urgency / date
   notifications.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  /**
+   * Avisos en el escritorio.
+   *
+   * La campanita solo se ve si el usuario tiene el CRM delante. Estos avisos los
+   * saca el navegador aunque este en otra pestana o con la ventana tapada, que
+   * es justo cuando hacen falta.
+   *
+   * No sale todo: solo lo que no puede esperar -- la cita que empieza ya y lo
+   * que se paso de fecha. El resto se queda en la campanita.
+   *
+   * Lo ya avisado se apunta en el navegador con la fecha del dia. Asi recargar
+   * la pagina no repite el mismo aviso, y al dia siguiente la lista se tira
+   * entera en vez de crecer para siempre.
+   */
+  const urgentes = notifications.filter(
+    (n) => n.type === "task-now" || n.type === "task-overdue" || n.type === "payment-overdue"
+  );
+  const firmaUrgentes = urgentes.map((n) => n.id).join(",");
+
+  useEffect(() => {
+    if (!firmaUrgentes) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    const clave = `crm_avisos_enviados_${hoy}`;
+
+    let yaAvisados: string[] = [];
+    try {
+      yaAvisados = JSON.parse(localStorage.getItem(clave) || "[]");
+    } catch {
+      yaAvisados = [];
+    }
+
+    const nuevos = urgentes.filter((n) => !yaAvisados.includes(n.id));
+    if (nuevos.length === 0) return;
+
+    for (const aviso of nuevos) {
+      try {
+        // El `tag` hace que un aviso repetido sustituya al anterior en lugar de
+        // apilarse: si la misma cita vuelve a avisar, no quedan dos.
+        new Notification(aviso.title, {
+          body: aviso.message,
+          tag: aviso.id,
+          icon: "/favicon.svg",
+        });
+      } catch {
+        // Si el navegador se niega, la campanita sigue mostrandolo igual.
+      }
+    }
+
+    try {
+      localStorage.setItem(clave, JSON.stringify([...yaAvisados, ...nuevos.map((n) => n.id)]));
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("crm_avisos_enviados_") && k !== clave) localStorage.removeItem(k);
+      }
+    } catch {
+      // Sin sitio donde apuntarlo el aviso puede repetirse; no es motivo para fallar.
+    }
+    // Depende solo de la firma: `urgentes` se lee del render que la produjo.
+  }, [firmaUrgentes]);
 
   return (
     <>
