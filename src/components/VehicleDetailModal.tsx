@@ -10,7 +10,7 @@ import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Vehicle, VehicleExpense, Agency, Client, Task } from '../types';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { sanitizeFirestoreData } from '../lib/clientUtils';
+import { sanitizeFirestoreData, checkIsLost } from '../lib/clientUtils';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials';
@@ -753,8 +753,21 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             dealsQ = query(collection(db, 'deals'), where('vehicleId', '==', docRef.id), where('agencyId', '==', userData.agencyId));
           }
           const dealsSnap = await getDocs(dealsQ);
-          dealsSnap.forEach(async (dSnap) => {
-             const dData = dSnap.data();
+          for (const dSnap of dealsSnap.docs) {
+             const dData = dSnap.data() as any;
+
+             // Un trato perdido guarda por cuanto se estaba negociando cuando
+             // se cayo. Ese numero es suyo y no tiene nada que ver con el
+             // precio al que despues se vendio el auto a otra persona.
+             //
+             // Aqui no habia filtro -- el de los contactos, justo abajo, si lo
+             // tiene, y el comentario de este bloque ya decia "open/won" --,
+             // asi que guardar la venta reescribia el valor de todos los
+             // tratos del auto, incluidos los perdidos. Un trato de 259,000
+             // que se perdio pasaba a figurar como de 210,000, y con el la
+             // razon por la que se perdio dejaba de tener sentido.
+             if (checkIsLost(dData.status)) continue;
+
              const updates: any = { value: payload.price };
              if (dData.saleDetails) {
                  updates.saleDetails = { ...dData.saleDetails, price: payload.price };
@@ -767,7 +780,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 }
                 await updateDoc(doc(db, 'clients', dData.clientId), cUpdates).catch(() => {});
              }
-          });
+          }
 
           let clientsQ = query(collection(db, 'clients'), where('vehicleId', '==', docRef.id));
           if (userData?.role !== 'master' && userData?.agencyId) {
