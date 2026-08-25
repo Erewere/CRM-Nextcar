@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
 import { checkIsWon } from "../lib/clientUtils";
 import { Search, X, Plus, Target, User } from "lucide-react";
 
@@ -14,7 +15,12 @@ import { Search, X, Plus, Target, User } from "lucide-react";
  *
  * Los tratos que ya traen este auto asignado salen primero, porque son los
  * candidatos naturales: varios clientes pueden andar viendo la misma unidad.
- * Los que ya estan vendidos no aparecen -- un auto se vende una vez.
+ *
+ * Aqui no se esconde ningun trato. Se intento dos veces, con buen motivo, y
+ * las dos veces el que se ocultaba era justo el que hacia falta: la lista
+ * salia vacia sin decir por que y el unico camino visible era crear un trato
+ * nuevo, que deja la venta duplicada. Los que no se pueden elegir se muestran
+ * apagados y con el motivo escrito.
  */
 
 interface TratoOpcion {
@@ -24,6 +30,10 @@ interface TratoOpcion {
   esDeEsteAuto: boolean;
   /** El trato ya esta en ganado o ya tiene un precio de venta registrado. */
   yaCerrado: boolean;
+  /** Ya registra la venta de otro vehiculo: enlazarlo aqui seria pisarla. */
+  registraOtroAuto: boolean;
+  /** Que auto registra, para poder decirlo. */
+  otroAuto: string;
 }
 
 interface Props {
@@ -43,6 +53,7 @@ export function SeleccionarTratoVenta({
   onElegido,
   onCerrar,
 }: Props) {
+  const { userData } = useAuth();
   const [cargando, setCargando] = useState(true);
   const [tratos, setTratos] = useState<TratoOpcion[]>([]);
   const [contactos, setContactos] = useState<{ id: string; nombre: string; telefono?: string }[]>([]);
@@ -54,9 +65,15 @@ export function SeleccionarTratoVenta({
   useEffect(() => {
     (async () => {
       try {
+        // El auto y quien lo esta vendiendo no siempre traen la misma agencia
+        // apuntada: hay usuarios con documentos duplicados y ese desajuste
+        // dejaba la lista sin los tratos buenos. Se miran las dos.
+        const agencias = Array.from(
+          new Set([agencyId, userData?.agencyId].filter(Boolean) as string[])
+        );
         const [dSnap, cSnap] = await Promise.all([
-          getDocs(query(collection(db, "deals"), where("agencyId", "==", agencyId))),
-          getDocs(query(collection(db, "clients"), where("agencyId", "==", agencyId))),
+          getDocs(query(collection(db, "deals"), where("agencyId", "in", agencias))),
+          getDocs(query(collection(db, "clients"), where("agencyId", "in", agencias))),
         ]);
 
         const porId = new Map<string, string>();
@@ -70,26 +87,29 @@ export function SeleccionarTratoVenta({
           const esDeEsteAuto = x.vehicleId === vehicleId;
           const yaCerrado = checkIsWon(x.status) || !!x.saleDetails?.price;
 
-          // Lo que hay que impedir es que un trato registre dos ventas, no que
-          // un trato ganado se enlace con el auto que vendio. Antes se
-          // escondia cualquier trato cerrado, y eso ocultaba justo el que hace
-          // falta: el caso normal es cerrar la venta desde el trato y venir
-          // aqui despues a enlazar el auto. Solo estorba un trato que ya
-          // registre la venta de OTRO vehiculo.
-          if (yaCerrado && x.vehicleId && !esDeEsteAuto) return;
-
+          // Aqui no se esconde ningun trato. Se han escondido dos veces por
+          // buenas razones -- que un trato no registre dos ventas -- y las dos
+          // veces el resultado fue el mismo: el trato que hacia falta era
+          // justo el que se ocultaba, la lista salia vacia sin explicar nada y
+          // el unico camino visible era crear un trato nuevo, que deja la
+          // venta duplicada. Los que estorban se muestran apagados y con el
+          // motivo escrito.
           lista.push({
             id: d.id,
             titulo: x.title || "Trato sin nombre",
             cliente: porId.get(x.clientId) || "Sin contacto",
             esDeEsteAuto,
             yaCerrado,
+            registraOtroAuto: yaCerrado && !!x.vehicleId && !esDeEsteAuto,
+            otroAuto: x.vehicle || "",
           });
         });
-        // Primero el trato de este auto, y despues los ya cerrados, que son los
-        // candidatos mas probables cuando se viene a enlazar una venta.
+        // Primero el trato de este auto, luego los cerrados -- los candidatos
+        // mas probables al venir a enlazar una venta -- y al final los que ya
+        // registran la venta de otro coche.
         lista.sort(
           (a, b) =>
+            Number(a.registraOtroAuto) - Number(b.registraOtroAuto) ||
             Number(b.esDeEsteAuto) - Number(a.esDeEsteAuto) ||
             Number(b.yaCerrado) - Number(a.yaCerrado)
         );
@@ -105,7 +125,7 @@ export function SeleccionarTratoVenta({
         setCargando(false);
       }
     })();
-  }, [agencyId, vehicleId]);
+  }, [agencyId, vehicleId, userData?.agencyId]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -184,11 +204,13 @@ export function SeleccionarTratoVenta({
                 <div className="py-8 text-center">
                   <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
                     {tratos.length === 0
-                      ? "Este cliente no tiene ningún trato abierto."
-                      : "Ningún trato coincide con lo que escribiste."}
+                      ? "No se encontró ningún trato en esta agencia."
+                      : `Ninguno de los ${tratos.length} tratos de esta agencia coincide con «${busqueda.trim()}».`}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-500">
-                    Crea uno para registrar la venta.
+                    {tratos.length === 0
+                      ? "Crea uno para registrar la venta."
+                      : "Borra el texto de arriba para verlos todos antes de crear uno nuevo: si la venta ya está en un trato, crear otro la duplicaría."}
                   </p>
                 </div>
               )}
@@ -197,8 +219,13 @@ export function SeleccionarTratoVenta({
                 filtrados.map((t) => (
                   <button
                     key={t.id}
+                    disabled={t.registraOtroAuto}
                     onClick={() => onElegido(t.id, `${t.titulo} · ${t.cliente}`)}
-                    className="w-full text-left px-3 py-2.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 border-b border-gray-100 dark:border-slate-700/50 last:border-0"
+                    className={`w-full text-left px-3 py-2.5 rounded border-b border-gray-100 dark:border-slate-700/50 last:border-0 ${
+                      t.registraOtroAuto
+                        ? "opacity-60 cursor-not-allowed"
+                        : "hover:bg-slate-100 dark:hover:bg-slate-700"
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       <Target className="w-4 h-4 text-slate-400 shrink-0" />
@@ -216,7 +243,11 @@ export function SeleccionarTratoVenta({
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 ml-6">
                       {t.cliente}
-                      {t.yaCerrado && !t.esDeEsteAuto && " · esta venta le quedará enlazada"}
+                      {t.registraOtroAuto
+                        ? ` · ya registra la venta de ${t.otroAuto || "otro auto"}`
+                        : t.yaCerrado && !t.esDeEsteAuto
+                          ? " · esta venta le quedará enlazada"
+                          : ""}
                     </p>
                   </button>
                 ))}
