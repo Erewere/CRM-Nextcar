@@ -49,6 +49,7 @@ import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 
+import { puedeVenderSinAprobacion, vehiculoVendido } from "../lib/ventaDeVehiculo";
 interface Props {
   client: Client | Partial<Client>;
   initialStatus?: string;
@@ -866,6 +867,18 @@ export function ClientDetailModal({
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
           const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
+          if (puedeVenderSinAprobacion(userData?.role)) {
+            // Quien cierra la venta ya tiene permiso para confirmarla: el auto
+            // sale del inventario ahora, no cuando alguien se acuerde de
+            // aprobarlo.
+            await updateDoc(doc(db, "vehicles", formData.vehicleId), vehiculoVendido({
+              clientId: finalClientId,
+              clientName: client.name || formData.name,
+              dealId: finalDealId,
+              precio: proposedPrice,
+              saleDetails,
+            }));
+          } else {
           await updateDoc(doc(db, "vehicles", formData.vehicleId), {
             pendingValidation: {
               type: "sold",
@@ -884,8 +897,9 @@ export function ClientDetailModal({
               requestedAt: new Date().toISOString(),
             },
           });
+          }
         }
-        
+
         await createPaymentTasks(db, {...client, ...formData}, saleDetails, userData);
         onUpdated?.();
       } catch (err) {

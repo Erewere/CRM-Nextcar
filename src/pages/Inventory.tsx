@@ -437,16 +437,19 @@ export function Inventory() {
       const now = new Date();
       const loadedVehicles = snapshot.docs.map(d => {
         const data = d.data() as Vehicle & { pendingValidation?: any };
-        
+
+        // Antes, una solicitud de venta sin aprobar se borraba sola a las 24
+        // horas: no se aprobaba ni se rechazaba, desaparecia. El auto se
+        // quedaba disponible, el trato seguia en ganado, el aviso de la
+        // campanita se esfumaba con ella y no quedaba rastro de que alguien
+        // hubiera cerrado esa venta. Un fin de semana bastaba para perderla.
+        //
+        // Una venta pendiente ahora espera a que una persona decida. Si lleva
+        // demasiado tiempo parada se marca como atrasada, que es lo contrario
+        // de esconderla.
         if (data.pendingValidation?.requestedAt) {
-          const reqTime = new Date(data.pendingValidation.requestedAt).getTime();
-          const diffHours = (now.getTime() - reqTime) / (1000 * 60 * 60);
-          if (diffHours >= 24) { 
-             setTimeout(() => {
-               updateDoc(doc(db, 'vehicles', d.id), { pendingValidation: null }).catch(console.error);
-             }, Math.random() * 2000);
-             delete data.pendingValidation;
-          }
+          const horas = (now.getTime() - new Date(data.pendingValidation.requestedAt).getTime()) / 3600000;
+          if (horas >= 24) data.pendingValidation = { ...data.pendingValidation, atrasada: true };
         }
         return { id: d.id, ...data };
       });

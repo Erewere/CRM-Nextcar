@@ -368,6 +368,32 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     }
   }, [userData]);
 
+  /**
+   * Recupera a que trato pertenece una venta ya registrada.
+   *
+   * El dato se guardaba (`soldDealId`) pero no se volvia a leer nunca, asi que
+   * al abrir un auto vendido el selector aparecia vacio y pedia asignar la
+   * venta otra vez. Y como no se puede guardar un auto vendido sin trato,
+   * cualquier cambio suelto -- una foto, el kilometraje -- obligaba a elegir de
+   * nuevo, con el riesgo de senalar el trato equivocado y reescribirlo.
+   *
+   * Los autos vendidos antes de que existiera `soldDealId` no lo tienen; para
+   * esos se usa el trato que ya encuentra la busqueda del comprador.
+   */
+  useEffect(() => {
+    if (isNew || formData.status !== 'sold') return;
+    const idGuardado = (vehicle as any)?.soldDealId;
+    if (!idGuardado || tratoVentaId) return;
+    setTratoVentaId(idGuardado);
+    getDoc(doc(db, 'deals', idGuardado))
+      .then((d) => {
+        if (!d.exists()) return;
+        const t = d.data() as any;
+        setTratoVentaEtiqueta(t.title || t.clientName || t.name || 'Trato de esta venta');
+      })
+      .catch(() => {});
+  }, [isNew, vehicle?.id, (vehicle as any)?.soldDealId, formData.status]);
+
   useEffect(() => {
     if (!isNew && vehicle?.id && formData.status === 'sold') {
       const fetchBuyer = async () => {
@@ -385,6 +411,14 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
              const dSnap = await getDocs(dq);
              if (!dSnap.empty) {
                  const dealData = dSnap.docs[0].data();
+                 // Venta antigua, sin `soldDealId`: el trato que la registra es
+                 // este, y sirve para que el selector no aparezca vacio.
+                 if (!(vehicle as any)?.soldDealId) {
+                   setTratoVentaId((previo) => previo || dSnap.docs[0].id);
+                   setTratoVentaEtiqueta((previo) =>
+                     previo || (dealData as any).title || (dealData as any).clientName || 'Trato de esta venta'
+                   );
+                 }
                  if (dealData.clientId) {
                      const clientDoc = await getDoc(doc(db, 'clients', dealData.clientId));
                      if (clientDoc.exists()) {

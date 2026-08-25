@@ -38,6 +38,7 @@ import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
 import { DealWonModal } from "../components/DealWonModal";
 import { LostReasonModal } from "../components/LostReasonModal";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
+import { puedeVenderSinAprobacion, vehiculoVendido } from "../lib/ventaDeVehiculo";
 import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { Settings, ChevronUp, ChevronDown, Archive, X, Search } from "lucide-react";
@@ -637,6 +638,18 @@ export function Kanban() {
         const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
         const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
+        if (puedeVenderSinAprobacion(userData?.role)) {
+          // Quien cierra la venta ya tiene permiso para confirmarla: el auto
+          // sale del inventario ahora, no cuando alguien se acuerde de
+          // aprobarlo.
+          await updateDoc(doc(db, "vehicles", client.vehicleId), vehiculoVendido({
+            clientId: actualClientId,
+            clientName: client.name,
+            dealId: idTrato || client.id,
+            precio: proposedPrice,
+            saleDetails,
+          }));
+        } else {
         await updateDoc(doc(db, "vehicles", client.vehicleId), {
           pendingValidation: {
             type: "sold",
@@ -655,6 +668,7 @@ export function Kanban() {
             requestedAt: new Date().toISOString(),
           },
         });
+        }
       }
 
       await createPaymentTasks(db, client, saleDetails, userData);

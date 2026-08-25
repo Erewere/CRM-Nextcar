@@ -454,11 +454,18 @@ export function NotificationsPopover() {
         const requestedBy = pv.requestedByName || "Un vendedor";
         const clientName = pv.clientName ? ` (Cliente: ${pv.clientName})` : "";
 
+        // Estas solicitudes antes se borraban solas a las 1 dia y la venta se
+        // perdia en silencio. Ahora esperan, y cuanto mas llevan esperando mas
+        // claro se dice: mientras no se apruebe, el auto sigue disponible.
+        const diasEsperando = Math.floor((now.getTime() - new Date(pv.requestedAt).getTime()) / 86400000);
+        const espera =
+          diasEsperando >= 1 ? ` Lleva ${diasEsperando} ${diasEsperando === 1 ? "día" : "días"} sin aprobarse y el auto sigue apareciendo como disponible.` : "";
+
         notifications.push({
           id: notifId,
           type: "admin-approval",
-          title: `Aprobación Pendiente: ${v.make} ${v.model}`,
-          message: `${requestedBy} solicitó marcar como ${typeLabel}${clientName}.`,
+          title: `${diasEsperando >= 1 ? "⚠️ " : ""}Aprobación Pendiente: ${v.make} ${v.model}`,
+          message: `${requestedBy} solicitó marcar como ${typeLabel}${clientName}.${espera}`,
           date: pv.requestedAt || new Date().toISOString(),
           icon: <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />,
           onClick: () => {
