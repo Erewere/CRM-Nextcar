@@ -22,6 +22,8 @@ interface TratoOpcion {
   titulo: string;
   cliente: string;
   esDeEsteAuto: boolean;
+  /** El trato ya esta en ganado o ya tiene un precio de venta registrado. */
+  yaCerrado: boolean;
 }
 
 interface Props {
@@ -64,16 +66,33 @@ export function SeleccionarTratoVenta({
         dSnap.docs.forEach((d) => {
           const x: any = d.data() || {};
           if (x.isDeleted) return;
-          // Un trato ya vendido no puede recibir otra venta.
-          if (checkIsWon(x.status) || x.saleDetails?.price) return;
+
+          const esDeEsteAuto = x.vehicleId === vehicleId;
+          const yaCerrado = checkIsWon(x.status) || !!x.saleDetails?.price;
+
+          // Lo que hay que impedir es que un trato registre dos ventas, no que
+          // un trato ganado se enlace con el auto que vendio. Antes se
+          // escondia cualquier trato cerrado, y eso ocultaba justo el que hace
+          // falta: el caso normal es cerrar la venta desde el trato y venir
+          // aqui despues a enlazar el auto. Solo estorba un trato que ya
+          // registre la venta de OTRO vehiculo.
+          if (yaCerrado && x.vehicleId && !esDeEsteAuto) return;
+
           lista.push({
             id: d.id,
             titulo: x.title || "Trato sin nombre",
             cliente: porId.get(x.clientId) || "Sin contacto",
-            esDeEsteAuto: x.vehicleId === vehicleId,
+            esDeEsteAuto,
+            yaCerrado,
           });
         });
-        lista.sort((a, b) => Number(b.esDeEsteAuto) - Number(a.esDeEsteAuto));
+        // Primero el trato de este auto, y despues los ya cerrados, que son los
+        // candidatos mas probables cuando se viene a enlazar una venta.
+        lista.sort(
+          (a, b) =>
+            Number(b.esDeEsteAuto) - Number(a.esDeEsteAuto) ||
+            Number(b.yaCerrado) - Number(a.yaCerrado)
+        );
         setTratos(lista);
 
         setContactos(
@@ -189,8 +208,16 @@ export function SeleccionarTratoVenta({
                           este auto
                         </span>
                       )}
+                      {t.yaCerrado && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          ya ganado
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 ml-6">{t.cliente}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 ml-6">
+                      {t.cliente}
+                      {t.yaCerrado && !t.esDeEsteAuto && " · esta venta le quedará enlazada"}
+                    </p>
                   </button>
                 ))}
             </div>
