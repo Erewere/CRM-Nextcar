@@ -377,22 +377,79 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
    * cualquier cambio suelto -- una foto, el kilometraje -- obligaba a elegir de
    * nuevo, con el riesgo de senalar el trato equivocado y reescribirlo.
    *
-   * Los autos vendidos antes de que existiera `soldDealId` no lo tienen; para
-   * esos se usa el trato que ya encuentra la busqueda del comprador.
+   * Los autos vendidos antes de que existiera `soldDealId` no lo tienen, y son
+   * la mayoria: hasta ahora ninguna aprobacion de venta lo escribia. Para esos
+   * se busca el trato que ya registra la venta de este auto.
+   *
+   * Esa busqueda tiene que ser independiente de la del comprador. Estaba
+   * colgada de ella, y esa se detiene en cuanto encuentra el contacto, asi que
+   * en las ventas con contacto enlazado -- las normales -- nunca llegaba a
+   * mirar los tratos y el selector seguia apareciendo vacio.
    */
   useEffect(() => {
-    if (isNew || formData.status !== 'sold') return;
-    const idGuardado = (vehicle as any)?.soldDealId;
-    if (!idGuardado || tratoVentaId) return;
-    setTratoVentaId(idGuardado);
-    getDoc(doc(db, 'deals', idGuardado))
-      .then((d) => {
-        if (!d.exists()) return;
-        const t = d.data() as any;
-        setTratoVentaEtiqueta(t.title || t.clientName || t.name || 'Trato de esta venta');
-      })
-      .catch(() => {});
-  }, [isNew, vehicle?.id, (vehicle as any)?.soldDealId, formData.status]);
+    if (isNew || !vehicle?.id || formData.status !== 'sold' || tratoVentaId) return;
+    let vigente = true;
+
+    const ponerEtiqueta = (t: any) =>
+      t?.title || t?.clientName || t?.name || 'Trato de esta venta';
+
+    (async () => {
+      try {
+        const idGuardado = (vehicle as any)?.soldDealId;
+        if (idGuardado) {
+          const d = await getDoc(doc(db, 'deals', idGuardado));
+          if (d.exists() && vigente) {
+            setTratoVentaId(d.id);
+            setTratoVentaEtiqueta(ponerEtiqueta(d.data()));
+            return;
+          }
+        }
+
+        let dq = query(
+          collection(db, 'deals'),
+          where('vehicleId', '==', vehicle.id),
+          where('status', 'in', ['won', 'sold'])
+        );
+        if (userData?.role !== 'master' && userData?.agencyId) {
+          dq = query(
+            collection(db, 'deals'),
+            where('vehicleId', '==', vehicle.id),
+            where('status', 'in', ['won', 'sold']),
+            where('agencyId', '==', userData.agencyId)
+          );
+        }
+        const snap = await getDocs(dq);
+        if (!snap.empty && vigente) {
+          setTratoVentaId(snap.docs[0].id);
+          setTratoVentaEtiqueta(ponerEtiqueta(snap.docs[0].data()));
+          return;
+        }
+
+        // Ultimo recurso: hay ventas viejas cuyo trato no guardo a que auto
+        // correspondia. Si el vehiculo si recuerda a quien se le vendio, se
+        // busca por ese contacto.
+        const comprador = (vehicle as any)?.soldToClientId || (vehicle as any)?.buyerId;
+        if (!comprador || !vigente) return;
+        const porCliente = await getDocs(
+          query(
+            collection(db, 'deals'),
+            where('clientId', '==', comprador),
+            where('status', 'in', ['won', 'sold'])
+          )
+        );
+        if (!porCliente.empty && vigente) {
+          setTratoVentaId(porCliente.docs[0].id);
+          setTratoVentaEtiqueta(ponerEtiqueta(porCliente.docs[0].data()));
+        }
+      } catch {
+        // Sin trato localizado el selector sigue pidiendolo, como antes.
+      }
+    })();
+
+    return () => {
+      vigente = false;
+    };
+  }, [isNew, vehicle?.id, (vehicle as any)?.soldDealId, formData.status, userData?.agencyId]);
 
   useEffect(() => {
     if (!isNew && vehicle?.id && formData.status === 'sold') {
@@ -411,14 +468,6 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
              const dSnap = await getDocs(dq);
              if (!dSnap.empty) {
                  const dealData = dSnap.docs[0].data();
-                 // Venta antigua, sin `soldDealId`: el trato que la registra es
-                 // este, y sirve para que el selector no aparezca vacio.
-                 if (!(vehicle as any)?.soldDealId) {
-                   setTratoVentaId((previo) => previo || dSnap.docs[0].id);
-                   setTratoVentaEtiqueta((previo) =>
-                     previo || (dealData as any).title || (dealData as any).clientName || 'Trato de esta venta'
-                   );
-                 }
                  if (dealData.clientId) {
                      const clientDoc = await getDoc(doc(db, 'clients', dealData.clientId));
                      if (clientDoc.exists()) {
