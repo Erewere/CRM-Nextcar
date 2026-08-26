@@ -66,6 +66,11 @@ export function ClientDetailModal({
 }: Props) {
   const { userData } = useAuth();
   const controlesArrastre = useDragControls();
+  // Cerrar en dos tiempos: primero se anima la salida, y cuando termina se
+  // avisa de verdad a quien abrio la ventana. Antes se desmontaba en el acto y
+  // la animacion de salida no llegaba a verse nunca.
+  const [cerrando, setCerrando] = useState(false);
+  const cerrar = () => setCerrando(true);
 
   /**
    * Al crear un trato, la ventana se queda abierta en vez de cerrarse.
@@ -1587,22 +1592,35 @@ export function ClientDetailModal({
   const completedTasks = tasks.filter((t) => t.completed);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+    // La animacion de salida ya existia pero no llegaba a verse: quien abre
+    // esta ventana la quita de golpe, y sin AnimatePresence no hay momento en
+    // que animarla. Va aqui dentro para que valga en todas las pantallas que
+    // la usan, y el cierre de verdad ocurre cuando la animacion termina.
+    <AnimatePresence onExitComplete={onClose}>
+      {!cerrando && (
+    <motion.div key="ventana-trato" className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
       {/* Backdrop */}
       <motion.div
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
+        onClick={cerrar}
       />
+      {/* La entrada y la salida viven en esta capa, y el arrastre en la de
+          dentro. Estaban en el mismo elemento, y `animate` fijaba la posicion
+          en cero: cada redibujado cancelaba el arrastre, asi que la hoja no se
+          movia al deslizarla por mas que el gesto si funcionara. */}
       <motion.div
-        className="bg-white dark:bg-slate-800 w-full max-w-6xl md:rounded rounded-t-3xl shadow-2xl flex flex-col overflow-hidden h-[95dvh] relative z-10"
+        className="w-full max-w-6xl relative z-10 flex"
         initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
         animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
         transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
         style={{ transformOrigin: "bottom center" }}
+      >
+      <motion.div
+        className="bg-white dark:bg-slate-800 w-full md:rounded rounded-t-3xl shadow-2xl flex flex-col overflow-hidden h-[95dvh] relative"
         // Solo arrastra desde el tirador (`dragListener` apagado): si escuchara
         // en toda la ventana, cada intento de leer el historial hacia abajo la
         // cerraria.
@@ -1620,7 +1638,7 @@ export function ClientDetailModal({
         onDragEnd={(_, info) => {
           // Cuenta la distancia o el impulso: un tiron corto y rapido tambien
           // cierra, como en cualquier app del telefono.
-          if (info.offset.y > 120 || info.velocity.y > 700) onClose();
+          if (info.offset.y > 120 || info.velocity.y > 700) cerrar();
         }}
       >
         {avisoDeCreado && (
@@ -1643,7 +1661,7 @@ export function ClientDetailModal({
             de accion, que en un telefono se sale de la pantalla: quedaba
             inalcanzable justo cuando mas falta hace. */}
         <button
-          onClick={onClose}
+          onClick={cerrar}
           aria-label="Cerrar"
           className="md:hidden absolute top-2.5 right-3 z-20 p-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200"
         >
@@ -1844,7 +1862,7 @@ export function ClientDetailModal({
                 hacer que baje de linea aparecieron las dos. */}
             <div className="hidden md:block w-px h-6 bg-gray-300 mx-1"></div>
             <button
-              onClick={onClose}
+              onClick={cerrar}
               className="hidden md:block p-1 text-gray-400 hover:text-gray-700 dark:text-slate-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <X className="w-6 h-6" />
@@ -3581,6 +3599,7 @@ export function ClientDetailModal({
           })()}
         </AnimatePresence>
       </motion.div>
+      </motion.div>
             {/* New Activity Modal */}
       {showNewTaskModal && (
         <NewActivityModal
@@ -3727,6 +3746,8 @@ export function ClientDetailModal({
           clientContext={formData as Client}
         />
       )}
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
