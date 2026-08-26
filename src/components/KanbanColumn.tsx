@@ -15,6 +15,8 @@ interface Props {
   column: { id: string; title: string };
   clients: Client[];
   onClientClick: (client: Client) => void;
+  /** Abre la hoja de etapas en el telefono. */
+  onMoverCliente?: (client: Client) => void;
   tasks?: Task[];
   key?: React.Key;
   dragHandleProps?: any;
@@ -31,6 +33,7 @@ export function KanbanColumn({
   column,
   clients,
   onClientClick,
+  onMoverCliente,
   tasks = [],
   dragHandleProps,
   onTitleChange,
@@ -193,6 +196,7 @@ export function KanbanColumn({
                 key={`client-${client.id}`}
                 client={client}
                 onClick={() => onClientClick(client)}
+                onMover={onMoverCliente ? () => onMoverCliente(client) : undefined}
                 tasks={clientTasks}
               />
             );

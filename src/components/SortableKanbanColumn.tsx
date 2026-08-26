@@ -9,6 +9,7 @@ interface Props {
   column: { id: string; title: string };
   clients: Client[];
   onClientClick: (client: Client) => void;
+  onMoverCliente?: (client: Client) => void;
   tasks?: Task[];
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
@@ -43,7 +44,7 @@ export function SortableKanbanColumn(props: Props) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex h-full flex-col shrink-0 md:shrink md:flex-1 md:min-w-[150px] relative w-[85vw] md:w-0 snap-center md:snap-align-none group">
+    <div ref={setNodeRef} data-etapa={props.column.id} style={style} className="flex h-full flex-col shrink-0 md:shrink md:flex-1 md:min-w-[150px] relative w-[85vw] md:w-0 snap-center md:snap-align-none group">
       <KanbanColumn
         {...props}
         dragHandleProps={{ ...attributes, ...listeners }}

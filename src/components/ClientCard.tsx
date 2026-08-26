@@ -2,7 +2,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Client, Task } from '../types';
-import { MessageCircle, Phone, ChevronRight, AlertTriangle, Lock } from 'lucide-react';
+import { MessageCircle, Phone, ChevronRight, AlertTriangle, Lock, ArrowRightLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
 import { getVehicleOfInterestText } from '../lib/clientUtils';
@@ -13,9 +13,11 @@ interface Props {
   onClick?: () => void;
   key?: React.Key;
   disabled?: boolean;
+  /** Abre la hoja para cambiar de etapa. Solo se usa en el telefono. */
+  onMover?: () => void;
 }
 
-export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
+export function ClientCard({ client, tasks = [], onClick, disabled, onMover }: Props) {
   const getTaskStatusInfo = () => {
     const pendingTasks = tasks.filter(t => !t.completed);
     if (pendingTasks.length === 0) {
@@ -154,7 +156,22 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
             )}
           </div>
           
-          <div 
+          {/* En el telefono no se puede arrastrar la tarjeta hasta otra
+              columna, asi que la etapa se cambia desde aqui. En pantalla
+              grande sobra: ahi se arrastra. */}
+          {onMover && !disabled && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMover();
+              }}
+              className="md:hidden ml-auto mr-2 flex items-center gap-1 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/60 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300 active:bg-blue-100"
+            >
+              <ArrowRightLeft className="w-3 h-3" /> Mover
+            </button>
+          )}
+
+          <div
             className={clsx("group/tooltip relative w-[24px] h-[24px] rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-110 hover:shadow-sm", statusColorClass)}
           >
             {hasNoTasks ? (
@@ -173,7 +190,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
   );
 }
 
-export function SortableClientCard({ client, tasks, onClick }: Props) {
+export function SortableClientCard({ client, tasks, onClick, onMover }: Props) {
   const { userData } = useAuth();
   
   const canModify = !client.id ||
@@ -209,7 +226,7 @@ export function SortableClientCard({ client, tasks, onClick }: Props) {
 
   return (
     <div ref={setNodeRef} style={style} {...(isDragDisabled ? {} : attributes)} {...(isDragDisabled ? {} : listeners)}>
-      <ClientCard client={client} tasks={tasks} onClick={onClick} disabled={isDragDisabled} />
+      <ClientCard client={client} tasks={tasks} onClick={onClick} disabled={isDragDisabled} onMover={onMover} />
     </div>
   );
 }

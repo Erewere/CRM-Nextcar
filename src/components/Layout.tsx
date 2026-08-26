@@ -484,7 +484,8 @@ export function Layout() {
             <p className="text-[15px] text-slate-500 dark:text-slate-400 hidden sm:block mt-1.5 truncate max-w-md leading-none">
               {location.pathname === '/' ? 'Métricas clave y estado de tus ventas' :
                location.pathname === '/inventory' ? 'Gestiona los vehículos de la agencia' :
-               location.pathname === '/kanban' ? 'Arrastra los prospectos para avanzar su proceso' :
+               // En el telefono no se arrastra: se toca «Mover» en la tarjeta.
+               location.pathname === '/kanban' ? (isMobile ? 'Toca «Mover» en una tarjeta para cambiarla de etapa' : 'Arrastra los prospectos para avanzar su proceso') :
                location.pathname === '/persons' ? 'Directorio de contactos y prospectos' :
                location.pathname === '/tasks' ? 'Gestiona tus tareas y recordatorios' :
                location.pathname === '/users' ? 'Administra los accesos y roles de usuarios' :

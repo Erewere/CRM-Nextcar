@@ -19,7 +19,8 @@ import {
   DragOverlay,
   closestCorners,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   useDroppable,
@@ -37,6 +38,7 @@ import { ClientDetailModal } from "../components/ClientDetailModal";
 import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
 import { DealWonModal } from "../components/DealWonModal";
 import { LostReasonModal } from "../components/LostReasonModal";
+import { MoverTratoMovil } from "../components/MoverTratoMovil";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { puedeVenderSinAprobacion, vehiculoVendido } from "../lib/ventaDeVehiculo";
 import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
@@ -202,6 +204,10 @@ export function Kanban() {
   const [newColumnId, setNewColumnId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  // Que trato esta esperando elegir etapa desde el telefono.
+  const [tratoAMover, setTratoAMover] = useState<Client | null>(null);
+  const carrusel = React.useRef<HTMLDivElement | null>(null);
+
   const [clientToMarkWon, setClientToMarkWon] = useState<{ client: Client, originalStatus: string } | null>(null);
   const [clientToMarkLost, setClientToMarkLost] = useState<{ client: Client, originalStatus: string, overColumnId: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -317,8 +323,24 @@ export function Kanban() {
     };
   }, [userData]);
 
+  /**
+   * El raton y el dedo se separan a proposito.
+   *
+   * Antes los dos usaban el mismo sensor, que empieza a arrastrar a los cinco
+   * pixeles de movimiento. Con el raton esta bien; con el dedo, cinco pixeles
+   * es exactamente el principio de un deslizamiento para ver la siguiente
+   * etapa. Asi que en el telefono cada intento de desplazarse arrancaba un
+   * arrastre y la pantalla se quedaba trabada: de ahi que casi no se pudiera
+   * mover nada.
+   *
+   * Con el dedo ahora hay que mantener pulsado un momento para arrastrar, y un
+   * deslizamiento normal vuelve a desplazar la pantalla. Aun asi, arrastrar en
+   * un telefono es incomodo -- la etapa de destino esta fuera de la pantalla --
+   * por eso ahi se mueve tocando, con la hoja de «Mover a».
+   */
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -451,6 +473,92 @@ export function Kanban() {
   const activeColumns = columns.filter((c) => !isTerminalColumn(c));
   const terminalColumns = columns.filter((c) => isTerminalColumn(c));
 
+  /**
+   * Mover un trato de etapa, venga de donde venga el gesto.
+   *
+   * Arrastrar con el raton y tocar «Mover a» en el telefono tienen que acabar
+   * en lo mismo: los mismos permisos, las mismas ventanas de venta ganada o
+   * perdida y las mismas escrituras. Con la logica repetida en dos sitios, la
+   * del telefono se habria quedado atras a la primera correccion.
+   *
+   * Devuelve false solo cuando el asesor no puede mover ese trato, para que
+   * quien arrastro pueda devolver la tarjeta a su sitio.
+   */
+  const moverTratoAEtapa = async (
+    client: Client,
+    destinoId: string,
+    origenStatus?: string | null
+  ): Promise<boolean> => {
+    if (isReadOnly) return true;
+    const columna = columns.find((c) => c.id === destinoId);
+    if (!columna) return true;
+
+    const desde = origenStatus ?? client.status;
+    if (desde === destinoId) return true;
+
+    // Un administrador supervisa el embudo completo de su agencia: puede mover
+    // el trato de cualquier asesor, igual que ya podia reasignarlo desde la
+    // ficha del contacto.
+    if (userData?.role !== "admin" && userData?.role !== "master") {
+      // Un asesor mueve lo que trae asignado, lo que creo el mismo y lo que
+      // esta sin asignar. Todo lo demas se lo reasigna un administrador.
+      const esSuyo =
+        !client.id ||
+        client.sellerId === userData?.id ||
+        !client.sellerId ||
+        client.creatorId === userData?.id;
+      if (!esSuyo) {
+        alert("Este trato está asignado a otro asesor. Pide a un administrador que te lo reasigne.");
+        return false;
+      }
+    }
+
+    // Ganado y perdido no son un cambio de etapa a secas: piden los datos de la
+    // venta o el motivo, y de ahi salen la venta del auto y sus tareas.
+    if (checkIsWon(destinoId, [columna])) {
+      setClientToMarkWon({ client, originalStatus: desde as string });
+      return true;
+    }
+    if (checkIsLost(destinoId, [columna])) {
+      setClientToMarkLost({ client, originalStatus: desde as string, overColumnId: destinoId });
+      return true;
+    }
+
+    try {
+      const updates: any = { status: destinoId, updatedAt: new Date().toISOString() };
+      const actualClientId = client.originalClientId || client.id;
+
+      if (deals.some((d) => d.id === client.id)) {
+        await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
+      } else {
+        // Es un contacto antiguo sin trato: se le crea uno al moverlo.
+        const dealRef = doc(collection(db, "deals"));
+        await setDoc(dealRef, {
+          ...updates,
+          id: dealRef.id,
+          clientId: actualClientId,
+          agencyId: userData?.agencyId,
+          sellerId: client.sellerId || userData?.id,
+          createdAt: new Date().toISOString(),
+          title: `Trato con ${client.name}`,
+          value: client.dealValue ? Number(client.dealValue) : 0,
+          vehicle: client.vehicle || null,
+          vehicleId: client.vehicleId || null,
+        });
+      }
+
+      if (actualClientId) {
+        await updateDoc(doc(db, "clients", actualClientId), {
+          status: destinoId,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      console.error("Status update error", e);
+    }
+    return true;
+  };
+
   const handleDragEnd = async (event: any) => {
     if (isReadOnly) return;
     const { active, over } = event;
@@ -490,84 +598,15 @@ export function Kanban() {
     const originalStatus = activeOriginalStatusRef.current;
     
     if (client && originalStatus !== overColumnId) {
-      // Un administrador supervisa el embudo completo de su agencia: puede mover
-      // el trato de cualquier asesor, igual que ya podia reasignarlo desde la
-      // ficha del contacto. Antes esta regla contradecia a la del modal, de modo
-      // que un mismo trato se podia reasignar pero no arrastrar.
-      if (userData?.role !== "admin" && userData?.role !== "master") {
-        // Un asesor mueve lo que trae asignado, lo que creo el mismo y lo que
-        // esta sin asignar. Todo lo demas se lo reasigna un administrador.
-        const esSuyo =
-          !client.id ||
-          client.sellerId === userData?.id ||
-          !client.sellerId ||
-          client.creatorId === userData?.id;
-        if (!esSuyo) {
-          alert("Este trato está asignado a otro asesor. Pide a un administrador que te lo reasigne.");
-          // Revert locally modified state
-          setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: originalStatus as string } : c));
-          activeOriginalStatusRef.current = null; activeColumnRef.current = null;
-          return;
-        }
-      }
-
-      // The array was already modified locally in handleDragOver, 
-      // we only need to persist to Firebase if the status is different from start
-      try {
-        const overStr = String(overColumnId || "").toLowerCase();
-        const overColumn = columns.find(c => c.id === overColumnId);
-        const isWon = overColumn ? checkIsWon(overColumnId, [overColumn]) : false;
-
-        if (isWon) {
-          setClientToMarkWon({ client, originalStatus: originalStatus as string });
-          activeOriginalStatusRef.current = null; activeColumnRef.current = null;
-          return;
-        }
-
-        const isLost = overColumn ? checkIsLost(overColumnId, [overColumn]) : false;
-        if (isLost) {
-          setClientToMarkLost({ client, originalStatus: originalStatus as string, overColumnId: overColumnId as string });
-          activeOriginalStatusRef.current = null; activeColumnRef.current = null;
-          return;
-        }
-
-        const updates: any = {
-          status: overColumnId,
-          updatedAt: new Date().toISOString(),
-        };
-
-        const isExistingDeal = deals.some(d => d.id === clientId);
-        const actualClientId = client.originalClientId || client.id;
-        if (isExistingDeal) {
-          await setDoc(doc(db, "deals", clientId), updates, { merge: true });
-        } else {
-          // It's a legacy client being moved, create a deal
-          const dealRef = doc(collection(db, "deals"));
-          await setDoc(dealRef, {
-            ...updates,
-            id: dealRef.id,
-            clientId: actualClientId,
-            agencyId: userData?.agencyId,
-            sellerId: client.sellerId || userData?.id,
-            createdAt: new Date().toISOString(),
-            title: `Trato con ${client.name}`,
-            value: client.dealValue ? Number(client.dealValue) : 0,
-            vehicle: client.vehicle || null,
-            vehicleId: client.vehicleId || null
-          });
-        }
-        // Also update the client's status so it stays in sync
-        if (actualClientId) {
-          await updateDoc(doc(db, "clients", actualClientId), {
-            status: overColumnId,
-            updatedAt: new Date().toISOString()
-          });
-        }
-      } catch (e) {
-        console.error("Status update error", e);
+      const sePudo = await moverTratoAEtapa(client, overColumnId as string, originalStatus);
+      if (!sePudo) {
+        // handleDragOver ya habia movido la tarjeta en pantalla; se devuelve.
+        setClients((prev) =>
+          prev.map((c) => (c.id === client.id ? { ...c, status: originalStatus as string } : c))
+        );
       }
     }
-    
+
     activeOriginalStatusRef.current = null; activeColumnRef.current = null;
   };
 
@@ -826,6 +865,33 @@ export function Kanban() {
         </button>
       </div>
 
+      {/* Fichas de etapas, solo en el telefono.
+          Alli se ve una etapa a la vez y las demas quedan fuera de la
+          pantalla, asi que para llegar a la ultima habia que deslizar tantas
+          veces como etapas tenga el embudo, sin saber cuantas faltaban. Aqui
+          estan todas con su conteo y se salta a cualquiera de un toque. */}
+      <div className="md:hidden flex gap-2 overflow-x-auto px-1 pb-2 shrink-0">
+        {activeColumns.map((col) => {
+          const cuantos = filteredClients.filter((c) => c.status === col.id).length;
+          return (
+            <button
+              key={`ficha-${col.id}`}
+              onClick={() =>
+                carrusel.current
+                  ?.querySelector(`[data-etapa="${col.id}"]`)
+                  ?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" })
+              }
+              className="shrink-0 flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 active:bg-slate-100 dark:active:bg-slate-700"
+            >
+              <span className="truncate max-w-[110px]">{col.title}</span>
+              <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                {cuantos}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col flex-1 min-h-0">
         <DndContext
           sensors={sensors}
@@ -834,7 +900,7 @@ export function Kanban() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex flex-1 overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded">
+          <div ref={carrusel} className="flex flex-1 overflow-x-auto snap-x snap-mandatory md:snap-none items-stretch bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded">
             <SortableContext items={activeColumns.map((c) => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
               {activeColumns.map((col, index) => {
                 const columnClients = filteredClients.filter(
@@ -854,6 +920,7 @@ export function Kanban() {
                     column={col}
                     clients={columnClients}
                     onClientClick={setSelectedClient}
+                    onMoverCliente={setTratoAMover}
                     tasks={tasks}
                     isFirst={index === 0}
                     isLast={index === activeColumns.length - 1}
@@ -942,6 +1009,21 @@ export function Kanban() {
           client={selectedClient}
           initialStatus={columns.length > 0 ? columns[0].id : "new"}
           onClose={() => setSelectedClient(null)}
+        />
+      )}
+
+      {tratoAMover && (
+        <MoverTratoMovil
+          client={tratoAMover}
+          columnas={columns}
+          onCerrar={() => setTratoAMover(null)}
+          onElegir={async (etapaId) => {
+            const trato = tratoAMover;
+            setTratoAMover(null);
+            // La misma funcion que usa el arrastre: mismos permisos, mismas
+            // ventanas de venta ganada o perdida, mismas escrituras.
+            await moverTratoAEtapa(trato, etapaId, trato.status);
+          }}
         />
       )}
 
