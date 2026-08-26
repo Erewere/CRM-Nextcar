@@ -39,6 +39,9 @@ import {
   Users,
   Edit2, Target, Calculator, Lock, Car, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search,
   Check,
+  Trophy,
+  XCircle,
+  RotateCcw,
 } from "lucide-react";
 import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
@@ -1669,14 +1672,18 @@ export function ClientDetailModal({
         </button>
 
         {/* TOP HEADER */}
-        <div className="flex flex-wrap md:flex-nowrap justify-between items-start md:items-center gap-y-2 px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flexitems-center justify-center text-blue-700 font-bold text-lg flex items-center">
+        {/* La cabecera se queda fija mientras el resto se desplaza, asi que
+            cada pixel de mas aqui es un pixel menos de informacion. En el
+            telefono va apretada: la inicial mas chica, el titulo mas corto y
+            el monto en la misma linea. */}
+        <div className="flex flex-wrap md:flex-nowrap justify-between items-start md:items-center gap-y-1.5 md:gap-y-2 px-4 md:px-6 py-2 md:py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
+          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto pr-10 md:pr-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 rounded-full bg-blue-100 justify-center text-blue-700 font-bold text-base md:text-lg flex items-center">
               {String(formData.name || "U")
                 .charAt(0)
                 .toUpperCase()}
             </div>
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-0 md:min-w-[200px]">
               <input
                 name={isDealContext ? "dealTitle" : "name"}
                 value={isDealContext ? (formData.dealTitle || "") : (formData.name || "")}
@@ -1688,7 +1695,7 @@ export function ClientDetailModal({
                   }
                 }}
                 placeholder={isDealContext ? "Nuevo Trato" : "Nombre"}
-                className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
+                className="text-base md:text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
               />
               
               {isDealContext && (
@@ -1739,7 +1746,7 @@ export function ClientDetailModal({
                       handleStatusChange(newStatus);
                     }
                   }}
-                  className="mt-1 block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  className="mt-1 block text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 border-0 rounded-full py-1 md:py-1.5 pl-3 pr-8 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
                 >
                   {!formData.dealTitle && !isNew && (
                     <option value="" disabled>Contacto sin trato activo</option>
@@ -1831,19 +1838,28 @@ export function ClientDetailModal({
               !checkIsWon(formData.status, pipelineStages) &&
               !checkIsLost(formData.status, pipelineStages) && (
                 <>
+                  {/* «Solo contacto» no decia lo que hace: marca el trato como
+                      perdido y pide el motivo. No borra nada, asi que tampoco
+                      puede llamarse «borrar»: seria peor mentira que la
+                      anterior, y en la direccion peligrosa.
+                      Van juntos y a lo ancho en el telefono, no apilados: uno
+                      debajo del otro sumaba altura a una cabecera que hay que
+                      hacer mas chica, no mas grande. */}
                   <button
                     type="button"
                     onClick={() => handleStatusChange("won")}
-                    className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                    className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 md:px-4 py-2 md:py-1.5 rounded-xl shadow-sm shadow-emerald-600/25 ring-1 ring-inset ring-white/20 active:scale-95 transition-all"
                   >
+                    <Trophy className="w-4 h-4 shrink-0" />
                     Ganado
                   </button>
                   <button
                     type="button"
                     onClick={() => handleStatusChange("lost")}
-                    className="bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                    className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 text-sm font-semibold px-3 md:px-4 py-2 md:py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
                   >
-                    Solo contacto
+                    <XCircle className="w-4 h-4 shrink-0" />
+                    Perdido
                   </button>
                 </>
               )}
@@ -1852,8 +1868,9 @@ export function ClientDetailModal({
                 <button
                   type="button"
                   onClick={() => handleStatusChange("new")}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 text-sm font-semibold px-4 py-1.5 rounded shadow-sm transition-colors"
+                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-semibold px-3 md:px-4 py-2 md:py-1.5 rounded-xl border border-gray-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
                 >
+                  <RotateCcw className="w-4 h-4 shrink-0" />
                   Reabrir trato
                 </button>
               )}
