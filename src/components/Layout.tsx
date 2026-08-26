@@ -551,12 +551,19 @@ export function Layout() {
         <nav className="md:hidden w-full bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0">
           {[
             { name: "Inicio", path: "/", icon: LayoutDashboard },
+            // El embudo no estaba en esta barra, y en el telefono no hay menu
+            // lateral, asi que no habia forma de llegar a el salvo escribiendo
+            // la direccion a mano: la pantalla donde vive el trabajo diario de
+            // un vendedor era inalcanzable desde su telefono.
+            { name: "Embudo", path: "/kanban", icon: Trello },
             { name: "Contactos", path: "/persons", icon: Users },
             { name: "Inventario", path: "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0 && location.pathname !== "/inventory") ? sharedMatches.length : undefined },
             { name: "Chats", path: "/chats", icon: MessageSquare, badge: unreadChatsCount > 0 ? unreadChatsCount : undefined },
             { name: "Citas", path: "/tasks", icon: CheckSquare },
           ].filter(item => {
             if (item.name === "Chats" && userData?.role === "seller") return false;
+            // Mismo permiso que en el menu de escritorio.
+            if (item.name === "Embudo" && userData?.role !== "admin" && userData?.role !== "seller") return false;
             return true;
           }).map(item => {
             const finalItem = { ...item };
@@ -576,7 +583,7 @@ export function Layout() {
               }}
               className={({ isActive }) =>
                 clsx(
-                  "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors relative",
+                  "flex flex-col items-center justify-center w-full min-w-0 h-full space-y-1 transition-colors relative",
                   (item as any).disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
                   isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 )
@@ -593,7 +600,10 @@ export function Layout() {
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium">{item.name}</span>
+              {/* Con el embudo ya son seis botones mas el de perfil. La
+                  etiqueta se recorta en vez de partirse en dos lineas, que
+                  descuadraria el alto de la barra. */}
+              <span className="text-[9px] font-medium leading-none truncate max-w-full px-0.5">{item.name}</span>
             </NavLink>
           ))}
           <button
