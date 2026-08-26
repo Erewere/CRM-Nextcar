@@ -1609,10 +1609,18 @@ export function ClientDetailModal({
         drag="y"
         dragControls={controlesArrastre}
         dragListener={false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.6 }}
+        // Solo tope arriba: hacia abajo la ventana sigue al dedo sin resistirse,
+        // que es lo que hace que se sienta una hoja y no un boton disfrazado.
+        // Antes tenia tope tambien abajo y apenas se movia: se cerraba de golpe
+        // al soltar, sin que nada acompañara el gesto.
+        dragConstraints={{ top: 0 }}
+        dragElastic={{ top: 0, bottom: 1 }}
+        // Si no se baja lo suficiente, vuelve a su sitio con un rebote.
+        dragSnapToOrigin
         onDragEnd={(_, info) => {
-          if (info.offset.y > 120) onClose();
+          // Cuenta la distancia o el impulso: un tiron corto y rapido tambien
+          // cierra, como en cualquier app del telefono.
+          if (info.offset.y > 120 || info.velocity.y > 700) onClose();
         }}
       >
         {avisoDeCreado && (
@@ -1831,10 +1839,13 @@ export function ClientDetailModal({
                   Reabrir trato
                 </button>
               )}
-            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+            {/* En el telefono esta X sobra: hay otra fija arriba a la derecha.
+                Antes no se veia porque la fila se salia de la pantalla; al
+                hacer que baje de linea aparecieron las dos. */}
+            <div className="hidden md:block w-px h-6 bg-gray-300 mx-1"></div>
             <button
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-gray-700 dark:text-slate-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              className="hidden md:block p-1 text-gray-400 hover:text-gray-700 dark:text-slate-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <X className="w-6 h-6" />
             </button>

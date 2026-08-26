@@ -97,32 +97,50 @@ export function MobileFab() {
         <AnimatePresence>
           {isOpen && (
              <motion.div 
-               className="flex flex-col items-center gap-3 mb-2"
+               className="flex flex-col items-end gap-3 mb-2"
                initial={{ y: 60, scale: 0.1, opacity: 0 }}
                animate={{ y: 0, scale: 1, opacity: 1 }}
                exit={{ y: 60, scale: 0.1, opacity: 0, transition: { duration: 0.2 } }}
                transition={{ type: "spring", damping: 18, stiffness: 300, mass: 0.8 }}
                style={{ transformOrigin: "bottom center" }}
              >
-              <button 
+              {/* Con iconos sueltos no habia forma de saber que hacia cada
+                  uno, y la opcion de crear una tarea parecia no existir. El
+                  nombre va al lado. */}
+              <button
                 onClick={() => { setIsOpen(false); setShowTaskModal(true); }}
-                className="w-12 h-12 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
+                className="flex items-center gap-2 active:scale-95 transition-all"
               >
-                <CheckSquare className="w-5 h-5" />
+                <span className="rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Nueva tarea
+                </span>
+                <span className="w-12 h-12 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 shrink-0">
+                  <CheckSquare className="w-5 h-5" />
+                </span>
               </button>
               {userData?.role !== "seller" && (
-              <button 
+              <button
                 onClick={() => { setIsOpen(false); setShowVehicleModal(true); }}
-                className="w-12 h-12 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
+                className="flex items-center gap-2 active:scale-95 transition-all"
               >
-                <Car className="w-5 h-5" />
+                <span className="rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Nuevo auto
+                </span>
+                <span className="w-12 h-12 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 shrink-0">
+                  <Car className="w-5 h-5" />
+                </span>
               </button>
               )}
-              <button 
+              <button
                 onClick={() => { setIsOpen(false); setShowClientModal(true); }}
-                className="w-12 h-12 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 active:scale-95 transition-all"
+                className="flex items-center gap-2 active:scale-95 transition-all"
               >
-                <Users className="w-5 h-5" />
+                <span className="rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Nuevo contacto
+                </span>
+                <span className="w-12 h-12 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 shrink-0">
+                  <Users className="w-5 h-5" />
+                </span>
               </button>
              </motion.div>
           )}
