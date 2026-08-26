@@ -1698,8 +1698,13 @@ export function ClientDetailModal({
                 className="text-base md:text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
               />
               
+              {/* El monto y la etapa comparten linea: la etapa estaba sola en
+                  una fila entera con todo el ancho vacio a su derecha, y esa
+                  fila es altura de cabecera fija que se le quita al contenido.
+                  Si no caben juntos, la etapa baja sola. */}
+              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-0.5">
               {isDealContext && (
-                <div className="flex items-center mt-1">
+                <div className="flex items-center">
                   <span className="text-gray-500 font-medium mr-1">$</span>
                   <input
                     type="number"
@@ -1746,7 +1751,7 @@ export function ClientDetailModal({
                       handleStatusChange(newStatus);
                     }
                   }}
-                  className="mt-1 block text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 border-0 rounded-full py-1 md:py-1.5 pl-3 pr-8 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                  className="block text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 border-0 rounded-full py-1 md:py-1.5 pl-3 pr-8 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
                 >
                   {!formData.dealTitle && !isNew && (
                     <option value="" disabled>Contacto sin trato activo</option>
@@ -1758,6 +1763,7 @@ export function ClientDetailModal({
                   ))}
                 </select>
               )}
+              </div>
               {formData.status === 'won' && (
                 <div className="mt-2 flex items-center gap-2">
                   <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase whitespace-nowrap">
