@@ -77,36 +77,62 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
   const { colorClass: statusColorClass, title: statusTitle, hasNoTasks } = getTaskStatusInfo();
   // console.log("ClientCard for", client.name, "tasks:", tasks, "statusTitle:", statusTitle);
 
+  const tituloDelTrato = client.dealTitle || (client.name ? `${client.name} deal` : 'Deal');
+  const textoDelAuto = getVehicleOfInterestText(client);
+
   return (
-    <div 
+    <div
       onClick={onClick}
       className={clsx(
-        "group bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl text-left relative overflow-hidden",
+        // Sin `overflow-hidden` aqui: recortaba los letreros que salen al pasar
+        // el raton, que es justo lo que hay que poder leer. Lo que se tiene que
+        // recortar son los brillos decorativos, y para eso llevan su propia
+        // caja recortada mas abajo.
+        "group bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl text-left relative",
         disabled ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
         client.origin === 'whatsapp' && "border-l-4 border-l-green-400"
       )}
     >
       {/* Modern water-drop / glass highlight effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-400/0 via-blue-300/5 to-indigo-400/10 dark:from-blue-500/0 dark:via-blue-400/5 dark:to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none mix-blend-overlay" />
-      <div className="absolute -inset-full top-0 left-0 bg-gradient-to-r from-transparent via-white/20 to-transparent dark:via-white/5 opacity-0 group-hover:opacity-100 group-hover:-translate-x-full duration-1000 transition-all ease-out pointer-events-none" />
+      <div className="absolute inset-0 overflow-hidden rounded pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-400/0 via-blue-300/5 to-indigo-400/10 dark:from-blue-500/0 dark:via-blue-400/5 dark:to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none mix-blend-overlay" />
+        <div className="absolute -inset-full top-0 left-0 bg-gradient-to-r from-transparent via-white/20 to-transparent dark:via-white/5 opacity-0 group-hover:opacity-100 group-hover:-translate-x-full duration-1000 transition-all ease-out pointer-events-none" />
+      </div>
       
       <div className="p-3 pb-2.5">
         <div className="flex justify-between items-start gap-2 mb-0.5">
-          <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
-            {client.dealTitle || (client.name ? `${client.name} deal` : 'Deal')}
-            {disabled && (
-              <span title="Solo lectura (Asignado a otro vendedor)"><Lock className="w-3 h-3 text-slate-400 shrink-0" /></span>
-            )}
-          </h4>
+          {/* El nombre casi siempre se corta en el ancho de la columna, y hasta
+              ahora no habia forma de leerlo entero sin abrir el trato. El
+              letrero cuelga por fuera del titulo, no dentro: el titulo recorta
+              su contenido y se llevaria por delante el letrero tambien. */}
+          <div className="relative group/nombre min-w-0 flex-1">
+            <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
+              {tituloDelTrato}
+              {disabled && (
+                <span title="Solo lectura (Asignado a otro vendedor)"><Lock className="w-3 h-3 text-slate-400 shrink-0" /></span>
+              )}
+            </h4>
+            <div className="absolute top-full left-0 mt-1 z-50 w-max max-w-[240px] bg-slate-800 dark:bg-slate-700 text-white text-[11px] font-medium px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/nombre:opacity-100 group-hover/nombre:visible pointer-events-none whitespace-normal text-left">
+              {tituloDelTrato}
+            </div>
+          </div>
           {client.dealValue ? (
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-800/50">
               ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(client.dealValue)}
             </span>
           ) : null}
         </div>
-        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-3 font-medium">
-          {getVehicleOfInterestText(client)}
-        </p>
+        {/* Lo mismo con el auto: «Busca: SUV Honda Pilot 201…» no dice cual. */}
+        <div className="relative group/auto mb-3">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-medium">
+            {textoDelAuto}
+          </p>
+          {textoDelAuto && (
+            <div className="absolute top-full left-0 mt-1 z-50 w-max max-w-[240px] bg-slate-800 dark:bg-slate-700 text-white text-[11px] font-medium px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/auto:opacity-100 group-hover/auto:visible pointer-events-none whitespace-normal text-left">
+              {textoDelAuto}
+            </div>
+          )}
+        </div>
         
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
