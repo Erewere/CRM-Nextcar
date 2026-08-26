@@ -463,8 +463,33 @@ export function Kanban() {
 
   // Busqueda sobre las tarjetas del embudo: nombre, titulo del trato, datos de
   // contacto y el auto, ya sea el texto escrito o el vehiculo enlazado.
+  /**
+   * El filtro de vendedor solo cuenta si apunta a alguien que sigue existiendo.
+   *
+   * Se guarda en el navegador, de modo que sobrevive a que ese vendedor se
+   * borre o se vaya de la agencia. Cuando eso pasa, el desplegable no encuentra
+   * su opcion y el navegador enseña la primera -- «Todos los vendedores» --
+   * mientras el filtro sigue aplicando al vendedor viejo: el embudo se queda en
+   * blanco y la pantalla dice que no hay ningun filtro puesto.
+   *
+   * Peor todavia: el desplegable solo se muestra a administradores, pero el
+   * filtro se aplicaba a todo el mundo. Un vendedor con ese valor guardado se
+   * quedaba sin embudo y sin nada en pantalla que lo explicara.
+   */
+  const filtroDeVendedor =
+    selectedSellerId !== "all" && users.some((u: any) => u.id === selectedSellerId)
+      ? selectedSellerId
+      : "all";
+
+  useEffect(() => {
+    if (filtroDeVendedor === "all" && selectedSellerId !== "all" && users.length > 0) {
+      setSelectedSellerId("all");
+      localStorage.removeItem("kanban_filterSeller");
+    }
+  }, [filtroDeVendedor, selectedSellerId, users.length]);
+
   const filteredClients = deduplicatedClients.filter((c) => {
-    if (selectedSellerId !== "all" && c.sellerId !== selectedSellerId) return false;
+    if (filtroDeVendedor !== "all" && c.sellerId !== filtroDeVendedor) return false;
     if (!searchQuery.trim()) return true;
 
     const q = searchQuery.toLowerCase().trim();
