@@ -3,6 +3,7 @@ import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, 
 import { Client, Vehicle } from '../../types';
 import { db } from '../../lib/firebase';
 import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { esElCompradorDelVehiculo } from '../../lib/ventaDeVehiculo';
 import { useAuth } from '../../contexts/AuthContext';
 import clsx from 'clsx';
 import { format } from 'date-fns';
@@ -198,8 +199,17 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       if (finalClientId) {
         await setDoc(doc(db, "clients", finalClientId), updateData, { merge: true });
       }
-      if (clientData?.vehicleId || client.vehicleId) {
-        await setDoc(doc(db, "vehicles", (clientData?.vehicleId || client.vehicleId) as string), updateData, { merge: true });
+      // El auto solo se toca si es el comprador quien esta borrando el pago.
+      // Este documento lo comparten todos los interesados en esa unidad, asi
+      // que sin la comprobacion el historial de cualquiera de ellos acababa
+      // escrito en el auto, encima del historial de la venta real.
+      const idVehiculo = (clientData?.vehicleId || client.vehicleId) as string | undefined;
+      if (idVehiculo) {
+        const refVehiculo = doc(db, "vehicles", idVehiculo);
+        const vehiculo = await getDoc(refVehiculo);
+        if (esElCompradorDelVehiculo(vehiculo.data(), finalClientId, finalDealId)) {
+          await setDoc(refVehiculo, updateData, { merge: true });
+        }
       }
       onUpdated?.();
     } catch (err) {

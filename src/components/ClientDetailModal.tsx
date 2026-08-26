@@ -49,7 +49,7 @@ import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 
-import { puedeVenderSinAprobacion, vehiculoVendido } from "../lib/ventaDeVehiculo";
+import { puedeVenderSinAprobacion, vehiculoVendido, esElCompradorDelVehiculo } from "../lib/ventaDeVehiculo";
 interface Props {
   client: Client | Partial<Client>;
   initialStatus?: string;
@@ -1067,8 +1067,16 @@ export function ClientDetailModal({
       if (finalClientId) {
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
+      // El auto solo se toca si es el comprador quien esta borrando el pago.
+      // Este documento lo comparten todos los interesados en esa unidad, asi
+      // que sin la comprobacion el historial de cualquiera de ellos acababa
+      // escrito en el auto, encima del historial de la venta real.
       if (formData.vehicleId) {
-        await setDoc(doc(db, "vehicles", formData.vehicleId), sanitizedData, { merge: true });
+        const refVehiculo = doc(db, "vehicles", formData.vehicleId);
+        const vehiculo = await getDoc(refVehiculo);
+        if (esElCompradorDelVehiculo(vehiculo.data(), finalClientId, finalDealId)) {
+          await setDoc(refVehiculo, sanitizedData, { merge: true });
+        }
       }
       onUpdated?.();
     } catch (err) {
