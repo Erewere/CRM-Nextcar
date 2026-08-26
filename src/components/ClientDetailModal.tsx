@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import imageCompression from "browser-image-compression";
 import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
@@ -65,6 +65,7 @@ export function ClientDetailModal({
   onUpdated,
 }: Props) {
   const { userData } = useAuth();
+  const controlesArrastre = useDragControls();
 
   /**
    * Al crear un trato, la ventana se queda abierta en vez de cerrarse.
@@ -1602,6 +1603,17 @@ export function ClientDetailModal({
         exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
         transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
         style={{ transformOrigin: "bottom center" }}
+        // Solo arrastra desde el tirador (`dragListener` apagado): si escuchara
+        // en toda la ventana, cada intento de leer el historial hacia abajo la
+        // cerraria.
+        drag="y"
+        dragControls={controlesArrastre}
+        dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.6 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 120) onClose();
+        }}
       >
         {avisoDeCreado && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded shadow-lg">
@@ -1609,8 +1621,29 @@ export function ClientDetailModal({
             Trato creado. Ya puedes añadir notas y actividades aquí mismo.
           </div>
         )}
+        {/* Tirador para cerrar deslizando hacia abajo, como cualquier hoja del
+            telefono. Antes solo se salia con el boton de atras del sistema, que
+            no cierra la ventana: te saca de la pantalla entera. */}
+        <div
+          onPointerDown={(e) => controlesArrastre.start(e)}
+          className="md:hidden pt-3 pb-1 flex justify-center shrink-0 cursor-grab active:cursor-grabbing touch-none"
+        >
+          <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+        </div>
+
+        {/* Cerrar, siempre visible. La X vivia al final de la fila de botones
+            de accion, que en un telefono se sale de la pantalla: quedaba
+            inalcanzable justo cuando mas falta hace. */}
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="md:hidden absolute top-2.5 right-3 z-20 p-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {/* TOP HEADER */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
+        <div className="flex flex-wrap md:flex-nowrap justify-between items-start md:items-center gap-y-2 px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-100 flexitems-center justify-center text-blue-700 font-bold text-lg flex items-center">
               {String(formData.name || "U")
@@ -1763,7 +1796,10 @@ export function ClientDetailModal({
                 );
               })()}
 
-          <div className="flex items-center gap-3">
+          {/* En el telefono estos botones se amontonaban en una sola fila que
+              se salia de la pantalla. Ahora bajan de linea y ocupan el ancho
+              completo, con la X aparte arriba a la derecha. */}
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto pr-8 md:pr-0">
             {!isNew &&
               formData.dealTitle &&
               !checkIsWon(formData.status, pipelineStages) &&

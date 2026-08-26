@@ -15,9 +15,11 @@ interface Props {
   disabled?: boolean;
   /** Abre la hoja para cambiar de etapa. Solo se usa en el telefono. */
   onMover?: () => void;
+  /** Acaba de aterrizar en esta etapa: se señala un momento. */
+  recienLlegado?: boolean;
 }
 
-export function ClientCard({ client, tasks = [], onClick, disabled, onMover }: Props) {
+export function ClientCard({ client, tasks = [], onClick, disabled, onMover, recienLlegado }: Props) {
   const getTaskStatusInfo = () => {
     const pendingTasks = tasks.filter(t => !t.completed);
     if (pendingTasks.length === 0) {
@@ -92,7 +94,11 @@ export function ClientCard({ client, tasks = [], onClick, disabled, onMover }: P
         // caja recortada mas abajo.
         "group bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-slate-800/60 hover:backdrop-blur-xl text-left relative",
         disabled ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
-        client.origin === 'whatsapp' && "border-l-4 border-l-green-400"
+        client.origin === 'whatsapp' && "border-l-4 border-l-green-400",
+        // Al cambiar de etapa la tarjeta desaparece de donde estaba y aparece
+        // en otra columna que en el telefono ni siquiera se ve. Llega
+        // señalada un par de segundos para no tener que buscarla.
+        recienLlegado && "ring-2 ring-blue-500 ring-offset-1 animate-in zoom-in-95 fade-in duration-500 shadow-lg"
       )}
     >
       {/* Modern water-drop / glass highlight effect */}
@@ -190,7 +196,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled, onMover }: P
   );
 }
 
-export function SortableClientCard({ client, tasks, onClick, onMover }: Props) {
+export function SortableClientCard({ client, tasks, onClick, onMover, recienLlegado }: Props) {
   const { userData } = useAuth();
   
   const canModify = !client.id ||
@@ -226,7 +232,7 @@ export function SortableClientCard({ client, tasks, onClick, onMover }: Props) {
 
   return (
     <div ref={setNodeRef} style={style} {...(isDragDisabled ? {} : attributes)} {...(isDragDisabled ? {} : listeners)}>
-      <ClientCard client={client} tasks={tasks} onClick={onClick} disabled={isDragDisabled} onMover={onMover} />
+      <ClientCard client={client} tasks={tasks} onClick={onClick} disabled={isDragDisabled} onMover={onMover} recienLlegado={recienLlegado} />
     </div>
   );
 }

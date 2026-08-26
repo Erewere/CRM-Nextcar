@@ -208,6 +208,8 @@ export function Kanban() {
   const [tratoAMover, setTratoAMover] = useState<Client | null>(null);
   // Para poder distinguir «no hay tratos» de «no se pudieron leer».
   const [errorDeTratos, setErrorDeTratos] = useState<string | null>(null);
+  // Que tarjeta acaba de cambiar de etapa, para señalarla al llegar.
+  const [recienMovido, setRecienMovido] = useState<string | null>(null);
   const [dealsRecibidos, setDealsRecibidos] = useState<number | null>(null);
   const carrusel = React.useRef<HTMLDivElement | null>(null);
 
@@ -991,6 +993,7 @@ export function Kanban() {
                     clients={columnClients}
                     onClientClick={setSelectedClient}
                     onMoverCliente={setTratoAMover}
+                    recienMovido={recienMovido}
                     tasks={tasks}
                     isFirst={index === 0}
                     isLast={index === activeColumns.length - 1}
@@ -1093,6 +1096,18 @@ export function Kanban() {
             // La misma funcion que usa el arrastre: mismos permisos, mismas
             // ventanas de venta ganada o perdida, mismas escrituras.
             await moverTratoAEtapa(trato, etapaId, trato.status);
+
+            // Sin esto la tarjeta desaparece de la etapa donde estabas y no hay
+            // forma de saber a donde fue: en el telefono la etapa de destino
+            // esta fuera de la pantalla. La pantalla viaja hasta ella y la
+            // tarjeta se señala un momento al llegar.
+            setRecienMovido(trato.id as string);
+            setTimeout(() => {
+              carrusel.current
+                ?.querySelector(`[data-etapa="${etapaId}"]`)
+                ?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+            }, 60);
+            setTimeout(() => setRecienMovido(null), 2600);
           }}
         />
       )}

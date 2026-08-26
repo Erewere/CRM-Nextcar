@@ -10,6 +10,7 @@ interface Props {
   clients: Client[];
   onClientClick: (client: Client) => void;
   onMoverCliente?: (client: Client) => void;
+  recienMovido?: string | null;
   tasks?: Task[];
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
