@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import imageCompression from "browser-image-compression";
 import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
 import { getClientMatches } from "../services/matchingEngine";
@@ -38,6 +38,7 @@ import {
   Eye,
   Users,
   Edit2, Target, Calculator, Lock, Car, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search,
+  Check,
 } from "lucide-react";
 import clsx from "clsx";
 import { TimeSelect } from "./TimeSelect";
@@ -58,12 +59,39 @@ interface Props {
 }
 
 export function ClientDetailModal({
-  client,
+  client: clientRecibido,
   initialStatus = "new",
   onClose,
   onUpdated,
 }: Props) {
   const { userData } = useAuth();
+
+  /**
+   * Al crear un trato, la ventana se queda abierta en vez de cerrarse.
+   *
+   * Las notas, los archivos y las actividades son registros aparte que tienen
+   * que apuntar al trato, asi que mientras el trato no existe no hay donde
+   * colgarlos y la pantalla los tiene apagados. Antes guardar cerraba la
+   * ventana, y para escribir la primera nota habia que volver a buscar el
+   * trato y abrirlo otra vez.
+   *
+   * Toda la pantalla decide si es nuevo con `!client.id`, asi que basta con
+   * darle la identidad del trato recien creado: a partir de ahi se comporta
+   * como un trato de siempre, las pestañas se encienden solas y los datos se
+   * cargan de la base.
+   */
+  const [recienCreado, setRecienCreado] = useState<{ id: string; originalClientId: string } | null>(null);
+  // Sin la ventana cerrandose no hay senal de que se guardo, asi que se dice.
+  const [avisoDeCreado, setAvisoDeCreado] = useState(false);
+  useEffect(() => {
+    if (!avisoDeCreado) return;
+    const t = setTimeout(() => setAvisoDeCreado(false), 6000);
+    return () => clearTimeout(t);
+  }, [avisoDeCreado]);
+  const client = useMemo(
+    () => (recienCreado && !clientRecibido.id ? { ...clientRecibido, ...recienCreado } : clientRecibido),
+    [clientRecibido, recienCreado]
+  );
   /**
    * Escribe sobre un trato solo si sigue existiendo.
    *
@@ -1218,6 +1246,19 @@ export function ClientDetailModal({
         };
         if (finalFormData.saleDetails) dealDataToSave.saleDetails = finalFormData.saleDetails;
         await setDoc(newDealRef, sanitizeFirestoreData(dealDataToSave));
+
+        // El trato ya existe: la ventana se queda abierta, ahora como trato de
+        // siempre, para poder escribir la primera nota o agendar la primera
+        // actividad sin tener que buscarlo y abrirlo otra vez.
+        // Sin `id` aqui a proposito: el guardado siguiente escribe el
+        // formulario entero en el documento del contacto, y meterle el id del
+        // trato se lo cambiaria. La identidad va por `recienCreado`, no por el
+        // formulario.
+        setRecienCreado({ id: newDealRef.id, originalClientId: finalClientId as string });
+        setFormData((prev) => ({ ...prev, dealTitle: dealDataToSave.title }));
+        setAvisoDeCreado(true);
+        onUpdated?.();
+        return;
       } else {
         const dataToUpdate = {
           ...finalFormData,
@@ -1562,6 +1603,12 @@ export function ClientDetailModal({
         transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
         style={{ transformOrigin: "bottom center" }}
       >
+        {avisoDeCreado && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded shadow-lg">
+            <Check className="w-4 h-4 shrink-0" />
+            Trato creado. Ya puedes añadir notas y actividades aquí mismo.
+          </div>
+        )}
         {/* TOP HEADER */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
           <div className="flex items-center gap-3">
