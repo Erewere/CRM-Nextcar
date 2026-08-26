@@ -907,18 +907,31 @@ export function Kanban() {
       {/* Un embudo vacio callado no dice si no hay tratos o si no se pudieron
           leer. Con 28 tratos en la agencia y la pantalla en blanco, esa
           diferencia es justo lo que hace falta saber. */}
-      {(errorDeTratos || dealsRecibidos === 0) && (
+      {filteredClients.length === 0 && (
         <div className="mb-3 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200 shrink-0">
           {errorDeTratos ? (
             <>
-              <span className="font-bold">No se pudieron leer los tratos.</span>{" "}
-              {errorDeTratos}
+              <span className="font-bold">No se pudieron leer los tratos.</span> {errorDeTratos}
+            </>
+          ) : dealsRecibidos === null ? (
+            <>
+              <span className="font-bold">La consulta de tratos no ha respondido.</span>{" "}
+              Ni datos ni error. Si esto no cambia en unos segundos, la suscripción no llegó
+              a crearse.
+            </>
+          ) : dealsRecibidos === 0 ? (
+            <>
+              <span className="font-bold">Llegaron 0 tratos de esta agencia.</span> Las etapas
+              sí cargaron, así que la agencia y la conexión están bien. Suele ser que esta
+              sesión entre con otra cuenta.
             </>
           ) : (
             <>
-              <span className="font-bold">No llegó ningún trato de esta agencia.</span>{" "}
-              La conexión funciona y las etapas sí cargaron, así que no es la red.
-              Suele ser que esta sesión esté entrando con otra cuenta o a otra agencia.
+              <span className="font-bold">
+                Llegaron {dealsRecibidos} tratos, pero ninguno se está mostrando.
+              </span>{" "}
+              El problema no es la lectura, es cómo se reparten por etapa. Etapas activas:{" "}
+              {activeColumns.length}. Contactos: {clients.length}.
             </>
           )}
         </div>
