@@ -206,6 +206,9 @@ export function Kanban() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   // Que trato esta esperando elegir etapa desde el telefono.
   const [tratoAMover, setTratoAMover] = useState<Client | null>(null);
+  // Para poder distinguir «no hay tratos» de «no se pudieron leer».
+  const [errorDeTratos, setErrorDeTratos] = useState<string | null>(null);
+  const [dealsRecibidos, setDealsRecibidos] = useState<number | null>(null);
   const carrusel = React.useRef<HTMLDivElement | null>(null);
 
   const [clientToMarkWon, setClientToMarkWon] = useState<{ client: Client, originalStatus: string } | null>(null);
@@ -284,10 +287,19 @@ export function Kanban() {
       query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)),
       (snapshot) => {
         let data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Deal);
+        setDealsRecibidos(data.length);
         if (userData.role === "seller") {
           data = data.filter((d) => d.sellerId === userData.id);
         }
         setDeals(data);
+        setErrorDeTratos(null);
+      },
+      // Esta suscripcion no tenia manejo de error: si Firestore la rechazaba,
+      // el embudo salia vacio sin decir nada y parecia que no habia tratos.
+      // Un embudo vacio y un embudo que no se pudo leer son cosas distintas.
+      (error) => {
+        console.error("Error leyendo los tratos", error);
+        setErrorDeTratos(error?.message || String(error));
       }
     );
 
@@ -891,6 +903,26 @@ export function Kanban() {
           );
         })}
       </div>
+
+      {/* Un embudo vacio callado no dice si no hay tratos o si no se pudieron
+          leer. Con 28 tratos en la agencia y la pantalla en blanco, esa
+          diferencia es justo lo que hace falta saber. */}
+      {(errorDeTratos || dealsRecibidos === 0) && (
+        <div className="mb-3 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200 shrink-0">
+          {errorDeTratos ? (
+            <>
+              <span className="font-bold">No se pudieron leer los tratos.</span>{" "}
+              {errorDeTratos}
+            </>
+          ) : (
+            <>
+              <span className="font-bold">No llegó ningún trato de esta agencia.</span>{" "}
+              La conexión funciona y las etapas sí cargaron, así que no es la red.
+              Suele ser que esta sesión esté entrando con otra cuenta o a otra agencia.
+            </>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col flex-1 min-h-0">
         <DndContext
