@@ -1702,7 +1702,7 @@ export function ClientDetailModal({
                   una fila entera con todo el ancho vacio a su derecha, y esa
                   fila es altura de cabecera fija que se le quita al contenido.
                   Si no caben juntos, la etapa baja sola. */}
-              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-0.5">
+              <div className="flex items-center flex-wrap justify-between md:justify-start w-full gap-x-3 gap-y-1 mt-0.5">
               {isDealContext && (
                 <div className="flex items-center">
                   <span className="text-gray-500 font-medium mr-1">$</span>
@@ -1838,7 +1838,7 @@ export function ClientDetailModal({
           {/* En el telefono estos botones se amontonaban en una sola fila que
               se salia de la pantalla. Ahora bajan de linea y ocupan el ancho
               completo, con la X aparte arriba a la derecha. */}
-          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto pr-8 md:pr-0">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto mt-2.5 md:mt-0">
             {!isNew &&
               formData.dealTitle &&
               !checkIsWon(formData.status, pipelineStages) &&
