@@ -450,7 +450,11 @@ export function Layout() {
         <header className="flex min-h-[56px] md:min-h-[72px] py-2 md:py-3 items-center justify-between border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 md:px-8 shrink-0 transition-colors z-20">
           <div className="flex flex-col justify-center overflow-hidden">
             <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-              <h1 className="text-lg md:text-[30px] font-bold text-slate-800 dark:text-white shrink-0 transition-colors leading-none truncate max-w-[140px] sm:max-w-none">
+              {/* En el telefono el titulo sobra: la barra de abajo ya marca en
+                  que pantalla estas, con el mismo nombre. Decia «Inventario»
+                  arriba e «Inventario» abajo, y ese sitio hace mas falta para
+                  la agencia y el perfil. */}
+              <h1 className="hidden md:block text-lg md:text-[30px] font-bold text-slate-800 dark:text-white shrink-0 transition-colors leading-none truncate max-w-[140px] sm:max-w-none">
                 {navItems.find(item => item.path === location.pathname)?.name || "Panel de Control"}
               </h1>
               {agencyName && (
@@ -496,6 +500,23 @@ export function Layout() {
           </div>
           <div className="flex items-center gap-2 md:gap-4 shrink-0">
             <NotificationsPopover />
+
+            {/* El perfil sube aqui, junto a la campanita. Estaba ocupando un
+                sitio en la barra de abajo, que es para navegar entre
+                pantallas, y ahi hacia falta para el embudo. */}
+            <button
+              onClick={() => setShowUserSettingsModal(true)}
+              className="md:hidden w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-600 shrink-0"
+              aria-label="Tu perfil"
+            >
+              {userData?.photoURL ? (
+                <img src={userData.photoURL} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                  {userData?.name?.substring(0, 2) || "US"}
+                </span>
+              )}
+            </button>
 
             {/* Simulating "Integration with website" CTA just conceptually or link out */}
             <a
@@ -600,25 +621,12 @@ export function Layout() {
                   </span>
                 )}
               </div>
-              {/* Con el embudo ya son seis botones mas el de perfil. La
-                  etiqueta se recorta en vez de partirse en dos lineas, que
-                  descuadraria el alto de la barra. */}
-              <span className="text-[9px] font-medium leading-none truncate max-w-full px-0.5">{item.name}</span>
+              {/* Al subir el perfil a la cabecera quedo sitio para el embudo
+                  sin apretar. El recorte se queda como red: una etiqueta
+                  partida en dos lineas descuadraria el alto de la barra. */}
+              <span className="text-[10px] font-medium leading-none truncate max-w-full px-0.5">{item.name}</span>
             </NavLink>
           ))}
-          <button
-            onClick={() => setShowUserSettingsModal(true)}
-            className="flex flex-col items-center justify-center w-full h-full space-y-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
-               {userData?.photoURL ? (
-                  <img src={userData.photoURL} alt="" className="w-full h-full object-cover" />
-               ) : (
-                  <span className="text-[8px] font-bold">{userData?.name?.substring(0, 2) || "US"}</span>
-               )}
-            </div>
-            <span className="text-[10px] font-medium truncate w-full px-1 text-center">{agencyName || "Perfil"}</span>
-          </button>
         </nav>
       )}
 
