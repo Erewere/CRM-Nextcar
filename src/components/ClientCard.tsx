@@ -104,7 +104,10 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
           {/* El nombre casi siempre se corta en el ancho de la columna, y hasta
               ahora no habia forma de leerlo entero sin abrir el trato. El
               letrero cuelga por fuera del titulo, no dentro: el titulo recorta
-              su contenido y se llevaria por delante el letrero tambien. */}
+              su contenido y se llevaria por delante el letrero tambien.
+              El ancho maximo lo mantiene dentro de la tarjeta: con uno mayor,
+              un texto largo se salia y tapaba la columna de al lado. Lo que
+              no cabe baja de linea. */}
           <div className="relative group/nombre min-w-0 flex-1">
             <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
               {tituloDelTrato}
@@ -112,7 +115,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
                 <span title="Solo lectura (Asignado a otro vendedor)"><Lock className="w-3 h-3 text-slate-400 shrink-0" /></span>
               )}
             </h4>
-            <div className="absolute top-full left-0 mt-1 z-50 w-max max-w-[240px] bg-slate-800 dark:bg-slate-700 text-white text-[11px] font-medium px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/nombre:opacity-100 group-hover/nombre:visible pointer-events-none whitespace-normal text-left">
+            <div className="absolute top-full left-0 mt-1 z-50 w-max max-w-[190px] bg-slate-800 dark:bg-slate-700 text-white text-[11px] font-medium px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/nombre:opacity-100 group-hover/nombre:visible pointer-events-none whitespace-normal text-left">
               {tituloDelTrato}
             </div>
           </div>
@@ -128,7 +131,7 @@ export function ClientCard({ client, tasks = [], onClick, disabled }: Props) {
             {textoDelAuto}
           </p>
           {textoDelAuto && (
-            <div className="absolute top-full left-0 mt-1 z-50 w-max max-w-[240px] bg-slate-800 dark:bg-slate-700 text-white text-[11px] font-medium px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/auto:opacity-100 group-hover/auto:visible pointer-events-none whitespace-normal text-left">
+            <div className="absolute top-full left-0 mt-1 z-50 w-max max-w-[190px] bg-slate-800 dark:bg-slate-700 text-white text-[11px] font-medium px-2 py-1 rounded shadow-lg opacity-0 invisible group-hover/auto:opacity-100 group-hover/auto:visible pointer-events-none whitespace-normal text-left">
               {textoDelAuto}
             </div>
           )}
