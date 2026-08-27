@@ -15,11 +15,20 @@ const TINTA = "#0f172a";
 const GRIS = "#64748b";
 const BORDE = "#e2e8f0";
 
-/** Contacto de Nextcar que aparece al pie de todos los correos. */
+/**
+ * Contacto de Nextcar que aparece al pie de todos los correos.
+ *
+ * Va a nombre del equipo y no de una persona: quien recibe esto es un cliente
+ * nuevo, y si el dia de mañana contesta alguien mas, el correo no se queda
+ * desmintiendose a si mismo.
+ */
 export const CONTACTO = {
-  nombre: "Luis Felipe",
-  empresa: "Nextcar",
+  nombre: "Equipo Nextcar",
   correo: "contacto@erewere.com",
+  // Dos formas del mismo numero: una para leerla y otra para el enlace, que
+  // exige el codigo de pais y sin espacios.
+  whatsapp: "461 239 9969",
+  whatsappEnlace: "https://wa.me/524612399969",
   sitio: "https://nextcar.erewere.com",
   crm: "https://crm.erewere.com",
 };
@@ -81,9 +90,10 @@ function envoltura(titulo: string, cuerpo: string): string {
     </td></tr>
     <tr><td style="padding:20px 32px 8px;">${cuerpo}</td></tr>
     <tr><td style="padding:20px 32px 28px;border-top:1px solid ${BORDE};">
-      <p style="margin:16px 0 6px;color:${TINTA};font-size:14px;font-weight:600;">¿Dudas? Escríbeme directo.</p>
-      <p style="margin:0;color:${GRIS};font-size:14px;line-height:1.6;">
-        ${esc(CONTACTO.nombre)} — ${esc(CONTACTO.empresa)}<br>
+      <p style="margin:16px 0 6px;color:${TINTA};font-size:14px;font-weight:600;">¿Dudas? Escríbenos, contestamos rápido.</p>
+      <p style="margin:0;color:${GRIS};font-size:14px;line-height:1.7;">
+        ${esc(CONTACTO.nombre)}<br>
+        WhatsApp: <a href="${esc(CONTACTO.whatsappEnlace)}" style="color:${AZUL};text-decoration:none;font-weight:600;">${esc(CONTACTO.whatsapp)}</a><br>
         <a href="mailto:${esc(CONTACTO.correo)}" style="color:${AZUL};text-decoration:none;">${esc(CONTACTO.correo)}</a><br>
         <a href="${esc(CONTACTO.sitio)}" style="color:${AZUL};text-decoration:none;">${esc(CONTACTO.sitio.replace(/^https?:\/\//, ""))}</a>
       </p>
