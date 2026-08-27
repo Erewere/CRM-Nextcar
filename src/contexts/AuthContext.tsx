@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getApiUrl } from '../lib/api';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -302,6 +303,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cada = setInterval(() => { void refrescarTokenRef.current?.(); }, 45 * 60 * 1000);
     return () => clearInterval(cada);
   }, [currentUser]);
+
+  /**
+   * El correo de bienvenida del dueño que acaba de registrarse.
+   *
+   * Se pide desde aqui porque el registro y la creacion de la agencia ocurren
+   * en el navegador: en el servidor no hay ningun momento donde engancharlo.
+   *
+   * Se pide en cada arranque de sesion a proposito, y quien decide si toca
+   * mandarlo es el servidor, que lleva la marca de si ya salio. Comprobarlo
+   * aqui tambien evita la llamada de mas cuando la marca ya viajo con los
+   * datos del usuario.
+   */
+  useEffect(() => {
+    if (!currentUser || !userData) return;
+    if (userData.role !== 'admin') return;
+    if (!userData.agencyId || userData.agencyId === 'unassigned') return;
+    if ((userData as any).bienvenidaEnviadaAt) return;
+
+    let cancelado = false;
+    (async () => {
+      try {
+        const token = await currentUser.getIdToken();
+        if (cancelado) return;
+        await fetch(getApiUrl('/api/correo/bienvenida'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        // Que no llegue la bienvenida no puede estorbar la sesion.
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [currentUser, userData?.role, userData?.agencyId, (userData as any)?.bienvenidaEnviadaAt]);
 
   /** El identificador de la sesion, para que el servidor sepa quien pide. */
   const credencialDelUsuario = async () => {

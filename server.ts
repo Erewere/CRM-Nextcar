@@ -15,6 +15,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
 import { Resend } from "resend";
+import { correoBienvenidaAdmin, correoInvitacionEquipo } from "./src/lib/plantillasCorreo";
 import Stripe from "stripe";
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
@@ -260,6 +261,36 @@ async function guardarClaveMcp(adminDb: any, agencyId: string, clave: string, cr
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
+
+/**
+ * Manda un correo y nunca revienta.
+ *
+ * Estos correos acompañan a algo mas importante que ellos: dar de alta a una
+ * persona. Si el correo falla -- se acabo la cuota, el servicio esta caido, la
+ * llave no esta puesta -- el usuario ya quedo creado y no se puede deshacer.
+ * Propagar el error dejaria al administrador viendo un fallo rojo sobre una
+ * operacion que en realidad salio bien, y probablemente lo intentaria otra vez.
+ *
+ * Devuelve si se mando, para poder decirlo sin mentir.
+ */
+async function mandarCorreo(para: string, asunto: string, html: string): Promise<boolean> {
+  if (!resend) {
+    console.warn("Correo no enviado: falta RESEND_API_KEY.", { para, asunto });
+    return false;
+  }
+  try {
+    const remitente = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+    const { error } = await resend.emails.send({ from: remitente, to: [para], subject: asunto, html });
+    if (error) {
+      console.error("Correo rechazado por Resend", { para, asunto, error });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("Correo fallido", { para, asunto, e });
+    return false;
+  }
+}
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -562,7 +593,28 @@ async function startServer() {
         createdAt: FieldValue.serverTimestamp()
       });
 
-      res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password });
+      // El correo de invitacion va con una liga para que la persona elija su
+      // contraseña, no con la temporal que acaba de poner el administrador:
+      // una contraseña escrita en un correo se queda ahi para siempre y esos
+      // correos se reenvian. Con la liga, ni el administrador la conoce.
+      let correoEnviado = false;
+      try {
+        const agenciaSnap = await adminDb.collection("agencies").doc(agencyId).get();
+        const nombreAgencia = (agenciaSnap.data() as any)?.name || "tu agencia";
+        const liga = await auth.generatePasswordResetLink(email);
+        const { subject, html } = correoInvitacionEquipo({
+          nombre: name || email.split("@")[0],
+          agencia: nombreAgencia,
+          usuario: email,
+          invitadoPor: llamante.name || llamante.email || "Un administrador",
+          ligaContrasena: liga,
+        });
+        correoEnviado = await mandarCorreo(email, subject, html);
+      } catch (e) {
+        console.error("No se pudo mandar la invitacion", e);
+      }
+
+      res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password, correoEnviado });
     } catch (err: any) {
       console.error("Create User Error:", err);
       res.status(500).json({ error: err.message });
@@ -1412,6 +1464,59 @@ async function startServer() {
    * desde la direccion de pruebas de Resend, que no es del dominio propio y
    * casi siempre acaba en spam o rechazada.
    */
+  /**
+   * La bienvenida del administrador que acaba de registrarse.
+   *
+   * El registro ocurre en el navegador y la agencia se crea ahi mismo, asi que
+   * no hay un momento en el servidor donde engancharlo: lo pide la propia
+   * aplicacion en cuanto el usuario ya tiene agencia.
+   *
+   * Se marca en el documento del usuario que ya se mando. Esa marca es lo unico
+   * que impide que llegue una y otra vez: la aplicacion vuelve a pedirlo en
+   * cada arranque de sesion, y sin la marca el dueño recibiria una bienvenida
+   * cada vez que abre el CRM.
+   */
+  app.post("/api/correo/bienvenida", express.json(), async (req, res) => {
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) return res.status(401).json({ error: "No autorizado" });
+
+    try {
+      const auth = getAuth(getAdminApp()!);
+      const decoded = await auth.verifyIdToken(authHeader.slice(7));
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const ref = adminDb.collection("users").doc(decoded.uid);
+      const snap = await ref.get();
+      const u = snap.exists ? (snap.data() as any) : null;
+      if (!u) return res.status(404).json({ error: "Usuario no encontrado" });
+
+      if (u.bienvenidaEnviadaAt) return res.json({ enviado: false, motivo: "ya se habia mandado" });
+      // Solo al dueño que se dio de alta el mismo. A quien agrega un
+      // administrador le llega la invitacion, que es otro correo.
+      if (u.role !== "admin") return res.json({ enviado: false, motivo: "no aplica a este rol" });
+      if (!u.agencyId || u.agencyId === "unassigned") {
+        return res.json({ enviado: false, motivo: "todavia sin agencia" });
+      }
+
+      const agencia = await adminDb.collection("agencies").doc(u.agencyId).get();
+      const { subject, html } = correoBienvenidaAdmin({
+        nombre: u.name || (u.email || "").split("@")[0],
+        agencia: (agencia.data() as any)?.name || "tu agencia",
+        usuario: u.email || decoded.email || "",
+      });
+
+      const enviado = await mandarCorreo(u.email || decoded.email || "", subject, html);
+      // La marca se pone aunque el envio falle: si no, cada arranque de sesion
+      // volveria a intentarlo para siempre. Queda en el registro del servidor.
+      await ref.set({ bienvenidaEnviadaAt: new Date().toISOString() }, { merge: true });
+      res.json({ enviado });
+    } catch (e: any) {
+      console.error("Bienvenida", e);
+      res.status(401).json({ error: "Token inválido" });
+    }
+  });
+
   app.get("/api/correo/estado", (_req, res) => {
     const remitente = process.env.RESEND_FROM_EMAIL || "";
     res.json({
