@@ -1401,6 +1401,27 @@ async function startServer() {
     });
   });
 
+  /**
+   * Si el servidor puede mandar correo.
+   *
+   * Mismo criterio que el de Google: solo si-o-no, ningun secreto. Desde fuera
+   * no habia forma de saber si falta la llave, porque la ruta de envio pide
+   * sesion antes de mirarla y siempre responde lo mismo.
+   *
+   * El remitente importa tanto como la llave: sin `RESEND_FROM_EMAIL` se manda
+   * desde la direccion de pruebas de Resend, que no es del dominio propio y
+   * casi siempre acaba en spam o rechazada.
+   */
+  app.get("/api/correo/estado", (_req, res) => {
+    const remitente = process.env.RESEND_FROM_EMAIL || "";
+    res.json({
+      llaveConfigurada: !!process.env.RESEND_API_KEY,
+      remitenteConfigurado: !!remitente,
+      remitente: remitente || "onboarding@resend.dev (de pruebas)",
+      usaDominioPropio: /@([a-z0-9-]+\.)*erewere\.com>?\s*$/i.test(remitente),
+    });
+  });
+
   app.post("/api/google/conectar", express.json(), async (req, res) => {
     const usuario = await quienPide(req);
     if (!usuario) return res.status(401).json({ error: "Inicia sesión para continuar." });
