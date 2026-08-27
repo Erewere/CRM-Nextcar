@@ -274,23 +274,38 @@ export function AgencyUsers() {
         const tempPassword = Math.random().toString(36).slice(-8) + 'Aa1!'; // Generate a random password
         const targetEmail = inviteEmail.trim();
 
-        // Use Firebase Auth REST API directly to avoid signing out the current admin
-        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`, {
+        // Crear la cuenta la hace el servidor, no el navegador.
+        //
+        // Antes se llamaba directo a la interfaz de Firebase desde aqui. Eso
+        // funcionaba, pero dejaba dos cosas fuera: la comprobacion de que quien
+        // da de alta puede hacerlo -- cualquiera con sesion podia crear cuentas
+        // desde la consola del navegador -- y el correo de invitacion, que solo
+        // el servidor puede mandar. El correo estaba escrito y enganchado a una
+        // ruta por la que no pasaba nadie.
+        const rolPermisos = inviteRole === 'seller';
+        const res = await fetch(getApiUrl('/api/create-user'), {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${await getAuth().currentUser?.getIdToken()}`
             },
             body: JSON.stringify({
                 email: targetEmail,
                 password: tempPassword,
-                returnSecureToken: true
+                name: inviteName.trim(),
+                role: inviteRole,
+                agencyId: targetAgencyId,
+                extras: {
+                    canManageVehicles: rolPermisos ? inviteCanManageVehicles : false,
+                    canManageExpenses: rolPermisos ? inviteCanManageExpenses : false,
+                },
             })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-            const errorMsg = data.error?.message || 'Error al crear el usuario en Auth';
+            const errorMsg = data.codigo === 'correo-ya-existe' ? 'EMAIL_EXISTS' : (data.error || 'Error al crear el usuario en Auth');
             if (errorMsg.includes('EMAIL_EXISTS')) {
                 // Check if user already exists in Firestore users collection
                 const q = query(collection(db, 'users'), where('email', '==', targetEmail));
@@ -357,8 +372,12 @@ export function AgencyUsers() {
                     ...extraPermissions
                 }]);
 
-                setInviteSuccessMsg(`¡El usuario ya existía en la autenticación! Se ha reactivado su cuenta en el CRM y se le ha enviado un correo para restablecer su contraseña.`);
-                setCreatedUserPassword('(Enviado enlace de restablecimiento a ' + targetEmail + ')');
+                setInviteSuccessMsg(
+                    reactData.correoEnviado
+                        ? `Ese correo ya tenía cuenta, así que se reactivó. Le enviamos la invitación a ${targetEmail} con la liga para crear su contraseña.`
+                        : `Ese correo ya tenía cuenta y se reactivó, pero no se pudo enviar el correo. Avísale tú.`
+                );
+                setCreatedUserPassword('(Invitación enviada a ' + targetEmail + ')');
                 setCreatedUserEmail(targetEmail);
                 setInviteEmail('');
                 setInviteName('');
@@ -369,27 +388,20 @@ export function AgencyUsers() {
             throw new Error(errorMsg);
         }
         
-        const newUserId = data.localId;
+        const newUserId = data.uid;
         const isSellerRole = inviteRole === 'seller';
         const extraPermissions = {
             canManageVehicles: isSellerRole ? inviteCanManageVehicles : false,
             canManageExpenses: isSellerRole ? inviteCanManageExpenses : false,
         };
 
-        // Save user data to Firestore
-        await setDoc(doc(db, 'users', newUserId), {
-            email: targetEmail,
-            name: inviteName.trim(),
-            role: inviteRole,
-            agencyId: targetAgencyId,
-            createdAt: new Date().toISOString(),
-            ...extraPermissions
-        });
+        // El documento del usuario ya lo escribio el servidor al crear la
+        // cuenta; escribirlo otra vez desde aqui solo pisaria su fecha.
 
         // Add the new user to the local list
         setUsers(prev => [...prev, {
             id: newUserId,
-            email: data.email,
+            email: targetEmail,
             name: inviteName.trim(),
             role: inviteRole,
             agencyId: targetAgencyId,
@@ -397,8 +409,15 @@ export function AgencyUsers() {
             ...extraPermissions
         }]);
 
-        setInviteSuccessMsg(`¡Usuario creado con éxito!`);
-        setCreatedUserPassword(tempPassword);
+        // Se dice lo que de verdad paso. Si el correo salio, la contraseña
+        // temporal sobra: esa persona va a poner la suya desde la liga. Si no
+        // salio, se enseña, porque entonces es el unico modo de que entre.
+        setInviteSuccessMsg(
+            data.correoEnviado
+                ? `¡Listo! Le enviamos la invitación a ${targetEmail} con la liga para crear su contraseña.`
+                : `Usuario creado, pero no se pudo enviar el correo. Pásale estos datos tú mismo.`
+        );
+        setCreatedUserPassword(data.correoEnviado ? `(Invitación enviada a ${targetEmail})` : tempPassword);
         setCreatedUserEmail(targetEmail);
         setInviteEmail('');
         setInviteName('');

@@ -562,7 +562,7 @@ async function startServer() {
         return res.status(403).json({ error: "Se requiere rol admin o master" });
       }
 
-      const { email, password, name, role, agencyId } = req.body;
+      const { email, password, name, role, agencyId, extras } = req.body;
       if (!email || !password || !role || !agencyId) {
         return res.status(400).json({ error: "Faltan parámetros requeridos" });
       }
@@ -575,11 +575,22 @@ async function startServer() {
       }
 
       const auth = getAuth(getAdminApp()!);
-      const userRecord = await auth.createUser({
-        email,
-        password,
-        displayName: name || email.split('@')[0],
-      });
+      let userRecord;
+      try {
+        userRecord = await auth.createUser({
+          email,
+          password,
+          displayName: name || email.split('@')[0],
+        });
+      } catch (e: any) {
+        // El correo ya tiene cuenta: pasa cuando se borro del CRM pero quedo en
+        // la autenticacion. Se avisa con un codigo propio para que la pantalla
+        // sepa que toca reactivar y no muestre un error, que aqui no lo hay.
+        if (e?.code === "auth/email-already-exists") {
+          return res.status(409).json({ error: "Ese correo ya tiene cuenta", codigo: "correo-ya-existe" });
+        }
+        throw e;
+      }
 
       const adminDb = getAdminDb();
       if (!adminDb) {
@@ -590,6 +601,9 @@ async function startServer() {
         role,
         agencyId,
         name: name || email.split('@')[0],
+        // Los permisos sueltos de un vendedor los decide quien lo da de alta.
+        canManageVehicles: !!extras?.canManageVehicles,
+        canManageExpenses: !!extras?.canManageExpenses,
         createdAt: FieldValue.serverTimestamp()
       });
 
@@ -689,7 +703,26 @@ async function startServer() {
         .filter((d) => d.id !== userRecord.uid)
         .map((d) => ({ id: d.id, agencyId: d.data().agencyId, role: d.data().role }));
 
-      res.json({ uid: userRecord.uid, duplicados });
+      // La misma invitacion que recibe alguien nuevo. Para quien la recibe no
+      // hay diferencia entre «te dieron de alta» y «te reactivaron»: en los dos
+      // casos es la primera vez que entra y necesita poner su contraseña.
+      let correoEnviado = false;
+      try {
+        const agenciaSnap = await adminDb.collection("agencies").doc(agencyId).get();
+        const liga = await getAuth(adminApp).generatePasswordResetLink(email);
+        const { subject, html } = correoInvitacionEquipo({
+          nombre: name || email.split("@")[0],
+          agencia: (agenciaSnap.data() as any)?.name || "tu agencia",
+          usuario: email,
+          invitadoPor: llamante.name || llamante.email || "Un administrador",
+          ligaContrasena: liga,
+        });
+        correoEnviado = await mandarCorreo(email, subject, html);
+      } catch (e) {
+        console.error("No se pudo mandar la invitacion (reactivar)", e);
+      }
+
+      res.json({ uid: userRecord.uid, duplicados, correoEnviado });
     } catch (err: any) {
       console.error("Reactivate User Error:", err);
       res.status(500).json({ error: err.message });
