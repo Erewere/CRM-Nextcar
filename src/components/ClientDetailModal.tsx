@@ -1939,6 +1939,23 @@ export function ClientDetailModal({
                     className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
+                {/* Un presupuesto es un rango, no solo un techo. Sin el
+                    minimo, a quien busca un auto de un millon se le
+                    recomendaba uno de trescientos mil como coincidencia
+                    exacta: cabia en su presupuesto, pero no era su busqueda.
+                    Si se deja vacio, se deduce del maximo. */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Presupuesto Mínimo</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Opcional"
+                    value={formData.wantedVehicle?.priceMin || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, priceMin: e.target.value ? parseInt(e.target.value) : undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Presupuesto Máximo</label>
                   <input

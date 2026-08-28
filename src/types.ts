@@ -183,6 +183,9 @@ export interface Client {
     model?: string;
     yearMin?: number;
     yearMax?: number;
+    /** Desde cuanto esta dispuesto a pagar; sin esto, un auto de un tercio
+     *  del presupuesto se recomendaba como coincidencia exacta. */
+    priceMin?: number;
     priceMax?: number;
     passengers?: number;
     bodyType?: string;
