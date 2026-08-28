@@ -19,6 +19,7 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const { userData, currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [name, setName] = useState(userData?.name || "");
+  const [telefono, setTelefono] = useState(userData?.phone || "");
   const [adminMobileViewAllContacts, setAdminMobileViewAllContacts] = useState(
     userData?.adminMobileViewAllContacts !== false
   );
@@ -58,6 +59,7 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
       setIsSaving(true);
       await updateDoc(doc(db, "users", userData.id), {
         name: name.trim(),
+        phone: telefono.trim(),
         adminMobileViewAllContacts
       });
       onClose();
@@ -172,6 +174,24 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
                 className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700"
                 placeholder="Ingresa tu nombre"
               />
+            </div>
+
+            {/* Su telefono sale en la ficha del auto que comparte, para que el
+                cliente le llame a el y no al conmutador de la agencia. */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Tu teléfono
+              </label>
+              <input
+                type="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                placeholder="461 123 4567"
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Aparece en las fichas de autos que compartas, para que el cliente te llame a ti.
+              </p>
             </div>
 
             {isMobile && userData.role === "admin" && (

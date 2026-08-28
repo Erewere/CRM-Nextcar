@@ -6,6 +6,8 @@ export interface User {
   name: string;
   createdAt: string | Date;
   photoURL?: string;
+  /** Su telefono, el que sale en la ficha del auto que comparte. */
+  phone?: string;
   adminMobileViewAllContacts?: boolean;
   canManageVehicles?: boolean;
   canManageExpenses?: boolean;

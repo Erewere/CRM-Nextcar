@@ -201,30 +201,43 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
     const pdfUrl = URL.createObjectURL(pdfBlob);
 
-    let shared = false;
-    if (navigator.share && navigator.canShare) {
-      try {
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: shareTitle,
-            text: shareText,
-            files: [file]
-          });
-          shared = true;
-        }
-      } catch (shareErr) {
-        console.log('Share dismissed or unsupported:', shareErr);
-      }
-    }
-
-    if (!shared) {
+    const bajar = () => {
       const link = document.createElement('a');
       link.href = pdfUrl;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      // El navegador necesita un momento con la direccion viva antes de que se
+      // libere; sin esto la descarga se corta en algunos navegadores.
+      setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    };
+
+    /**
+     * En el telefono, compartir. En la computadora, descargar.
+     *
+     * Antes se intentaba compartir siempre. En un telefono eso esta bien: sale
+     * el menu y la ficha se manda por WhatsApp de un toque. Pero Chrome de
+     * escritorio tambien dice que sabe compartir, y ahi abre un menu del
+     * sistema donde hay que buscar como guardar el archivo -- para algo que
+     * solo se queria descargar. De ahi que costara bajarla.
+     */
+    const enTelefono =
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); // iPad moderno
+
+    if (enTelefono && navigator.share && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ title: shareTitle, text: shareText, files: [file] });
+        return;
+      } catch (shareErr) {
+        // Si cierran el menu sin elegir, se descarga igual: mejor que quedarse
+        // sin nada despues de esperar a que se genere.
+        console.log('Share dismissed or unsupported:', shareErr);
+      }
     }
+
+    bajar();
   };
 
   const handleSharePDF = async (e: React.MouseEvent) => {
@@ -2140,35 +2153,36 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
         {/* Hidden PDF View */}
         <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none w-[800px] max-w-none">
-          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col p-10 font-sans relative overflow-hidden" style={{ background: '#0b1220', color: '#ffffff' }}>
+          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col p-10 font-sans relative overflow-hidden" style={{ background: '#ffffff', color: '#0f172a' }}>
 
-            {/* Un solo resplandor, detras de la foto. Antes habia dos manchas
-                enormes de colores distintos que competian con el auto. */}
-            <div className="absolute top-[-260px] right-[-160px] w-[620px] h-[620px] rounded-full pointer-events-none" style={{ backgroundColor: 'rgba(37, 99, 235, 0.18)', filter: 'blur(130px)' }}></div>
+            {/* Sin fondos de color ni resplandores: esta hoja se imprime, y
+                en papel un fondo oscuro se come el toner y sale sucio. Una
+                franja fina arriba da caracter sin gastar tinta. */}
+            <div className="absolute top-0 left-0 right-0 h-[6px]" style={{ backgroundColor: '#2563eb' }}></div>
 
             {/* Cabecera: manda la marca de la agencia, no la palabra «ficha». */}
             <div className="w-full flex items-center justify-between gap-6 mb-8 z-10">
               {laAgenciaDelPdf?.logoUrl ? (
                 <img src={pdfLogoDataUrl || laAgenciaDelPdf.logoUrl} alt="" className="max-h-[56px] max-w-[300px] object-contain" crossOrigin={(pdfLogoDataUrl || '').startsWith('data:') ? undefined : 'anonymous'} />
               ) : (
-                <span className="text-[26px] font-bold tracking-[0.14em] uppercase" style={{ color: '#ffffff' }}>
+                <span className="text-[26px] font-bold tracking-[0.14em] uppercase" style={{ color: '#0f172a' }}>
                   {laAgenciaDelPdf?.name || ''}
                 </span>
               )}
-              <span className="text-[15px] font-semibold tracking-[0.24em] uppercase shrink-0" style={{ color: 'rgba(255,255,255,0.35)' }}>Ficha técnica</span>
+              <span className="text-[15px] font-semibold tracking-[0.24em] uppercase shrink-0" style={{ color: '#94a3b8' }}>Ficha técnica</span>
             </div>
 
             {/* El modelo es el titular; la marca lo presenta. */}
             <div className="w-full mb-6 z-10">
-              <p className="text-[19px] font-bold uppercase tracking-[0.22em] mb-1" style={{ color: '#60a5fa' }}>
+              <p className="text-[19px] font-bold uppercase tracking-[0.22em] mb-1" style={{ color: '#2563eb' }}>
                 {formData.make || 'Vehículo'}
               </p>
-              <h1 className="text-[56px] font-extrabold leading-[1.02] tracking-tight" style={{ color: '#ffffff' }}>
+              <h1 className="text-[56px] font-extrabold leading-[1.02] tracking-tight" style={{ color: '#0f172a' }}>
                 {formData.model || ''}
               </h1>
             </div>
 
-            <div className="w-full h-[360px] rounded-[24px] overflow-hidden relative shrink-0 z-10 flex items-center justify-center" style={{ backgroundColor: '#111c2e' }}>
+            <div className="w-full h-[360px] rounded-[24px] overflow-hidden relative shrink-0 z-10 flex items-center justify-center" style={{ backgroundColor: '#f1f5f9' }}>
               {allPhotos.length > 0 && getPdfImageSrc() ? (
                 <img
                   src={getPdfImageSrc()}
@@ -2177,7 +2191,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   crossOrigin={getPdfImageSrc().startsWith('data:') ? undefined : "anonymous"}
                 />
               ) : (
-                <span className="text-2xl" style={{ color: '#64748b' }}>Sin imagen</span>
+                <span className="text-2xl" style={{ color: '#94a3b8' }}>Sin imagen</span>
               )}
               {formData.status === 'sold' && (
                 <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'rgba(220, 38, 38, 0.82)' }}>
@@ -2192,8 +2206,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             {finalSalePrice > 0 && (
               <div className="w-full mt-7 flex items-end justify-between gap-8 z-10 shrink-0">
                 <div>
-                  <p className="text-[14px] font-bold uppercase tracking-[0.2em] mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Precio</p>
-                  <p className="text-[52px] font-extrabold leading-none tracking-tight" style={{ color: '#ffffff' }}>
+                  <p className="text-[14px] font-bold uppercase tracking-[0.2em] mb-1.5" style={{ color: '#94a3b8' }}>Precio</p>
+                  <p className="text-[52px] font-extrabold leading-none tracking-tight" style={{ color: '#0f172a' }}>
                     ${Number(finalSalePrice).toLocaleString('es-MX')}
                   </p>
                 </div>
@@ -2202,11 +2216,11 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   if (!fin) return null;
                   return (
                     <div className="text-right shrink-0">
-                      <p className="text-[14px] font-bold uppercase tracking-[0.2em] mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>A crédito desde</p>
-                      <p className="text-[22px] font-bold leading-tight" style={{ color: '#ffffff' }}>
+                      <p className="text-[14px] font-bold uppercase tracking-[0.2em] mb-1.5" style={{ color: '#94a3b8' }}>A crédito desde</p>
+                      <p className="text-[22px] font-bold leading-tight" style={{ color: '#0f172a' }}>
                         ${Number(fin.downPaymentAmount).toLocaleString('es-MX')} de enganche
                       </p>
-                      <p className="text-[17px] font-medium" style={{ color: 'rgba(255,255,255,0.55)' }}>hasta {fin.maxTerm} meses</p>
+                      <p className="text-[17px] font-medium" style={{ color: '#64748b' }}>hasta {fin.maxTerm} meses</p>
                     </div>
                   );
                 })()}
@@ -2216,18 +2230,18 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
             <div className="w-full mt-7 grid grid-cols-4 gap-x-6 gap-y-5 z-10 shrink-0">
               {datosDelPdf.map(([etiqueta, valor]) => (
                 <div key={etiqueta} className="flex flex-col">
-                  <span className="text-[13px] font-bold uppercase tracking-[0.14em] mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{etiqueta}</span>
-                  <span className="text-[22px] font-bold leading-tight" style={{ color: '#ffffff' }}>{valor}</span>
+                  <span className="text-[13px] font-bold uppercase tracking-[0.14em] mb-1" style={{ color: '#94a3b8' }}>{etiqueta}</span>
+                  <span className="text-[22px] font-bold leading-tight" style={{ color: '#0f172a' }}>{valor}</span>
                 </div>
               ))}
             </div>
 
             {equipoDelPdf.length > 0 && (
               <div className="w-full mt-7 z-10 shrink-0">
-                <p className="text-[13px] font-bold uppercase tracking-[0.14em] mb-2.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Equipamiento</p>
+                <p className="text-[13px] font-bold uppercase tracking-[0.14em] mb-2.5" style={{ color: '#94a3b8' }}>Equipamiento</p>
                 <div className="flex flex-wrap gap-2">
                   {equipoDelPdf.slice(0, 10).map((x) => (
-                    <span key={x} className="rounded-full px-3.5 py-1.5 text-[16px] font-semibold" style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)' }}>
+                    <span key={x} className="rounded-full px-3.5 py-1.5 text-[16px] font-semibold" style={{ backgroundColor: '#f1f5f9', color: '#334155' }}>
                       {x}
                     </span>
                   ))}
@@ -2237,20 +2251,30 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
             {/* El pie deja de ser una frase generica: quien recibe esto tiene
                 que poder llamar sin buscar el numero por otro lado. */}
-            <div className="w-full mt-auto pt-7 flex items-end justify-between gap-8 z-10" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+            <div className="w-full mt-auto pt-7 flex items-end justify-between gap-8 z-10" style={{ borderTop: '1px solid #e2e8f0' }}>
               <div className="flex-1 min-w-0">
-                <p className="text-[24px] font-bold leading-tight mb-2" style={{ color: '#ffffff' }}>
-                  {laAgenciaDelPdf?.name || ''}
-                </p>
-                {laAgenciaDelPdf?.phone && (
-                  <p className="text-[21px] font-semibold leading-tight" style={{ color: '#60a5fa' }}>{laAgenciaDelPdf.phone}</p>
+                {/* Primero quien la manda: el cliente le llama a esa persona,
+                    no al conmutador. Si el vendedor no puso su telefono, queda
+                    el de la agencia y la ficha sigue sirviendo. */}
+                {(userData?.name || userData?.phone) && (
+                  <div className="mb-3">
+                    <p className="text-[13px] font-bold uppercase tracking-[0.14em] mb-0.5" style={{ color: '#94a3b8' }}>Tu asesor</p>
+                    <p className="text-[22px] font-bold leading-tight" style={{ color: '#0f172a' }}>
+                      {userData?.name || ''}
+                      {userData?.phone ? <span style={{ color: '#2563eb' }}>{`  ·  ${userData.phone}`}</span> : null}
+                    </p>
+                  </div>
                 )}
+                <p className="text-[18px] font-bold leading-tight" style={{ color: '#334155' }}>
+                  {laAgenciaDelPdf?.name || ''}
+                  {laAgenciaDelPdf?.phone ? <span style={{ color: '#64748b' }}>{`  ·  ${laAgenciaDelPdf.phone}`}</span> : null}
+                </p>
                 {laAgenciaDelPdf?.address && (
-                  <p className="text-[16px] leading-snug mt-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{laAgenciaDelPdf.address}</p>
+                  <p className="text-[15px] leading-snug mt-1" style={{ color: '#94a3b8' }}>{laAgenciaDelPdf.address}</p>
                 )}
               </div>
               {formData.websiteUrl && (
-                <div className="flex flex-col items-center rounded-2xl p-3 shrink-0" style={{ backgroundColor: '#ffffff' }}>
+                <div className="flex flex-col items-center rounded-2xl p-3 shrink-0" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0' }}>
                   <QRCodeSVG value={formData.websiteUrl || ""} size={104} level="M" />
                   <span className="text-[12px] font-bold mt-1.5 tracking-[0.12em] uppercase" style={{ color: '#0f172a' }}>Ver online</span>
                 </div>
