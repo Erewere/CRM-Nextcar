@@ -1385,6 +1385,9 @@ async function startServer() {
           photoUrl: data.photoUrl,
           photoUrls: data.photoUrls,
           km: data.km,
+          // Sin esto, el filtro de pasajeros no se puede aplicar a los autos
+          // de otras agencias: quien busca siete plazas veria SUVs de cinco.
+          passengers: data.passengers,
           status: data.status,
           ...(data.description !== undefined ? { description: data.description } : {})
         };

@@ -189,6 +189,10 @@ export interface Client {
     priceMax?: number;
     passengers?: number;
     bodyType?: string;
+    /** Automatica o estandar: para mucha gente no es preferencia, es requisito. */
+    transmission?: string;
+    /** Cuanto kilometraje acepta como maximo. */
+    kmMax?: number;
   };
   createdAt: any;
   updatedAt: any;

@@ -198,10 +198,17 @@ export function useSharedInventoryMatches() {
           c.status !== "Ganado" &&
           c.status !== "Perdido" &&
           c.wantedVehicle &&
+          // Un cliente que solo dijo «SUV de 7 plazas, automatica» tambien
+          // cuenta: antes esta lista solo miraba marca, modelo, precio, año y
+          // carroceria, asi que esa busqueda no llegaba a compararse nunca.
           (c.wantedVehicle.make ||
             c.wantedVehicle.model ||
             c.wantedVehicle.priceMax ||
+            c.wantedVehicle.priceMin ||
             c.wantedVehicle.yearMin ||
+            c.wantedVehicle.passengers ||
+            c.wantedVehicle.transmission ||
+            c.wantedVehicle.kmMax ||
             (c.wantedVehicle.bodyType && c.wantedVehicle.bodyType !== "Cualquiera"))
         ) {
           activeClients.push(c);

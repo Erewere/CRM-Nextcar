@@ -38,6 +38,20 @@ const MARCAS_PREMIUM = [
   'astonmartin', 'mini', 'genesis', 'acura',
 ];
 
+/**
+ * Automatica o estandar, sin importar como este escrito.
+ *
+ * En el inventario aparece como «Automática», «Automatica», «Manual»,
+ * «Estándar» o «Std» segun quien lo capturo.
+ */
+function tipoDeTransmision(v?: string): 'auto' | 'manual' | null {
+  const t = (v || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (!t.trim()) return null;
+  if (t.includes("auto") || t.includes("cvt") || t.includes("tiptronic") || t.includes("dsg")) return 'auto';
+  if (t.includes("man") || t.includes("estand") || t.includes("standard") || t.includes("std") || t.includes("sincron")) return 'manual';
+  return null;
+}
+
 function nivelDeMarca(marca?: string): number {
   const m = (marca || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, '');
   if (!m) return 1;
@@ -50,7 +64,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
   if (!client.wantedVehicle) return matches;
 
   const wv = client.wantedVehicle;
-  if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && !wv.priceMin && (!wv.bodyType || wv.bodyType === "Cualquiera") && !wv.passengers) {
+  if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && !wv.priceMin && (!wv.bodyType || wv.bodyType === "Cualquiera") && !wv.passengers && !wv.transmission && !wv.kmMax) {
     return matches;
   }
 
@@ -146,7 +160,34 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     }
     if (wv.model && !checkMatch(vehicle.model, wv.model)) score -= 25;
 
-    // 5. Año.
+    // 5. Transmision.
+    //
+    // Descarta, no resta: quien no maneja estandar no compra un estandar por
+    // muy bueno que sea, y a quien la quiere estandar no le sirve otra cosa.
+    // Es de los motivos de rechazo mas comunes y hasta ahora no se preguntaba.
+    if (wv.transmission && wv.transmission !== "Cualquiera") {
+      const q = tipoDeTransmision(wv.transmission);
+      const t = tipoDeTransmision(vehicle.transmission);
+      if (!t) {
+        score -= 20; // el auto no lo tiene capturado
+      } else if (q && t !== q) {
+        return;
+      }
+    }
+
+    // 6. Kilometraje maximo.
+    if (wv.kmMax && wv.kmMax > 0) {
+      const km = Number(vehicle.km);
+      if (!vehicle.km || Number.isNaN(km)) {
+        score -= 10;
+      } else if (km > wv.kmMax * 1.15) {
+        return;
+      } else if (km > wv.kmMax) {
+        score -= 15;
+      }
+    }
+
+    // 7. Año.
     const yearMin = wv.yearMin || 0;
     const yearMax = wv.yearMax || 9999;
     if (vehicle.year < yearMin || vehicle.year > yearMax) {

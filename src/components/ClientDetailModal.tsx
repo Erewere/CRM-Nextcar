@@ -1944,6 +1944,33 @@ export function ClientDetailModal({
                     recomendaba uno de trescientos mil como coincidencia
                     exacta: cabia en su presupuesto, pero no era su busqueda.
                     Si se deja vacio, se deduce del maximo. */}
+                {/* Transmision y kilometraje: dos de los motivos de rechazo
+                    mas comunes, y no se preguntaban. Quien no maneja estandar
+                    no compra un estandar por bueno que sea. */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Transmisión</label>
+                  <select
+                    value={formData.wantedVehicle?.transmission || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, transmission: e.target.value || undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    <option value="">Cualquiera</option>
+                    <option value="Automática">Automática</option>
+                    <option value="Manual">Estándar / Manual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kilometraje Máximo</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Opcional. Ej. 80000"
+                    value={formData.wantedVehicle?.kmMax || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, kmMax: e.target.value ? parseInt(e.target.value) : undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Presupuesto Mínimo</label>
                   <input
