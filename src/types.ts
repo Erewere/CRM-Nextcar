@@ -85,6 +85,12 @@ export interface Vehicle {
 export interface Agency {
   id: string;
   name: string;
+  /** Datos que pone el dueño al entrar por primera vez. */
+  address?: string;
+  phone?: string;
+  logoUrl?: string;
+  /** Cuando termino de poner los datos de su agencia; sin esto se le pide. */
+  datosCompletadosAt?: string;
   phoneWhatsApp?: string;
   facebookPageId?: string;
   pipelineStages?: PipelineStage[];

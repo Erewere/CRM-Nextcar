@@ -1533,9 +1533,18 @@ async function startServer() {
       }
 
       const agencia = await adminDb.collection("agencies").doc(u.agencyId).get();
+      const nombreAgencia = (agencia.data() as any)?.name || "";
+      // Si todavia no le ha puesto nombre a su agencia, la bienvenida diria
+      // «Tu CRM de Agencia de Luis ya esta listo», que es justo la impresion
+      // contraria a la que busca este correo. Se espera, y sin dejar la marca:
+      // en cuanto lo nombre, la siguiente comprobacion lo manda.
+      if (/^Agencia de /i.test(nombreAgencia)) {
+        return res.json({ enviado: false, motivo: "la agencia todavia no tiene nombre" });
+      }
+
       const { subject, html } = correoBienvenidaAdmin({
         nombre: u.name || (u.email || "").split("@")[0],
-        agencia: (agencia.data() as any)?.name || "tu agencia",
+        agencia: nombreAgencia || "tu agencia",
         usuario: u.email || decoded.email || "",
       });
 

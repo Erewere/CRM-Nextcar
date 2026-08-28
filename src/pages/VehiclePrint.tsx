@@ -4,7 +4,9 @@ import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Vehicle } from '../types';
 
+import { useAuth } from '../contexts/AuthContext';
 export function VehiclePrint() {
+  const { agencyData } = useAuth();
   const { id } = useParams();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
 
@@ -50,6 +52,20 @@ export function VehiclePrint() {
 
         {/* Header */}
         <div className="text-center mb-4 print:mb-3 border-b-[6px] print:border-b-[4px] border-slate-900 pb-4 print:pb-2">
+          {/* La hoja se la queda el cliente, asi que va con la marca de la
+              agencia y no con la del CRM. Si no subieron logo, al menos el
+              nombre. */}
+          {agencyData?.logoUrl ? (
+            <img
+              src={agencyData.logoUrl}
+              alt={agencyData.name || ""}
+              className="mx-auto mb-3 print:mb-2 max-h-16 print:max-h-12 object-contain"
+            />
+          ) : agencyData?.name ? (
+            <p className="mb-2 print:mb-1 text-sm print:text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+              {agencyData.name}
+            </p>
+          ) : null}
           <h1 className="text-5xl print:text-4xl font-black uppercase tracking-tighter mb-1">
             {vehicle.make}
           </h1>

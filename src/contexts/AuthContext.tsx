@@ -335,7 +335,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })();
     return () => { cancelado = true; };
-  }, [currentUser, userData?.role, userData?.agencyId, (userData as any)?.bienvenidaEnviadaAt]);
+    // Depende tambien del nombre de la agencia: el servidor no manda la
+    // bienvenida hasta que tiene uno de verdad, asi que en cuanto el dueño lo
+    // pone hay que volver a pedirla. Sin esto habria que cerrar sesion y
+    // entrar otra vez para que llegara.
+  }, [currentUser, userData?.role, userData?.agencyId, (userData as any)?.bienvenidaEnviadaAt, agencyData?.name]);
 
   /** El identificador de la sesion, para que el servidor sepa quien pide. */
   const credencialDelUsuario = async () => {

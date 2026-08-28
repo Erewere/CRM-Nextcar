@@ -44,6 +44,7 @@ import { getTrialDaysLeft } from "../lib/subscription";
 import { NOMBRE_ROL, type Rol } from "../lib/permissions";
 
 import { MiClaveMcp } from "./MiClaveMcp";
+import { DatosDeAgenciaModal } from "./DatosDeAgenciaModal";
 export function Layout() {
   const { userData, agencyData, googleAccount, googleToken, disconnectGoogleServices } = useAuth();
   const trialDaysLeft = getTrialDaysLeft(agencyData);
@@ -58,6 +59,20 @@ export function Layout() {
   const [showClaveMcp, setShowClaveMcp] = useState(false);
   const [menuPerfilAbierto, setMenuPerfilAbierto] = useState(false);
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
+  const [mostrarDatosAgencia, setMostrarDatosAgencia] = useState(false);
+
+  /**
+   * Solo se pide a quien todavia no le ha puesto nombre a su agencia.
+   *
+   * La señal es el nombre que pone el sistema al registrarse, «Agencia de
+   * alguien». Mirar solo si faltan los datos habria sacado esta ventana a
+   * todas las agencias que ya existen y ya tienen su nombre bien puesto.
+   */
+  const faltaNombrarAgencia =
+    userData?.role === 'admin' &&
+    !!agencyData &&
+    !agencyData.datosCompletadosAt &&
+    /^Agencia de /i.test(agencyData.name || '');
   const isMobile = useIsMobile();
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
   const { matches: sharedMatches, ownAgencySharing } = useSharedInventoryMatches();
@@ -282,13 +297,24 @@ export function Layout() {
             isSidebarCollapsed ? "justify-center px-2" : "justify-start"
           )}
         >
+          {/* El logo de la agencia manda sobre el de Nextcar: dentro de su CRM,
+              quien tiene que verse es su marca. Si no subio ninguno, se queda
+              el de Nextcar. */}
           {isSidebarCollapsed ? (
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded p-1.5">
-              <NextcarLogo variant="icon" />
+              {agencyData?.logoUrl ? (
+                <img src={agencyData.logoUrl} alt={agencyData.name || ""} className="max-h-full max-w-full object-contain" />
+              ) : (
+                <NextcarLogo variant="icon" />
+              )}
             </div>
           ) : (
             <div className="flex h-12 w-32 items-center justify-start">
-              <NextcarLogo variant="full" className="ml-[-8px]" />
+              {agencyData?.logoUrl ? (
+                <img src={agencyData.logoUrl} alt={agencyData.name || ""} className="max-h-12 max-w-full object-contain" />
+              ) : (
+                <NextcarLogo variant="full" className="ml-[-8px]" />
+              )}
             </div>
           )}
         </div>
@@ -397,6 +423,15 @@ export function Layout() {
                     <Users className="w-4 h-4 shrink-0" />
                     <span className="truncate">Mi perfil</span>
                   </button>
+                  {userData?.role === 'admin' && agencyData && (
+                    <button
+                      onClick={() => { setMenuPerfilAbierto(false); setMostrarDatosAgencia(true); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      <Building2 className="w-4 h-4 shrink-0" />
+                      <span className="truncate">Datos de mi agencia</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => { setMenuPerfilAbierto(false); setShowClaveMcp(true); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700"
@@ -628,6 +663,14 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+      )}
+
+      {(faltaNombrarAgencia || mostrarDatosAgencia) && agencyData && (
+        <DatosDeAgenciaModal
+          agencia={agencyData}
+          primeraVez={faltaNombrarAgencia}
+          onCerrar={() => setMostrarDatosAgencia(false)}
+        />
       )}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
