@@ -26,6 +26,7 @@ import {
   DollarSign,
   Building2,
   Bot,
+  Phone,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -68,6 +69,41 @@ export function Layout() {
    * alguien». Mirar solo si faltan los datos habria sacado esta ventana a
    * todas las agencias que ya existen y ya tienen su nombre bien puesto.
    */
+  /**
+   * Avisos que se pueden posponer, pero no perder.
+   *
+   * Se descartan aqui y reaparecen en la campanita, donde se quedan hasta que
+   * el dato se llena. Un aviso que se puede callar para siempre no sirve para
+   * lo que hace falta, que es que el dato acabe puesto; y uno que no se puede
+   * callar estorba a quien va con prisa.
+   */
+  const [avisosDescartados, setAvisosDescartados] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('crm_avisos_descartados') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const descartarAviso = (clave: string) => {
+    setAvisosDescartados((prev) => {
+      const next = Array.from(new Set([...prev, clave]));
+      try {
+        localStorage.setItem('crm_avisos_descartados', JSON.stringify(next));
+        // La campanita escucha esto para recoger el aviso en el momento. Sin
+        // el, tardaria hasta un minuto en aparecer ahi.
+        window.dispatchEvent(new Event('crm-avisos-cambiaron'));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Su telefono sale en las fichas que comparte; sin el, el cliente no sabe a
+  // quien llamarle.
+  const faltaTelefonoPropio =
+    !!userData &&
+    (userData.role === 'seller' || userData.role === 'admin') &&
+    !userData.phone;
+
   const faltaNombrarAgencia =
     userData?.role === 'admin' &&
     !!agencyData &&
@@ -595,6 +631,60 @@ export function Layout() {
             : (location.pathname === '/chats' ? "h-full overflow-hidden p-4 md:p-6" : "overflow-auto p-4 md:p-6")
         )}>
           <WelcomeTour />
+
+          {faltaTelefonoPropio && !avisosDescartados.includes('telefono') && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 px-4 py-3">
+              <Phone className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Falta tu teléfono</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                  Aparece en las fichas de autos que compartes, para que el cliente te llame a ti y no al conmutador.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={() => setShowUserSettingsModal(true)}
+                    className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+                  >
+                    Ponerlo ahora
+                  </button>
+                  <button
+                    onClick={() => descartarAviso('telefono')}
+                    className="text-xs font-semibold text-slate-500 dark:text-slate-400 px-2 py-1.5"
+                  >
+                    Más tarde
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {userData?.role === 'admin' && agencyData && /^Agencia de /i.test(agencyData.name || '') &&
+           !avisosDescartados.includes('agencia') && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+              <Building2 className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Tu agencia todavía no tiene nombre</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                  Sale así en las fichas de tus autos y en los correos a tu equipo.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={() => setMostrarDatosAgencia(true)}
+                    className="text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+                  >
+                    Ponerle nombre
+                  </button>
+                  <button
+                    onClick={() => descartarAviso('agencia')}
+                    className="text-xs font-semibold text-slate-500 dark:text-slate-400 px-2 py-1.5"
+                  >
+                    Más tarde
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Outlet />
         </div>
       </main>

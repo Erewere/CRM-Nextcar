@@ -3,7 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Vehicle, Client } from "../types";
-import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, Check } from "lucide-react";
+import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, Check, Phone, Building2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import clsx from "clsx";
 import { isBefore, addDays, startOfDay, isAfter } from "date-fns";
@@ -49,7 +49,7 @@ const isClosedStatus = (status: string | undefined, pipelineStages: any[] = []) 
 };
 
 export function NotificationsPopover() {
-  const { userData } = useAuth();
+  const { userData, agencyData } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -63,6 +63,24 @@ export function NotificationsPopover() {
       return new Set();
     }
   });
+  /**
+   * Que avisos de configuracion ya se pospusieron en la pantalla.
+   *
+   * Aqui solo aparecen los pospuestos: mostrarlos desde el principio seria
+   * decir la misma cosa dos veces a la vez, y el recuadro de la pantalla ya
+   * lo dice mejor, con su boton para arreglarlo.
+   */
+  const [avisosPospuestos, setAvisosPospuestos] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('crm_avisos_descartados') || '[]'); } catch { return []; }
+  });
+  useEffect(() => {
+    const releer = () => {
+      try { setAvisosPospuestos(JSON.parse(localStorage.getItem('crm_avisos_descartados') || '[]')); } catch {}
+    };
+    window.addEventListener('crm-avisos-cambiaron', releer);
+    return () => window.removeEventListener('crm-avisos-cambiaron', releer);
+  }, []);
+
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedClientContext, setSelectedClientContext] = useState<Client | null>(null);
 
@@ -441,6 +459,38 @@ export function NotificationsPopover() {
     }
   });
 
+  /**
+   * Datos de configuracion que faltan.
+   *
+   * Estos avisos empiezan como un recuadro dentro de la pantalla, con un
+   * «mas tarde». Cuando alguien lo pospone, reaparecen aqui y ya no se pueden
+   * descartar: se van solos cuando el dato se llena, que es de lo que se
+   * trata. Por eso no consultan `dismissedIds` como los demas.
+   */
+  if (avisosPospuestos.includes("telefono") && userData && (userData.role === "seller" || userData.role === "admin") && !(userData as any).phone) {
+    notifications.push({
+      id: "config-telefono",
+      type: "config-pendiente",
+      title: "Falta tu teléfono",
+      message: "Sin él, las fichas que compartes no dicen a quién llamarle. Ponlo en tu perfil.",
+      date: new Date().toISOString(),
+      icon: <Phone className="w-5 h-5 text-blue-500 shrink-0" />,
+      onClick: () => {},
+    });
+  }
+
+  if (avisosPospuestos.includes("agencia") && userData?.role === "admin" && agencyData && /^Agencia de /i.test(agencyData.name || "")) {
+    notifications.push({
+      id: "config-agencia",
+      type: "config-pendiente",
+      title: "Tu agencia todavía no tiene nombre",
+      message: `Aparece como «${agencyData.name}» en las fichas de tus autos y en los correos a tu equipo.`,
+      date: new Date().toISOString(),
+      icon: <Building2 className="w-5 h-5 text-amber-500 shrink-0" />,
+      onClick: () => {},
+    });
+  }
+
   // 5. Pending Admin Approvals (Vehicles & Clients)
   if (userData?.role === "admin" || userData?.role === "master") {
     // A) Vehicle pending validations
@@ -678,17 +728,23 @@ export function NotificationsPopover() {
                         </div>
                       </button>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDismissNotif(notif);
-                        }}
-                        title="Descartar notificación"
-                        className="shrink-0 ml-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors opacity-80 sm:opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] font-medium"
-                      >
-                        <X className="w-4 h-4" />
-                        <span className="hidden sm:inline">Descartar</span>
-                      </button>
+                      {/* Los avisos de configuracion no se pueden descartar:
+                          ya se pospusieron una vez en la pantalla, y se van
+                          solos cuando el dato se llena. Poder callarlos aqui
+                          tambien los dejaria sin efecto. */}
+                      {notif.type !== "config-pendiente" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDismissNotif(notif);
+                          }}
+                          title="Descartar notificación"
+                          className="shrink-0 ml-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors opacity-80 sm:opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] font-medium"
+                        >
+                          <X className="w-4 h-4" />
+                          <span className="hidden sm:inline">Descartar</span>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
