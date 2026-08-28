@@ -668,6 +668,7 @@ export function Layout() {
       {(faltaNombrarAgencia || mostrarDatosAgencia) && agencyData && (
         <DatosDeAgenciaModal
           agencia={agencyData}
+          uid={userData?.id || ''}
           primeraVez={faltaNombrarAgencia}
           onCerrar={() => setMostrarDatosAgencia(false)}
         />

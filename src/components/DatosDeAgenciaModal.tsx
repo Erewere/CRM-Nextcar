@@ -20,10 +20,13 @@ import { Building2, X, Upload, Loader2 } from "lucide-react";
  */
 export function DatosDeAgenciaModal({
   agencia,
+  uid,
   primeraVez = false,
   onCerrar,
 }: {
   agencia: Agency;
+  /** Quien sube el logo; define la carpeta permitida en el almacenamiento. */
+  uid: string;
   primeraVez?: boolean;
   onCerrar: () => void;
 }) {
@@ -51,7 +54,13 @@ export function DatosDeAgenciaModal({
         maxWidthOrHeight: 600,
         useWebWorker: true,
       });
-      const destino = ref(storage, `agencies/${agencia.id}/logo/${Date.now()}_${archivo.name}`);
+      // Sube a la carpeta del propio usuario y no a una de la agencia: las
+      // reglas de almacenamiento viven en la consola de Firebase, fuera de
+      // este repositorio, y lo unico que se sabe permitido es `users/{uid}`
+      // -- por ahi entran los avatares y las fotos de los autos. Una ruta
+      // nueva se habria quedado bloqueada al subir, sin forma de saberlo desde
+      // aqui. La direccion final se guarda en la agencia igual.
+      const destino = ref(storage, `users/${uid}/agency-logo/${Date.now()}_${archivo.name}`);
       const tarea = uploadBytesResumable(destino, comprimido);
       await new Promise<void>((listo, falla) => {
         tarea.on("state_changed", () => {}, falla, () => listo());
