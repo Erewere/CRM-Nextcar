@@ -2286,29 +2286,50 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         {/* Hidden Partners PDF View */}
         <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none w-[800px] max-w-none">
           <div ref={partnerDocRef} className="w-[800px] h-[1131px] flex flex-col p-12 font-sans relative bg-white text-slate-800" style={{ backgroundColor: '#ffffff' }}>
-            {/* Decorative top strip */}
-            <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600"></div>
-            
-            {/* Logo and report header */}
-            <div className="flex justify-between items-start mb-8 mt-4">
-              <div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none uppercase">
-                  {agencies.find(a => a.id === (formData.agencyId || vehicle?.agencyId || userData?.agencyId))?.name || 'AGENCIA'}
+            {/* Los colores van escritos a mano y no con clases: la hoja se
+                vuelca a imagen, y ese volcado no entiende los colores nuevos
+                de Tailwind -- salen negros o transparentes. */}
+            <div className="absolute top-0 left-0 right-0 h-[10px]" style={{ backgroundColor: '#1e293b' }}></div>
+
+            {/* Quien firma este reporte va arriba y con su logo. Antes decia
+                «AGENCIA» en mayusculas cuando la lista de agencias no habia
+                cargado, que es casi siempre para un administrador: el reporte
+                salia sin decir de quien era. */}
+            <div className="flex justify-between items-start gap-8 mb-7 mt-5">
+              <div className="min-w-0">
+                {laAgenciaDelPdf?.logoUrl && (
+                  <img
+                    src={pdfLogoDataUrl || laAgenciaDelPdf.logoUrl}
+                    alt=""
+                    className="max-h-[52px] max-w-[280px] object-contain mb-3"
+                    crossOrigin={(pdfLogoDataUrl || '').startsWith('data:') ? undefined : 'anonymous'}
+                  />
+                )}
+                <h1 className="text-[27px] font-extrabold tracking-tight leading-none" style={{ color: '#0f172a' }}>
+                  {laAgenciaDelPdf?.name || 'Agencia'}
                 </h1>
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-2">
-                  REPORTE FINANCIERO DE SOCIOS
+                {(laAgenciaDelPdf?.address || laAgenciaDelPdf?.phone) && (
+                  <p className="text-[12px] mt-1.5" style={{ color: '#94a3b8' }}>
+                    {[laAgenciaDelPdf?.address, laAgenciaDelPdf?.phone].filter(Boolean).join('  ·  ')}
+                  </p>
+                )}
+                <p className="text-[13px] font-bold uppercase tracking-[0.18em] mt-3" style={{ color: '#2563eb' }}>
+                  Reporte financiero de socios
                 </p>
               </div>
-              <div className="text-right">
-                <span className="inline-block bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded uppercase tracking-wider mb-1.5">
-                  Uso Interno / Confidencial
+              <div className="text-right shrink-0">
+                <span className="inline-block text-[11px] font-bold px-3 py-1 rounded uppercase tracking-wider mb-2" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                  Confidencial
                 </span>
-                <p className="text-xs text-slate-500">Fecha de Emisión: {new Date().toLocaleDateString()}</p>
-                <p className="text-xs text-slate-500">ID Vehículo: {vehicle.id?.substring(0, 8) || 'N/A'}</p>
+                <p className="text-[12px]" style={{ color: '#64748b' }}>Emitido el {new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                <p className="text-[12px]" style={{ color: '#94a3b8' }}>Folio {vehicle.id?.substring(0, 8).toUpperCase() || 'N/A'}</p>
+                {userData?.name && (
+                  <p className="text-[12px] mt-1" style={{ color: '#94a3b8' }}>Generado por {userData.name}</p>
+                )}
               </div>
             </div>
 
-            <div className="border-t-2 border-gray-200 my-4"></div>
+            <div style={{ borderTop: '1px solid #e2e8f0', margin: '0 0 20px' }}></div>
 
             {/* Section 1: Vehicle details */}
             <div className="mb-6">
@@ -2351,16 +2372,23 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                 </div>
               </div>
 
-              {/* Outstanding profit summary bar */}
-              <div className="p-5 rounded border-2 flex justify-between items-center bg-[#f4f5f5]" style={{ borderColor: '#cbd5e1' }}>
-                <div>
-                  <span className="text-sm font-black text-slate-700 uppercase block">Utilidad Bruta para Socios</span>
-                  <span className="text-xs text-slate-500 font-medium">Método de cálculo: Precio de Venta - Costo de Adquisición - Egresos</span>
+              {/* La utilidad, con su margen. Un socio no compara pesos entre
+                  autos de precios distintos: compara el porcentaje. Antes
+                  habia que sacarlo a mano. */}
+              <div className="p-5 rounded-xl flex justify-between items-center gap-6" style={{ backgroundColor: utility >= 0 ? '#ecfdf5' : '#fef2f2', border: `1px solid ${utility >= 0 ? '#a7f3d0' : '#fecaca'}` }}>
+                <div className="min-w-0">
+                  <span className="text-[15px] font-bold uppercase tracking-wide block" style={{ color: '#0f172a' }}>Utilidad bruta para socios</span>
+                  <span className="text-[12px] font-medium" style={{ color: '#64748b' }}>Precio de venta − costo de adquisición − gastos</span>
                 </div>
-                <div className="text-right">
-                  <span className={`text-2xl font-black px-6 py-2.5 rounded inline-block shadow-sm text-white ${utility >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                    ${Number(utility).toLocaleString()}
+                <div className="text-right shrink-0">
+                  <span className="text-[34px] font-extrabold leading-none block" style={{ color: utility >= 0 ? '#047857' : '#b91c1c' }}>
+                    ${Number(utility).toLocaleString('es-MX')}
                   </span>
+                  {finalSalePrice > 0 && (
+                    <span className="text-[13px] font-bold" style={{ color: utility >= 0 ? '#059669' : '#dc2626' }}>
+                      {`${((utility / finalSalePrice) * 100).toFixed(1)}% sobre la venta`}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -2407,8 +2435,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
             {/* Corporate stamp & sign block at the very bottom */}
             <div className="border-t border-gray-200 pt-6 mt-auto">
-              <p className="text-xs text-slate-400 text-center italic mb-8">
-                "Este reporte financiero contiene información confidencial protegida por convenios de socios. Su divulgación no autorizada está estrictamente prohibida por las políticas internas de la organización."
+              <p className="text-[11px] text-center mb-8" style={{ color: '#94a3b8' }}>
+                Documento confidencial de uso interno entre socios de {laAgenciaDelPdf?.name || 'la agencia'}. No compartir fuera de la sociedad.
               </p>
               <div className="flex justify-around items-center pt-4 text-xs text-slate-600 font-bold">
                 <div className="flex flex-col items-center">
