@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
-  const { userData } = useAuth();
+  const { userData, agencyData } = useAuth();
   const navigate = useNavigate();
   const isNew = !vehicle.id;
   const isMobile = useIsMobile();
@@ -1010,6 +1010,52 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const finalSalePrice = (formData.status === 'sold' && formData.saleDetails?.price) ? formData.saleDetails.price : (formData.price || 0);
+
+  /**
+   * Datos de la agencia para la ficha en PDF.
+   *
+   * Un master puede abrir el auto de otra agencia, y entonces la suya no es la
+   * que va en la ficha: manda la del vehiculo. `agencyData` queda de respaldo
+   * para cuando esa lista todavia no ha cargado.
+   */
+  const laAgenciaDelPdf =
+    agencies.find((a) => a.id === (formData.agencyId || vehicle?.agencyId || userData?.agencyId)) ||
+    agencyData ||
+    null;
+
+  // Solo los datos que estan llenos. Antes salian con un guion, y media ficha
+  // de guiones se lee como un auto del que no se sabe nada.
+  const datosDelPdf: [string, string][] = ([
+    ["Año", formData.year ? String(formData.year) : ""],
+    ["Kilometraje", formData.km ? `${Number(formData.km).toLocaleString("es-MX")} km` : ""],
+    ["Transmisión", formData.transmission || ""],
+    ["Carrocería", formData.bodyType || ""],
+    ["Color", formData.color || ""],
+    ["Motor", [formData.cylinders ? `${formData.cylinders} cil` : "", formData.liters ? `${formData.liters} L` : ""].filter(Boolean).join(" · ")],
+    ["Pasajeros", formData.passengers ? String(formData.passengers) : ""],
+  ] as [string, string][]).filter(([, v]) => v).slice(0, 8);
+
+  // El equipamiento se captura separado por comas y no aparecia en la ficha.
+  const equipoDelPdf = (formData.equipment || "")
+    .split(/[,;]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  /**
+   * El logo, convertido a imagen incrustada.
+   *
+   * La ficha se arma volcando el bloque a una imagen, y ese volcado no puede
+   * leer archivos de otro dominio: el logo saldria en blanco. La foto del auto
+   * ya se resolvia asi; el logo necesitaba lo mismo.
+   */
+  const [pdfLogoDataUrl, setPdfLogoDataUrl] = useState<string>("");
+  useEffect(() => {
+    const url = laAgenciaDelPdf?.logoUrl;
+    if (!url) { setPdfLogoDataUrl(""); return; }
+    let vigente = true;
+    urlToDataUrl(url).then((d) => { if (vigente && d) setPdfLogoDataUrl(d); }).catch(() => {});
+    return () => { vigente = false; };
+  }, [laAgenciaDelPdf?.logoUrl]);
   const utility = finalSalePrice - (formData.purchasePrice || 0) - totalExpenses;
 
   return (
@@ -2094,126 +2140,122 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
         {/* Hidden PDF View */}
         <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none w-[800px] max-w-none">
-          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col p-8 font-sans relative overflow-hidden" style={{ background: 'linear-gradient(to bottom right, #0f172a, #1e293b)', color: '#ffffff' }}>
-            
-            {/* Header section with brand/agency name if available */}
-            <div className="w-full flex justify-between items-center mb-6 z-10">
-               <div className="text-3xl font-black tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>FICHA TÉCNICA</div>
-               <div className="text-3xl font-bold px-6 py-2 rounded-full" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#60a5fa' }}>
-                 {agencies.find(a => a.id === (formData.agencyId || vehicle?.agencyId || userData?.agencyId))?.name?.toUpperCase() || (userData?.role === 'master' ? 'AUTO DEALER' : 'NUESTRO INVENTARIO')}
-               </div>
+          <div ref={pdfRef} className="w-[800px] h-[1131px] flex flex-col p-10 font-sans relative overflow-hidden" style={{ background: '#0b1220', color: '#ffffff' }}>
+
+            {/* Un solo resplandor, detras de la foto. Antes habia dos manchas
+                enormes de colores distintos que competian con el auto. */}
+            <div className="absolute top-[-260px] right-[-160px] w-[620px] h-[620px] rounded-full pointer-events-none" style={{ backgroundColor: 'rgba(37, 99, 235, 0.18)', filter: 'blur(130px)' }}></div>
+
+            {/* Cabecera: manda la marca de la agencia, no la palabra «ficha». */}
+            <div className="w-full flex items-center justify-between gap-6 mb-8 z-10">
+              {laAgenciaDelPdf?.logoUrl ? (
+                <img src={pdfLogoDataUrl || laAgenciaDelPdf.logoUrl} alt="" className="max-h-[56px] max-w-[300px] object-contain" crossOrigin={(pdfLogoDataUrl || '').startsWith('data:') ? undefined : 'anonymous'} />
+              ) : (
+                <span className="text-[26px] font-bold tracking-[0.14em] uppercase" style={{ color: '#ffffff' }}>
+                  {laAgenciaDelPdf?.name || ''}
+                </span>
+              )}
+              <span className="text-[15px] font-semibold tracking-[0.24em] uppercase shrink-0" style={{ color: 'rgba(255,255,255,0.35)' }}>Ficha técnica</span>
             </div>
 
-            {/* Top row: Image on left, Title & Price on right */}
-            <div className="flex w-full gap-6 mb-8 z-10">
-               {/* Left: Image */}
-               <div className="w-[420px] h-[320px] rounded-[30px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[6px] relative flex items-center justify-center shrink-0" style={{ borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e293b' }}>
-                  {allPhotos.length > 0 && getPdfImageSrc() ? (
-                    <img 
-                      src={getPdfImageSrc()} 
-                      alt={`${formData.make || ''} ${formData.model || ''}`}
-                      className="w-full h-full object-cover"
-                      crossOrigin={getPdfImageSrc().startsWith('data:') ? undefined : "anonymous"}
-                    />
-                  ) : (
-                    <div className="text-3xl font-medium flex flex-col items-center" style={{ color: '#64748b' }}>
-                      <span>Sin Imagen</span>
-                    </div>
-                  )}
-                  {formData.status === 'sold' && (
-                    <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(220, 38, 38, 0.8)' }}>
-                      <span className="font-black text-5xl rotate-[-15deg] uppercase tracking-widest border-4 p-4 rounded-3xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>VENDIDO</span>
-                    </div>
-                  )}
-               </div>
-
-               {/* Right: Title & Price */}
-               <div className="flex-1 flex flex-col justify-center">
-                  <h1 className="text-[50px] font-black uppercase leading-none tracking-tight mb-2" style={{ color: '#ffffff', textShadow: '0 5px 15px rgba(0,0,0,0.5)' }}>
-                    {formData.make || 'Vehículo'}
-                  </h1>
-                  <h2 className="text-[35px] font-bold tracking-wide mb-6" style={{ color: '#60a5fa' }}>
-                    {formData.model || ''} <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>|</span> <span style={{ color: '#ffffff' }}>{formData.year || ''}</span>
-                  </h2>
-                  
-                  {finalSalePrice > 0 && (
-                    <div className="w-full rounded-[24px] py-4 px-6 flex flex-col justify-center shadow-2xl" style={{ background: 'linear-gradient(to right, #2563eb, #3b82f6)' }}>
-                      <span className="text-lg font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Precio de Venta</span>
-                      <span className="text-[40px] font-black leading-none" style={{ color: '#ffffff' }}>${Number(finalSalePrice).toLocaleString()}</span>
-                    </div>
-                  )}
-               </div>
+            {/* El modelo es el titular; la marca lo presenta. */}
+            <div className="w-full mb-6 z-10">
+              <p className="text-[19px] font-bold uppercase tracking-[0.22em] mb-1" style={{ color: '#60a5fa' }}>
+                {formData.make || 'Vehículo'}
+              </p>
+              <h1 className="text-[56px] font-extrabold leading-[1.02] tracking-tight" style={{ color: '#ffffff' }}>
+                {formData.model || ''}
+              </h1>
             </div>
 
-            {/* Vehicle Specifications Grid */}
-            <div className="w-full backdrop-blur-md rounded-[30px] p-6 border grid grid-cols-3 gap-x-8 gap-y-6 mb-8 z-10" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-              <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Kilometraje</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{Number(formData.km || 0).toLocaleString()} km</span>
-              </div>
-              <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Transmisión</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.transmission || ''}</span>
-              </div>
-              <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Color</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.color || ''}</span>
-              </div>
-              <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Carrocería</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.bodyType || ''}</span>
-              </div>
-              <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Motor</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.cylinders ? `${formData.cylinders} Cil` : '-'} {formData.liters ? `/ ${formData.liters} L` : ''}</span>
-              </div>
-              <div className="flex flex-col border-b-2 pb-4" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                <span className="text-base font-semibold uppercase tracking-wider mb-1" style={{ color: '#93c5fd' }}>Pasajeros</span>
-                <span className="text-2xl font-black" style={{ color: '#ffffff' }}>{formData.passengers || '-'}</span>
-              </div>
+            <div className="w-full h-[360px] rounded-[24px] overflow-hidden relative shrink-0 z-10 flex items-center justify-center" style={{ backgroundColor: '#111c2e' }}>
+              {allPhotos.length > 0 && getPdfImageSrc() ? (
+                <img
+                  src={getPdfImageSrc()}
+                  alt={`${formData.make || ''} ${formData.model || ''}`}
+                  className="w-full h-full object-cover"
+                  crossOrigin={getPdfImageSrc().startsWith('data:') ? undefined : "anonymous"}
+                />
+              ) : (
+                <span className="text-2xl" style={{ color: '#64748b' }}>Sin imagen</span>
+              )}
+              {formData.status === 'sold' && (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'rgba(220, 38, 38, 0.82)' }}>
+                  <span className="font-extrabold text-5xl rotate-[-12deg] uppercase tracking-[0.15em] border-4 px-6 py-3 rounded-2xl" style={{ color: '#ffffff', borderColor: '#ffffff' }}>Vendido</span>
+                </div>
+              )}
             </div>
 
-            {/* Financing Info (If applicable) */}
-            {formData.price && formData.price > 0 && (
-              <div className="w-full z-10 mb-8">
+            {/* Precio y financiamiento en una sola linea: es la pregunta que se
+                hace quien recibe esto, y antes estaba repartida en dos bloques
+                separados por toda la hoja. */}
+            {finalSalePrice > 0 && (
+              <div className="w-full mt-7 flex items-end justify-between gap-8 z-10 shrink-0">
+                <div>
+                  <p className="text-[14px] font-bold uppercase tracking-[0.2em] mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Precio</p>
+                  <p className="text-[52px] font-extrabold leading-none tracking-tight" style={{ color: '#ffffff' }}>
+                    ${Number(finalSalePrice).toLocaleString('es-MX')}
+                  </p>
+                </div>
                 {(() => {
-                  const financing = getFinancingInfo(formData.year || new Date().getFullYear(), formData.price || 0);
-                  if (!financing) return null;
+                  const fin = getFinancingInfo(formData.year || new Date().getFullYear(), formData.price || 0);
+                  if (!fin) return null;
                   return (
-                    <div className="w-full rounded-[30px] p-6 border grid grid-cols-2 gap-6 shadow-2xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                      <div className="flex flex-col border-r-2" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-                        <span className="text-base font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Enganche Min ({financing.downPaymentPct}%)</span>
-                        <span className="text-3xl font-black" style={{ color: '#ffffff' }}>${Number(financing.downPaymentAmount).toLocaleString()}</span>
-                      </div>
-                      <div className="flex flex-col pl-4">
-                        <span className="text-base font-semibold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>Plazo Máximo</span>
-                        <span className="text-3xl font-black" style={{ color: '#ffffff' }}>{financing.maxTerm} Meses</span>
-                        <span className="text-lg font-medium mt-2" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          Tasa: {financing.minRate} - {financing.maxRate}
-                        </span>
-                      </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[14px] font-bold uppercase tracking-[0.2em] mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>A crédito desde</p>
+                      <p className="text-[22px] font-bold leading-tight" style={{ color: '#ffffff' }}>
+                        ${Number(fin.downPaymentAmount).toLocaleString('es-MX')} de enganche
+                      </p>
+                      <p className="text-[17px] font-medium" style={{ color: 'rgba(255,255,255,0.55)' }}>hasta {fin.maxTerm} meses</p>
                     </div>
                   );
                 })()}
               </div>
             )}
 
-            {/* Footer / Contact info & QR */}
-            <div className="w-full mt-auto flex items-end justify-between z-10">
-               <div className="flex-1 pr-6 pb-2">
-                 <p className="text-xl font-medium leading-relaxed" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Contáctanos para más información o agenda tu prueba de manejo hoy mismo.</p>
-               </div>
-               {formData.websiteUrl && (
-                 <div className="flex flex-col items-center bg-white p-3 rounded shrink-0">
-                   <QRCodeSVG value={formData.websiteUrl || ""} size={120} level="M" />
-                   <span className="text-sm font-bold text-slate-800 mt-2 tracking-wider">VER ONLINE</span>
-                 </div>
-               )}
+            <div className="w-full mt-7 grid grid-cols-4 gap-x-6 gap-y-5 z-10 shrink-0">
+              {datosDelPdf.map(([etiqueta, valor]) => (
+                <div key={etiqueta} className="flex flex-col">
+                  <span className="text-[13px] font-bold uppercase tracking-[0.14em] mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{etiqueta}</span>
+                  <span className="text-[22px] font-bold leading-tight" style={{ color: '#ffffff' }}>{valor}</span>
+                </div>
+              ))}
             </div>
-            
-            {/* Decorative elements */}
-            <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] rounded-full blur-[100px] pointer-events-none" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}></div>
-            <div className="absolute bottom-[-200px] left-[-200px] w-[800px] h-[800px] rounded-full blur-[120px] pointer-events-none" style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)' }}></div>
+
+            {equipoDelPdf.length > 0 && (
+              <div className="w-full mt-7 z-10 shrink-0">
+                <p className="text-[13px] font-bold uppercase tracking-[0.14em] mb-2.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Equipamiento</p>
+                <div className="flex flex-wrap gap-2">
+                  {equipoDelPdf.slice(0, 10).map((x) => (
+                    <span key={x} className="rounded-full px-3.5 py-1.5 text-[16px] font-semibold" style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)' }}>
+                      {x}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* El pie deja de ser una frase generica: quien recibe esto tiene
+                que poder llamar sin buscar el numero por otro lado. */}
+            <div className="w-full mt-auto pt-7 flex items-end justify-between gap-8 z-10" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-[24px] font-bold leading-tight mb-2" style={{ color: '#ffffff' }}>
+                  {laAgenciaDelPdf?.name || ''}
+                </p>
+                {laAgenciaDelPdf?.phone && (
+                  <p className="text-[21px] font-semibold leading-tight" style={{ color: '#60a5fa' }}>{laAgenciaDelPdf.phone}</p>
+                )}
+                {laAgenciaDelPdf?.address && (
+                  <p className="text-[16px] leading-snug mt-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{laAgenciaDelPdf.address}</p>
+                )}
+              </div>
+              {formData.websiteUrl && (
+                <div className="flex flex-col items-center rounded-2xl p-3 shrink-0" style={{ backgroundColor: '#ffffff' }}>
+                  <QRCodeSVG value={formData.websiteUrl || ""} size={104} level="M" />
+                  <span className="text-[12px] font-bold mt-1.5 tracking-[0.12em] uppercase" style={{ color: '#0f172a' }}>Ver online</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
