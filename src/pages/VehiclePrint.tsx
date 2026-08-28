@@ -37,106 +37,128 @@ export function VehiclePrint() {
 
   if (!vehicle) return <div className="p-10 text-center font-bold text-xl">Cargando datos del vehículo...</div>;
 
+  // Solo lo que este lleno: una ficha con seis guiones se lee como un
+  // formulario a medio llenar, no como la hoja de un auto.
+  const fichas = [
+    ["Año", vehicle.year ? String(vehicle.year) : ""],
+    ["Kilometraje", vehicle.km ? `${vehicle.km.toLocaleString("es-MX")} km` : ""],
+    ["Transmisión", vehicle.transmission || ""],
+    ["Carrocería", vehicle.bodyType || ""],
+    ["Color", vehicle.color || ""],
+    ["Motor", vehicle.liters ? `${vehicle.liters} L` : ""],
+    ["Cilindros", vehicle.cylinders ? String(vehicle.cylinders) : ""],
+    ["Pasajeros", vehicle.passengers ? String(vehicle.passengers) : ""],
+  ].filter(([, v]) => v);
+
+  // El equipamiento se captura separado por comas; en etiquetas sueltas se
+  // recorre de un vistazo, en un parrafo hay que leerlo entero.
+  const equipo = (vehicle.equipment || "")
+    .split(/[,;]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  const foto = vehicle.photoUrls?.[0] || vehicle.photoUrl;
+  const precio = vehicle.price > 0
+    ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(vehicle.price)
+    : "";
+
   return (
-    <div className="p-4 sm:p-8 max-w-2xl mx-auto bg-white min-h-screen text-slate-900 font-sans print:p-0 print:w-full print:max-w-none">
-      <div className="border-[8px] print:border-[6px] border-slate-900 p-6 print:p-5 rounded-3xl flex flex-col min-h-[90vh] print:min-h-[100%] print:h-[8.2in] relative bg-white">
-        
-        {/* Floating Print Button (Hidden when printing) */}
-        <button 
-          onClick={() => window.print()} 
-          className="absolute top-6 right-6 print:hidden bg-slate-900 text-white px-6 py-3 rounded-full font-bold shadow-xl hover:bg-slate-800 transition-colors z-10 flex items-center gap-2"
+    <div className="min-h-screen bg-slate-100 print:bg-white p-6 print:p-0 font-sans">
+      <div className="mx-auto max-w-[5.5in] bg-white print:max-w-none rounded-2xl print:rounded-none shadow-xl print:shadow-none overflow-hidden flex flex-col min-h-[8.5in] print:min-h-[8.2in]">
+
+        <button
+          onClick={() => window.print()}
+          className="fixed bottom-6 right-6 print:hidden bg-slate-900 text-white px-5 py-3 rounded-full font-bold shadow-2xl hover:bg-slate-800 transition-colors z-10 flex items-center gap-2"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
           Imprimir / PDF
         </button>
 
-        {/* Header */}
-        <div className="text-center mb-4 print:mb-3 border-b-[6px] print:border-b-[4px] border-slate-900 pb-4 print:pb-2">
-          {/* La hoja se la queda el cliente, asi que va con la marca de la
-              agencia y no con la del CRM. Si no subieron logo, al menos el
-              nombre. */}
+        {/* La marca de la agencia arriba, discreta: la protagonista es el auto. */}
+        <div className="flex items-center justify-between gap-3 px-7 print:px-6 pt-6 print:pt-4 pb-4">
           {agencyData?.logoUrl ? (
-            <img
-              src={agencyData.logoUrl}
-              alt={agencyData.name || ""}
-              className="mx-auto mb-3 print:mb-2 max-h-16 print:max-h-12 object-contain"
-            />
-          ) : agencyData?.name ? (
-            <p className="mb-2 print:mb-1 text-sm print:text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-              {agencyData.name}
-            </p>
-          ) : null}
-          <h1 className="text-5xl print:text-4xl font-black uppercase tracking-tighter mb-1">
-            {vehicle.make}
-          </h1>
-          <h2 className="text-3xl print:text-2xl font-bold text-slate-700">
-            {vehicle.model} <span className="text-slate-400">|</span> {vehicle.year}
-          </h2>
+            <img src={agencyData.logoUrl} alt={agencyData.name || ""} className="max-h-11 print:max-h-9 max-w-[45%] object-contain" />
+          ) : (
+            <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-800">
+              {agencyData?.name || ""}
+            </span>
+          )}
+          {agencyData?.phone && (
+            <span className="text-[13px] font-semibold text-slate-500 whitespace-nowrap">{agencyData.phone}</span>
+          )}
         </div>
 
-        {/* Photo */}
-        {(vehicle.photoUrls?.[0] || vehicle.photoUrl) && (
-          <div className="mb-6 print:mb-4 w-full flex justify-center">
-            <img 
-              src={vehicle.photoUrls?.[0] || vehicle.photoUrl} 
-              alt={`${vehicle.make} ${vehicle.model}`} 
-              className="max-h-[300px] print:max-h-[220px] w-auto object-cover rounded shadow-xl border-4 border-gray-200"
+        {/* El titulo: el modelo manda, la marca lo acompaña. Antes la marca iba
+            enorme y el modelo pequeño, cuando lo que distingue a un auto de
+            otro en el mismo lote es justamente el modelo. */}
+        <div className="px-7 print:px-6 pb-5">
+          <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-blue-600">{vehicle.make}</p>
+          <h1 className="text-[34px] print:text-[30px] leading-[1.08] font-extrabold text-slate-900 tracking-tight mt-0.5">
+            {vehicle.model}
+          </h1>
+        </div>
+
+        {foto && (
+          <div className="px-7 print:px-6">
+            <img
+              src={foto}
+              alt={`${vehicle.make} ${vehicle.model}`}
+              className="w-full h-[240px] print:h-[200px] object-cover rounded-xl"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgLoaded(true)}
-              
             />
           </div>
         )}
 
-        {/* Details Grid */}
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-6 print:mb-4 text-lg print:text-base">
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
-            <span className="font-bold text-slate-500 uppercase">Transmisión:</span>
-            <span className="font-black text-right">{vehicle.transmission}</span>
-          </div>
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
-            <span className="font-bold text-slate-500 uppercase">Kilometraje:</span>
-            <span className="font-black text-right">{vehicle.km.toLocaleString()} km</span>
-          </div>
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
-            <span className="font-bold text-slate-500 uppercase">Color:</span>
-            <span className="font-black text-right">{vehicle.color}</span>
-          </div>
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
-            <span className="font-bold text-slate-500 uppercase">Carrocería:</span>
-            <span className="font-black text-right">{vehicle.bodyType}</span>
-          </div>
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
-            <span className="font-bold text-slate-500 uppercase">Cilindros:</span>
-            <span className="font-black text-right">{vehicle.cylinders || '-'}</span>
-          </div>
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5">
-            <span className="font-bold text-slate-500 uppercase">Motor:</span>
-            <span className="font-black text-right">{vehicle.liters ? `${vehicle.liters} L` : '-'}</span>
-          </div>
-          <div className="flex justify-between border-b-2 border-gray-200 pb-1.5 col-span-2">
-            <span className="font-bold text-slate-500 uppercase">Pasajeros:</span>
-            <span className="font-black text-right">{vehicle.passengers || '-'}</span>
+        <div className="px-7 print:px-6 pt-6 print:pt-5">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+            {fichas.map(([etiqueta, valor], i) => (
+              <div
+                key={etiqueta}
+                className={`flex items-baseline justify-between gap-3 py-2.5 print:py-2 ${i < fichas.length - (fichas.length % 2 === 0 ? 2 : 1) ? "border-b border-slate-100" : ""}`}
+              >
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 whitespace-nowrap">{etiqueta}</span>
+                <span className="text-[15px] print:text-[14px] font-semibold text-slate-900 text-right">{valor}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Equipment / Extra Info */}
-        {vehicle.equipment && (
-          <div className="mb-6 print:mb-4 bg-slate-100 p-4 rounded">
-            <h3 className="text-lg print:text-sm font-black uppercase tracking-widest mb-1 text-slate-800">
-              Equipamiento Destacado
-            </h3>
-            <p className="text-base print:text-xs leading-snug font-medium text-slate-700">{vehicle.equipment}</p>
+        {equipo.length > 0 && (
+          <div className="px-7 print:px-6 pt-5 print:pt-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Equipamiento</p>
+            <div className="flex flex-wrap gap-1.5">
+              {equipo.map((x) => (
+                <span key={x} className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] print:text-[11px] font-semibold text-slate-700">
+                  {x}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Price */}
-        {vehicle.price > 0 && (
-          <div className="mt-auto text-center border-t-[6px] print:border-t-[4px] border-slate-900 pt-6 print:pt-4 bg-[#f4f5f5] rounded-b-xl -mx-6 -mb-6 print:-mx-5 print:-mb-5 pb-6 print:pb-4">
-            <div className="text-xl print:text-lg font-bold text-slate-500 uppercase mb-2 tracking-widest">Precio de Venta</div>
-            <div className="text-6xl print:text-5xl font-black text-slate-900">${vehicle.price.toLocaleString()}</div>
-          </div>
-        )}
+        {/* El precio cierra la hoja, con la direccion al lado: el cliente se la
+            lleva a su casa y ahi es donde tiene que encontrar donde estas. */}
+        <div className="mt-auto px-7 print:px-6 pt-6 print:pt-5 pb-6 print:pb-5">
+          {precio && (
+            <div className="flex items-end justify-between gap-4 border-t border-slate-200 pt-5 print:pt-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Precio</p>
+                <p className="text-[38px] print:text-[32px] leading-none font-extrabold text-slate-900 tracking-tight mt-1">
+                  {precio}
+                </p>
+              </div>
+              {agencyData?.address && (
+                <p className="text-[11px] print:text-[10px] leading-snug text-slate-500 text-right max-w-[48%]">
+                  {agencyData.address}
+                </p>
+              )}
+            </div>
+          )}
+          {!precio && agencyData?.address && (
+            <p className="text-[11px] text-slate-500 border-t border-slate-200 pt-4">{agencyData.address}</p>
+          )}
+        </div>
       </div>
 
       <style>{`
@@ -146,8 +168,8 @@ export function VehiclePrint() {
             print-color-adjust: exact;
             background-color: white;
           }
-          @page { 
-            margin: 0.25in; 
+          @page {
+            margin: 0.25in;
             size: 5.5in 8.5in; /* Media carta (Statement) */
           }
         }
