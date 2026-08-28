@@ -934,32 +934,45 @@ export function Kanban() {
       {/* Un embudo vacio callado no dice si no hay tratos o si no se pudieron
           leer. Con 28 tratos en la agencia y la pantalla en blanco, esa
           diferencia es justo lo que hace falta saber. */}
-      {filteredClients.length === 0 && (
+      {/* Un embudo sin tarjetas puede ser cuatro cosas distintas, y tratarlas
+          igual fue lo que nos tuvo dando vueltas un dia entero. Pero tampoco
+          se le puede gritar a una agencia nueva que «llegaron 0 tratos»: eso
+          no es un fallo, es que acaba de empezar.
+
+          Mientras la consulta no ha contestado no se dice nada: en el telefono
+          eso duraba un instante y hacia parpadear un aviso de error que no era
+          tal. */}
+      {filteredClients.length === 0 && errorDeTratos && (
         <div className="mb-3 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200 shrink-0">
-          {errorDeTratos ? (
+          <span className="font-bold">No se pudieron leer los tratos.</span> {errorDeTratos}
+        </div>
+      )}
+
+      {filteredClients.length === 0 && !errorDeTratos && dealsRecibidos !== null && (
+        <div className="mb-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-5 text-center shrink-0">
+          {dealsRecibidos === 0 ? (
             <>
-              <span className="font-bold">No se pudieron leer los tratos.</span> {errorDeTratos}
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Aquí van a vivir tus tratos
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Cada persona interesada en un auto es un trato, y lo vas moviendo de etapa
+                hasta la venta. Empieza con «+ Nuevo trato».
+              </p>
             </>
-          ) : dealsRecibidos === null ? (
-            <>
-              <span className="font-bold">La consulta de tratos no ha respondido.</span>{" "}
-              Ni datos ni error. Si esto no cambia en unos segundos, la suscripción no llegó
-              a crearse.
-            </>
-          ) : dealsRecibidos === 0 ? (
-            <>
-              <span className="font-bold">Llegaron 0 tratos de esta agencia.</span> Las etapas
-              sí cargaron, así que la agencia y la conexión están bien. Suele ser que esta
-              sesión entre con otra cuenta.
-            </>
+          ) : searchQuery.trim() ? (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Ningún trato coincide con <span className="font-bold">«{searchQuery.trim()}»</span>.
+            </p>
+          ) : filtroDeVendedor !== "all" ? (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Ese vendedor no tiene tratos en estas etapas. Cambia el filtro de arriba para verlos todos.
+            </p>
           ) : (
-            <>
-              <span className="font-bold">
-                Llegaron {dealsRecibidos} tratos, pero ninguno se está mostrando.
-              </span>{" "}
-              El problema no es la lectura, es cómo se reparten por etapa. Etapas activas:{" "}
-              {activeColumns.length}. Contactos: {clients.length}.
-            </>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Tus {dealsRecibidos} tratos están todos en etapas archivadas —ganados o perdidos—.
+              Ábrelas con el botón del archivero.
+            </p>
           )}
         </div>
       )}
