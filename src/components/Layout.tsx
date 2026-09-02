@@ -271,10 +271,12 @@ export function Layout() {
       roles: ["master", "admin"],
     },
     {
-      name: "Chat Interagencias",
+      name: "Chats",
       path: "/chats",
       icon: MessageSquare,
-      roles: ["master", "admin"],
+      // Los vendedores atienden sus propias conversaciones de WhatsApp, así que
+      // también necesitan esta pantalla; antes solo entraban admin y master.
+      roles: ["master", "admin", "seller"],
       badge: unreadChatsCount > 0 ? unreadChatsCount : undefined,
     },
   ].filter((item) => {
@@ -566,6 +568,7 @@ export function Layout() {
                location.pathname === '/users' ? 'Administra los accesos y roles de usuarios' :
                location.pathname === '/billing' ? 'Gestiona el plan y facturación de la agencia' :
                location.pathname === '/integrations' ? 'Conecta tus herramientas favoritas al CRM' :
+               location.pathname === '/chats' ? 'Conversaciones de WhatsApp con clientes y mensajes con otras agencias' :
                'Administra y controla las actividades del CRM'}
             </p>
           </div>
