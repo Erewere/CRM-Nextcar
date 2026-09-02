@@ -1563,9 +1563,10 @@ async function startServer() {
       });
     }
 
-    // The message body belongs in the timeline, not in `vehicle` — that field
-    // is what the client is looking for, and overwriting it lost real data.
-    if (text) {
+    // Solo la primera conversación deja nota: así en el historial del contacto
+    // se lee que llegó por WhatsApp, sin que cada mensaje posterior inunde las
+    // notas que el equipo escribe a mano. La conversación vive en el chat.
+    if (text && (!existing || origin !== "whatsapp")) {
       await adminDb.collection("notes").add({
         agencyId,
         clientId,
