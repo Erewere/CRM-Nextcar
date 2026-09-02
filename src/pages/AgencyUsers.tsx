@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
-import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink } from 'lucide-react';
+import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink, MessageCircle } from 'lucide-react';
 import { Task, Client } from '../types';
 import { ROLES_ASIGNABLES, NOMBRE_ROL, DESCRIPCION_ROL, type Rol } from '../lib/permissions';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -36,6 +36,9 @@ export function AgencyUsers() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [shareInventory, setShareInventory] = useState(false);
+  const [waRoutingMode, setWaRoutingMode] = useState<'manual' | 'roundRobin'>('manual');
+  const [waRoutingSellers, setWaRoutingSellers] = useState<string[]>([]);
+  const [savingRouting, setSavingRouting] = useState(false);
   const [savingSharing, setSavingSharing] = useState(false);
   
   useEffect(() => {
@@ -134,6 +137,10 @@ export function AgencyUsers() {
             if (agencyData.businessHours) {
               setBusinessStart(agencyData.businessHours.start || '08:00');
               setBusinessEnd(agencyData.businessHours.end || '21:00');
+            }
+            if (agencyData.whatsappRouting) {
+              setWaRoutingMode(agencyData.whatsappRouting.mode === 'roundRobin' ? 'roundRobin' : 'manual');
+              setWaRoutingSellers(Array.isArray(agencyData.whatsappRouting.sellerIds) ? agencyData.whatsappRouting.sellerIds : []);
             }
             if (agencyData.shareInventory !== undefined) {
               setShareInventory(!!agencyData.shareInventory);
@@ -531,6 +538,24 @@ export function AgencyUsers() {
       alert('Error guardando configuración.');
     } finally {
       setSavingInactivity(false);
+    }
+  };
+
+  const handleSaveWaRouting = async (mode: 'manual' | 'roundRobin', sellerIds: string[]) => {
+    if (!userData?.agencyId) return;
+    setSavingRouting(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), {
+        'whatsappRouting.mode': mode,
+        'whatsappRouting.sellerIds': sellerIds,
+      });
+      setWaRoutingMode(mode);
+      setWaRoutingSellers(sellerIds);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar la asignación de conversaciones de WhatsApp.');
+    } finally {
+      setSavingRouting(false);
     }
   };
 
@@ -950,6 +975,85 @@ export function AgencyUsers() {
               >
                 {savingHours ? 'Guardando...' : 'Guardar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asignación de conversaciones de WhatsApp */}
+      {userData?.role === 'admin' && (
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-green-600" />
+              Asignación de Conversaciones de WhatsApp
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Define qué pasa cuando un cliente nuevo escribe por WhatsApp. Las conversaciones de contactos que ya tienen vendedor asignado siempre se quedan con él.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => handleSaveWaRouting('manual', waRoutingSellers)}
+              disabled={savingRouting}
+              className={`w-full text-left p-4 rounded border transition-colors ${
+                waRoutingMode === 'manual'
+                  ? 'border-green-500 bg-green-50/60 dark:bg-green-950/20'
+                  : 'border-gray-200 dark:border-slate-700 bg-[#f4f5f5] dark:bg-slate-900 hover:border-slate-300'
+              }`}
+            >
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Asignación manual</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Las conversaciones nuevas llegan sin dueño y aparecen marcadas como "Sin asignar". Tú decides quién atiende cada una desde la pantalla de Chats.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSaveWaRouting('roundRobin', waRoutingSellers)}
+              disabled={savingRouting}
+              className={`w-full text-left p-4 rounded border transition-colors ${
+                waRoutingMode === 'roundRobin'
+                  ? 'border-green-500 bg-green-50/60 dark:bg-green-950/20'
+                  : 'border-gray-200 dark:border-slate-700 bg-[#f4f5f5] dark:bg-slate-900 hover:border-slate-300'
+              }`}
+            >
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Rotación automática</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Cada conversación nueva se reparte por turnos: una a un vendedor, la siguiente al que sigue, y así sucesivamente. Puedes reasignarlas después.
+              </p>
+            </button>
+          </div>
+
+          <div className="p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">¿Quiénes entran en la rotación?</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              Si no marcas a nadie, entran todos los vendedores de la agencia. Marca solo a algunos si quieres limitar quién recibe conversaciones nuevas.
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {users.filter((u: any) => u.role === 'seller').length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No hay vendedores en esta agencia todavía.</p>
+              ) : (
+                users.filter((u: any) => u.role === 'seller').map((u: any) => (
+                  <label key={u.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      disabled={savingRouting}
+                      checked={waRoutingSellers.includes(u.id)}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...waRoutingSellers, u.id]
+                          : waRoutingSellers.filter(id => id !== u.id);
+                        handleSaveWaRouting(waRoutingMode, next);
+                      }}
+                      className="rounded border-slate-300"
+                    />
+                    {u.name || u.email}
+                  </label>
+                ))
+              )}
             </div>
           </div>
         </div>

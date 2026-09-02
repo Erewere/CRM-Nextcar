@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
-import { MessageCircle, Send, ArrowLeft, Clock, AlertCircle } from 'lucide-react';
+import { MessageCircle, Send, ArrowLeft, Clock, AlertCircle, UserCheck } from 'lucide-react';
 import clsx from 'clsx';
 
 interface WaMessage {
@@ -43,7 +43,10 @@ export function WhatsAppChat() {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sellers, setSellers] = useState<{ id: string; name?: string }[]>([]);
+  const [assigning, setAssigning] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
+  const isAdmin = userData?.role === 'admin' || userData?.role === 'master';
 
   useEffect(() => {
     if (!userData?.agencyId) return;
@@ -68,6 +71,38 @@ export function WhatsAppChat() {
     }, (err) => console.error('Error cargando contactos:', err));
     return () => unsub();
   }, [userData?.agencyId]);
+
+  useEffect(() => {
+    if (!userData?.agencyId || !isAdmin) return;
+    const q = query(collection(db, 'users'), where('agencyId', '==', userData.agencyId));
+    const unsub = onSnapshot(q, (snap) => {
+      setSellers(snap.docs
+        .map(d => ({ id: d.id, ...(d.data() as any) }))
+        .filter((u: any) => u.role === 'seller')
+        .map((u: any) => ({ id: u.id, name: u.name || u.email })));
+    }, (err) => console.error('Error cargando vendedores:', err));
+    return () => unsub();
+  }, [userData?.agencyId, isAdmin]);
+
+  const handleAssign = async (sellerId: string) => {
+    if (!activeClientId || !currentUser) return;
+    setAssigning(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(getApiUrl('/api/clients/assign-seller'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ clientId: activeClientId, sellerId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al asignar');
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || 'Error al asignar la conversación');
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   // A seller only follows up their own clients; admins and master see everything.
   const visibleMessages = useMemo(() => {
@@ -167,6 +202,11 @@ export function WhatsAppChat() {
                     <p className="text-xs truncate text-slate-500 dark:text-slate-400">
                       {conv.last.direction === 'outbound' ? 'Tú: ' : ''}{conv.last.text}
                     </p>
+                    {!c?.sellerId && (
+                      <span className="inline-flex items-center gap-1 mt-1 mr-2 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                        <UserCheck className="w-3 h-3" /> Sin asignar
+                      </span>
+                    )}
                     {left !== null && left > 0 && (
                       <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                         <Clock className="w-3 h-3" /> {Math.floor(left)} h para responder
@@ -203,6 +243,23 @@ export function WhatsAppChat() {
                   {activeClient.phone || 'Sin teléfono'} · WhatsApp
                 </div>
               </div>
+
+              {isAdmin && (
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">Atiende:</span>
+                  <select
+                    value={activeClient.sellerId || ''}
+                    disabled={assigning}
+                    onChange={(e) => handleAssign(e.target.value)}
+                    className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <option value="">Sin asignar</option>
+                    {sellers.map(v => (
+                      <option key={v.id} value={v.id}>{v.name || v.id}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#f4f5f5]/30 dark:bg-slate-950/10 space-y-4">

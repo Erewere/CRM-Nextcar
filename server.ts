@@ -1102,6 +1102,65 @@ async function startServer() {
   // Free-form reply to a customer. Meta only delivers these inside the 24 h
   // window opened by the customer's last message; outside it the API rejects
   // the send, so we check first and give a clear reason instead of a raw error.
+  // Reasignar una conversación a otro vendedor de la misma agencia.
+  app.post("/api/clients/assign-seller", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const userData = userDoc.data();
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden asignar conversaciones" });
+      }
+
+      const { clientId, sellerId } = req.body;
+      if (!clientId) return res.status(400).json({ error: "Falta el parámetro clientId" });
+
+      const clientRef = adminDb.collection("clients").doc(clientId);
+      const clientSnap = await clientRef.get();
+      if (!clientSnap.exists) return res.status(404).json({ error: "Contacto no encontrado" });
+      if (userData?.role !== "master" && clientSnap.data()?.agencyId !== userData?.agencyId) {
+        return res.status(403).json({ error: "Ese contacto no es de tu agencia" });
+      }
+
+      // Cadena vacía = dejarlo sin asignar; si viene un vendedor, tiene que ser
+      // de la misma agencia del contacto.
+      if (sellerId) {
+        const sellerDoc = await adminDb.collection("users").doc(sellerId).get();
+        if (!sellerDoc.exists || sellerDoc.data()?.agencyId !== clientSnap.data()?.agencyId) {
+          return res.status(400).json({ error: "Ese vendedor no pertenece a la agencia del contacto" });
+        }
+      }
+
+      await clientRef.update({
+        sellerId: sellerId || "",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return res.json({ success: true });
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ error: e.message || "Error al asignar la conversación" });
+    }
+  });
+
   app.post("/api/meta/send-message", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -1396,6 +1455,42 @@ async function startServer() {
     }
   });
 
+  // Reparte una conversación entrante entre los vendedores de la agencia.
+  // "manual" la deja sin dueño para que un admin la asigne; "roundRobin" va
+  // rotando. El turno se avanza dentro de una transacción porque dos mensajes
+  // que entran a la vez tomarían el mismo índice y caerían en el mismo vendedor.
+  async function pickSellerForAgency(adminDb: any, agencyId: string): Promise<string> {
+    try {
+      const agencyRef = adminDb.collection("agencies").doc(agencyId);
+      const agencySnap = await agencyRef.get();
+      const routing = agencySnap.data()?.whatsappRouting || {};
+      if (routing.mode !== "roundRobin") return "";
+
+      let pool: string[] = Array.isArray(routing.sellerIds) ? routing.sellerIds.filter(Boolean) : [];
+      if (pool.length === 0) {
+        const sellers = await adminDb
+          .collection("users")
+          .where("agencyId", "==", agencyId)
+          .where("role", "==", "seller")
+          .get();
+        pool = sellers.docs.map((d: any) => d.id);
+      }
+      if (pool.length === 0) return "";
+
+      const turn = await adminDb.runTransaction(async (tx: any) => {
+        const fresh = await tx.get(agencyRef);
+        const current = fresh.data()?.whatsappRouting?.turn || 0;
+        tx.update(agencyRef, { "whatsappRouting.turn": current + 1 });
+        return current;
+      });
+
+      return pool[turn % pool.length];
+    } catch (e) {
+      console.error("No se pudo asignar vendedor automáticamente:", e);
+      return "";
+    }
+  }
+
   async function createMetaLead(
     adminDb: any,
     agencyId: string,
@@ -1425,6 +1520,8 @@ async function startServer() {
       }) || null;
     }
 
+    const assignedSeller = existing ? "" : await pickSellerForAgency(adminDb, agencyId);
+
     const clientId = existing
       ? existing.id
       : (await clientsRef.add({
@@ -1435,7 +1532,7 @@ async function startServer() {
           email: "",
           status: "new",
           origin: origin,
-          sellerId: "",
+          sellerId: assignedSeller,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })).id;
