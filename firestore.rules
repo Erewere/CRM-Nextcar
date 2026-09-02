@@ -186,5 +186,12 @@ service cloud.firestore {
         allow read, write: if isAuthenticated();
       }
     }
+
+    // Conversaciones de WhatsApp con clientes. Solo lectura desde la app: los
+    // mensajes los escribe el servidor (webhook entrante y endpoint de envío)
+    // con el Admin SDK, para que nadie pueda fabricar historial desde el cliente.
+    match /whatsappMessages/{id} {
+      allow read: if isAuthenticated() && belongsToMyAgency(resource.data);
+    }
   }
 }

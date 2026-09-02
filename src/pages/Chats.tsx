@@ -13,7 +13,8 @@ import {
   getDoc,
   getDocs
 } from 'firebase/firestore';
-import { MessageSquare, Send, ArrowLeft, Car, Info, ShieldAlert } from 'lucide-react';
+import { MessageSquare, Send, ArrowLeft, Car, Info, ShieldAlert, MessageCircle } from 'lucide-react';
+import { WhatsAppChat } from '../components/WhatsAppChat';
 import { useLocation } from 'react-router';
 import clsx from 'clsx';
 
@@ -36,6 +37,7 @@ interface Message {
 
 export function Chats() {
   const { userData } = useAuth();
+  const [canal, setCanal] = useState<'whatsapp' | 'interno'>('whatsapp');
   const location = useLocation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -229,8 +231,45 @@ export function Chats() {
   }
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-[#f4f5f5] dark:bg-slate-950 overflow-hidden md:rounded md:border border-gray-200 dark:border-slate-800 md:shadow-sm">
-      
+    <div className="h-full flex flex-col bg-[#f4f5f5] dark:bg-slate-950 overflow-hidden md:rounded md:border border-gray-200 dark:border-slate-800 md:shadow-sm">
+
+      {/* Selector de canal: clientes por WhatsApp vs. otras agencias */}
+      <div className="flex shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <button
+          onClick={() => setCanal('whatsapp')}
+          className={clsx(
+            "flex items-center gap-2 px-5 py-3 text-sm font-bold transition-colors border-b-2",
+            canal === 'whatsapp'
+              ? "border-green-600 text-green-700 dark:text-green-400"
+              : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          )}
+        >
+          <MessageCircle className="w-4 h-4" />
+          WhatsApp
+          <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline">clientes</span>
+        </button>
+        <button
+          onClick={() => setCanal('interno')}
+          className={clsx(
+            "flex items-center gap-2 px-5 py-3 text-sm font-bold transition-colors border-b-2",
+            canal === 'interno'
+              ? "border-blue-600 text-blue-700 dark:text-blue-400"
+              : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          )}
+        >
+          <MessageSquare className="w-4 h-4" />
+          Interno
+          <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline">otras agencias</span>
+        </button>
+      </div>
+
+      {canal === 'whatsapp' ? (
+        <div className="flex-1 overflow-hidden">
+          <WhatsAppChat />
+        </div>
+      ) : (
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+
       {/* Sidebar List of Chats */}
       <div className={clsx(
         "w-full md:w-80 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden",
@@ -427,6 +466,8 @@ export function Chats() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }
