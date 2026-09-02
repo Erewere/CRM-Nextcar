@@ -1303,21 +1303,56 @@ async function startServer() {
   ) {
     if (!adminDb) return;
     const clientsRef = adminDb.collection("clients");
-    
-    const newClient = {
-      agencyId,
-      name,
-      address: `Lead from ${origin}`,
-      phone,
-      email: "",
-      vehicle: text.substring(0, 100),
-      status: "new",
-      origin: origin,
-      sellerId: "",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    await clientsRef.add(newClient);
+
+    // An incoming message is a conversation, not necessarily a new person:
+    // without this lookup every message from the same number created another
+    // duplicate contact. Match on the last 10 digits so that the country code
+    // and the Mexican "1" prefix don't cause misses (WhatsApp reports
+    // 5214612729349, the CRM usually stores 4612729349).
+    const digits = (phone || "").replace(/\D/g, "");
+    const tail = digits.slice(-10);
+
+    let existing: any = null;
+    if (tail.length === 10) {
+      const snap = await clientsRef.where("agencyId", "==", agencyId).get();
+      existing = snap.docs.find((d: any) => {
+        const p = (d.data()?.phone || "").replace(/\D/g, "");
+        return p.length >= 10 && p.slice(-10) === tail && !d.data()?.isDeleted;
+      }) || null;
+    }
+
+    const clientId = existing
+      ? existing.id
+      : (await clientsRef.add({
+          agencyId,
+          name,
+          address: `Lead from ${origin}`,
+          phone,
+          email: "",
+          status: "new",
+          origin: origin,
+          sellerId: "",
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        })).id;
+
+    if (existing) {
+      await existing.ref.update({ updatedAt: FieldValue.serverTimestamp() });
+    }
+
+    // The message body belongs in the timeline, not in `vehicle` — that field
+    // is what the client is looking for, and overwriting it lost real data.
+    if (text) {
+      await adminDb.collection("notes").add({
+        agencyId,
+        clientId,
+        content: text,
+        type: origin,
+        direction: "inbound",
+        createdAt: new Date().toISOString(),
+        createdByName: name || "Cliente",
+      });
+    }
   }
 
     app.get("/api/proxy-image", async (req, res) => {

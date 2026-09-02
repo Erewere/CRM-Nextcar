@@ -104,9 +104,9 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
       setTimeout(() => {
         onClose();
       }, 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error al enviar el mensaje');
+      alert(err?.message || 'Error al enviar el mensaje');
     } finally {
       setSending(false);
     }

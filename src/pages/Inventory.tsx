@@ -5,8 +5,9 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs, getDoc } from 'firebase/firestore';
 import { getApiUrl } from '../lib/api';
 import { Vehicle, Client, VehicleExpense } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
+import { ShareVehicleModal } from '../components/ShareVehicleModal';
 import { MobileInventory } from './mobile/MobileInventory';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useSharedInventoryMatches, useInventarioCompartido } from '../hooks/useSharedInventoryMatches';
@@ -220,6 +221,7 @@ export function Inventory() {
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>({});
 
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
+  const [vehicleToShare, setVehicleToShare] = useState<Vehicle | null>(null);
 
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [excelData, setExcelData] = useState<any[]>([]);
@@ -1047,8 +1049,17 @@ export function Inventory() {
                     </div>
                   )}
                   <div className="absolute top-2 right-2 flex gap-2">
+                    {vehicle.agencyId === userData?.agencyId && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setVehicleToShare(vehicle); }}
+                        title="Compartir por WhatsApp"
+                        className="p-1.5 bg-white dark:bg-slate-800/90 rounded text-slate-400 hover:text-green-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    )}
                     {((userData?.role === 'admin' || userData?.role === 'master') && vehicle.agencyId === userData?.agencyId) && (
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
                         className="p-1.5 bg-white dark:bg-slate-800/90 rounded text-slate-400 hover:text-red-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                       >
@@ -1283,6 +1294,13 @@ export function Inventory() {
         <VehicleDetailModal 
           vehicle={selectedVehicle as Vehicle} 
           onClose={() => setSelectedVehicle(undefined)} 
+        />
+      )}
+
+      {vehicleToShare && (
+        <ShareVehicleModal
+          vehicle={vehicleToShare}
+          onClose={() => setVehicleToShare(null)}
         />
       )}
 
