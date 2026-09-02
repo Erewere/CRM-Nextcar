@@ -1077,12 +1077,14 @@ async function startServer() {
           phoneNumberId,
           accountId,
           updatedAt: FieldValue.serverTimestamp(),
-          // Legacy field: tokens used to be stored here in plaintext, readable by
-          // any authenticated user. Always strip it — the token now lives in the
-          // secrets subcollection, reachable only via the Admin SDK.
-          accessToken: FieldValue.delete(),
         }
       }, { merge: true });
+
+      // Older versions stored the access token here in plaintext, where any
+      // authenticated user could read it; the token now lives in the secrets
+      // subcollection instead. This has to be its own update() with a dotted
+      // path — FieldValue.delete() nested inside a map is rejected by the SDK.
+      await agencyDocRef.update({ "whatsappConfig.accessToken": FieldValue.delete() }).catch(() => {});
 
       if (accessToken) {
         await agencyDocRef.collection("secrets").doc("whatsapp").set({
