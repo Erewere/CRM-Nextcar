@@ -1099,6 +1099,168 @@ async function startServer() {
     }
   });
 
+  // Free-form reply to a customer. Meta only delivers these inside the 24 h
+  // window opened by the customer's last message; outside it the API rejects
+  // the send, so we check first and give a clear reason instead of a raw error.
+  // Reasignar una conversación a otro vendedor de la misma agencia.
+  app.post("/api/clients/assign-seller", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const userData = userDoc.data();
+      if (userData?.role !== "master" && userData?.role !== "admin") {
+        return res.status(403).json({ error: "Solo administradores pueden asignar conversaciones" });
+      }
+
+      const { clientId, sellerId } = req.body;
+      if (!clientId) return res.status(400).json({ error: "Falta el parámetro clientId" });
+
+      const clientRef = adminDb.collection("clients").doc(clientId);
+      const clientSnap = await clientRef.get();
+      if (!clientSnap.exists) return res.status(404).json({ error: "Contacto no encontrado" });
+      if (userData?.role !== "master" && clientSnap.data()?.agencyId !== userData?.agencyId) {
+        return res.status(403).json({ error: "Ese contacto no es de tu agencia" });
+      }
+
+      // Cadena vacía = dejarlo sin asignar; si viene un vendedor, tiene que ser
+      // de la misma agencia del contacto.
+      if (sellerId) {
+        const sellerDoc = await adminDb.collection("users").doc(sellerId).get();
+        if (!sellerDoc.exists || sellerDoc.data()?.agencyId !== clientSnap.data()?.agencyId) {
+          return res.status(400).json({ error: "Ese vendedor no pertenece a la agencia del contacto" });
+        }
+      }
+
+      await clientRef.update({
+        sellerId: sellerId || "",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return res.json({ success: true });
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ error: e.message || "Error al asignar la conversación" });
+    }
+  });
+
+  app.post("/api/meta/send-message", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const token = authHeader.substring(7);
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(token);
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const userData = userDoc.data();
+      if (!userData?.agencyId || userData.agencyId === "unassigned") {
+        return res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+
+      const { clientId, text } = req.body;
+      if (!clientId || !text) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos (clientId, text)" });
+      }
+
+      const clientDoc = await adminDb.collection("clients").doc(clientId).get();
+      if (!clientDoc.exists) return res.status(404).json({ error: "Contacto no encontrado" });
+      const client = clientDoc.data();
+      if (client?.agencyId !== userData.agencyId) {
+        return res.status(403).json({ error: "Ese contacto no es de tu agencia" });
+      }
+      if (!client?.phone) {
+        return res.status(400).json({ error: "El contacto no tiene teléfono" });
+      }
+
+      const lastInbound = client?.lastWhatsappInboundAt ? new Date(client.lastWhatsappInboundAt).getTime() : 0;
+      const hoursSince = (Date.now() - lastInbound) / 3600000;
+      if (!lastInbound || hoursSince >= 24) {
+        return res.status(409).json({
+          error: "La ventana de 24 horas está cerrada. Solo puedes responder con texto libre dentro de las 24 horas posteriores al último mensaje del cliente; fuera de ese plazo hay que usar una plantilla aprobada.",
+          windowClosed: true,
+        });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(userData.agencyId);
+      const agencySnap = await agencyDocRef.get();
+      const phoneNumberId = agencySnap.data()?.whatsappConfig?.phoneNumberId;
+      const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
+      const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
+      if (!phoneNumberId || !accessToken) {
+        return res.status(400).json({ error: "WhatsApp no está configurado para esta agencia. Ve a Integraciones para conectarlo." });
+      }
+
+      let to = String(client.phone).replace(/\D/g, "");
+      if (to.length === 10) to = "52" + to;
+
+      const metaRes = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "text",
+          text: { body: text },
+        }),
+      });
+      const metaData: any = await metaRes.json();
+      if (!metaRes.ok) {
+        console.error("Meta API error (send-message):", metaData);
+        return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje" });
+      }
+
+      await adminDb.collection("whatsappMessages").add({
+        agencyId: userData.agencyId,
+        clientId,
+        direction: "outbound",
+        text,
+        phone: client.phone,
+        waMessageId: metaData?.messages?.[0]?.id || null,
+        status: "sent",
+        sentByName: userData?.name || "",
+        createdAt: new Date().toISOString(),
+      });
+
+      await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
+
+      return res.json({ success: true, messageId: metaData?.messages?.[0]?.id });
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ error: e.message || "Error al enviar el mensaje" });
+    }
+  });
+
   app.post("/api/meta/send-template", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -1250,7 +1412,7 @@ async function startServer() {
                 console.log(
                   `New incoming WA message from ${name} (${phone}): ${text}`,
                 );
-                await createMetaLead(adminDb, agencyId, name, phone, "whatsapp", text);
+                await createMetaLead(adminDb, agencyId, name, phone, "whatsapp", text, value.messages[0]?.id);
               }
             }
           }
@@ -1293,6 +1455,42 @@ async function startServer() {
     }
   });
 
+  // Reparte una conversación entrante entre los vendedores de la agencia.
+  // "manual" la deja sin dueño para que un admin la asigne; "roundRobin" va
+  // rotando. El turno se avanza dentro de una transacción porque dos mensajes
+  // que entran a la vez tomarían el mismo índice y caerían en el mismo vendedor.
+  async function pickSellerForAgency(adminDb: any, agencyId: string): Promise<string> {
+    try {
+      const agencyRef = adminDb.collection("agencies").doc(agencyId);
+      const agencySnap = await agencyRef.get();
+      const routing = agencySnap.data()?.whatsappRouting || {};
+      if (routing.mode !== "roundRobin") return "";
+
+      let pool: string[] = Array.isArray(routing.sellerIds) ? routing.sellerIds.filter(Boolean) : [];
+      if (pool.length === 0) {
+        const sellers = await adminDb
+          .collection("users")
+          .where("agencyId", "==", agencyId)
+          .where("role", "==", "seller")
+          .get();
+        pool = sellers.docs.map((d: any) => d.id);
+      }
+      if (pool.length === 0) return "";
+
+      const turn = await adminDb.runTransaction(async (tx: any) => {
+        const fresh = await tx.get(agencyRef);
+        const current = fresh.data()?.whatsappRouting?.turn || 0;
+        tx.update(agencyRef, { "whatsappRouting.turn": current + 1 });
+        return current;
+      });
+
+      return pool[turn % pool.length];
+    } catch (e) {
+      console.error("No se pudo asignar vendedor automáticamente:", e);
+      return "";
+    }
+  }
+
   async function createMetaLead(
     adminDb: any,
     agencyId: string,
@@ -1300,6 +1498,7 @@ async function startServer() {
     phone: string,
     origin: string,
     text: string,
+    waMessageId?: string,
   ) {
     if (!adminDb) return;
     const clientsRef = adminDb.collection("clients");
@@ -1321,6 +1520,8 @@ async function startServer() {
       }) || null;
     }
 
+    const assignedSeller = existing ? "" : await pickSellerForAgency(adminDb, agencyId);
+
     const clientId = existing
       ? existing.id
       : (await clientsRef.add({
@@ -1331,13 +1532,35 @@ async function startServer() {
           email: "",
           status: "new",
           origin: origin,
-          sellerId: "",
+          sellerId: assignedSeller,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })).id;
 
+    // Meta only allows free-form replies within 24 h of the customer's last
+    // message; store when it arrived so the UI can tell sellers whether the
+    // window is still open instead of letting them write messages that bounce.
+    const clientUpdate: any = { updatedAt: FieldValue.serverTimestamp() };
+    if (origin === "whatsapp") {
+      clientUpdate.lastWhatsappInboundAt = new Date().toISOString();
+    }
     if (existing) {
-      await existing.ref.update({ updatedAt: FieldValue.serverTimestamp() });
+      await existing.ref.update(clientUpdate);
+    } else if (origin === "whatsapp") {
+      await clientsRef.doc(clientId).update(clientUpdate);
+    }
+
+    if (origin === "whatsapp" && text) {
+      await adminDb.collection("whatsappMessages").add({
+        agencyId,
+        clientId,
+        direction: "inbound",
+        text,
+        phone,
+        waMessageId: waMessageId || null,
+        status: "received",
+        createdAt: new Date().toISOString(),
+      });
     }
 
     // The message body belongs in the timeline, not in `vehicle` — that field
