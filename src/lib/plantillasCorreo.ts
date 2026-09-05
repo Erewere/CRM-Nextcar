@@ -77,7 +77,11 @@ const PARA_QUE_SIRVE = `
     de memoria cuánto dejó cada auto.
   </p>`;
 
-function envoltura(titulo: string, cuerpo: string): string {
+function envoltura(
+  titulo: string,
+  cuerpo: string,
+  pie: string = "Recibes este correo porque se creó una cuenta a tu nombre en Nextcar CRM.",
+): string {
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(titulo)}</title></head>
@@ -100,7 +104,7 @@ function envoltura(titulo: string, cuerpo: string): string {
     </td></tr>
   </table>
   <p style="max-width:560px;margin:14px auto 0;color:#94a3b8;font-size:12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-    Recibes este correo porque se creó una cuenta a tu nombre en Nextcar CRM.
+    ${esc(pie)}
   </p>
 </td></tr></table>
 </body></html>`;
@@ -198,5 +202,72 @@ export function correoInvitacionEquipo(d: {
   return {
     subject: `${d.invitadoPor} te agregó al CRM de ${d.agencia}`,
     html: envoltura(`Tu acceso a Nextcar CRM`, cuerpo),
+  };
+}
+
+/**
+ * Invitación en frío a una agencia que todavía no usa el CRM.
+ *
+ * A diferencia de los correos de arriba, aquí no hay cuenta creada: quien lee
+ * esto no conoce Nextcar. El correo tiene que explicarse solo, como si fuera
+ * el home de una página, y la anécdota del 81-a-1 la vivimos nosotros mismos
+ * vendiendo autos — no es un caso de estudio prestado.
+ */
+export function correoInvitacionAgencia(d: {
+  agencia: string;
+  ciudad?: string;
+}): { subject: string; html: string } {
+  const saludo = d.ciudad ? `${d.agencia} (${d.ciudad})` : d.agencia;
+
+  const cuerpo = `
+    <p style="margin:0 0 4px;color:${AZUL};font-size:13px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">
+      Una invitación de Nextcar
+    </p>
+    <h1 style="margin:0 0 14px;color:${TINTA};font-size:24px;font-weight:800;line-height:1.3;">
+      Lo construimos para nosotros.<br>Se lo abrimos a ${esc(saludo)}.
+    </h1>
+    <p style="margin:0 0 22px;color:${GRIS};font-size:15px;line-height:1.65;">
+      Somos una agencia de seminuevos, como la suya. Nextcar CRM nació de
+      nuestra propia operación y hoy lo usamos todos los días para vender
+      autos — ahora lo ponemos a disposición de otras agencias en Guanajuato
+      y Querétaro.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f8fafc;border:1px solid ${BORDE};border-radius:10px;padding:16px 18px;margin:0 0 26px;">
+      <tr><td style="color:${TINTA};font-size:15px;line-height:1.6;">
+        En una sola campaña generamos <strong>81 conversaciones</strong> por
+        WhatsApp y Meta — y cerramos <strong>1 venta</strong>. No porque
+        faltaran interesados, sino porque el seguimiento se perdía en el
+        camino. <span style="color:${GRIS};">Por eso existe Nextcar CRM.</span>
+      </td></tr>
+    </table>
+
+    <h2 style="margin:0 0 12px;color:${TINTA};font-size:17px;font-weight:800;">
+      Qué va a encontrar ${esc(d.agencia)}
+    </h2>
+    <ul style="margin:0 0 24px;padding-left:20px;color:${TINTA};font-size:15px;line-height:1.8;">
+      <li><strong>Tablero de negociaciones</strong> — cada cliente en su etapa, desde el primer mensaje hasta la firma, sin post-its ni WhatsApp perdido.</li>
+      <li><strong>Leads automáticos de WhatsApp y Meta</strong> — entran solos al CRM; nadie los captura a mano.</li>
+      <li><strong>Equipo de ventas</strong> — se asignan los clientes, se mide a cada vendedor y ninguno se queda sin dueño.</li>
+      <li><strong>Inventario y pagos</strong> — autos, gastos, consignaciones y mensualidades de crédito en un solo lugar.</li>
+      <li><strong>Reportes reales</strong> — qué campaña y qué vendedor están cerrando ventas de verdad.</li>
+    </ul>
+
+    <p style="margin:0 0 6px;color:${GRIS};font-size:14px;line-height:1.6;">
+      Nos encantaría mostrárselo en una llamada de 15 minutos, sin costo ni compromiso.
+    </p>
+    ${boton("Conocer Nextcar CRM", CONTACTO.crm)}
+    <p style="margin:-14px 0 0;color:${GRIS};font-size:13px;line-height:1.5;">
+      ¿Prefiere WhatsApp? Escríbanos directo:
+      <a href="${esc(CONTACTO.whatsappEnlace)}" style="color:${AZUL};text-decoration:none;font-weight:600;">${esc(CONTACTO.whatsapp)}</a>
+    </p>`;
+
+  return {
+    subject: `${d.agencia}: el CRM que usamos en Nextcar, ahora para su agencia`,
+    html: envoltura(
+      `Conozca Nextcar CRM`,
+      cuerpo,
+      `Le escribimos porque ${esc(d.agencia)} aparece en nuestro directorio de agencias de seminuevos en Guanajuato y Querétaro. Si prefiere no recibir más correos de este tipo, respóndanos y lo quitamos de la lista.`,
+    ),
   };
 }
