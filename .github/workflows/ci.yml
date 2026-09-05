@@ -28,3 +28,7 @@ jobs:
 
       - name: Compilar
         run: npm run build
+
+      # El emulador de Firestore necesita Java; los runners de Ubuntu ya lo traen.
+      - name: Probar las reglas de Firestore
+        run: npm run test:rules
