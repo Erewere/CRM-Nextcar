@@ -70,10 +70,16 @@ function getAdminApp() {
   return adminApp;
 }
 
+// La base se puede cambiar por variable de entorno para poder correr contra
+// una de pruebas sin tocar los datos reales de las agencias. Sin la variable,
+// queda la de produccion: los despliegues existentes no cambian.
+const FIRESTORE_DATABASE_ID =
+  process.env.FIRESTORE_DATABASE_ID || "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a";
+
 function getAdminDb() {
   const adminApp = getAdminApp();
   if (!adminApp) return null;
-  return getAdminFirestore(adminApp, "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a");
+  return getAdminFirestore(adminApp, FIRESTORE_DATABASE_ID);
 }
 
 /**

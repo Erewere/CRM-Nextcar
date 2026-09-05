@@ -11,7 +11,13 @@ export const auth = initializeAuth(app, {
   persistence: [browserSessionPersistence, inMemoryPersistence],
   popupRedirectResolver: browserPopupRedirectResolver
 });
-export const db = initializeFirestore(app, { experimentalForceLongPolling: true }, "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a");
+// Misma idea que en el servidor: apuntar a otra base para pruebas sin tocar
+// los datos reales. Sin la variable, queda la de produccion.
+const databaseId =
+  (import.meta.env.VITE_FIRESTORE_DATABASE_ID as string) ||
+  "ai-studio-e65d5185-219a-4e1d-a330-044b1109696a";
+
+export const db = initializeFirestore(app, { experimentalForceLongPolling: true }, databaseId);
 export const storage = getStorage(app);
 
 
