@@ -28,3 +28,13 @@ jobs:
 
       - name: Compilar
         run: npm run build
+
+      # El emulador de Firestore corre sobre Java, y firebase-tools exige 21 o
+      # superior — el runner trae una versión más vieja por defecto.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Probar las reglas de Firestore
+        run: npm run test:rules
