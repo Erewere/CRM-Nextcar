@@ -1300,7 +1300,7 @@ async function startServer() {
         return res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
       }
 
-      const { to, templateName, variables, agencyId: bodyAgencyId } = req.body;
+      const { to, templateName, variables, agencyId: bodyAgencyId, clientId } = req.body;
       if (!to || !templateName) {
         return res.status(400).json({ error: "Faltan parámetros requeridos (to, templateName)" });
       }
@@ -1346,6 +1346,37 @@ async function startServer() {
       if (!metaRes.ok) {
         console.error("Meta API error:", metaData);
         return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje de WhatsApp" });
+      }
+
+      // Dejar rastro en la conversación: si no, el vendedor comparte un auto y
+      // en el chat no aparece nada, así que quien retome después no sabe qué
+      // ya se le mandó al cliente y se lo repite.
+      if (clientId) {
+        try {
+          const clientSnap = await adminDb.collection("clients").doc(clientId).get();
+          if (clientSnap.exists && clientSnap.data()?.agencyId === targetAgencyId) {
+            const partes = Array.isArray(variables)
+              ? variables.map((v: any) => v?.text).filter(Boolean)
+              : [];
+            await adminDb.collection("whatsappMessages").add({
+              agencyId: targetAgencyId,
+              clientId,
+              direction: "outbound",
+              text: partes.length ? `[Plantilla] ${partes.join(" · ")}` : `[Plantilla] ${templateName}`,
+              templateName,
+              phone: clientSnap.data()?.phone || to,
+              waMessageId: metaData?.messages?.[0]?.id || null,
+              status: "sent",
+              sentByName: userData?.name || "",
+              createdAt: new Date().toISOString(),
+            });
+            await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
+          }
+        } catch (regErr) {
+          // Registrar es secundario: si falla, el mensaje ya se envió y no
+          // tiene caso devolver error al vendedor.
+          console.error("No se pudo registrar la plantilla en la conversación:", regErr);
+        }
       }
 
       res.json({ success: true, messageId: metaData?.messages?.[0]?.id });

@@ -74,6 +74,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
         },
         body: JSON.stringify({
           to: phone,
+          clientId: selectedClient.id,
           templateName: 'vehicle_recommendation',
           variables: [
              { type: "text", text: selectedClient.name },
