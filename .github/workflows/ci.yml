@@ -1,0 +1,30 @@
+name: CI
+
+# Corre en cada Pull Request y en cada push a main. La idea es que un cambio
+# que no compila se detecte aquí y no en el despliegue de Hostinger, que es
+# donde nos hemos estado enterando hasta ahora.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verificar:
+    name: Tipos y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Revisar tipos
+        run: npm run lint
+
+      - name: Compilar
+        run: npm run build
