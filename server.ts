@@ -1545,10 +1545,12 @@ async function startServer() {
                 await createMetaLead(
                   adminDb,
                   agencyId,
-                  `Messenger Lead (${senderId})`,
+                  `Messenger ${senderId.slice(-6)}`,
                   "",
                   "messenger",
                   text,
+                  undefined,
+                  senderId,
                 );
               }
             }
@@ -1608,6 +1610,7 @@ async function startServer() {
     origin: string,
     text: string,
     waMessageId?: string,
+    externalId?: string,
   ) {
     if (!adminDb) return;
     const clientsRef = adminDb.collection("clients");
@@ -1629,6 +1632,17 @@ async function startServer() {
       }) || null;
     }
 
+    // Messenger no da telefono: solo un identificador de la persona frente a
+    // esa pagina. Sin esto, cada mensaje suyo crearia otro contacto, que es el
+    // diluvio de duplicados que ya nos costo arreglar en WhatsApp.
+    if (!existing && externalId) {
+      const porId = await clientsRef
+        .where("agencyId", "==", agencyId)
+        .where("messengerPsid", "==", externalId)
+        .get();
+      existing = porId.docs.find((d: any) => !d.data()?.isDeleted) || null;
+    }
+
     const assignedSeller = existing ? "" : await pickSellerForAgency(adminDb, agencyId);
 
     const clientId = existing
@@ -1642,6 +1656,7 @@ async function startServer() {
           status: "new",
           origin: origin,
           sellerId: assignedSeller,
+          ...(externalId ? { messengerPsid: externalId } : {}),
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })).id;
@@ -1670,6 +1685,29 @@ async function startServer() {
         status: "received",
         createdAt: new Date().toISOString(),
       });
+    }
+
+    // Un contacto sin trato no sale en el embudo, y lo que no se ve no se
+    // trabaja. Vale igual para esta puerta que para la publica: quien escribe
+    // por WhatsApp o Messenger es un prospecto, no una ficha de directorio.
+    try {
+      const { etapaId, etapas } = await primeraEtapaDelEmbudo(adminDb, agencyId);
+      if (!(await tieneTratoAbierto(adminDb, agencyId, clientId, etapas))) {
+        const datosCliente = existing ? (existing.data() || {}) : {};
+        await crearTratoDelLead(adminDb, {
+          agencyId,
+          clientId,
+          name: datosCliente.name || name,
+          vehicle: datosCliente.vehicle || "",
+          vehicleId: datosCliente.vehicleId || null,
+          sellerId: datosCliente.sellerId || assignedSeller || "",
+          etapaId,
+        });
+      }
+    } catch (errTrato) {
+      // El contacto y el mensaje ya quedaron guardados: que falle el trato no
+      // debe perder el lead.
+      console.error("No se pudo crear el trato del mensaje entrante:", errTrato);
     }
 
     // Solo la primera conversación deja nota: así en el historial del contacto
