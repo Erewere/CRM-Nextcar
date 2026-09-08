@@ -1108,6 +1108,7 @@ async function startServer() {
       return res.json({
         phoneNumberId: whatsappConfig.phoneNumberId || "",
         accountId: whatsappConfig.accountId || "",
+        facebookPageId: agencySnap.data()?.facebookPageId || "",
         hasAccessToken: !!accessToken,
         maskedAccessToken: accessToken ? "••••••••" + accessToken.slice(-4) : null,
       });
@@ -1136,7 +1137,7 @@ async function startServer() {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
       const userData = userDoc.data();
-      const { agencyId: bodyAgencyId, phoneNumberId, accountId, accessToken } = req.body;
+      const { agencyId: bodyAgencyId, phoneNumberId, accountId, accessToken, facebookPageId } = req.body;
       const targetAgencyId = bodyAgencyId || userData?.agencyId;
 
       if (userData?.role !== "master" && userData?.role !== "admin") {
@@ -1155,7 +1156,13 @@ async function startServer() {
           phoneNumberId,
           accountId,
           updatedAt: FieldValue.serverTimestamp(),
-        }
+        },
+        // El webhook de Messenger identifica la agencia por el id de la pagina
+        // que recibio el mensaje. Sin este dato, los mensajes llegan y se
+        // descartan porque no se sabe de quien son.
+        ...(facebookPageId !== undefined
+          ? { facebookPageId: String(facebookPageId || "").trim() }
+          : {}),
       }, { merge: true });
 
       // Older versions stored the access token here in plaintext, where any
@@ -1687,10 +1694,11 @@ async function startServer() {
       });
     }
 
-    // Un contacto sin trato no sale en el embudo, y lo que no se ve no se
-    // trabaja. Vale igual para esta puerta que para la publica: quien escribe
-    // por WhatsApp o Messenger es un prospecto, no una ficha de directorio.
-    try {
+    // WhatsApp trae el telefono, asi que quien escribe ya es un prospecto real
+    // y entra al embudo solo. Messenger no da telefono ni nombre completo: ahi
+    // el trato lo crea el vendedor cuando ya pidio los datos, para no llenar el
+    // embudo de tarjetas sin forma de contactar a nadie.
+    if (origin === "whatsapp") try {
       const { etapaId, etapas } = await primeraEtapaDelEmbudo(adminDb, agencyId);
       if (!(await tieneTratoAbierto(adminDb, agencyId, clientId, etapas))) {
         const datosCliente = existing ? (existing.data() || {}) : {};
