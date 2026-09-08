@@ -1243,7 +1243,16 @@ export function ClientDetailModal({
 
         // ALWAYS create a NEW deal record in `deals`
         const newDealRef = doc(collection(db, "deals"));
-        const initialStage = finalFormData.status || (pipelineStages && pipelineStages[0]?.id) || "lead";
+        // El estado de un contacto y una etapa del embudo no son lo mismo. Un
+        // contacto nuevo trae status "new", que no es ninguna columna: el trato
+        // nacia con esa etapa y no aparecia en el embudo por ningun lado. Solo
+        // se hereda si de verdad es una etapa; si no, entra en la primera.
+        const primeraEtapa = (pipelineStages && pipelineStages[0]?.id) || "lead";
+        const heredada = finalFormData.status;
+        const initialStage =
+          heredada && pipelineStages?.some((e: any) => e?.id === heredada)
+            ? heredada
+            : primeraEtapa;
         const dealDataToSave: any = {
           id: newDealRef.id,
           clientId: finalClientId,
