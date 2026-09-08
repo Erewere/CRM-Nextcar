@@ -1105,12 +1105,19 @@ async function startServer() {
       const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
       const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
 
+      // El token de la pagina es otro distinto del de WhatsApp: lo emite Meta
+      // por pagina y es el unico que sirve para contestar por Messenger.
+      const secretMsgr = await agencyDocRef.collection("secrets").doc("messenger").get();
+      const pageToken = secretMsgr.exists ? secretMsgr.data()?.pageAccessToken : null;
+
       return res.json({
         phoneNumberId: whatsappConfig.phoneNumberId || "",
         accountId: whatsappConfig.accountId || "",
         facebookPageId: agencySnap.data()?.facebookPageId || "",
         hasAccessToken: !!accessToken,
         maskedAccessToken: accessToken ? "••••••••" + accessToken.slice(-4) : null,
+        hasPageToken: !!pageToken,
+        maskedPageToken: pageToken ? "••••••••" + pageToken.slice(-4) : null,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -1137,7 +1144,7 @@ async function startServer() {
         return res.status(403).json({ error: "Usuario no encontrado" });
       }
       const userData = userDoc.data();
-      const { agencyId: bodyAgencyId, phoneNumberId, accountId, accessToken, facebookPageId } = req.body;
+      const { agencyId: bodyAgencyId, phoneNumberId, accountId, accessToken, facebookPageId, pageAccessToken } = req.body;
       const targetAgencyId = bodyAgencyId || userData?.agencyId;
 
       if (userData?.role !== "master" && userData?.role !== "admin") {
@@ -1174,6 +1181,13 @@ async function startServer() {
       if (accessToken) {
         await agencyDocRef.collection("secrets").doc("whatsapp").set({
           accessToken,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      if (pageAccessToken) {
+        await agencyDocRef.collection("secrets").doc("messenger").set({
+          pageAccessToken,
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
       }
@@ -1404,6 +1418,108 @@ async function startServer() {
       await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
 
       return res.json({ success: true, messageId: metaData?.messages?.[0]?.id });
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ error: e.message || "Error al enviar el mensaje" });
+    }
+  });
+
+  // Contestar por Messenger desde el CRM. Es otra API que la de WhatsApp: se le
+  // habla a la pagina, no a un numero, y el destinatario es el PSID (el id que
+  // esa persona tiene frente a esa pagina, y solo frente a esa).
+  app.post("/api/meta/send-messenger", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const userData = userDoc.data();
+
+      const { clientId, text } = req.body;
+      if (!clientId || !text) {
+        return res.status(400).json({ error: "Faltan parámetros requeridos (clientId, text)" });
+      }
+
+      const clientDoc = await adminDb.collection("clients").doc(clientId).get();
+      if (!clientDoc.exists) return res.status(404).json({ error: "Contacto no encontrado" });
+      const client = clientDoc.data();
+      if (client?.agencyId !== userData?.agencyId) {
+        return res.status(403).json({ error: "Ese contacto no es de tu agencia" });
+      }
+      const psid = client?.messengerPsid;
+      if (!psid) {
+        return res.status(400).json({ error: "Este contacto no llegó por Messenger, así que no hay conversación a la que responder." });
+      }
+
+      // Messenger tiene su propia ventana de 24 h, igual que WhatsApp. Fuera de
+      // ella Meta rechaza el mensaje, asi que conviene decirlo antes de gastar
+      // la llamada y dejar al vendedor creyendo que se envio.
+      const ultimo = client?.lastMessengerInboundAt ? new Date(client.lastMessengerInboundAt).getTime() : 0;
+      if (!ultimo || (Date.now() - ultimo) / 3600000 >= 24) {
+        return res.status(409).json({
+          error: "Pasaron más de 24 horas desde su último mensaje. Messenger solo permite responder dentro de ese plazo.",
+          windowClosed: true,
+        });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(client.agencyId);
+      const agencySnap = await agencyDocRef.get();
+      const pageId = agencySnap.data()?.facebookPageId;
+      const secretSnap = await agencyDocRef.collection("secrets").doc("messenger").get();
+      const pageToken = secretSnap.exists ? secretSnap.data()?.pageAccessToken : null;
+      if (!pageId || !pageToken) {
+        return res.status(400).json({ error: "Messenger no está configurado para esta agencia. Ve a Integraciones para conectarlo." });
+      }
+
+      const metaRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pageToken}` },
+        body: JSON.stringify({
+          recipient: { id: psid },
+          messaging_type: "RESPONSE",
+          message: { text },
+        }),
+      });
+      const metaData: any = await metaRes.json();
+      if (!metaRes.ok) {
+        console.error("Meta API error (send-messenger):", metaData);
+        return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje" });
+      }
+
+      // Si message_echoes esta suscrito, Meta va a devolver este mismo mensaje
+      // por el webhook. Se guarda con el mid para poder reconocerlo alli y no
+      // pintarlo dos veces en la conversacion.
+      await adminDb.collection("whatsappMessages").add({
+        agencyId: client.agencyId,
+        clientId,
+        channel: "messenger",
+        direction: "outbound",
+        text,
+        phone: "",
+        waMessageId: metaData?.message_id || null,
+        status: "sent",
+        sentByName: userData?.name || "",
+        createdAt: new Date().toISOString(),
+      });
+
+      await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
+
+      return res.json({ success: true, messageId: metaData?.message_id });
     } catch (e: any) {
       console.error(e);
       return res.status(500).json({ error: e.message || "Error al enviar el mensaje" });
@@ -1702,6 +1818,18 @@ async function startServer() {
               if (event.message?.is_echo) {
                 const dueno = await buscarPorPsid(event.recipient?.id || "");
                 if (!dueno || !text) continue;
+                // Lo que el CRM manda tambien vuelve como echo. Ya quedo
+                // guardado al enviarlo, asi que si el mid coincide se ignora:
+                // si no, el vendedor veria su propio mensaje dos veces.
+                const mid = event.message?.mid;
+                if (mid) {
+                  const yaEsta = await adminDb.collection("whatsappMessages")
+                    .where("agencyId", "==", agencyId)
+                    .where("waMessageId", "==", mid)
+                    .limit(1)
+                    .get();
+                  if (!yaEsta.empty) continue;
+                }
                 await adminDb.collection("whatsappMessages").add({
                   agencyId,
                   clientId: dueno.id,

@@ -10,6 +10,9 @@ export function Integrations() {
   const [accessToken, setAccessToken] = useState('');
   const [hasAccessToken, setHasAccessToken] = useState(false);
   const [maskedAccessToken, setMaskedAccessToken] = useState<string | null>(null);
+  const [pageAccessToken, setPageAccessToken] = useState('');
+  const [hasPageToken, setHasPageToken] = useState(false);
+  const [maskedPageToken, setMaskedPageToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -144,6 +147,8 @@ export function Integrations() {
             setFacebookPageId(data.facebookPageId || '');
             setHasAccessToken(!!data.hasAccessToken);
             setMaskedAccessToken(data.maskedAccessToken || null);
+            setHasPageToken(!!data.hasPageToken);
+            setMaskedPageToken(data.maskedPageToken || null);
           }
         }
         // La misma URL de webhook sirve para todas las agencias: Meta identifica
@@ -178,6 +183,7 @@ export function Integrations() {
           accountId,
           facebookPageId,
           ...(accessToken ? { accessToken } : {}),
+          ...(pageAccessToken ? { pageAccessToken } : {}),
         }),
       });
       const data = await res.json();
@@ -187,6 +193,11 @@ export function Integrations() {
         setHasAccessToken(true);
         setMaskedAccessToken('••••••••' + accessToken.slice(-4));
         setAccessToken('');
+      }
+      if (pageAccessToken) {
+        setHasPageToken(true);
+        setMaskedPageToken('••••••••' + pageAccessToken.slice(-4));
+        setPageAccessToken('');
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -390,6 +401,30 @@ export function Integrations() {
                       Sin este dato, los mensajes de Messenger llegan al CRM pero se descartan
                       porque no se sabe a qué agencia pertenecen.
                     </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Token de la Página (Messenger)
+                    </label>
+                    <input
+                      type="password"
+                      value={pageAccessToken}
+                      onChange={(e) => setPageAccessToken(e.target.value)}
+                      placeholder={hasPageToken ? 'Dejar en blanco para mantener el token actual' : 'Opcional — solo para responder Messenger desde el CRM'}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
+                    />
+                    {hasPageToken ? (
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Token guardado: {maskedPageToken}. Por seguridad no se puede ver completo — solo reemplazarlo.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Es distinto del de WhatsApp: lo genera Meta por página, en Configuración de la
+                        API de Messenger, con el botón "Generar" del renglón de tu página. Sin él, el
+                        CRM recibe Messenger pero no puede contestar.
+                      </p>
+                    )}
                   </div>
 
                   <div>

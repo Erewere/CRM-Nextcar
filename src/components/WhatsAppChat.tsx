@@ -161,16 +161,18 @@ export function WhatsAppChat() {
     feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConversation?.messages.length, activeClientId]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || !activeClientId || !currentUser) return;
+  // Cada canal tiene su propia API: WhatsApp le habla a un numero, Messenger a
+  // la pagina. Quien escribe no tiene por que saberlo.
+  const enviarTexto = async (texto: string) => {
+    if (!texto.trim() || !activeClientId || !currentUser) return;
     setSending(true);
     try {
       const token = await currentUser.getIdToken();
-      const res = await fetch(getApiUrl('/api/meta/send-message'), {
+      const ruta = canalActivo === 'messenger' ? '/api/meta/send-messenger' : '/api/meta/send-message';
+      const res = await fetch(getApiUrl(ruta), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ clientId: activeClientId, text: inputText.trim() }),
+        body: JSON.stringify({ clientId: activeClientId, text: texto.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al enviar el mensaje');
@@ -182,6 +184,18 @@ export function WhatsAppChat() {
       setSending(false);
     }
   };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await enviarTexto(inputText);
+  };
+
+  // El saludo que pide los datos. Existe porque en Messenger Meta no da telefono
+  // ni nombre real y el vendedor los tiene que pedir en cada conversacion: sin
+  // esto, los teclea a mano cada vez y cada quien pregunta distinto.
+  const SALUDO = '¡Hola! Gracias por escribirnos 🚗 Para poder ayudarte mejor, ' +
+    '¿me compartes tu nombre completo, tu teléfono y tu correo? Con esos datos te ' +
+    'paso la información del auto que te interese.';
 
   return (
     <div className="h-full flex flex-col md:flex-row overflow-hidden">
@@ -376,27 +390,17 @@ export function WhatsAppChat() {
               <div ref={feedEndRef} />
             </div>
 
-            {canalActivo === 'messenger' ? (
-              // Meta todavía no aprueba que el CRM escriba por Messenger; hasta
-              // entonces el vendedor contesta en el buzón de Meta y la respuesta
-              // se copia sola a esta conversación.
-              <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-blue-50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300 flex items-start gap-3 shrink-0 text-sm">
-                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                <span>
-                  Por ahora las respuestas de Messenger se escriben desde el buzón de Meta —
-                  aparecerán aquí en cuanto las mandes.{' '}
-                  <a
-                    href="https://business.facebook.com/latest/inbox/messenger"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-bold underline inline-flex items-center gap-1"
-                  >
-                    Abrir el buzón <ExternalLink className="w-3 h-3" />
-                  </a>
-                </span>
-              </div>
-            ) : windowOpen ? (
+            {windowOpen ? (
               <form onSubmit={handleSend} className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                {/* Un clic en vez de teclear el mismo saludo en cada conversación. */}
+                <button
+                  type="button"
+                  onClick={() => enviarTexto(SALUDO)}
+                  disabled={sending}
+                  className="mb-3 px-3 py-1.5 rounded-full border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-green-500 hover:text-green-700 dark:hover:text-green-400 disabled:opacity-50"
+                >
+                  👋 Saludar y pedir sus datos
+                </button>
                 <div className="flex gap-3">
                   <input
                     type="text"
@@ -422,11 +426,29 @@ export function WhatsAppChat() {
             ) : (
               <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 flex items-start gap-3 shrink-0 text-sm">
                 <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <span>
-                  Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp solo permite
-                  responder con texto libre dentro de ese plazo; para retomar la conversación hay que
-                  enviarle una plantilla aprobada (por ejemplo, compartiéndole un vehículo desde Inventario).
-                </span>
+                {canalActivo === 'messenger' ? (
+                  <span>
+                    Pasaron más de 24 horas desde su último mensaje y Messenger no permite
+                    retomarlo desde aquí — no hay plantillas como en WhatsApp. Si tienes su
+                    teléfono, escríbele por WhatsApp desde la ficha; si no, queda esperar a que
+                    él escriba.{' '}
+                    <a
+                      href="https://business.facebook.com/latest/inbox/messenger"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-bold underline inline-flex items-center gap-1"
+                    >
+                      Abrir el buzón de Meta <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </span>
+                ) : (
+                  <span>
+                    Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp solo permite
+                    responder con texto libre dentro de ese plazo; para retomar la conversación hay que
+                    enviarle una plantilla aprobada — el botón <strong>Escribirle por WhatsApp</strong> de
+                    la ficha te ofrece las tuyas.
+                  </span>
+                )}
               </div>
             )}
           </>
