@@ -3191,7 +3191,16 @@ export function ClientDetailModal({
                           </div>
                           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400 font-medium">
                             <Clock className="w-3.5 h-3.5" />
+                            {/* Antes solo salia la fecha: para saber a que hora
+                                era la cita habia que abrir la tarea. Es el dato
+                                que se mira de reojo antes de llamar. */}
                             {t.dueDate}
+                            {(t.startTime || t.dueTime) && (
+                              <span className="font-bold text-slate-700 dark:text-slate-200">
+                                {t.startTime || t.dueTime}
+                                {t.endTime ? ` a ${t.endTime}` : ""}
+                              </span>
+                            )}
                             <button
                               onClick={() => handleEditTaskClick(t)}
                               className="ml-2 text-gray-400 hover:text-blue-600 transition-colors"

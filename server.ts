@@ -3902,7 +3902,24 @@ async function startServer() {
               detalle: "Cerrar una venta enlaza el auto y registra los pagos; darla por perdida pide un motivo. Ambas cosas se hacen en el CRM.",
             });
           }
-          cambios.status = etapa;
+          // El embudo agrupa por el id de la etapa, no por su nombre. Antes se
+          // guardaba el texto tal cual, asi que pedir "prueba de manejo" dejaba
+          // status="prueba de manejo" cuando la etapa real es
+          // "prueba-de-manejo": la escritura funcionaba, el asistente decia que
+          // si, y la tarjeta no aparecia en esa columna.
+          const { etapas } = await primeraEtapaDelEmbudo(db, targetAgencyId);
+          const etapaId = etapaQuePidieron(toolArgs.etapa, etapas);
+          if (!etapaId) {
+            const disponibles = etapas
+              .filter((e) => e?.id && !checkIsWon(e.id, etapas) && !checkIsLost(e.id, etapas))
+              .map((e) => e.title || e.id);
+            return texto({
+              error: `No existe una etapa llamada "${toolArgs.etapa}" en este embudo.`,
+              detalle: "No la escribas como texto libre: el embudo agrupa por etapas reales y una inventada deja el trato fuera de todas las columnas.",
+              etapasDisponibles: disponibles,
+            });
+          }
+          cambios.status = etapaId;
         }
         if (Object.keys(cambios).length === 0) {
           return texto({ error: "No indicaste nada que cambiar." });
@@ -3923,7 +3940,13 @@ async function startServer() {
           clientId: c?.id || null,
           title: String(toolArgs.titulo),
           dueDate: String(toolArgs.fecha),
-          ...(toolArgs.hora ? { dueTime: String(toolArgs.hora) } : {}),
+          // La hora se guarda en los dos campos a proposito. El calendario del
+          // CRM ordena, coloca y sincroniza con Google por startTime; la vista
+          // movil lee dueTime. Antes solo se escribia dueTime, asi que la cita
+          // se creaba pero salia sin hora en la agenda y caia al final del dia.
+          ...(toolArgs.hora
+            ? { startTime: String(toolArgs.hora), dueTime: String(toolArgs.hora) }
+            : {}),
           ...(toolArgs.notas ? { notes: String(toolArgs.notas) } : {}),
           completed: false,
           createdAt: new Date().toISOString(),
@@ -3931,8 +3954,13 @@ async function startServer() {
         });
         return texto({
           ok: true, tarea: toolArgs.titulo, fecha: toolArgs.fecha,
+          // Que la respuesta diga la hora: si no, el asistente no la menciona y
+          // quien pidio la cita no sabe si quedo agendada a esa hora o sin ella.
+          hora: toolArgs.hora ? String(toolArgs.hora) : null,
           cliente: c?.name || null,
-          aviso: c ? undefined : "Se agendó sin contacto: no encontré a esa persona.",
+          aviso: c
+            ? (toolArgs.hora ? undefined : "Quedó sin hora, solo con fecha. Si querían una hora, dila y vuelve a agendarla.")
+            : "Se agendó sin contacto: no encontré a esa persona.",
         });
       }
 
