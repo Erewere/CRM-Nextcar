@@ -196,7 +196,7 @@ export function Login() {
           Uso exclusivo para personal autorizado de agencias Nextcar.
         </p>
         <a
-          href="/privacidad"
+          href="/privacidad.html"
           className="mt-2 text-[10px] text-slate-400 hover:text-blue-600 underline transition-colors"
         >
           Aviso de Privacidad

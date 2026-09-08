@@ -3,7 +3,6 @@ import { BrowserRouter, Route, Routes, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
-import { Privacidad } from './pages/Privacidad';
 import { Dashboard } from './pages/Dashboard';
 import { Kanban } from './pages/Kanban';
 import { Tasks } from './pages/Tasks';
@@ -94,9 +93,6 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          {/* Publica a proposito: Meta la abre para revisar la app, y quien quiera
-              ejercer sus derechos no tiene por que tener cuenta. */}
-          <Route path="/privacidad" element={<Privacidad />} />
           <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
