@@ -2088,6 +2088,18 @@ async function startServer() {
         return res.status(500).json({ error: "Base de datos no disponible" });
       }
 
+      // Esta puerta es publica: quien llama escribe el agencyId a mano. Si no
+      // existe, el contacto se guardaba igual y quedaba en el vacio, sin que
+      // ninguna agencia lo viera. Ya paso con ids mal escritos ("nextcar" en
+      // minusculas, "unassigned"): leads que nadie podia trabajar porque no
+      // pertenecian a nadie. Mejor rechazarlo y que quien integra se entere.
+      const agenciaSnap = await adminDb.collection("agencies").doc(String(agencyId)).get();
+      if (!agenciaSnap.exists) {
+        return res.status(400).json({
+          error: `La agencia "${agencyId}" no existe. Revisa el agencyId de la integracion.`,
+        });
+      }
+
       // Validate sellerId: check if user exists and belongs to the given agency
       let validatedSellerId = "";
       if (sellerId && typeof sellerId === "string" && sellerId.trim() !== "") {
