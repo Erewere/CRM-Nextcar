@@ -1,6 +1,9 @@
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
-import { checkIsWon } from "./src/lib/clientUtils.ts";
+// Un solo criterio de ganado/perdido para navegador y servidor: son funciones
+// puras, sin SDK, asi que valen igual de los dos lados. Duplicarlas aqui era
+// garantia de que un dia dejaran de coincidir.
+import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import firebaseConfig from "./firebase-applet-config.json";
 import express from "express";
 import cors from "cors";
@@ -209,37 +212,6 @@ async function buscarContactoPorTelefono(adminDb: any, agencyId: string, phone: 
 }
 
 /** Completa los datos de contacto que le falten, sin pisar los que ya tiene. */
-// Mismo criterio de ganado/perdido que src/lib/clientUtils.ts, reescrito aqui
-// porque aquel usa el SDK del navegador y esto corre con el Admin SDK. Si
-// cambia alla, cambia aca.
-function etapaEsGanada(estado: string, etapas: { id: string; title?: string }[] = []) {
-  const s = String(estado || "").trim().toLowerCase();
-  if (["won", "ganado", "ganados", "sold", "vendido", "vendidos"].includes(s)) return true;
-  const claves = ["ganad", "won", "cerrado ganado", "venta ganada"];
-  if (claves.some((k) => s.includes(k))) return true;
-  const etapa = etapas.find((e) => e.id === estado);
-  if (etapa) {
-    const t = String(etapa.title || "").trim().toLowerCase();
-    const id = String(etapa.id || "").trim().toLowerCase();
-    return claves.some((k) => t.includes(k) || id.includes(k));
-  }
-  return false;
-}
-
-function etapaEsPerdida(estado: string, etapas: { id: string; title?: string }[] = []) {
-  const s = String(estado || "").trim().toLowerCase();
-  if (["lost", "perdido", "perdidos", "cancelado", "rechazado"].includes(s)) return true;
-  const claves = ["perdid", "lost", "descartad", "rechazad", "cancelad"];
-  if (claves.some((k) => s.includes(k))) return true;
-  const etapa = etapas.find((e) => e.id === estado);
-  if (etapa) {
-    const t = String(etapa.title || "").trim().toLowerCase();
-    const id = String(etapa.id || "").trim().toLowerCase();
-    return claves.some((k) => t.includes(k) || id.includes(k));
-  }
-  return false;
-}
-
 // La primera columna del embudo de esa agencia. Se salta las etapas finales:
 // un lead recien llegado no puede nacer en Ganados ni en Perdidos.
 async function primeraEtapaDelEmbudo(adminDb: any, agencyId: string) {
@@ -247,7 +219,7 @@ async function primeraEtapaDelEmbudo(adminDb: any, agencyId: string) {
     const snap = await adminDb.collection("agencies").doc(agencyId).get();
     const etapas = (snap.data()?.pipelineStages || []) as { id: string; title?: string }[];
     const abierta = etapas.find(
-      (e) => e?.id && !etapaEsGanada(e.id, etapas) && !etapaEsPerdida(e.id, etapas)
+      (e) => e?.id && !checkIsWon(e.id, etapas) && !checkIsLost(e.id, etapas)
     );
     return { etapaId: abierta?.id || "new", etapas };
   } catch (e) {
@@ -272,7 +244,7 @@ async function tieneTratoAbierto(
   return snap.docs.some((d: any) => {
     const t = d.data() || {};
     if (t.isDeleted) return false;
-    return !etapaEsGanada(t.status, etapas) && !etapaEsPerdida(t.status, etapas);
+    return !checkIsWon(t.status, etapas) && !checkIsLost(t.status, etapas);
   });
 }
 
