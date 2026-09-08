@@ -5,10 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
 import {
   User, Phone, Mail, MapPin, Car, Tag, StickyNote, Megaphone,
-  Check, Search, X, Briefcase, History, MessageSquarePlus,
+  Check, Search, X, Briefcase, History, MessageSquarePlus, Target,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { EscribirAlCliente } from './EscribirAlCliente';
+import { ResumenBusquedaAuto } from './ResumenBusquedaAuto';
 
 // El panel de la derecha del chat. Nace de una necesidad concreta: en Messenger
 // Meta no da telefono ni nombre real, asi que el vendedor tiene que capturarlos
@@ -298,6 +299,17 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
           ultimoMensajeEntrante={cliente.lastWhatsappInboundAt}
           onCerrar={() => setEscribiendo(false)}
         />
+      )}
+
+      {/* Lo que busca, para tenerlo a la vista mientras se conversa: es lo que
+          permite ofrecerle algo sin salir a consultar su ficha. */}
+      {cliente.wantedVehicle && (
+        <div className="p-4 border-b border-gray-200 dark:border-slate-800">
+          <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
+            <Target className="w-3 h-3" /> Lo que busca
+          </label>
+          <ResumenBusquedaAuto buscado={cliente.wantedVehicle} compacto />
+        </div>
       )}
 
       {/* Vehiculo de interes */}

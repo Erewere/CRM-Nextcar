@@ -9,6 +9,7 @@ import { useReadOnly } from "../hooks/useReadOnly";
 import { usePermissions } from "../hooks/usePermissions";
 import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
 import { EscribirAlCliente } from "./EscribirAlCliente";
+import { ResumenBusquedaAuto, frasesDeBusqueda } from "./ResumenBusquedaAuto";
 import {
   doc,
   onSnapshot,
@@ -2774,17 +2775,28 @@ export function ClientDetailModal({
                     </p>
                   )}
 
-                  {(formData.wantedVehicle?.make || formData.tags?.some(t => {
+                  {/* Antes solo se miraba la marca: quien capturo "SUV, 5
+                      pasajeros" sin marca no veia nada. Basta con que haya algo
+                      capturado, o con que traiga la etiqueta de busqueda. */}
+                  {(frasesDeBusqueda(formData.wantedVehicle).length > 0 || formData.tags?.some(t => {
                     const lower = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     return lower.includes('busca de auto') || lower.includes('busca auto') || lower.includes('buscan auto') || lower.includes('busqueda');
                   })) && (
                     <div className="mt-3 flex flex-col gap-2">
+                      {/* Lo que busca, siempre visible. Antes habia que abrir el
+                          formulario de once campos para saber si queria SUV o
+                          sedan: es el dato que mas se consulta y estaba a dos
+                          clics. */}
+                      <ResumenBusquedaAuto buscado={formData.wantedVehicle} />
+
                       <button
                         type="button"
                         onClick={() => setShowWantedVehicleMenu(true)}
                         className="w-full text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/50 py-1.5 rounded transition-colors"
                       >
-                        Ver / Editar Búsqueda de Auto
+                        {frasesDeBusqueda(formData.wantedVehicle).length > 0
+                          ? "Editar lo que busca"
+                          : "Capturar lo que busca"}
                       </button>
                       
                       {(() => {
