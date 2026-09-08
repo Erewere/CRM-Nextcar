@@ -1357,9 +1357,14 @@ export function ClientDetailModal({
             delete dealDataToUpdate[k],
         );
 
+        // Si de verdad se escribio en un trato. guardarTratoSiExiste devuelve
+        // false en silencio cuando el trato no existe, y ese silencio era el
+        // problema: la ficha se veia como trato, la etapa se guardaba, y no
+        // habia ninguna tarjeta en el embudo.
+        let tratoGuardado = false;
         if (finalDealId && Object.keys(dealDataToUpdate).length > 0) {
           dealDataToUpdate.updatedAt = new Date().toISOString();
-          await guardarTratoSiExiste(finalDealId, sanitizeFirestoreData(dealDataToUpdate));
+          tratoGuardado = await guardarTratoSiExiste(finalDealId, sanitizeFirestoreData(dealDataToUpdate));
         }
 
         await setDoc(doc(db, "clients", finalClientId as string), sanitizeFirestoreData(dataToUpdate), { merge: true });
@@ -1374,7 +1379,15 @@ export function ClientDetailModal({
         // "Contactados" sin aparecer en el embudo. Abrirlos y guardar los
         // arregla. Repetirlo no duplica nada: si ya hay un trato abierto se
         // mueve ese, no se crea otro.
-        if (!isDealContext && dataToUpdate.status) {
+        //
+        // La segunda condicion es la que faltaba. Abrir la ficha "como trato"
+        // daba por hecho que el trato existe, y hay contactos que se ven asi
+        // sin tenerlo: los que crea el asistente con create_lead y los que
+        // entraron por /api/public/v1/leads antes del arreglo, que solo crean
+        // el contacto. En esos, la etapa se guardaba en el contacto, la ficha
+        // decia "Confirmacion Cita" con su valor y su auto, y en el embudo no
+        // habia nada. Ahora, si no se escribio en ningun trato, se crea.
+        if ((!isDealContext || !tratoGuardado) && dataToUpdate.status) {
           try {
             const r = await aplicarEtapaAlTrato({
               clientId: finalClientId as string,
@@ -1386,6 +1399,8 @@ export function ClientDetailModal({
               vehicle: (dataToUpdate.vehicle as string) || null,
               vehicleId: (dataToUpdate.vehicleId as string) || null,
               esMaster: userData?.role === "master",
+              valor: Number(dataToUpdate.dealValue ?? formData.dealValue) || 0,
+              titulo: (dataToUpdate.dealTitle as string) || formData.dealTitle || undefined,
             });
             if (r.accion === "creado") {
               alert("Listo. Se creó su trato en el embudo, en esa etapa.");

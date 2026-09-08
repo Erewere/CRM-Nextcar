@@ -47,6 +47,10 @@ export async function aplicarEtapaAlTrato(datos: {
   vehicle?: string | null;
   vehicleId?: string | null;
   esMaster?: boolean;
+  /** Lo que ya trae el contacto, para no nacer en $0 y sin nombre cuando el
+   *  trato se crea a posteriori para uno que ya venia con esos datos. */
+  valor?: number;
+  titulo?: string;
 }): Promise<ResultadoEtapa> {
   const etapa = String(datos.etapa || "").trim();
   const etapas = datos.pipelineStages || [];
@@ -90,11 +94,13 @@ export async function aplicarEtapaAlTrato(datos: {
       clientId: datos.clientId,
       agencyId: datos.agencyId,
       sellerId: datos.sellerId,
-      title: datos.vehicle
-        ? `Trato: ${datos.vehicle}`
-        : `Trato con ${datos.nombre || "Cliente"}`,
+      title:
+        datos.titulo ||
+        (datos.vehicle
+          ? `Trato: ${datos.vehicle}`
+          : `Trato con ${datos.nombre || "Cliente"}`),
       status: etapa,
-      value: 0,
+      value: Number(datos.valor) || 0,
       vehicle: datos.vehicle || null,
       vehicleId: datos.vehicleId || null,
       createdAt: new Date().toISOString(),
