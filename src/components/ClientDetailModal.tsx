@@ -8,6 +8,7 @@ import { db, storage } from "../lib/firebase";
 import { useReadOnly } from "../hooks/useReadOnly";
 import { usePermissions } from "../hooks/usePermissions";
 import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
+import { EscribirAlCliente } from "./EscribirAlCliente";
 import {
   doc,
   onSnapshot,
@@ -152,6 +153,7 @@ export function ClientDetailModal({
     return true;
   };
 
+  const [escribiendoWhatsApp, setEscribiendoWhatsApp] = useState(false);
   const isReadOnly = useReadOnly();
   const { can } = usePermissions();
   // Borrar un trato pierde su historial, asi que no lo hace cualquiera.
@@ -3327,6 +3329,17 @@ export function ClientDetailModal({
 
             {/* BOTTOM ACTIONS (mobile: form save, desktop: right aligned save) */}
             <div className={`p-4 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3 shrink-0 ${isNew ? "hidden md:flex" : ""}`}>
+              {/* Retomar a un cliente frio sin tener que disfrazarlo de "te
+                  comparto un auto", que era el unico camino que habia. */}
+              {!isNew && (client.phone || "").trim() && (
+                <button
+                  type="button"
+                  onClick={() => setEscribiendoWhatsApp(true)}
+                  className="mr-auto px-4 py-2 text-sm font-bold text-green-700 dark:text-green-400 border border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
+                >
+                  Escribirle por WhatsApp
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
@@ -3850,6 +3863,16 @@ export function ClientDetailModal({
           vehicle={selectedVehicleForModal}
           onClose={() => setSelectedVehicleForModal(null)}
           clientContext={formData as Client}
+        />
+      )}
+
+      {escribiendoWhatsApp && client.id && (
+        <EscribirAlCliente
+          clientId={client.id}
+          nombre={formData.name || client.name || ""}
+          telefono={formData.phone || client.phone || ""}
+          ultimoMensajeEntrante={(client as any).lastWhatsappInboundAt}
+          onCerrar={() => setEscribiendoWhatsApp(false)}
         />
       )}
     </motion.div>

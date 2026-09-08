@@ -1410,6 +1410,76 @@ async function startServer() {
     }
   });
 
+  // Las plantillas aprobadas de la agencia, tal como estan en Meta. Se piden en
+  // vivo y no se guardan: Meta puede rechazar o pausar una en cualquier momento,
+  // y una lista escrita a mano acabaria ofreciendo plantillas que ya rebotan.
+  app.get("/api/meta/templates", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const userData = userDoc.data();
+      if (!userData?.agencyId || userData.agencyId === "unassigned") {
+        return res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
+      }
+
+      const agencyDocRef = adminDb.collection("agencies").doc(userData.agencyId);
+      const agencySnap = await agencyDocRef.get();
+      const wabaId = agencySnap.data()?.whatsappConfig?.accountId;
+      const secretSnap = await agencyDocRef.collection("secrets").doc("whatsapp").get();
+      const accessToken = secretSnap.exists ? secretSnap.data()?.accessToken : null;
+      if (!wabaId || !accessToken) {
+        return res.status(400).json({ error: "WhatsApp no está configurado para esta agencia. Ve a Integraciones para conectarlo." });
+      }
+
+      const metaRes = await fetch(
+        `https://graph.facebook.com/v21.0/${wabaId}/message_templates?limit=100&fields=name,status,language,category,components`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const metaData: any = await metaRes.json();
+      if (!metaRes.ok) {
+        console.error("Meta API error (templates):", metaData);
+        return res.status(metaRes.status).json({ error: metaData?.error?.message || "No se pudieron leer las plantillas" });
+      }
+
+      // Solo las aprobadas y en español: mandar una pendiente o rechazada
+      // devuelve un error de Meta que al vendedor no le dice nada.
+      const plantillas = (metaData?.data || [])
+        .filter((t: any) => t.status === "APPROVED" && String(t.language || "").startsWith("es"))
+        .map((t: any) => {
+          const cuerpo = (t.components || []).find((c: any) => c.type === "BODY");
+          const texto = cuerpo?.text || "";
+          // Cuantos huecos hay que rellenar: {{1}}, {{2}}...
+          const huecos = new Set((texto.match(/\{\{\s*\d+\s*\}\}/g) || []).map((h: string) => h.replace(/\D/g, "")));
+          // La categoria viaja porque decide el precio: Meta cobra mas por una
+          // de marketing que por una de utilidad, y quien manda deberia verlo
+          // antes de elegir.
+          return { name: t.name, language: t.language, category: t.category || "", texto, variables: huecos.size };
+        });
+
+      return res.json({ plantillas });
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ error: e.message || "Error al leer las plantillas" });
+    }
+  });
+
   app.post("/api/meta/send-template", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -1449,7 +1519,7 @@ async function startServer() {
         return res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
       }
 
-      const { to, templateName, variables, agencyId: bodyAgencyId, clientId } = req.body;
+      const { to, templateName, variables, agencyId: bodyAgencyId, clientId, language } = req.body;
       if (!to || !templateName) {
         return res.status(400).json({ error: "Faltan parámetros requeridos (to, templateName)" });
       }
@@ -1485,7 +1555,11 @@ async function startServer() {
           type: "template",
           template: {
             name: templateName,
-            language: { code: "es_MX" },
+            // Cada plantilla esta aprobada en un idioma concreto y Meta la
+            // rechaza si no coincide: "agender_llamada" es es, y
+            // "vehicle_recommendation" es es_MX. Estaba escrito es_MX a mano, asi
+            // que solo funcionaba la segunda de casualidad. Quien manda dice cual.
+            language: { code: language || "es_MX" },
             ...(variables && variables.length ? { components: [{ type: "body", parameters: variables }] } : {}),
           },
         }),

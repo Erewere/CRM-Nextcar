@@ -5,9 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
 import {
   User, Phone, Mail, MapPin, Car, Tag, StickyNote, Megaphone,
-  Check, Search, X, Briefcase, History,
+  Check, Search, X, Briefcase, History, MessageSquarePlus,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { EscribirAlCliente } from './EscribirAlCliente';
 
 // El panel de la derecha del chat. Nace de una necesidad concreta: en Messenger
 // Meta no da telefono ni nombre real, asi que el vendedor tiene que capturarlos
@@ -46,6 +47,7 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
   const [notaNueva, setNotaNueva] = useState('');
   const [tratos, setTratos] = useState<any[]>([]);
   const [creandoTrato, setCreandoTrato] = useState(false);
+  const [escribiendo, setEscribiendo] = useState(false);
 
   useEffect(() => {
     if (!clientId || !userData?.agencyId) return;
@@ -275,6 +277,28 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
           </button>
         )}
       </div>
+
+      {/* Escribirle por WhatsApp aunque no haya escrito el */}
+      {(cliente.phone || '').trim() && (
+        <div className="p-4 border-b border-gray-200 dark:border-slate-800">
+          <button
+            onClick={() => setEscribiendo(true)}
+            className="w-full py-2 rounded border border-green-600 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 font-bold text-sm flex items-center justify-center gap-2"
+          >
+            <MessageSquarePlus className="w-4 h-4" /> Escribirle por WhatsApp
+          </button>
+        </div>
+      )}
+
+      {escribiendo && (
+        <EscribirAlCliente
+          clientId={cliente.id}
+          nombre={cliente.name || ''}
+          telefono={cliente.phone || ''}
+          ultimoMensajeEntrante={cliente.lastWhatsappInboundAt}
+          onCerrar={() => setEscribiendo(false)}
+        />
+      )}
 
       {/* Vehiculo de interes */}
       <div className="p-4 border-b border-gray-200 dark:border-slate-800">
