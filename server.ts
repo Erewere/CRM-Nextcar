@@ -1246,6 +1246,70 @@ async function startServer() {
     }
   });
 
+  // Convertir un contacto en trato desde el chat. Vive en el servidor a
+  // proposito: usa exactamente las mismas reglas que los leads entrantes
+  // (primera etapa real del embudo, nunca una etapa final, y no duplicar si ya
+  // hay un trato abierto). Reimplementarlo en el navegador seria repetir esa
+  // logica y que las dos versiones se separaran con el tiempo.
+  app.post("/api/clients/crear-trato", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autorizado" });
+      }
+      const adminApp = getAdminApp();
+      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
+
+      let decodedToken;
+      try {
+        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
+      } catch (e) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+      if (!userDoc.exists) return res.status(403).json({ error: "Usuario no encontrado" });
+      const userData = userDoc.data();
+
+      const { clientId } = req.body;
+      if (!clientId) return res.status(400).json({ error: "Falta el parámetro clientId" });
+
+      const clientSnap = await adminDb.collection("clients").doc(clientId).get();
+      if (!clientSnap.exists) return res.status(404).json({ error: "Contacto no encontrado" });
+      const datosCliente: any = clientSnap.data() || {};
+      if (datosCliente.agencyId !== userData?.agencyId) {
+        return res.status(403).json({ error: "Ese contacto no es de tu agencia" });
+      }
+      // Un vendedor solo convierte lo suyo; el admin, cualquiera de su agencia.
+      if (userData?.role === "seller" && datosCliente.sellerId && datosCliente.sellerId !== decodedToken.uid) {
+        return res.status(403).json({ error: "Ese contacto lo atiende otro vendedor" });
+      }
+
+      const { etapaId, etapas } = await primeraEtapaDelEmbudo(adminDb, datosCliente.agencyId);
+      if (await tieneTratoAbierto(adminDb, datosCliente.agencyId, clientId, etapas)) {
+        return res.json({ success: true, yaExistia: true });
+      }
+
+      const dealId = await crearTratoDelLead(adminDb, {
+        agencyId: datosCliente.agencyId,
+        clientId,
+        name: datosCliente.name || "Contacto",
+        vehicle: datosCliente.vehicle || "",
+        vehicleId: datosCliente.vehicleId || null,
+        sellerId: datosCliente.sellerId || decodedToken.uid,
+        etapaId,
+      });
+
+      return res.json({ success: true, dealId });
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ error: e.message || "Error al crear el trato" });
+    }
+  });
+
   app.post("/api/meta/send-message", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;

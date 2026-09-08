@@ -3,8 +3,9 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
-import { MessageCircle, Send, ArrowLeft, Clock, AlertCircle, UserCheck, ExternalLink } from 'lucide-react';
+import { MessageCircle, Send, ArrowLeft, Clock, AlertCircle, UserCheck, ExternalLink, PanelRight } from 'lucide-react';
 import clsx from 'clsx';
+import { ChatClientPanel } from './ChatClientPanel';
 
 type Canal = 'whatsapp' | 'messenger';
 
@@ -52,6 +53,9 @@ export function WhatsAppChat() {
   const [sellers, setSellers] = useState<{ id: string; name?: string }[]>([]);
   const [assigning, setAssigning] = useState(false);
   const [filtro, setFiltro] = useState<'todos' | Canal>('todos');
+  // En pantallas anchas la ficha se ve siempre; en las angostas se abre y cierra
+  // para no comerse la conversación.
+  const [fichaAbierta, setFichaAbierta] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
   const isAdmin = userData?.role === 'admin' || userData?.role === 'master';
 
@@ -294,7 +298,8 @@ export function WhatsAppChat() {
       {/* Conversación activa */}
       <div className={clsx(
         "flex-1 bg-white dark:bg-slate-900 flex flex-col overflow-hidden",
-        !activeClientId && "hidden md:flex"
+        !activeClientId && "hidden md:flex",
+        fichaAbierta && "hidden xl:flex"
       )}>
         {activeConversation && activeClient ? (
           <>
@@ -322,8 +327,16 @@ export function WhatsAppChat() {
                 </div>
               </div>
 
+              <button
+                onClick={() => setFichaAbierta(true)}
+                className="ml-auto p-2 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 xl:hidden shrink-0"
+                title="Ver la ficha del contacto"
+              >
+                <PanelRight className="w-5 h-5" />
+              </button>
+
               {isAdmin && (
-                <div className="ml-auto flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 xl:ml-auto">
                   <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">Atiende:</span>
                   <select
                     value={activeClient.sellerId || ''}
@@ -429,6 +442,21 @@ export function WhatsAppChat() {
           </div>
         )}
       </div>
+
+      {/* Ficha del contacto: se captura el teléfono, se le asigna el auto y se
+          convierte en trato sin salir de la conversación. */}
+      {activeClientId && (
+        <div className={clsx(
+          "w-full md:w-80 border-l border-gray-200 dark:border-slate-800 shrink-0 overflow-hidden",
+          fichaAbierta ? "flex" : "hidden xl:flex"
+        )}>
+          <ChatClientPanel
+            clientId={activeClientId}
+            canal={canalActivo}
+            onCerrar={() => setFichaAbierta(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

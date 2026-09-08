@@ -175,7 +175,7 @@ export interface Client {
   status: string;
   soldAt?: string;
   saleDetails?: SaleDetails;
-  origin: "manual" | "whatsapp" | "web" | "website" | "google_contacts" | "excel_import" | "facebook" | "instagram";
+  origin: "manual" | "whatsapp" | "messenger" | "web" | "website" | "google_contacts" | "excel_import" | "facebook" | "instagram";
   tags?: string[];
   dismissedMatches?: string[];
   wantedVehicle?: {
