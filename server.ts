@@ -1542,9 +1542,43 @@ async function startServer() {
               continue;
             }
             const agencyId = snapshot.docs[0].id;
+            const buscarPorPsid = async (psid: string) => {
+              if (!psid) return null;
+              const snap = await adminDb
+                .collection("clients")
+                .where("agencyId", "==", agencyId)
+                .where("messengerPsid", "==", psid)
+                .get();
+              return snap.docs.find((d: any) => !d.data()?.isDeleted) || null;
+            };
+
             for (const event of entry.messaging) {
               const senderId = event.sender?.id || "";
               const text = event.message?.text || "";
+
+              // Un "echo" es lo que la propia pagina mando desde el buzon de
+              // Meta. Se guarda como respuesta nuestra para que la conversacion
+              // se vea completa en el CRM. Tratarlo como mensaje entrante seria
+              // el error caro: crearia un contacto falso con el id de la pagina
+              // por cada respuesta del vendedor.
+              if (event.message?.is_echo) {
+                const dueno = await buscarPorPsid(event.recipient?.id || "");
+                if (!dueno || !text) continue;
+                await adminDb.collection("whatsappMessages").add({
+                  agencyId,
+                  clientId: dueno.id,
+                  channel: "messenger",
+                  direction: "outbound",
+                  text,
+                  phone: "",
+                  waMessageId: event.message?.mid || null,
+                  status: "sent",
+                  sentByName: "Buzón de Meta",
+                  createdAt: new Date().toISOString(),
+                });
+                continue;
+              }
+
               if (senderId && text) {
                 console.log(
                   `New incoming Messenger message from ${senderId} to page ${entryId}: ${text}`,
@@ -1559,6 +1593,26 @@ async function startServer() {
                   undefined,
                   senderId,
                 );
+              }
+
+              // De donde llego: un anuncio, un link con etiqueta o un codigo QR.
+              // Es lo que despues permite saber que anuncio trajo al que si
+              // compro. Va despues de crear el lead para que el contacto exista.
+              const referral = event.referral || event.postback?.referral;
+              if (senderId && referral) {
+                const dueno = await buscarPorPsid(senderId);
+                if (dueno) {
+                  await dueno.ref.update({
+                    messengerReferral: {
+                      source: referral.source || "",
+                      type: referral.type || "",
+                      ref: referral.ref || "",
+                      adId: referral.ad_id || "",
+                      recibidoEn: new Date().toISOString(),
+                    },
+                    updatedAt: FieldValue.serverTimestamp(),
+                  });
+                }
               }
             }
           }
@@ -1671,26 +1725,31 @@ async function startServer() {
     // Meta only allows free-form replies within 24 h of the customer's last
     // message; store when it arrived so the UI can tell sellers whether the
     // window is still open instead of letting them write messages that bounce.
+    const ahoraIso = new Date().toISOString();
     const clientUpdate: any = { updatedAt: FieldValue.serverTimestamp() };
-    if (origin === "whatsapp") {
-      clientUpdate.lastWhatsappInboundAt = new Date().toISOString();
-    }
+    if (origin === "whatsapp") clientUpdate.lastWhatsappInboundAt = ahoraIso;
+    if (origin === "messenger") clientUpdate.lastMessengerInboundAt = ahoraIso;
     if (existing) {
       await existing.ref.update(clientUpdate);
-    } else if (origin === "whatsapp") {
+    } else {
       await clientsRef.doc(clientId).update(clientUpdate);
     }
 
-    if (origin === "whatsapp" && text) {
+    // La conversacion vive en la pantalla de Chats, venga por donde venga.
+    // Antes solo se guardaba la de WhatsApp: un mensaje de Messenger creaba el
+    // contacto pero el chat salia vacio, y el vendedor no veia que le habian
+    // escrito. El canal queda marcado porque cada uno se responde distinto.
+    if (text) {
       await adminDb.collection("whatsappMessages").add({
         agencyId,
         clientId,
+        channel: origin,
         direction: "inbound",
         text,
         phone,
         waMessageId: waMessageId || null,
         status: "received",
-        createdAt: new Date().toISOString(),
+        createdAt: ahoraIso,
       });
     }
 
@@ -1719,9 +1778,9 @@ async function startServer() {
     }
 
     // Solo la primera conversación deja nota: así en el historial del contacto
-    // se lee que llegó por WhatsApp, sin que cada mensaje posterior inunde las
-    // notas que el equipo escribe a mano. La conversación vive en el chat.
-    if (text && (!existing || origin !== "whatsapp")) {
+    // se lee por dónde llegó, sin que cada mensaje posterior inunde las notas
+    // que el equipo escribe a mano. La conversación vive en el chat.
+    if (text && !existing) {
       await adminDb.collection("notes").add({
         agencyId,
         clientId,

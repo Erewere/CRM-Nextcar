@@ -3,8 +3,10 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
-import { MessageCircle, Send, ArrowLeft, Clock, AlertCircle, UserCheck } from 'lucide-react';
+import { MessageCircle, Send, ArrowLeft, Clock, AlertCircle, UserCheck, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
+
+type Canal = 'whatsapp' | 'messenger';
 
 interface WaMessage {
   id: string;
@@ -14,6 +16,9 @@ interface WaMessage {
   createdAt: string;
   status?: string;
   sentByName?: string;
+  // Los mensajes guardados antes de que existiera Messenger no traen canal:
+  // todos eran de WhatsApp.
+  channel?: Canal;
 }
 
 interface ClientLite {
@@ -22,6 +27,7 @@ interface ClientLite {
   phone?: string;
   sellerId?: string;
   lastWhatsappInboundAt?: string;
+  lastMessengerInboundAt?: string;
   isDeleted?: boolean;
 }
 
@@ -45,6 +51,7 @@ export function WhatsAppChat() {
   const [loading, setLoading] = useState(true);
   const [sellers, setSellers] = useState<{ id: string; name?: string }[]>([]);
   const [assigning, setAssigning] = useState(false);
+  const [filtro, setFiltro] = useState<'todos' | Canal>('todos');
   const feedEndRef = useRef<HTMLDivElement>(null);
   const isAdmin = userData?.role === 'admin' || userData?.role === 'master';
 
@@ -119,14 +126,31 @@ export function WhatsAppChat() {
     return Object.entries(byClient)
       .map(([clientId, msgs]) => {
         const sorted = [...msgs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        return { clientId, messages: sorted, last: sorted[sorted.length - 1] };
+        const last = sorted[sorted.length - 1];
+        return { clientId, messages: sorted, last, canal: (last.channel || 'whatsapp') as Canal };
       })
       .sort((a, b) => new Date(b.last.createdAt).getTime() - new Date(a.last.createdAt).getTime());
   }, [visibleMessages]);
 
+  const conteo = useMemo(() => ({
+    todos: conversations.length,
+    whatsapp: conversations.filter(c => c.canal === 'whatsapp').length,
+    messenger: conversations.filter(c => c.canal === 'messenger').length,
+  }), [conversations]);
+
+  const conversacionesVisibles = useMemo(
+    () => filtro === 'todos' ? conversations : conversations.filter(c => c.canal === filtro),
+    [conversations, filtro]
+  );
+
   const activeConversation = conversations.find(c => c.clientId === activeClientId) || null;
   const activeClient = activeClientId ? clients[activeClientId] : null;
-  const windowLeft = hoursLeft(activeClient?.lastWhatsappInboundAt);
+  const canalActivo = activeConversation?.canal || 'whatsapp';
+  // Cada canal tiene su propia ventana de 24 h: que el cliente escriba por
+  // WhatsApp no reabre la de Messenger ni al revés.
+  const windowLeft = hoursLeft(
+    canalActivo === 'messenger' ? activeClient?.lastMessengerInboundAt : activeClient?.lastWhatsappInboundAt
+  );
   const windowOpen = windowLeft !== null && windowLeft > 0;
 
   useEffect(() => {
@@ -162,24 +186,58 @@ export function WhatsAppChat() {
         "w-full md:w-80 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden",
         activeClientId && "hidden md:flex"
       )}>
+        {/* Filtro por canal, al estilo del buzón de Meta: la misma lista, pero
+            pudiendo ver solo WhatsApp o solo Messenger. */}
+        <div className="flex gap-1 p-2 border-b border-gray-200 dark:border-slate-800 shrink-0">
+          {([
+            { id: 'todos', etiqueta: 'Todos' },
+            { id: 'whatsapp', etiqueta: 'WhatsApp' },
+            { id: 'messenger', etiqueta: 'Messenger' },
+          ] as const).map(op => (
+            <button
+              key={op.id}
+              onClick={() => setFiltro(op.id)}
+              className={clsx(
+                "px-2.5 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1.5",
+                filtro === op.id
+                  ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
+                  : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
+            >
+              {op.etiqueta}
+              {conteo[op.id] > 0 && (
+                <span className={clsx(
+                  "text-[10px] px-1.5 rounded-full",
+                  filtro === op.id ? "bg-white/20 dark:bg-slate-900/20" : "bg-slate-200 dark:bg-slate-700"
+                )}>
+                  {conteo[op.id]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
           {loading ? (
             <div className="p-6 text-center text-sm text-slate-500">
               <div className="animate-spin rounded-full h-6 w-6 border-2 border-green-500 border-t-transparent mx-auto mb-2" />
               Cargando conversaciones...
             </div>
-          ) : conversations.length === 0 ? (
+          ) : conversacionesVisibles.length === 0 ? (
             <div className="p-6 text-center text-sm text-slate-400">
-              Aún no hay conversaciones de WhatsApp.
+              Aún no hay conversaciones{filtro !== 'todos' ? ` de ${filtro === 'whatsapp' ? 'WhatsApp' : 'Messenger'}` : ''}.
               <p className="text-xs text-slate-500 mt-2">
-                Aparecerán aquí en cuanto un cliente escriba al número del negocio.
+                Aparecerán aquí en cuanto un cliente escriba al número o a la página del negocio.
               </p>
             </div>
           ) : (
-            conversations.map(conv => {
+            conversacionesVisibles.map(conv => {
               const c = clients[conv.clientId];
               const nombre = c?.name || 'Contacto';
-              const left = hoursLeft(c?.lastWhatsappInboundAt);
+              const left = hoursLeft(
+                conv.canal === 'messenger' ? c?.lastMessengerInboundAt : c?.lastWhatsappInboundAt
+              );
+              const esMessenger = conv.canal === 'messenger';
               return (
                 <button
                   key={conv.clientId}
@@ -189,7 +247,12 @@ export function WhatsAppChat() {
                     activeClientId === conv.clientId && "bg-green-50/60 dark:bg-slate-800/80"
                   )}
                 >
-                  <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-950/50 flex items-center justify-center font-bold text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/40 shrink-0">
+                  <div className={clsx(
+                    "w-10 h-10 rounded-full flex items-center justify-center font-bold border shrink-0",
+                    esMessenger
+                      ? "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40"
+                      : "bg-green-50 dark:bg-green-950/50 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/40"
+                  )}>
                     {nombre.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -202,6 +265,14 @@ export function WhatsAppChat() {
                     <p className="text-xs truncate text-slate-500 dark:text-slate-400">
                       {conv.last.direction === 'outbound' ? 'Tú: ' : ''}{conv.last.text}
                     </p>
+                    {filtro === 'todos' && (
+                      <span className={clsx(
+                        "inline-flex items-center mt-1 mr-2 text-[10px] font-semibold",
+                        esMessenger ? "text-blue-600 dark:text-blue-400" : "text-green-600 dark:text-green-400"
+                      )}>
+                        {esMessenger ? 'Messenger' : 'WhatsApp'}
+                      </span>
+                    )}
                     {!c?.sellerId && (
                       <span className="inline-flex items-center gap-1 mt-1 mr-2 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
                         <UserCheck className="w-3 h-3" /> Sin asignar
@@ -231,7 +302,12 @@ export function WhatsAppChat() {
               <button onClick={() => setActiveClientId(null)} className="p-1 text-slate-400 hover:text-slate-700 md:hidden">
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-950/50 flex items-center justify-center font-bold text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/40 shrink-0">
+              <div className={clsx(
+                "w-10 h-10 rounded-full flex items-center justify-center font-bold border shrink-0",
+                canalActivo === 'messenger'
+                  ? "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40"
+                  : "bg-green-50 dark:bg-green-950/50 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/40"
+              )}>
                 {(activeClient.name || 'C').charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
@@ -240,7 +316,9 @@ export function WhatsAppChat() {
                 </h3>
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                   <span className={clsx("w-2 h-2 rounded-full", windowOpen ? "bg-emerald-500" : "bg-amber-500")} />
-                  {activeClient.phone || 'Sin teléfono'} · WhatsApp
+                  {canalActivo === 'messenger'
+                    ? (activeClient.phone || 'Sin teléfono aún') + ' · Messenger'
+                    : (activeClient.phone || 'Sin teléfono') + ' · WhatsApp'}
                 </div>
               </div>
 
@@ -285,7 +363,26 @@ export function WhatsAppChat() {
               <div ref={feedEndRef} />
             </div>
 
-            {windowOpen ? (
+            {canalActivo === 'messenger' ? (
+              // Meta todavía no aprueba que el CRM escriba por Messenger; hasta
+              // entonces el vendedor contesta en el buzón de Meta y la respuesta
+              // se copia sola a esta conversación.
+              <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-blue-50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300 flex items-start gap-3 shrink-0 text-sm">
+                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <span>
+                  Por ahora las respuestas de Messenger se escriben desde el buzón de Meta —
+                  aparecerán aquí en cuanto las mandes.{' '}
+                  <a
+                    href="https://business.facebook.com/latest/inbox/messenger"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold underline inline-flex items-center gap-1"
+                  >
+                    Abrir el buzón <ExternalLink className="w-3 h-3" />
+                  </a>
+                </span>
+              </div>
+            ) : windowOpen ? (
               <form onSubmit={handleSend} className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
                 <div className="flex gap-3">
                   <input
@@ -325,7 +422,7 @@ export function WhatsAppChat() {
             <div className="w-16 h-16 rounded bg-[#f4f5f5] dark:bg-slate-800 flex items-center justify-center mb-4 text-green-500 border">
               <MessageCircle className="w-8 h-8" />
             </div>
-            <h3 className="font-bold text-slate-700 dark:text-slate-300 mb-1">Conversaciones de WhatsApp</h3>
+            <h3 className="font-bold text-slate-700 dark:text-slate-300 mb-1">Conversaciones con clientes</h3>
             <p className="text-sm text-slate-500 max-w-sm">
               Selecciona un contacto de la izquierda para ver la conversación y darle seguimiento.
             </p>

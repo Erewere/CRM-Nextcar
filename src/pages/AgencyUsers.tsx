@@ -986,10 +986,10 @@ export function AgencyUsers() {
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-green-600" />
-              Asignación de Conversaciones de WhatsApp
+              Asignación de Conversaciones de Clientes
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Define qué pasa cuando un cliente nuevo escribe por WhatsApp. Las conversaciones de contactos que ya tienen vendedor asignado siempre se quedan con él.
+              Define qué pasa cuando un cliente nuevo escribe por WhatsApp o por Messenger. Las conversaciones de contactos que ya tienen vendedor asignado siempre se quedan con él.
             </p>
           </div>
 

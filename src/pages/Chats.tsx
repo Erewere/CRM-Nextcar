@@ -245,8 +245,8 @@ export function Chats() {
           )}
         >
           <MessageCircle className="w-4 h-4" />
-          WhatsApp
-          <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline">clientes</span>
+          Clientes
+          <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline">WhatsApp y Messenger</span>
         </button>
         <button
           onClick={() => setCanal('interno')}
