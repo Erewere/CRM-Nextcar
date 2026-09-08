@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '../lib/firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, enviarCorreoDeRecuperacion } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { Navigate, useLocation } from 'react-router';
 import { NextcarLogo } from '../components/NextcarLogo';
@@ -13,6 +13,8 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [aviso, setAviso] = useState('');
+  const [enviandoRecuperacion, setEnviandoRecuperacion] = useState(false);
 
   if (loading) return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#f4f5f5] dark:bg-slate-900">
@@ -21,6 +23,32 @@ export function Login() {
     </div>
   );
   if (currentUser) return <Navigate to="/" />;
+
+  // Recuperar la cuenta sin depender de nadie. Antes no habia forma: a quien
+  // se le olvidaba la contrasena solo le quedaba pedir que se la cambiaran a
+  // mano en la consola de Firebase, o crearse otra cuenta -- que es de donde
+  // salen los usuarios duplicados que acaban entrando a la agencia equivocada.
+  const recuperarContrasena = async () => {
+    setError('');
+    setAviso('');
+    if (!email.trim()) {
+      setError('Escribe primero tu email y vuelve a darle.');
+      return;
+    }
+    setEnviandoRecuperacion(true);
+    try {
+      await enviarCorreoDeRecuperacion(email.trim());
+    } catch (err: any) {
+      // A proposito no se distingue si esa cuenta existe: decirlo permitiria
+      // averiguar quien tiene cuenta en el CRM probando correos.
+      if (err?.code !== 'auth/user-not-found' && err?.code !== 'auth/invalid-email') {
+        console.error(err);
+      }
+    } finally {
+      setEnviandoRecuperacion(false);
+      setAviso('Si esa cuenta existe, te llegó un correo para poner una contraseña nueva. Revisa también el correo no deseado.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +94,12 @@ export function Login() {
           </div>
         )}
 
+        {aviso && (
+          <div className="mb-4 w-full p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs rounded text-center font-medium">
+            {aviso}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="w-full space-y-4 mb-6">
           {isRegistering && (
             <div>
@@ -108,6 +142,17 @@ export function Login() {
           >
             {isRegistering ? 'Registrarse' : 'Iniciar Sesión'}
           </button>
+
+          {!isRegistering && (
+            <button
+              type="button"
+              onClick={recuperarContrasena}
+              disabled={enviandoRecuperacion}
+              className="w-full text-xs font-semibold text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+            >
+              {enviandoRecuperacion ? 'Enviando...' : '¿Olvidaste tu contraseña?'}
+            </button>
+          )}
         </form>
 
         <div className="w-full border-t border-gray-200 dark:border-slate-700 pt-6">

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeAuth, browserSessionPersistence, inMemoryPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { initializeAuth, browserSessionPersistence, inMemoryPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -42,6 +42,19 @@ export const signInWithEmail = async (email: string, pass: string) => {
 
 export const signUpWithEmail = async (email: string, pass: string) => {
   return await createUserWithEmailAndPassword(auth, email, pass);
+};
+
+/**
+ * Manda el correo para poner una contrasena nueva.
+ *
+ * Lo envia Firebase, no el CRM: no depende de Resend ni de que el servidor este
+ * arriba. Hasta ahora no habia forma de recuperar la cuenta, asi que a quien se
+ * le olvidaba solo le quedaba pedirle a Luis que se la cambiara a mano en la
+ * consola -- o crearse otra cuenta, que es de donde salen los usuarios
+ * duplicados que luego entran a la agencia equivocada.
+ */
+export const enviarCorreoDeRecuperacion = async (email: string) => {
+  return await sendPasswordResetEmail(auth, email);
 };
 
 export const logout = async () => {
