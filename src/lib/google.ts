@@ -89,7 +89,12 @@ function unaHoraDespues(hhmm: string): string {
  * Ahora, sin hora el evento va de dia completo -- que es lo que significa una
  * actividad sin hora -- y con hora, si no se dijo cuando termina, dura una.
  */
-export function eventoDeActividad(a: Actividad) {
+/**
+ * @param zona Zona horaria del evento. En el navegador se deduce de quien
+ * mira; el servidor tiene que pasarla, porque su reloj vive en UTC y una cita
+ * de las 7 de la tarde acabaria puesta a la una de la madrugada.
+ */
+export function eventoDeActividad(a: Actividad, zona?: string) {
   if (!a.dueDate) return null;
   const base = {
     summary: (a.title || '').trim() || 'Actividad',
@@ -109,8 +114,8 @@ export function eventoDeActividad(a: Actividad) {
   const fin = a.endTime && a.endTime > a.startTime ? a.endTime : unaHoraDespues(a.startTime);
   return {
     ...base,
-    start: { dateTime: `${a.dueDate}T${a.startTime}:00`, timeZone: zonaHoraria() },
-    end: { dateTime: `${a.dueDate}T${fin}:00`, timeZone: zonaHoraria() },
+    start: { dateTime: `${a.dueDate}T${a.startTime}:00`, timeZone: zona || zonaHoraria() },
+    end: { dateTime: `${a.dueDate}T${fin}:00`, timeZone: zona || zonaHoraria() },
   };
 }
 

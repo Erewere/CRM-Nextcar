@@ -4,6 +4,11 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // puras, sin SDK, asi que valen igual de los dos lados. Duplicarlas aqui era
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
+import { eventoDeActividad } from "./src/lib/google.ts";
+
+// El reloj del servidor vive en UTC. Sin decirle la zona, una cita de las 7 de
+// la tarde acabaria en el calendario a la una de la madrugada.
+const ZONA_HORARIA_AGENCIA = "America/Mexico_City";
 import firebaseConfig from "./firebase-applet-config.json";
 import express from "express";
 import cors from "cors";
@@ -2211,6 +2216,48 @@ async function startServer() {
   }
 
   /**
+   * El permiso de Google de un usuario, sin que el usuario este delante.
+   *
+   * Lo mismo que hace /api/google/token, pero para el asistente: cuando alguien
+   * le pide "agendame la prueba de manejo", no hay navegador donde pedir nada.
+   * Devuelve null si esa persona nunca conecto su cuenta o si el pase murio;
+   * quien llame decide que hacer, porque quedarse sin evento no debe impedir
+   * que la actividad se guarde en el CRM.
+   */
+  async function permisoDeGoogleDe(uid: string): Promise<{ token: string; cuenta: string | null } | null> {
+    try {
+      const adminDb = getAdminDb();
+      if (!adminDb || !uid) return null;
+
+      const doc = await adminDb.collection("userSecrets").doc(uid).get();
+      const guardado = doc.exists ? doc.data() : null;
+      if (!guardado?.googleRefreshToken) return null;
+
+      const cuenta = guardado.googleAccount || null;
+      const vigente = permisosEnMemoria.get(uid);
+      if (vigente && vigente.vence > Date.now()) return { token: vigente.token, cuenta };
+
+      const cred = credencialesDeGoogle();
+      if (!cred) return null;
+
+      const datos = await pedirleTokenAGoogle({
+        client_id: cred.id,
+        client_secret: cred.secreto,
+        refresh_token: guardado.googleRefreshToken,
+        grant_type: "refresh_token",
+      });
+      permisosEnMemoria.set(uid, {
+        token: datos.access_token,
+        vence: Date.now() + (Number(datos.expires_in || 3600) - 120) * 1000,
+      });
+      return { token: datos.access_token, cuenta };
+    } catch (e: any) {
+      console.warn("No se pudo renovar el permiso de Google:", e?.message);
+      return null;
+    }
+  }
+
+  /**
    * De que cuenta salio el permiso. El calendario principal lleva por nombre
    * el correo de su dueño, asi que se averigua sin pedir ningun permiso extra.
    */
@@ -3505,7 +3552,8 @@ async function startServer() {
     },
     {
       name: "agendar_tarea",
-      description: "Agenda una tarea o cita para un contacto: llamarle, mandarle fotos, prueba de manejo, entrega.",
+      description:
+        "Agenda una tarea o cita para un contacto: llamarle, mandarle fotos, prueba de manejo, entrega. Además de guardarla en el CRM, crea el evento en el Google Calendar de quien la agenda. Úsala también cuando te pidan un recordatorio de algo del CRM: es preferible un evento en su calendario que una alarma suelta en el teléfono, porque queda ligado al contacto y lo ve todo su equipo.",
       inputSchema: {
         type: "object",
         properties: {
@@ -3952,8 +4000,56 @@ async function startServer() {
           createdAt: new Date().toISOString(),
           ...marcaDeAutor(),
         });
+
+        // La cita va tambien al calendario de quien la agenda. Antes la
+        // sincronizacion con Google era un boton dentro de "Tareas y
+        // Calendario": una cita pedida al asistente se quedaba en el CRM y no
+        // aparecia en el telefono, asi que acababa como alarma suelta en vez de
+        // como evento. Si falla, la actividad ya quedo guardada; solo se avisa.
+        let enElCalendario = false;
+        let motivoSinCalendario: string | null = null;
+        try {
+          const permiso = await permisoDeGoogleDe(sesion?.userId || "");
+          if (!permiso) {
+            motivoSinCalendario = "No hay una cuenta de Google conectada, así que la cita quedó solo en el CRM. Se conecta en Integraciones.";
+          } else {
+            const evento = eventoDeActividad(
+              {
+                title: String(toolArgs.titulo),
+                notes: toolArgs.notas ? String(toolArgs.notas) : "",
+                dueDate: String(toolArgs.fecha),
+                startTime: toolArgs.hora ? String(toolArgs.hora) : undefined,
+              },
+              ZONA_HORARIA_AGENCIA,
+            );
+            if (evento) {
+              const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${permiso.token}`, "Content-Type": "application/json" },
+                body: JSON.stringify(evento),
+              });
+              if (r.ok) {
+                const datos: any = await r.json();
+                await ref.set(
+                  { googleEventId: datos.id, ...(permiso.cuenta ? { googleAccount: permiso.cuenta } : {}) },
+                  { merge: true },
+                );
+                enElCalendario = true;
+              } else {
+                const err: any = await r.json().catch(() => ({}));
+                motivoSinCalendario = err?.error?.message || `Google respondió ${r.status}.`;
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error("No se pudo crear el evento en el calendario:", e?.message);
+          motivoSinCalendario = "Falló la conexión con Google.";
+        }
+
         return texto({
           ok: true, tarea: toolArgs.titulo, fecha: toolArgs.fecha,
+          enElCalendarioDeGoogle: enElCalendario,
+          avisoCalendario: motivoSinCalendario || undefined,
           // Que la respuesta diga la hora: si no, el asistente no la menciona y
           // quien pidio la cita no sabe si quedo agendada a esa hora o sin ella.
           hora: toolArgs.hora ? String(toolArgs.hora) : null,
