@@ -195,6 +195,12 @@ export function Login() {
         <p className="mt-8 text-[10px] text-center text-slate-400">
           Uso exclusivo para personal autorizado de agencias Nextcar.
         </p>
+        <a
+          href="/privacidad"
+          className="mt-2 text-[10px] text-slate-400 hover:text-blue-600 underline transition-colors"
+        >
+          Aviso de Privacidad
+        </a>
       </div>
     </div>
   );
