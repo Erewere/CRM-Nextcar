@@ -1365,11 +1365,13 @@ export function ClientDetailModal({
         // solo la etiqueta del contacto: el embudo se arma con `deals`, asi
         // que no pasaba nada visible. Ahora esa eleccion crea o mueve su
         // trato. Las etapas finales no crean nada -- ver etapaDelContacto.ts.
-        if (
-          !isDealContext &&
-          dataToUpdate.status &&
-          dataToUpdate.status !== client.status
-        ) {
+        // No se exige que la etapa haya cambiado. Hay contactos antiguos que
+        // ya traen etapa y nunca tuvieron trato -- los que entraron por
+        // /api/public/v1/leads, que solo crea el contacto -- y decian estar en
+        // "Contactados" sin aparecer en el embudo. Abrirlos y guardar los
+        // arregla. Repetirlo no duplica nada: si ya hay un trato abierto se
+        // mueve ese, no se crea otro.
+        if (!isDealContext && dataToUpdate.status) {
           try {
             const r = await aplicarEtapaAlTrato({
               clientId: finalClientId as string,
@@ -3295,8 +3297,12 @@ export function ClientDetailModal({
                     <div className="relative">
                       <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-gray-300 border-2 border-white shadow-sm"></div>
                       <div className="text-sm text-gray-500 dark:text-slate-400 ml-1">
-                        Trato creado. Origen:{" "}
-                        <span className="font-semibold">{formData.origin}</span>
+                        {/* Decia "Trato creado" siempre, hubiera trato o no:
+                            es el pie fijo de la linea de tiempo, no un
+                            registro de nada. Carlos lo mostraba teniendo cero
+                            tratos. Ahora solo dice de donde llego. */}
+                        Contacto registrado. Origen:{" "}
+                        <span className="font-semibold">{formData.origin || "manual"}</span>
                       </div>
                     </div>
                   </div>
