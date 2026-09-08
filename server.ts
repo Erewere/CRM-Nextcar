@@ -230,6 +230,34 @@ async function primeraEtapaDelEmbudo(adminDb: any, agencyId: string) {
 
 // Dos tratos abiertos del mismo cliente son dos tarjetas compitiendo en el
 // embudo y dos vendedores creyendo que la venta es suya.
+/**
+ * Encuentra la etapa que pidieron, escrita como la diria una persona.
+ *
+ * Nadie dice "stage_1786386181916": dicen "confirmacion cita". Se compara sin
+ * acentos ni mayusculas, contra el titulo y contra el id. Devuelve null si no
+ * hay etapa o si no se reconoce, para que quien llame decida que hacer.
+ */
+function etapaQuePidieron(
+  texto: string | undefined,
+  etapas: { id: string; title?: string }[]
+): string | null {
+  const limpio = String(texto || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!limpio) return null;
+  const normal = (s: string) =>
+    String(s || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const hallada = etapas.find(
+    (e) => normal(e.id) === limpio || normal(e.title || "") === limpio
+  );
+  if (!hallada) return null;
+  // Nacer en "Ganados" seria una venta sin auto, sin importe y sin pagos.
+  if (checkIsWon(hallada.id, etapas) || checkIsLost(hallada.id, etapas)) return null;
+  return hallada.id;
+}
+
 async function tieneTratoAbierto(
   adminDb: any,
   agencyId: string,
@@ -3349,7 +3377,8 @@ async function startServer() {
     },
     {
       name: "create_lead",
-      description: "Registra un nuevo prospecto o cliente potencial en el CRM Erewere para la agencia autenticada",
+      description:
+        "Registra un nuevo prospecto en el CRM Erewere y lo mete al embudo. Si esa persona ya estaba dada de alta, actualiza su ficha en vez de duplicarla, y si ya tenía un trato abierto no le crea otro. Si no te dicen la etapa, no la inventes: se usa la primera del embudo y la respuesta te pide avisarlo y preguntar si quieren moverlo.",
       inputSchema: {
         type: "object",
         properties: {
@@ -3357,7 +3386,12 @@ async function startServer() {
           phone: { type: "string", description: "Teléfono de contacto" },
           email: { type: "string", description: "Correo electrónico" },
           vehicle: { type: "string", description: "Vehículo o auto de interés" },
-          origin: { type: "string", description: "Origen del lead (ej: whatsapp, web, mcp_ai)" }
+          origin: { type: "string", description: "Origen del lead (ej: whatsapp, web, mcp_ai)" },
+          etapa: {
+            type: "string",
+            description:
+              "Etapa del embudo donde entra, tal como la diría una persona (ej: 'Confirmacion Cita', 'Contactados'). Opcional: si no te la dicen, no la adivines — déjala vacía y la respuesta te dirá qué etapas hay para preguntar."
+          }
         },
         required: ["name"]
       }
@@ -4114,6 +4148,56 @@ async function startServer() {
         }
         const docRef = yaEstaba || (await db.collection("clients").add(newClient));
 
+        // El contacto sin trato no aparece en el embudo por ningun lado: la
+        // ficha se ve completa y la tarjeta no existe. Ya paso con la entrada
+        // de leads de la web y estaba pasando igual aqui.
+        const { etapaId: primeraEtapa, etapas } = await primeraEtapaDelEmbudo(db, targetAgencyId);
+        const etapaPedida = etapaQuePidieron(toolArgs.etapa, etapas);
+        const etapaFinal = etapaPedida || primeraEtapa;
+
+        let tratoCreado: string | null = null;
+        let yaTeniaTrato = false;
+        try {
+          // Dos tratos abiertos del mismo cliente son dos tarjetas compitiendo
+          // en el embudo y dos vendedores creyendo que la venta es suya.
+          yaTeniaTrato = await tieneTratoAbierto(db, targetAgencyId, docRef.id, etapas);
+          if (!yaTeniaTrato) {
+            tratoCreado = await crearTratoDelLead(db, {
+              agencyId: targetAgencyId,
+              clientId: docRef.id,
+              name,
+              vehicle: vehicle || "",
+              vehicleId: null,
+              sellerId: sesion?.userId || "",
+              etapaId: etapaFinal,
+            });
+          }
+        } catch (errTrato) {
+          // El contacto ya quedo guardado: que falle el trato no debe perder
+          // el lead ni hacer creer que no se dio de alta a nadie.
+          console.error("No se pudo crear el trato del lead del asistente:", errTrato);
+        }
+
+        const nombreEtapa =
+          etapas.find((e) => e.id === etapaFinal)?.title || etapaFinal;
+        const etapasDisponibles = etapas
+          .filter((e) => e?.id && !checkIsWon(e.id, etapas) && !checkIsLost(e.id, etapas))
+          .map((e) => e.title || e.id);
+
+        const partes: string[] = [];
+        partes.push(
+          yaEstaba
+            ? `'${name}' ya estaba registrado con ese teléfono; se actualizó su ficha (ID ${docRef.id}) en vez de crear otra.`
+            : `Lead '${name}' creado correctamente con ID ${docRef.id}.`
+        );
+        if (yaTeniaTrato) {
+          partes.push("Ya tenía un trato abierto en el embudo, así que no se creó otro.");
+        } else if (tratoCreado) {
+          partes.push(`Se creó su trato en el embudo, en la etapa "${nombreEtapa}".`);
+        } else {
+          partes.push("OJO: no se pudo crear su trato en el embudo; avísale a quien te pidió esto.");
+        }
+
         return {
           jsonrpc: "2.0",
           id,
@@ -4127,9 +4211,18 @@ async function startServer() {
                   success: true,
                   leadId: docRef.id,
                   yaExistia: !!yaEstaba,
-                  message: yaEstaba
-                    ? `'${name}' ya estaba registrado con ese teléfono; se actualizó su ficha (ID ${docRef.id}) en vez de crear otra.`
-                    : `Lead '${name}' creado correctamente con ID ${docRef.id}`
+                  dealId: tratoCreado,
+                  yaTeniaTrato,
+                  etapa: nombreEtapa,
+                  etapaLaElegisteTu: !!etapaPedida,
+                  etapasDisponibles,
+                  // Sin esto el asistente da por buena la etapa por omision y
+                  // no la menciona. Quien pide el alta quiere decidirla.
+                  instruccion:
+                    etapaPedida || yaTeniaTrato
+                      ? undefined
+                      : `No te dijeron en qué etapa va, así que quedó en "${nombreEtapa}". Dilo y pregunta si quiere moverlo, ofreciendo estas etapas: ${etapasDisponibles.join(", ")}.`,
+                  message: partes.join(" ")
                 })
               }
             ]
