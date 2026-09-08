@@ -84,6 +84,16 @@ export function MobileInventory() {
     if (userData?.role !== 'master') {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
       clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
+
+      // Mismo caso que en el inventario de escritorio: estas coincidencias son
+      // para vender, no para enterarse de la cartera de los companeros.
+      if (userData?.role === 'seller') {
+        clientsQ = query(
+          collection(db, 'clients'),
+          where('agencyId', '==', userData.agencyId),
+          where('sellerId', '==', userData.id),
+        );
+      }
     }
 
     const unsubscribeVehicles = onSnapshot(q, (snapshot) => {

@@ -11,6 +11,7 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
+import { useAvisosDescartados, descartarAviso, idDeMatch } from "../lib/avisosDescartados";
 
 const parseDate = (val: any): Date | null => {
   if (!val) return null;
@@ -55,14 +56,9 @@ export function NotificationsPopover() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem("crm_dismissed_notifications");
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  // La lista de descartados vive en un solo sitio para todo el CRM, para que
+  // descartar aquí también descarte en el aviso flotante de coincidencias.
+  const dismissedIds = useAvisosDescartados();
   /**
    * Que avisos de configuracion ya se pospusieron en la pantalla.
    *
@@ -194,16 +190,7 @@ export function NotificationsPopover() {
   }, []);
 
   const handleDismissNotif = async (notif: { id: string; type: string; clientId?: string }) => {
-    setDismissedIds((prev) => {
-      const next = new Set(prev);
-      next.add(notif.id);
-      try {
-        localStorage.setItem("crm_dismissed_notifications", JSON.stringify(Array.from(next)));
-      } catch (e) {
-        console.error("Failed to save dismissed notification", e);
-      }
-      return next;
-    });
+    descartarAviso(notif.id);
 
     if (notif.type === "deal-stale" && notif.clientId) {
       try {
@@ -410,7 +397,7 @@ export function NotificationsPopover() {
   if (ownAgencySharing) {
     matches.forEach((m) => {
       if (isSellerNotif && m.client.sellerId && m.client.sellerId !== userData?.id) return;
-      const notifId = `match-${m.client.id}-${m.vehicle.id}`;
+      const notifId = idDeMatch(m.client.id, m.vehicle.id);
       if (dismissedIds.has(notifId)) return;
       notifications.push({
         id: notifId,

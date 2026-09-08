@@ -433,6 +433,18 @@ export function Inventory() {
       q = query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId));
       clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
       expensesQ = query(collection(db, 'vehicleExpenses'), where('agencyId', '==', userData.agencyId));
+
+      // Esta lista solo alimenta las etiquetas de coincidencia sobre las fotos.
+      // Filtrada solo por agencia, a un vendedor le mostraba el nombre de
+      // clientes de sus companeros: no solo no eran suyos, es que no deberia
+      // saber que existen. Cada quien ve las coincidencias de los suyos.
+      if (userData?.role === 'seller') {
+        clientsQ = query(
+          collection(db, 'clients'),
+          where('agencyId', '==', userData.agencyId),
+          where('sellerId', '==', userData.id),
+        );
+      }
     }
 
     const unsubscribeVehicles = onSnapshot(q, (snapshot) => {

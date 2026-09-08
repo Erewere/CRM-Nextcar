@@ -40,6 +40,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
+import { AvisoMatchesRed } from "./AvisoMatchesRed";
 import { NextcarLogo } from "./NextcarLogo";
 import { getTrialDaysLeft } from "../lib/subscription";
 import { NOMBRE_ROL, type Rol } from "../lib/permissions";
@@ -694,6 +695,10 @@ export function Layout() {
       
       {/* Global Mobile FAB */}
       {isMobile && location.pathname !== '/chats' && <MobileFab />}
+
+      {/* Las coincidencias con el inventario de otras agencias, al frente. En
+          Chats estorbaria sobre el cuadro de escribir. */}
+      {location.pathname !== '/chats' && <AvisoMatchesRed />}
 
       {/* Mobile Bottom Navigation */}
       {isMobile && (
