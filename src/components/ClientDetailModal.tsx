@@ -52,6 +52,7 @@ import { VehicleDetailModal } from "./VehicleDetailModal";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
+import { aplicarEtapaAlTrato } from "../lib/etapaDelContacto";
 
 import { puedeVenderSinAprobacion, vehiculoVendido, esElCompradorDelVehiculo } from "../lib/ventaDeVehiculo";
 interface Props {
@@ -1359,6 +1360,38 @@ export function ClientDetailModal({
         }
 
         await setDoc(doc(db, "clients", finalClientId as string), sanitizeFirestoreData(dataToUpdate), { merge: true });
+
+        // Elegir una etapa en la ficha de un contacto (no de un trato) movia
+        // solo la etiqueta del contacto: el embudo se arma con `deals`, asi
+        // que no pasaba nada visible. Ahora esa eleccion crea o mueve su
+        // trato. Las etapas finales no crean nada -- ver etapaDelContacto.ts.
+        if (
+          !isDealContext &&
+          dataToUpdate.status &&
+          dataToUpdate.status !== client.status
+        ) {
+          try {
+            const r = await aplicarEtapaAlTrato({
+              clientId: finalClientId as string,
+              agencyId: (dataToUpdate.agencyId as string) || userData?.agencyId || "",
+              sellerId: (dataToUpdate.sellerId as string) || userData?.id || "",
+              etapa: dataToUpdate.status as string,
+              pipelineStages,
+              nombre: dataToUpdate.name as string,
+              vehicle: (dataToUpdate.vehicle as string) || null,
+              vehicleId: (dataToUpdate.vehicleId as string) || null,
+              esMaster: userData?.role === "master",
+            });
+            if (r.accion === "creado") {
+              alert("Listo. Se creó su trato en el embudo, en esa etapa.");
+            }
+          } catch (err) {
+            // El contacto ya quedo guardado: fallar aqui en rojo haria creer
+            // que no se guardo nada.
+            console.error("No se pudo crear o mover el trato:", err);
+            alert("Se guardó el contacto, pero no se pudo mover su trato.");
+          }
+        }
 
         // Sync vehicle price if it's a won deal
         const finalStatus = dataToUpdate.status || dealDataToUpdate.status || client.status;

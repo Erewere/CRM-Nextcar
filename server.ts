@@ -1714,7 +1714,6 @@ async function startServer() {
 
   const PERMISOS_GOOGLE = [
     "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/contacts.readonly",
   ].join(" ");
 
   /** Permisos vigentes en memoria, para no pedirle uno nuevo a Google en cada llamada. */
