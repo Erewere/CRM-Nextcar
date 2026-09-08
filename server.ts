@@ -209,6 +209,106 @@ async function buscarContactoPorTelefono(adminDb: any, agencyId: string, phone: 
 }
 
 /** Completa los datos de contacto que le falten, sin pisar los que ya tiene. */
+// Mismo criterio de ganado/perdido que src/lib/clientUtils.ts, reescrito aqui
+// porque aquel usa el SDK del navegador y esto corre con el Admin SDK. Si
+// cambia alla, cambia aca.
+function etapaEsGanada(estado: string, etapas: { id: string; title?: string }[] = []) {
+  const s = String(estado || "").trim().toLowerCase();
+  if (["won", "ganado", "ganados", "sold", "vendido", "vendidos"].includes(s)) return true;
+  const claves = ["ganad", "won", "cerrado ganado", "venta ganada"];
+  if (claves.some((k) => s.includes(k))) return true;
+  const etapa = etapas.find((e) => e.id === estado);
+  if (etapa) {
+    const t = String(etapa.title || "").trim().toLowerCase();
+    const id = String(etapa.id || "").trim().toLowerCase();
+    return claves.some((k) => t.includes(k) || id.includes(k));
+  }
+  return false;
+}
+
+function etapaEsPerdida(estado: string, etapas: { id: string; title?: string }[] = []) {
+  const s = String(estado || "").trim().toLowerCase();
+  if (["lost", "perdido", "perdidos", "cancelado", "rechazado"].includes(s)) return true;
+  const claves = ["perdid", "lost", "descartad", "rechazad", "cancelad"];
+  if (claves.some((k) => s.includes(k))) return true;
+  const etapa = etapas.find((e) => e.id === estado);
+  if (etapa) {
+    const t = String(etapa.title || "").trim().toLowerCase();
+    const id = String(etapa.id || "").trim().toLowerCase();
+    return claves.some((k) => t.includes(k) || id.includes(k));
+  }
+  return false;
+}
+
+// La primera columna del embudo de esa agencia. Se salta las etapas finales:
+// un lead recien llegado no puede nacer en Ganados ni en Perdidos.
+async function primeraEtapaDelEmbudo(adminDb: any, agencyId: string) {
+  try {
+    const snap = await adminDb.collection("agencies").doc(agencyId).get();
+    const etapas = (snap.data()?.pipelineStages || []) as { id: string; title?: string }[];
+    const abierta = etapas.find(
+      (e) => e?.id && !etapaEsGanada(e.id, etapas) && !etapaEsPerdida(e.id, etapas)
+    );
+    return { etapaId: abierta?.id || "new", etapas };
+  } catch (e) {
+    console.warn("No se pudieron leer las etapas del embudo:", e);
+    return { etapaId: "new", etapas: [] as { id: string; title?: string }[] };
+  }
+}
+
+// Dos tratos abiertos del mismo cliente son dos tarjetas compitiendo en el
+// embudo y dos vendedores creyendo que la venta es suya.
+async function tieneTratoAbierto(
+  adminDb: any,
+  agencyId: string,
+  clientId: string,
+  etapas: { id: string; title?: string }[]
+) {
+  const snap = await adminDb
+    .collection("deals")
+    .where("agencyId", "==", agencyId)
+    .where("clientId", "==", clientId)
+    .get();
+  return snap.docs.some((d: any) => {
+    const t = d.data() || {};
+    if (t.isDeleted) return false;
+    return !etapaEsGanada(t.status, etapas) && !etapaEsPerdida(t.status, etapas);
+  });
+}
+
+// Un contacto sin trato no aparece en el embudo, y lo que no se ve no se
+// trabaja. Todo lo que entra por la puerta publica (Marketplace, WhatsApp, el
+// formulario de la pagina) tiene que llegar al embudo, no solo al directorio.
+async function crearTratoDelLead(
+  adminDb: any,
+  datos: {
+    agencyId: string;
+    clientId: string;
+    name: string;
+    vehicle?: string;
+    vehicleId?: string | null;
+    sellerId?: string;
+    etapaId: string;
+  }
+) {
+  const ref = adminDb.collection("deals").doc();
+  const ahora = new Date().toISOString();
+  await ref.set({
+    id: ref.id,
+    clientId: datos.clientId,
+    agencyId: datos.agencyId,
+    sellerId: datos.sellerId || "",
+    title: `Trato con ${datos.name || "cliente"}`,
+    status: datos.etapaId,
+    value: 0,
+    vehicle: datos.vehicle || null,
+    vehicleId: datos.vehicleId || null,
+    createdAt: ahora,
+    updatedAt: ahora,
+  });
+  return ref.id;
+}
+
 function camposQueFaltan(existente: any, entrante: Record<string, any>) {
   const relleno: Record<string, any> = {};
   for (const [k, v] of Object.entries(entrante)) {
@@ -2058,16 +2158,60 @@ async function startServer() {
           { ...relleno, updatedAt: FieldValue.serverTimestamp() },
           { merge: true }
         );
+
+        // Vuelve a escribir alguien que ya conocemos: solo entra al embudo si
+        // no tiene ya un trato abierto. Si lo tiene, ese es el que se trabaja.
+        let dealId: string | null = null;
+        try {
+          const { etapaId, etapas } = await primeraEtapaDelEmbudo(adminDb, agencyId);
+          if (!(await tieneTratoAbierto(adminDb, agencyId, yaEstaba.id, etapas))) {
+            const anterior = yaEstaba.data() || {};
+            dealId = await crearTratoDelLead(adminDb, {
+              agencyId,
+              clientId: yaEstaba.id,
+              name: anterior.name || name,
+              vehicle: vehicle || anterior.vehicle || "",
+              vehicleId: anterior.vehicleId || null,
+              sellerId: validatedSellerId || anterior.sellerId || "",
+              etapaId,
+            });
+          }
+        } catch (errTrato) {
+          // El contacto ya quedo guardado; que falle el trato no debe perder
+          // el lead. Se registra para poder revisarlo.
+          console.error("No se pudo crear el trato del lead existente:", errTrato);
+        }
+
         return res.status(200).json({
           success: true,
           leadId: yaEstaba.id,
+          dealId,
           yaExistia: true,
         });
       }
 
       const docRef = await adminDb.collection("clients").add(newClient);
 
-      res.status(201).json({ success: true, leadId: docRef.id });
+      // Sin trato, el contacto queda solo en el directorio y nadie lo trabaja
+      // porque nadie lo ve. Esa era la fuga: entraban leads de Marketplace y
+      // del formulario de la pagina que jamas aparecian en el embudo.
+      let dealId: string | null = null;
+      try {
+        const { etapaId } = await primeraEtapaDelEmbudo(adminDb, agencyId);
+        dealId = await crearTratoDelLead(adminDb, {
+          agencyId,
+          clientId: docRef.id,
+          name,
+          vehicle: vehicle || "",
+          vehicleId: null,
+          sellerId: validatedSellerId,
+          etapaId,
+        });
+      } catch (errTrato) {
+        console.error("No se pudo crear el trato del lead nuevo:", errTrato);
+      }
+
+      res.status(201).json({ success: true, leadId: docRef.id, dealId });
     } catch (e: any) {
       res.status(500).json({ error: e.message, stack: e.stack });
     }
