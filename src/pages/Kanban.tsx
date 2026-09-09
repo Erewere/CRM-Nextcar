@@ -832,7 +832,7 @@ export function Kanban() {
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+      <div className="mb-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
         <div className="relative w-full md:w-80 lg:w-96">
           <div className="relative flex items-center">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
@@ -856,11 +856,11 @@ export function Kanban() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 justify-end">
+        <div className="flex flex-wrap items-center gap-2 justify-end">
           {userData?.role === "admin" && (
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors ml-2"
+              className="p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300 rounded transition-colors"
               title="Configurar Etapas del Pipeline"
             >
               <Settings className="w-5 h-5" />
@@ -868,14 +868,14 @@ export function Kanban() {
           )}
           <button
             onClick={() => setShowArchived(true)}
-            className="p-2 text-slate-400 hover:bg-slate-100 dark:bg-slate-700 hover:text-slate-700 dark:text-slate-300 rounded transition-colors ml-2"
+            className="p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300 rounded transition-colors"
             title="Ver Ganados y Perdidos"
           >
             <Archive className="w-5 h-5" />
           </button>
           {["admin", "master"].includes(userData?.role || "") &&
             users.length > 0 && (
-              <div className="ml-4">
+              <div>
                 <select
                   value={selectedSellerId}
                   onChange={(e) => {
@@ -895,13 +895,13 @@ export function Kanban() {
                 </select>
               </div>
             )}
+          <button
+            onClick={() => setSelectedClient({} as Client)}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-1.5 rounded text-xs font-bold shadow-sm shadow-blue-200 shrink-0"
+          >
+            + NUEVO TRATO
+          </button>
         </div>
-        <button
-          onClick={() => setSelectedClient({} as Client)}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors text-white px-4 py-2 rounded text-xs font-bold shadow-sm shadow-blue-200"
-        >
-          + NUEVO TRATO
-        </button>
       </div>
 
       {/* Fichas de etapas, solo en el telefono.
