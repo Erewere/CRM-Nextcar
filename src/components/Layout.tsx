@@ -594,16 +594,12 @@ export function Layout() {
               )}
             </button>
 
-            {/* Simulating "Integration with website" CTA just conceptually or link out */}
-            <a
-              href="https://www.nextcar.erewere.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-            >
-              <NextcarMarca className="w-5 h-5 shrink-0" />
-              Ir a Nextcar
-            </a>
+            {/* La marca del CRM. Aqui habia un enlace «Ir a Nextcar» escrito a
+                mano al sitio de esa agencia, que se le mostraba a todas: el
+                administrador de otra agencia acababa en la pagina de Nextcar.
+                Se queda la marca sola, sin enlace, hasta que cada agencia pueda
+                poner la direccion de su propio sitio. */}
+            <NextcarMarca className="hidden sm:block w-9 h-9 text-slate-700 dark:text-slate-200 shrink-0" />
           </div>
         </header>
 
