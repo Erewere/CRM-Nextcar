@@ -747,26 +747,6 @@ export function Inventory() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex justify-end items-center mb-4">
-        <div className="flex items-center gap-3">
-          {!isReadOnly && (userData?.role !== "seller" || userData?.canManageVehicles) && (
-            <>
-              <label className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
-                <Download className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Importar Excel</span>
-                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
-              </label>
-              <button 
-                onClick={() => setSelectedVehicle({} as Vehicle)}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded font-medium flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Agregar Vehículo
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
       {(userData?.role === 'admin' || userData?.role === 'master') && pendingVehicles.length > 0 && (
         <div className="mb-6 p-4 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-2xl shadow-sm transition-all">
           <div className="flex items-center justify-between mb-3">
@@ -903,22 +883,25 @@ export function Inventory() {
       )}
 
       <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b flex items-center justify-between gap-4">
-          <div className="flex flex-1 max-w-xl gap-3">
+        {/* Todo en una linea: buscador y filtros a la izquierda, pestanas y
+            acciones a la derecha. Los botones vivian en una fila propia
+            encima del recuadro y se comian una franja entera de pantalla. */}
+        <div className="px-4 py-2.5 border-b flex items-center justify-between gap-3">
+          <div className="flex flex-1 max-w-xl gap-3 min-w-0">
             <div className="relative flex-1">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text" 
                 placeholder="Buscar por marca, modelo, año, VIN, carrocería..." 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-4 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <select
               value={filterBodyType}
               onChange={(e) => setFilterBodyType(e.target.value)}
-              className="px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+              className="px-3 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
             >
               <option value="all">Carrocería</option>
               {uniqueBodyTypes.map(t => (
@@ -928,7 +911,7 @@ export function Inventory() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="activos">En inventario (sin vendidos)</option>
               <option value="all">Todos, incluidos vendidos</option>
@@ -1015,6 +998,23 @@ export function Inventory() {
               <List className="w-4 h-4" />
             </button>
           </div>
+
+          {!isReadOnly && (userData?.role !== "seller" || userData?.canManageVehicles) && (
+            <>
+              <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm cursor-pointer shrink-0">
+                <Download className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Importar Excel</span>
+                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
+              </label>
+              <button
+                onClick={() => setSelectedVehicle({} as Vehicle)}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-3 py-1.5 rounded font-semibold flex items-center gap-2 text-xs md:text-sm shrink-0"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span className="hidden lg:inline">Agregar Vehículo</span>
+                <span className="lg:hidden">Agregar</span>
+              </button>
+            </>
+          )}
         </div>
         
         {viewMode === 'grid' ? (
