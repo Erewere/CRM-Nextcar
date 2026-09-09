@@ -882,9 +882,12 @@ export function Persons() {
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5]">
       {/* Header */}
-      <div className="p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-          <div className="flex items-center gap-4">
+      <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* El buscador sube a la misma linea que el resto: en dos filas la
+              barra se comia una franja de pantalla que hace mas falta para
+              ver contactos. */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="flex bg-gray-100 p-1 rounded">
               <button
                 onClick={() => setViewMode("list")}
@@ -908,6 +911,16 @@ export function Persons() {
               >
                 <Grid className="w-4 h-4" />
               </button>
+            </div>
+            <div className="flex items-center gap-2 relative flex-1 min-w-0 md:max-w-xs">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 shrink-0" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, teléfono o correo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 py-1.5 pl-9 pr-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm hover:bg-gray-100 dark:hover:bg-slate-700"
+              />
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -953,16 +966,6 @@ export function Persons() {
               </>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-2 relative max-w-md">
-          <Search className="w-5 h-5 text-gray-400 absolute left-3" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, teléfono o correo..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200-full py-1.5 pl-10 pr-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700"
-          />
         </div>
       </div>
 
