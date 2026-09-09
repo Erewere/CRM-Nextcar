@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, enviarCorreoDeRecuperacion } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { Navigate, useLocation } from 'react-router';
-import { NextcarLogo } from '../components/NextcarLogo';
+import { NextcarLogo, NextcarIcono } from '../components/NextcarLogo';
 
 export function Login() {
   const { currentUser, loading, connectGoogleServices } = useAuth();
@@ -18,7 +18,7 @@ export function Login() {
 
   if (loading) return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#f4f5f5] dark:bg-slate-900">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+      <NextcarIcono className="h-16 w-16 mb-4" animado />
       <p className="text-slate-500 font-medium text-sm">Cargando aplicación...</p>
     </div>
   );

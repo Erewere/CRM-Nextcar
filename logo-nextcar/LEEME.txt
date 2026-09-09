@@ -1,0 +1,26 @@
+NEXTCAR CRM — logo "Aguja" (4A)
+
+Tipografia: Manrope ExtraBold (800) para NEXTCAR, tracking -0.045em.
+Descriptor "crm": Manrope Bold (700), tracking 0.9em.
+Descarga: https://fonts.google.com/specimen/Manrope
+
+Colores
+  Tinta    #0F0F10
+  Aguja    #D6402A
+  Rojo sobre fondo oscuro  #E8503A
+  Rojo para texto chico sobre claro  #A82A17
+
+Archivos
+  lockup-claro.png / lockup-oscuro.png  lockup completo (icono + NEXTCAR + crm)
+  icono-color.svg    marca sola, arco negro + aguja roja
+  icono-negro.svg    una tinta, para contratos y grabado
+  icono-blanco.svg   una tinta sobre fondo oscuro
+  icono-app-oscuro.svg  icono de app / favicon (cuadro redondeado)
+  favicon.svg        el mismo, en la raiz del proyecto
+  4A-hoja-completa.png  la hoja de especificacion completa
+
+Reglas
+  La tipografia toma el color que contrasta con el fondo. El rojo se queda en la aguja.
+  Las marcas del tablero se quitan abajo de 40 px.
+  Abajo de 20 px la aguja vuelve a ser trazo parejo y se quita el pivote.
+  Lockup horizontal: no bajar de 110 px de ancho; abajo de eso, solo el icono.

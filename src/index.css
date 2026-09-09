@@ -41,3 +41,26 @@ div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-
   padding: 1rem !important;
 }
 
+
+/* La aguja del logo barre como el tablero de un coche al encender: sube rapido,
+   se detiene un instante arriba y vuelve. Solo se usa en las esperas.
+
+   El giro va anclado al pivote (24, 34) del SVG; si se cambia el dibujo, hay
+   que cambiar tambien este punto o la aguja se despega del centro. */
+@keyframes nextcar-barrido {
+  0%   { transform: rotate(0deg); }
+  45%  { transform: rotate(-108deg); }
+  60%  { transform: rotate(-108deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.nextcar-aguja {
+  transform-origin: 24px 34px;
+  animation: nextcar-barrido 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+/* Quien pidio en su sistema que no le muevan las cosas en pantalla, no se las
+   movemos: la aguja se queda quieta y el logo se ve igual de bien. */
+@media (prefers-reduced-motion: reduce) {
+  .nextcar-aguja { animation: none; }
+}

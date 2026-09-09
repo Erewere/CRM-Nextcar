@@ -1,5 +1,1 @@
-<svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="128" fill="#0F172A"/>
-  <text x="140" y="320" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="200" fill="#DC2626">N</text>
-  <text x="280" y="320" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="200" fill="#FFFFFF">C</text>
-</svg>
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" fill="none" xmlns:c2pa="http://c2pa.org/manifest"> <rect width="48" height="48" rx="11" fill="#0F0F10"></rect> <path d="M9 34a15 15 0 1 1 30 0" stroke="#FFFFFF" stroke-width="4.4" stroke-linecap="round"></path> <polygon points="25.3,35 22.7,33.2 31.3,23.7" fill="#D6402A"></polygon> <circle cx="24" cy="34" r="3" fill="#FFFFFF"></circle> </svg>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { NextcarIcono } from './components/NextcarLogo';
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
@@ -50,7 +51,7 @@ const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, 
 
   if (loading) {
     console.log("ProtectedRoute: loading is true, rendering spinner");
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E4002B]"></div></div>;
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900"><NextcarIcono className="h-14 w-14" animado /></div>;
   }
   if (!currentUser) {
     console.log("ProtectedRoute: no currentUser, redirecting to /login");
@@ -58,7 +59,7 @@ const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, 
   }
   if (!userData) {
     console.log("ProtectedRoute: no userData, rendering spinner");
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E4002B]"></div></div>;
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900"><NextcarIcono className="h-14 w-14" animado /></div>;
   }
   
   if (requireRole) {
