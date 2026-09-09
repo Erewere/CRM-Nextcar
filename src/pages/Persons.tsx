@@ -33,6 +33,7 @@ import {
   Trash2,
   User as UserIcon,
   FileSpreadsheet,
+  Contact,
   Car,
 } from "lucide-react";
 import { ClientDetailModal } from "../components/ClientDetailModal";
@@ -50,7 +51,7 @@ import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 export function Persons() {
   const isMobile = useIsMobile();
-  const { userData } = useAuth();
+  const { userData, googleToken, connectGoogleServices, refrescarTokenGoogle } = useAuth();
   const isReadOnly = useReadOnly();
   const location = useLocation();
   const navigate = useNavigate();
@@ -96,6 +97,7 @@ export function Persons() {
     { id: string; title: string }[]
   >([]);
   const [importingContacts, setImportingContacts] = useState(false);
+  const [importandoDeGoogle, setImportandoDeGoogle] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
 
@@ -485,6 +487,135 @@ export function Persons() {
     }
   };
 
+  // Importar la libreta de Google como contactos del CRM. Se quito por error
+  // el 7 de septiembre junto con tres menus que si estaban muertos; esta
+  // funcionaba. Vuelve con un solo boton, en Personas, al lado del de Excel:
+  // antes habia dos, y uno de ellos dentro del alta de una persona, que es
+  // donde nadie lo buscaba.
+  const handleImportGoogleContacts = async () => {
+    try {
+      setImportandoDeGoogle(true);
+      // El servidor guarda el pase de renovacion, asi que primero se pide un
+      // permiso fresco. Solo se abre la ventana de Google si esta persona no
+      // ha conectado nunca su cuenta.
+      let token = (await refrescarTokenGoogle()) ?? googleToken;
+      if (!token) {
+        token = await connectGoogleServices();
+      }
+      if (!token) {
+        setImportandoDeGoogle(false);
+        return;
+      }
+
+      const fetchContacts = async (accessToken: string) => {
+        return await fetch(
+          "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers,organizations&pageSize=1000",
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+      };
+
+      let res = await fetchContacts(token);
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Renovar no molesta al usuario; solo si eso falla se le pide que
+          // vuelva a conectar.
+          const renovado = (await refrescarTokenGoogle()) ?? (await connectGoogleServices());
+          if (renovado) {
+            token = renovado;
+            res = await fetchContacts(token);
+          }
+        }
+      }
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("People API Error:", res.status, errorData);
+        alert(
+          `Error de Google (${res.status}): ${
+            errorData.error?.message || "No se pudo acceder a Google Contacts. Verifica la conexión."
+          }`
+        );
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.connections && data.connections.length > 0) {
+        let importedCount = 0;
+        let newPersons: Client[] = [];
+        
+        for (const person of data.connections) {
+          const nameObj = person.names?.[0];
+          const personName =
+            nameObj?.displayName ||
+            [nameObj?.givenName, nameObj?.familyName].filter(Boolean).join(" ") ||
+            person.emailAddresses?.[0]?.value ||
+            person.organizations?.[0]?.name ||
+            "";
+          const personEmail = person.emailAddresses?.[0]?.value || "";
+          const personPhone = person.phoneNumbers?.[0]?.value || "";
+          const personOrganization = person.organizations?.[0]?.name || "";
+
+          if (personName || personEmail || personPhone) {
+            const cleanPhone = (p: string) => p.replace(/\D/g, "");
+            const exists = [...persons, ...newPersons].find((p) => {
+              const sameEmail =
+                Boolean(personEmail) && Boolean(p.email) && p.email.toLowerCase().trim() === personEmail.toLowerCase().trim();
+              const samePhone =
+                Boolean(personPhone) && Boolean(p.phone) && cleanPhone(p.phone) === cleanPhone(personPhone);
+              const sameName =
+                Boolean(personName) && Boolean(p.name) && String(p.name).toLowerCase().trim() === String(personName).toLowerCase().trim();
+              return sameEmail || samePhone || sameName;
+            });
+
+            if (!exists) {
+              const newRef = doc(collection(db, "clients"));
+              const newPerson: Client = {
+                id: newRef.id,
+                agencyId: userData?.agencyId || "",
+                sellerId: userData?.id || "",
+                name: personName || "Contacto Google",
+                email: personEmail,
+                phone: personPhone,
+                organization: personOrganization,
+                address: "",
+                vehicle: "",
+                status: "",
+                origin: "google_contacts",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+              await setDoc(newRef, newPerson);
+              newPersons.push(newPerson);
+              importedCount++;
+            }
+          }
+        }
+
+        if (newPersons.length > 0) {
+          setPersons((prev) => [...newPersons, ...prev]);
+        }
+        alert(
+          importedCount > 0
+            ? `Se importaron ${importedCount} contactos nuevos desde tu cuenta de Google.`
+            : "Todos los contactos de tu cuenta de Google ya existen en el CRM."
+        );
+      } else {
+        alert("No se encontraron contactos en tu cuenta de Google.");
+      }
+    } catch (e: any) {
+      console.error("Error al importar contactos:", e);
+      alert("Hubo un error al importar los contactos: " + (e.message || e));
+    } finally {
+      setImportandoDeGoogle(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -800,6 +931,17 @@ export function Persons() {
               <span className="hidden sm:inline">Importar Excel</span>
               <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
             </label>
+            <button
+              type="button"
+              onClick={handleImportGoogleContacts}
+              disabled={importandoDeGoogle}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm disabled:opacity-50"
+            >
+              <Contact className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">
+                {importandoDeGoogle ? "Importando..." : "Importar de Google"}
+              </span>
+            </button>
             {!isReadOnly && (
               <>
                 <button

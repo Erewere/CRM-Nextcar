@@ -30,6 +30,8 @@ function leerCuentaGoogle(uid: string) {
 const CLIENTE_GOOGLE = (firebaseConfig as any).oAuthClientId as string;
 const PERMISOS_GOOGLE = [
   'https://www.googleapis.com/auth/calendar.events',
+  // Solo lectura, y solo cuando alguien pulsa "Importar de Google" en Personas.
+  'https://www.googleapis.com/auth/contacts.readonly',
 ].join(' ');
 
 let cargaDeGoogle: Promise<void> | null = null;
