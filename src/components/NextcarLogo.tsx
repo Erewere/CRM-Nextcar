@@ -47,6 +47,29 @@ export function NextcarIcono({ className, animado = false }: { className?: strin
   );
 }
 
+/**
+ * La marca sola, sin el cuadro de fondo: el arco toma el color del texto que la
+ * rodea y la aguja se queda roja, que es la regla del diseño.
+ *
+ * Para acompañar texto o sustituir un icono suelto. El cuadro oscuro de
+ * `NextcarIcono` se ve como una manchita por debajo de unos 24 px.
+ */
+export function NextcarMarca({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 30" fill="none" className={className} role="img" aria-label="Nextcar">
+      <path d="M3 27a21 21 0 1 1 42 0" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+      <path
+        d="M9.7 18.75 13.2 20.75M24 10.5V14.5M38.3 18.75 34.8 20.75"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <polygon points="25.23,27.86 22.77,26.14 32.6,14.7" fill="#D6402A" />
+      <circle cx="24" cy="27" r="3.2" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function NextcarLogo({ className, variant = "full", size = "auto", animado = false }: Props) {
   const alturaIcono = {
     sm: "h-7 w-7",

@@ -41,7 +41,7 @@ import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 
 import { MobileFab } from "./MobileFab";
 import { AvisoMatchesRed } from "./AvisoMatchesRed";
-import { NextcarLogo, NextcarIcono } from "./NextcarLogo";
+import { NextcarLogo, NextcarMarca } from "./NextcarLogo";
 import { getTrialDaysLeft } from "../lib/subscription";
 import { NOMBRE_ROL, type Rol } from "../lib/permissions";
 
@@ -518,21 +518,6 @@ export function Layout() {
           )}
         </div>
 
-        {/* La marca del CRM, al pie y discreta.
-            Arriba manda el logo de la agencia: es su casa, y con mas agencias
-            usando el sistema eso importa mas, no menos. Pero el CRM tambien
-            tiene que decir de quien es, y aqui abajo no le quita sitio a nadie.
-            Plegada la barra, solo el icono. */}
-        <div className="px-3 py-3 border-t border-gray-100 dark:border-slate-800 shrink-0">
-          <div className={clsx("flex items-center gap-2 opacity-50", isSidebarCollapsed && "justify-center")}>
-            <NextcarIcono className="h-5 w-5 shrink-0" />
-            {!isSidebarCollapsed && (
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                Nextcar CRM
-              </span>
-            )}
-          </div>
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -616,7 +601,7 @@ export function Layout() {
               rel="noopener noreferrer"
               className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
             >
-              <Car className="w-4 h-4" />
+              <NextcarMarca className="w-5 h-5 shrink-0" />
               Ir a Nextcar
             </a>
           </div>
