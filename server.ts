@@ -24,7 +24,9 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
 import { Resend } from "resend";
-import { correoBienvenidaAdmin, correoInvitacionEquipo } from "./src/lib/plantillasCorreo";
+import nodemailer from "nodemailer";
+import { destinatariosDeLaSemana, armarCorreo, DIAS_ENTRE_CORREOS, type TipoCorreo } from "./src/lib/correosDeAnimo.ts";
+import { correoBienvenidaAdmin, correoInvitacionEquipo, CONTACTO } from "./src/lib/plantillasCorreo";
 import Stripe from "stripe";
 
 // Initialize Firebase Admin lazily to avoid crashing if env is not set yet
@@ -386,21 +388,98 @@ const resend = process.env.RESEND_API_KEY
  * Devuelve si se mando, para poder decirlo sin mentir.
  */
 async function mandarCorreo(para: string, asunto: string, html: string): Promise<boolean> {
+  return (await enviarCorreo(para, asunto, html)).ok;
+}
+
+/**
+ * Buzon de Hostinger, si esta configurado.
+ *
+ * Luis ya manda campanas desde ahi y no le cuesta por correo. El dominio tiene
+ * SPF, DKIM (hostingermail-a/b/c) y DMARC puestos para Hostinger, asi que lo
+ * que sale por aqui llega firmado. Resend queda de respaldo: si Hostinger
+ * rechaza o no responde, el correo sale por el otro lado en vez de perderse.
+ */
+let transporteHostinger: nodemailer.Transporter | null = null;
+function hostinger(): nodemailer.Transporter | null {
+  const { SMTP_HOST, SMTP_USER, SMTP_PASS } = process.env;
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+  if (!transporteHostinger) {
+    const puerto = Number(process.env.SMTP_PORT) || 465;
+    transporteHostinger = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: puerto,
+      secure: puerto === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+  }
+  return transporteHostinger;
+}
+
+function remitenteHostinger(): string {
+  return process.env.CORREO_REMITENTE || `Equipo Nextcar <${process.env.SMTP_USER}>`;
+}
+
+/**
+ * A donde llegan las respuestas. Sin esto, contestar un correo del CRM caia en
+ * un buzon que no existe (no-reply@) y la respuesta se perdia.
+ */
+function responderA(): string | undefined {
+  return process.env.CORREO_RESPUESTA || undefined;
+}
+
+type ResultadoEnvio = { ok: boolean; via: "hostinger" | "resend" | "ninguno"; error?: string };
+
+async function enviarCorreo(
+  para: string,
+  asunto: string,
+  html: string,
+  extra: { texto?: string; cabeceras?: Record<string, string> } = {},
+): Promise<ResultadoEnvio> {
+  const respuesta = responderA();
+  let errorHostinger: string | undefined;
+
+  const smtp = hostinger();
+  if (smtp) {
+    try {
+      await smtp.sendMail({
+        from: remitenteHostinger(),
+        to: para,
+        subject: asunto,
+        html,
+        text: extra.texto,
+        replyTo: respuesta,
+        headers: extra.cabeceras,
+      });
+      return { ok: true, via: "hostinger" };
+    } catch (e: any) {
+      errorHostinger = e?.message || String(e);
+      console.error("Hostinger rechazó el correo; se intenta por Resend", { para, asunto, error: errorHostinger });
+    }
+  }
+
   if (!resend) {
-    console.warn("Correo no enviado: falta RESEND_API_KEY.", { para, asunto });
-    return false;
+    console.warn("Correo no enviado: no hay Hostinger ni RESEND_API_KEY que funcionen.", { para, asunto });
+    return { ok: false, via: "ninguno", error: errorHostinger || "No hay servicio de correo configurado" };
   }
   try {
     const remitente = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-    const { error } = await resend.emails.send({ from: remitente, to: [para], subject: asunto, html });
+    const { error } = await resend.emails.send({
+      from: remitente,
+      to: [para],
+      subject: asunto,
+      html,
+      ...(extra.texto ? { text: extra.texto } : {}),
+      ...(respuesta ? { replyTo: respuesta } : {}),
+      ...(extra.cabeceras ? { headers: extra.cabeceras } : {}),
+    });
     if (error) {
       console.error("Correo rechazado por Resend", { para, asunto, error });
-      return false;
+      return { ok: false, via: "resend", error: (error as any)?.message || "Resend lo rechazó" };
     }
-    return true;
-  } catch (e) {
+    return { ok: true, via: "resend" };
+  } catch (e: any) {
     console.error("Correo fallido", { para, asunto, e });
-    return false;
+    return { ok: false, via: "resend", error: e?.message || String(e) };
   }
 }
 
@@ -3010,6 +3089,319 @@ async function startServer() {
       res.status(500).json({ error: "No se pudieron calcular las estadísticas" });
     }
   });
+
+  // ===== Correos de animo y resumen semanal =====
+  //
+  // Quien recibe que lo decide src/lib/correosDeAnimo.ts, con las mismas
+  // metricas del panel. Aqui solo se manda, se registra y se da de baja.
+  //
+  // Decision de Luis: primero con su clic. El envio automatico existe, pero
+  // nace apagado y se enciende desde el panel cuando confie en como salen.
+  // Un error en un envio automatico le escribe a todos los clientes a la vez.
+
+  /** Firma del enlace de baja: nadie puede dar de baja a otro adivinando su id. */
+  function firmaDeBaja(uid: string): string {
+    const clave = process.env.CORREO_BAJA_SECRETO || process.env.FIREBASE_SERVICE_ACCOUNT_B64 || "";
+    return crypto.createHmac("sha256", clave).update(`baja:${uid}`).digest("hex").slice(0, 32);
+  }
+
+  function firmaValida(uid: string, t: string): boolean {
+    const esperada = Buffer.from(firmaDeBaja(uid));
+    const recibida = Buffer.from(String(t || ""));
+    return esperada.length === recibida.length && crypto.timingSafeEqual(esperada, recibida);
+  }
+
+  const enlaceDeBaja = (uid: string) =>
+    `${CONTACTO.crm}/api/correo/baja?u=${encodeURIComponent(uid)}&t=${firmaDeBaja(uid)}`;
+
+  function paginaSimple(titulo: string, texto: string, enlace?: { url: string; etiqueta: string }, extra = ""): string {
+    const e = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    // Con el Manual de marca: logo sobre negro arriba, todo lo demas en blanco.
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<title>${e(titulo)}</title></head>
+<body style="margin:0;background:#FFFFFF;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<div style="max-width:480px;margin:48px auto;border:1px solid #DAD6CE;border-radius:12px;overflow:hidden;">
+<div style="background:#0F0F10;padding:30px 36px;"><img src="/logo/lockup-correo-oscuro.jpg" width="200" height="41" alt="Nextcar CRM" style="display:block;"></div>
+<div style="padding:32px 36px;">
+<h1 style="font-size:24px;font-weight:800;letter-spacing:-0.02em;color:#0F0F10;margin:0 0 12px;">${e(titulo)}</h1>
+<p style="font-size:15px;color:#4A463F;line-height:1.65;margin:0 0 20px;">${e(texto)}</p>
+${enlace ? `<a href="${e(enlace.url)}" style="color:#A82A17;font-size:14px;font-weight:700;text-decoration:none;">${e(enlace.etiqueta)}</a>` : ""}
+${extra}
+</div></div></body></html>`;
+  }
+
+  async function cambiarSuscripcion(uid: string, recibe: boolean): Promise<boolean> {
+    const adminDb = getAdminDb();
+    if (!adminDb) return false;
+    const ref = adminDb.collection("users").doc(uid);
+    const doc = await ref.get();
+    if (!doc.exists) return false;
+    await ref.set({ correosDeAnimo: recibe, correosDeAnimoCambiadoEl: new Date().toISOString() }, { merge: true });
+    metricasEnMemoria = null; // que el panel lo refleje ya
+    return true;
+  }
+
+  // Enlace del pie del correo.
+  //
+  // Abrir el enlace NO da de baja: solo muestra un boton que lo confirma. Los
+  // filtros de seguridad de Outlook y Microsoft 365 abren solos los enlaces de
+  // cada correo para revisarlos; si abrir bastara, un robot daria de baja a
+  // cualquiera que use Outlook sin que se entere. Los robots abren enlaces,
+  // pero no envian formularios.
+  //
+  // El POST sirve para las dos cosas: el boton de esta pagina y la baja de un
+  // clic que Gmail y Yahoo ofrecen junto al remitente (RFC 8058), que llega
+  // con List-Unsubscribe=One-Click en el cuerpo.
+  app.get("/api/correo/baja", async (req, res) => {
+    const uid = String(req.query.u || "");
+    const t = String(req.query.t || "");
+    if (!uid || !firmaValida(uid, t)) {
+      return res.status(400).send(paginaSimple("Enlace no válido", "Este enlace de baja no es correcto. Escríbenos y te damos de baja a mano."));
+    }
+    const accion = `/api/correo/baja?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(t)}`;
+    res.send(
+      paginaSimple(
+        "¿Dejar de recibir estos correos?",
+        "Ya no te llegarán consejos ni el resumen de los lunes. Los correos importantes de tu cuenta, como las invitaciones, sí te seguirán llegando.",
+        undefined,
+        `<form method="post" action="${accion}" style="margin:0;">
+          <button type="submit" style="background:#D6402A;color:#FFFFFF;border:0;border-radius:8px;padding:13px 26px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;">Sí, darme de baja</button>
+        </form>`,
+      ),
+    );
+  });
+
+  app.post("/api/correo/baja", express.urlencoded({ extended: false }), async (req, res) => {
+    const uid = String(req.query.u || "");
+    const t = String(req.query.t || "");
+    if (!uid || !firmaValida(uid, t)) return res.status(400).send("Enlace no válido");
+    const ok = await cambiarSuscripcion(uid, false).catch(() => false);
+    if (req.body?.["List-Unsubscribe"] === "One-Click") return res.send("Baja registrada");
+    if (!ok) return res.status(404).send(paginaSimple("No encontramos tu cuenta", "Puede que ya no exista. Si sigues recibiendo correos, escríbenos."));
+    res.send(
+      paginaSimple(
+        "Listo, ya no te llegarán",
+        "No volverás a recibir consejos ni resúmenes semanales de Nextcar CRM.",
+        { url: `/api/correo/alta?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(t)}`, etiqueta: "Me equivoqué, quiero seguir recibiéndolos" },
+      ),
+    );
+  });
+
+  app.get("/api/correo/alta", async (req, res) => {
+    const uid = String(req.query.u || "");
+    if (!uid || !firmaValida(uid, String(req.query.t || ""))) {
+      return res.status(400).send(paginaSimple("Enlace no válido", "Este enlace no es correcto."));
+    }
+    await cambiarSuscripcion(uid, true).catch(() => false);
+    res.send(paginaSimple("¡Bienvenido de vuelta!", "Te volverán a llegar los consejos y tu resumen de los lunes."));
+  });
+
+  /** uid -> momento del ultimo correo que SI salio en los ultimos dias. */
+  async function ultimosEnvios(adminDb: any): Promise<Record<string, number>> {
+    const desde = new Date(Date.now() - (DIAS_ENTRE_CORREOS + 1) * 86_400_000).toISOString();
+    const snap = await adminDb.collection("correosEnviados").where("enviadoEl", ">=", desde).get();
+    const m: Record<string, number> = {};
+    snap.forEach((d: any) => {
+      const x = d.data();
+      if (!x.ok || !x.uid) return;
+      const t = Date.parse(x.enviadoEl);
+      if (!m[x.uid] || t > m[x.uid]) m[x.uid] = t;
+    });
+    return m;
+  }
+
+  async function destinatariosActuales(adminDb: any, fresco = false) {
+    const metricas = await leerMetricasDePlataforma(fresco);
+    const ultimo = await ultimosEnvios(adminDb);
+    return destinatariosDeLaSemana(metricas, Date.now(), ultimo);
+  }
+
+  /**
+   * Manda los correos de la semana. `uids` null = todos a los que les toca.
+   * La lista se recalcula aqui mismo, con el registro de envios al dia: asi
+   * dos clics seguidos, o el automatico y un clic, no mandan dos veces.
+   */
+  async function mandarCorreosDeLaSemana(uids: string[] | null, origen: "manual" | "automatico") {
+    const adminDb = getAdminDb();
+    if (!adminDb) throw new Error("Base de datos no disponible");
+    const lista = await destinatariosActuales(adminDb, true);
+    const elegidos = lista.filter((d) => d.tipo && d.datos && (!uids || uids.includes(d.uid)));
+    const omitidos = uids ? uids.filter((u) => !elegidos.some((d) => d.uid === u)) : [];
+
+    const detalle: { uid: string; nombre: string; ok: boolean; via: string; error?: string }[] = [];
+    for (const d of elegidos) {
+      const baja = enlaceDeBaja(d.uid);
+      const correo = armarCorreo(d.datos!, baja);
+      const r = await enviarCorreo(d.correo, correo.asunto, correo.html, {
+        texto: correo.texto,
+        cabeceras: {
+          "List-Unsubscribe": `<${baja}>, <mailto:${CONTACTO.correo}?subject=baja>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+      });
+      await adminDb.collection("correosEnviados").add({
+        uid: d.uid,
+        agencyId: d.agencyId,
+        tipo: d.tipo,
+        asunto: correo.asunto,
+        enviadoEl: new Date().toISOString(),
+        via: r.via,
+        ok: r.ok,
+        origen,
+        ...(r.error ? { error: String(r.error).slice(0, 300) } : {}),
+      });
+      detalle.push({ uid: d.uid, nombre: d.nombre, ok: r.ok, via: r.via, error: r.error });
+      // Un respiro entre correos: los buzones cortan a quien manda en rafaga.
+      await new Promise((ok) => setTimeout(ok, 400));
+    }
+    return {
+      enviados: detalle.filter((x) => x.ok).length,
+      fallidos: detalle.filter((x) => !x.ok).length,
+      omitidos: omitidos.length,
+      detalle,
+    };
+  }
+
+  function estadoDelCorreo() {
+    const smtp = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+    return {
+      via: smtp ? "hostinger" : resend ? "resend" : "ninguno",
+      hostingerConfigurado: smtp,
+      remitente: smtp ? remitenteHostinger() : process.env.RESEND_FROM_EMAIL || null,
+      resendDeRespaldo: !!resend,
+      respuestasA: responderA() || null,
+    };
+  }
+
+  app.get("/api/admin/correos", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    try {
+      const [lista, cfgSnap, histSnap] = await Promise.all([
+        destinatariosActuales(quien.adminDb, req.query.fresco === "1"),
+        quien.adminDb.collection("plataforma").doc("correos").get(),
+        quien.adminDb.collection("correosEnviados").orderBy("enviadoEl", "desc").limit(60).get(),
+      ]);
+      const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+      res.json({
+        estado: estadoDelCorreo(),
+        automatico: !!cfg?.automatico,
+        ultimaSemanaAutomatica: cfg?.ultimaSemana || null,
+        ultimoResultadoAutomatico: cfg?.ultimoResultado || null,
+        // Sin `datos`: la lista dice a quien y por que, no sus numeros.
+        destinatarios: lista.map(({ datos, ...resto }) => resto),
+        historial: histSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })),
+      });
+    } catch (e: any) {
+      console.error("Correos: no se pudo armar la lista", e);
+      res.status(500).json({ error: "No se pudo armar la lista de correos" });
+    }
+  });
+
+  app.get("/api/admin/correos/vista-previa", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const lista = await destinatariosActuales(quien.adminDb);
+    const d = lista.find((x) => x.uid === String(req.query.uid || ""));
+    if (!d || !d.datos) return res.status(404).json({ error: "Esta semana no le toca correo." });
+    const c = armarCorreo(d.datos, enlaceDeBaja(d.uid));
+    res.json({ asunto: c.asunto, html: c.html, para: d.correo });
+  });
+
+  app.post("/api/admin/correos/enviar", express.json(), async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const uids = Array.isArray(req.body?.uids) ? req.body.uids.map(String) : null;
+    if (!uids || uids.length === 0) return res.status(400).json({ error: "Elige al menos a una persona." });
+    try {
+      res.json(await mandarCorreosDeLaSemana(uids, "manual"));
+    } catch (e: any) {
+      console.error("Correos: fallo el envio", e);
+      res.status(500).json({ error: e?.message || "No se pudieron mandar" });
+    }
+  });
+
+  /** Manda al propio master el correo que recibiria alguien. Para ver como
+   *  llega de verdad, por Hostinger, sin molestar a ningun cliente. */
+  app.post("/api/admin/correos/probar", express.json(), async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const yo = (await quien.adminDb.collection("users").doc(quien.uid).get()).data();
+    if (!yo?.email) return res.status(400).json({ error: "Tu usuario no tiene correo." });
+    const lista = await destinatariosActuales(quien.adminDb);
+    const d = lista.find((x) => x.uid === String(req.body?.uid || "")) || lista.find((x) => x.datos);
+    if (!d || !d.datos) return res.status(404).json({ error: "No hay a quién tomar de ejemplo esta semana." });
+    const c = armarCorreo(d.datos, enlaceDeBaja(quien.uid));
+    const r = await enviarCorreo(yo.email, `[Prueba] ${c.asunto}`, c.html, { texto: c.texto });
+    res.json({ ...r, para: yo.email, ejemploDe: d.nombre });
+  });
+
+  app.post("/api/admin/correos/verificar", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const smtp = hostinger();
+    if (!smtp) return res.json({ hostinger: "no-configurado" });
+    try {
+      await smtp.verify();
+      res.json({ hostinger: "ok" });
+    } catch (e: any) {
+      res.json({ hostinger: "error", detalle: e?.message || String(e) });
+    }
+  });
+
+  app.post("/api/admin/correos/automatico", express.json(), async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const activo = req.body?.activo === true;
+    await quien.adminDb.collection("plataforma").doc("correos").set(
+      { automatico: activo, automaticoCambiadoEl: new Date().toISOString(), automaticoCambiadoPor: quien.uid },
+      { merge: true },
+    );
+    res.json({ automatico: activo });
+  });
+
+  /**
+   * Envio automatico: los lunes desde las 9:00, hora de Mexico. Si el servidor
+   * estaba apagado el lunes, lo recupera hasta el miercoles. La semana se
+   * "reclama" en una transaccion antes de mandar, asi que ni un reinicio ni dos
+   * servidores a la vez mandan dos veces; y aun asi, cada persona tiene su
+   * propio candado de DIAS_ENTRE_CORREOS.
+   */
+  async function revisarEnvioAutomatico() {
+    const adminDb = getAdminDb();
+    if (!adminDb) return;
+    try {
+      const ref = adminDb.collection("plataforma").doc("correos");
+      const cfg = (await ref.get()).data();
+      if (!cfg?.automatico) return;
+
+      const mx = new Date(Date.now() - 6 * 3_600_000);
+      const dia = mx.getUTCDay(); // 1 = lunes
+      if (dia < 1 || dia > 3 || mx.getUTCHours() < 9) return;
+      const lunes = new Date(Date.UTC(mx.getUTCFullYear(), mx.getUTCMonth(), mx.getUTCDate() - (dia - 1)));
+      const semana = lunes.toISOString().slice(0, 10);
+
+      const tomada = await adminDb.runTransaction(async (tx: any) => {
+        const s = await tx.get(ref);
+        if (s.data()?.ultimaSemana === semana) return false;
+        tx.set(ref, { ultimaSemana: semana, ultimaCorridaEl: new Date().toISOString() }, { merge: true });
+        return true;
+      });
+      if (!tomada) return;
+
+      const r = await mandarCorreosDeLaSemana(null, "automatico");
+      await ref.set(
+        { ultimoResultado: { semana, enviados: r.enviados, fallidos: r.fallidos, el: new Date().toISOString() } },
+        { merge: true },
+      );
+      console.log(`Correos de la semana ${semana}: ${r.enviados} enviados, ${r.fallidos} fallidos.`);
+    } catch (e) {
+      console.error("Envio automatico de correos:", e);
+    }
+  }
+  setTimeout(revisarEnvioAutomatico, 2 * 60 * 1000);
+  setInterval(revisarEnvioAutomatico, 30 * 60 * 1000);
 
   // Clave de MCP personal. Cada quien genera y consulta la suya; nadie ve la
   // de otro, ni siquiera un administrador. Lo que la clave permite hacer lo

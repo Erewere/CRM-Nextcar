@@ -17,6 +17,13 @@ import {
   Trophy,
   MailX,
   ArrowRight,
+  Mail,
+  Send,
+  Eye,
+  X,
+  CheckCircle2,
+  XCircle,
+  Plug,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -91,7 +98,7 @@ interface Usuario {
   recibeCorreos: boolean;
 }
 
-type Pestana = 'resumen' | 'agencias' | 'usuarios';
+type Pestana = 'resumen' | 'agencias' | 'usuarios' | 'correos';
 
 const SEMAFORO: Record<Semaforo, { etiqueta: string; punto: string; chip: string }> = {
   activa: {
@@ -150,7 +157,7 @@ function fechaCorta(iso: string | null): string {
 function leerPestana(): Pestana {
   try {
     const v = localStorage.getItem('plataforma.pestana');
-    if (v === 'resumen' || v === 'agencias' || v === 'usuarios') return v;
+    if (v === 'resumen' || v === 'agencias' || v === 'usuarios' || v === 'correos') return v;
   } catch {}
   return 'resumen';
 }
@@ -348,6 +355,7 @@ export function PlatformPanel() {
               ['resumen', 'Resumen', null],
               ['agencias', 'Agencias', agencias.length],
               ['usuarios', 'Usuarios', usuarios.length],
+              ['correos', 'Correos', null],
             ] as [Pestana, string, number | null][]
           ).map(([id, etiqueta, n]) => (
             <button
@@ -401,6 +409,7 @@ export function PlatformPanel() {
             setFiltroAgencia={setFiltroAgencia}
           />
         )}
+        {datos && pestana === 'correos' && <VistaCorreos usuarios={usuarios} />}
       </div>
     </div>
   );
@@ -1045,6 +1054,484 @@ function VistaUsuarios({
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Correos de animo y resumen semanal
+//
+// Decision de Luis: primero con su clic. El automatico nace apagado. Esta
+// pantalla dice a quien le toca y por que, deja ver cada correo antes de
+// mandarlo y guarda el historial. Los numeros de cada persona solo aparecen en
+// la vista previa del correo, que es lo mismo que le va a llegar a ella.
+
+interface DestinatarioFila {
+  uid: string;
+  nombre: string;
+  correo: string;
+  rol: string;
+  agencyId: string;
+  agencia: string;
+  tipo: 'semanal' | 'animo' | null;
+  motivo: string;
+}
+
+const TIPO_CORREO: Record<string, { etiqueta: string; chip: string }> = {
+  animo: { etiqueta: 'Ánimo', chip: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800' },
+  semanal: { etiqueta: 'Resumen', chip: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' },
+};
+
+function VistaCorreos({ usuarios }: { usuarios: Usuario[] }) {
+  const { currentUser } = useAuth();
+  const [info, setInfo] = useState<any>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<'todos' | 'animo' | 'semanal' | 'no'>('todos');
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<{ tono: 'ok' | 'mal'; texto: string } | null>(null);
+  const [vista, setVista] = useState<{ asunto: string; html: string; para: string } | null>(null);
+
+  const pedir = async (ruta: string, cuerpo?: any) => {
+    if (!currentUser) throw new Error('No hay una sesión activa.');
+    const token = await currentUser.getIdToken();
+    const res = await fetch(ruta, {
+      method: cuerpo !== undefined ? 'POST' : 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(cuerpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(cuerpo !== undefined ? { body: JSON.stringify(cuerpo) } : {}),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error || `Error ${res.status}`);
+    return json;
+  };
+
+  const cargar = async (fresco = false) => {
+    setCargando(true);
+    setError(null);
+    try {
+      setInfo(await pedir(`/api/admin/correos${fresco ? '?fresco=1' : ''}`));
+    } catch (e: any) {
+      setError(e.message || 'No se pudo cargar la lista.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    cargar();
+  }, [currentUser]);
+
+  const lista: DestinatarioFila[] = info?.destinatarios || [];
+  const tocan = lista.filter((d) => d.tipo);
+  const visibles = lista.filter((d) =>
+    filtro === 'todos' ? true : filtro === 'no' ? !d.tipo : d.tipo === filtro,
+  );
+  const nombreDe = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const u of usuarios) m[u.id] = u.nombre;
+    return m;
+  }, [usuarios]);
+
+  const marcar = (uid: string) =>
+    setMarcados((m) => {
+      const n = new Set(m);
+      n.has(uid) ? n.delete(uid) : n.add(uid);
+      return n;
+    });
+  const marcablesVisibles = visibles.filter((d) => d.tipo).map((d) => d.uid);
+  const todosMarcados = marcablesVisibles.length > 0 && marcablesVisibles.every((u) => marcados.has(u));
+
+  const verPrevia = async (uid: string) => {
+    setOcupado(`vista-${uid}`);
+    try {
+      setVista(await pedir(`/api/admin/correos/vista-previa?uid=${encodeURIComponent(uid)}`));
+    } catch (e: any) {
+      setAviso({ tono: 'mal', texto: e.message });
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const enviar = async () => {
+    const uids = [...marcados];
+    if (uids.length === 0) return;
+    if (
+      !window.confirm(
+        `Vas a mandar ${uids.length} correo${uids.length === 1 ? '' : 's'} a clientes reales.\n\n` +
+          'Salen ahora mismo y no se pueden deshacer. ¿Continuar?',
+      )
+    )
+      return;
+    setOcupado('enviar');
+    setAviso(null);
+    try {
+      const r = await pedir('/api/admin/correos/enviar', { uids });
+      setAviso({
+        tono: r.fallidos > 0 ? 'mal' : 'ok',
+        texto:
+          `Salieron ${r.enviados} de ${uids.length}.` +
+          (r.fallidos > 0 ? ` Fallaron ${r.fallidos}: revisa el historial.` : '') +
+          (r.omitidos > 0 ? ` ${r.omitidos} ya no les tocaba (alguien les mandó antes).` : ''),
+      });
+      setMarcados(new Set());
+      await cargar(true);
+    } catch (e: any) {
+      setAviso({ tono: 'mal', texto: e.message });
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const verificar = async () => {
+    setOcupado('verificar');
+    setAviso(null);
+    try {
+      const r = await pedir('/api/admin/correos/verificar', {});
+      setAviso(
+        r.hostinger === 'ok'
+          ? { tono: 'ok', texto: 'Hostinger acepta la conexión con el buzón. Todo listo para mandar desde ahí.' }
+          : r.hostinger === 'no-configurado'
+          ? { tono: 'mal', texto: 'Hostinger no está configurado: faltan SMTP_HOST, SMTP_USER o SMTP_PASS en las variables del servidor.' }
+          : { tono: 'mal', texto: `Hostinger rechazó la conexión: ${r.detalle || 'sin detalle'}. Revisa usuario y contraseña del buzón.` },
+      );
+    } catch (e: any) {
+      setAviso({ tono: 'mal', texto: e.message });
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const probar = async () => {
+    setOcupado('probar');
+    setAviso(null);
+    try {
+      const uid = [...marcados][0] || tocan[0]?.uid;
+      const r = await pedir('/api/admin/correos/probar', { uid });
+      setAviso(
+        r.ok
+          ? { tono: 'ok', texto: `Te llegó a ${r.para}, por ${r.via === 'hostinger' ? 'Hostinger' : 'Resend'}: el correo que recibiría ${r.ejemploDe}.` }
+          : { tono: 'mal', texto: `No salió: ${r.error || 'sin detalle'}.` },
+      );
+      await cargar();
+    } catch (e: any) {
+      setAviso({ tono: 'mal', texto: e.message });
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const cambiarAutomatico = async (activo: boolean) => {
+    if (
+      activo &&
+      !window.confirm(
+        'Desde el próximo lunes a las 9:00 los correos saldrán solos, a todos a los que les toque.\n\n' +
+          'Nadie recibe dos por semana y quien se dio de baja no recibe nada. ¿Activar?',
+      )
+    )
+      return;
+    setOcupado('auto');
+    try {
+      await pedir('/api/admin/correos/automatico', { activo });
+      await cargar();
+    } catch (e: any) {
+      setAviso({ tono: 'mal', texto: e.message });
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  if (cargando && !info) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-slate-500 py-12 justify-center">
+        <RefreshCw className="w-4 h-4 animate-spin" /> Armando la lista de la semana…
+      </div>
+    );
+  }
+  if (error && !info) {
+    return <div className="p-4 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">{error}</div>;
+  }
+
+  const e = info?.estado || {};
+  const nAnimo = lista.filter((d) => d.tipo === 'animo').length;
+  const nResumen = lista.filter((d) => d.tipo === 'semanal').length;
+  const nNo = lista.filter((d) => !d.tipo).length;
+
+  return (
+    <div className="space-y-5">
+      {/* Como salen */}
+      <div className="grid lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
+          <div className="flex items-start gap-3">
+            {e.via === 'hostinger' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-slate-900 dark:text-white text-sm">
+                {e.via === 'hostinger'
+                  ? 'Salen por tu buzón de Hostinger'
+                  : e.via === 'resend'
+                  ? 'Salen por Resend, no por Hostinger'
+                  : 'No hay servicio de correo configurado'}
+              </p>
+              {e.remitente && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5 break-all">Remitente: {e.remitente}</p>
+              )}
+              <p className={`text-sm mt-0.5 ${e.respuestasA ? 'text-slate-600 dark:text-slate-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                {e.respuestasA
+                  ? `Las respuestas llegan a ${e.respuestasA}`
+                  : 'Sin dirección de respuesta: si alguien contesta, la respuesta se pierde (falta CORREO_RESPUESTA).'}
+              </p>
+              {e.via !== 'hostinger' && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                  Para mandar desde Hostinger faltan SMTP_HOST, SMTP_PORT, SMTP_USER y SMTP_PASS en las variables de
+                  entorno de la app en Hostinger.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button
+                  onClick={verificar}
+                  disabled={!!ocupado}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                >
+                  <Plug className="w-4 h-4" /> {ocupado === 'verificar' ? 'Probando…' : 'Probar conexión con Hostinger'}
+                </button>
+                <button
+                  onClick={probar}
+                  disabled={!!ocupado || tocan.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                  title="Te manda a ti el correo de alguien de la lista, para ver cómo llega"
+                >
+                  <Mail className="w-4 h-4" /> {ocupado === 'probar' ? 'Mandando…' : 'Mandarme una prueba'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Automatico */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-semibold text-slate-900 dark:text-white text-sm">Envío automático</p>
+            <button
+              role="switch"
+              aria-checked={!!info?.automatico}
+              onClick={() => cambiarAutomatico(!info?.automatico)}
+              disabled={!!ocupado}
+              className={`relative w-11 h-6 rounded-full transition-colors disabled:opacity-50 ${
+                info?.automatico ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  info?.automatico ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+            {info?.automatico
+              ? 'Encendido: salen solos los lunes a las 9:00.'
+              : 'Apagado: solo sale lo que tú mandes desde aquí.'}
+          </p>
+          {info?.ultimoResultadoAutomatico && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+              Última vez: semana del {info.ultimoResultadoAutomatico.semana} ·{' '}
+              {info.ultimoResultadoAutomatico.enviados} enviados
+              {info.ultimoResultadoAutomatico.fallidos > 0 && `, ${info.ultimoResultadoAutomatico.fallidos} fallidos`}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {aviso && (
+        <div
+          className={`flex items-start gap-2 p-3 rounded-lg border text-sm ${
+            aviso.tono === 'ok'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-900 dark:text-emerald-300'
+              : 'border-red-200 bg-red-50 text-red-800 dark:bg-red-900/20 dark:border-red-900 dark:text-red-300'
+          }`}
+        >
+          {aviso.tono === 'ok' ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+          <span className="flex-1">{aviso.texto}</span>
+          <button onClick={() => setAviso(null)} className="opacity-60 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* La lista de la semana */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">
+        <div className="p-4 border-b border-gray-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <h3 className="font-bold text-slate-900 dark:text-white">Esta semana</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {nAnimo} de ánimo · {nResumen} resúmenes · {nNo} no reciben. Nadie recibe dos por semana.
+            </p>
+          </div>
+          <button
+            onClick={() => cargar(true)}
+            disabled={cargando}
+            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+            title="Recalcular"
+          >
+            <RefreshCw className={`w-4 h-4 ${cargando ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={enviar}
+            disabled={marcados.size === 0 || !!ocupado}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-black dark:bg-white dark:text-slate-900 text-white text-sm font-semibold disabled:opacity-40"
+          >
+            <Send className="w-4 h-4" />
+            {ocupado === 'enviar' ? 'Mandando…' : `Enviar a ${marcados.size} seleccionado${marcados.size === 1 ? '' : 's'}`}
+          </button>
+        </div>
+
+        <div className="px-4 pt-3 flex flex-wrap gap-2">
+          <Chip activo={filtro === 'todos'} onClick={() => setFiltro('todos')}>Todos · {lista.length}</Chip>
+          <Chip activo={filtro === 'animo'} onClick={() => setFiltro('animo')}>Ánimo · {nAnimo}</Chip>
+          <Chip activo={filtro === 'semanal'} onClick={() => setFiltro('semanal')}>Resumen · {nResumen}</Chip>
+          <Chip activo={filtro === 'no'} onClick={() => setFiltro('no')}>No reciben · {nNo}</Chip>
+        </div>
+
+        {visibles.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-10">Nadie en este grupo.</p>
+        ) : (
+          <div className="overflow-x-auto mt-2">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="text-xs text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th className="px-4 py-2 w-10">
+                    <input
+                      type="checkbox"
+                      checked={todosMarcados}
+                      disabled={marcablesVisibles.length === 0}
+                      onChange={() =>
+                        setMarcados((m) => {
+                          const n = new Set(m);
+                          todosMarcados ? marcablesVisibles.forEach((u) => n.delete(u)) : marcablesVisibles.forEach((u) => n.add(u));
+                          return n;
+                        })
+                      }
+                      className="rounded"
+                      title="Marcar todos los que tocan"
+                    />
+                  </th>
+                  <th className="text-left font-medium px-2 py-2">Persona</th>
+                  <th className="text-left font-medium px-2 py-2">Agencia</th>
+                  <th className="text-left font-medium px-2 py-2">Correo</th>
+                  <th className="text-left font-medium px-2 py-2">Por qué</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibles.map((d) => (
+                  <tr key={d.uid} className={`border-t border-gray-100 dark:border-slate-700/60 ${!d.tipo ? 'opacity-60' : ''}`}>
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={marcados.has(d.uid)}
+                        disabled={!d.tipo}
+                        onChange={() => marcar(d.uid)}
+                        className="rounded"
+                      />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <div className="font-medium text-slate-900 dark:text-white">{d.nombre}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {ROL[d.rol] || d.rol} · {d.correo}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2.5 text-slate-600 dark:text-slate-300">{d.agencia}</td>
+                    <td className="px-2 py-2.5">
+                      {d.tipo ? (
+                        <span className={`px-2 py-0.5 rounded-full border text-xs font-semibold ${TIPO_CORREO[d.tipo].chip}`}>
+                          {TIPO_CORREO[d.tipo].etiqueta}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 text-slate-600 dark:text-slate-400 text-xs">{d.motivo}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      {d.tipo && (
+                        <button
+                          onClick={() => verPrevia(d.uid)}
+                          disabled={!!ocupado}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> {ocupado === `vista-${d.uid}` ? 'Abriendo…' : 'Ver correo'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Historial */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">
+        <div className="p-4 border-b border-gray-100 dark:border-slate-700">
+          <h3 className="font-bold text-slate-900 dark:text-white">Lo que ya salió</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Los últimos 60 envíos.</p>
+        </div>
+        {(info?.historial || []).length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">Todavía no se ha mandado ninguno.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <tbody>
+                {info.historial.map((h: any) => (
+                  <tr key={h.id} className="border-t first:border-t-0 border-gray-100 dark:border-slate-700/60">
+                    <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">
+                      {new Date(h.enviadoEl).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="px-2 py-2 font-medium text-slate-800 dark:text-slate-200">{nombreDe[h.uid] || h.uid}</td>
+                    <td className="px-2 py-2 text-slate-600 dark:text-slate-400 truncate max-w-[280px]" title={h.asunto}>{h.asunto}</td>
+                    <td className="px-2 py-2 text-xs text-slate-500">{h.via === 'hostinger' ? 'Hostinger' : h.via === 'resend' ? 'Resend' : '—'}{h.origen === 'automatico' ? ' · auto' : ''}</td>
+                    <td className="px-4 py-2 text-right">
+                      {h.ok ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 inline" />
+                      ) : (
+                        <span title={h.error || ''}>
+                          <XCircle className="w-4 h-4 text-red-500 inline" />
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Vista previa: es exactamente lo que le va a llegar */}
+      {vista && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setVista(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={(ev) => ev.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 p-4 border-b border-gray-200 dark:border-slate-700">
+              <div className="min-w-0">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Para: {vista.para}</p>
+                <p className="font-semibold text-slate-900 dark:text-white truncate">{vista.asunto}</p>
+              </div>
+              <button onClick={() => setVista(null)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            {/* sandbox sin permisos: el correo se muestra, no ejecuta nada */}
+            <iframe title="Vista previa del correo" srcDoc={vista.html} sandbox="" className="w-full flex-1 min-h-[60vh] bg-white" />
+          </div>
         </div>
       )}
     </div>

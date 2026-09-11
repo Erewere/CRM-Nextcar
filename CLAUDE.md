@@ -142,10 +142,48 @@ arquitectura que este CRM no tiene.
 - **Base de datos:** `ai-studio-e65d5185-219a-4e1d-a330-044b1109696a` —
   **no** es `(default)`, y hay otras parecidas en la misma cuenta
 - **Agencia Nextcar:** `k77PpUc4SKDVCps2qSDw`
-- **Correo saliente:** Resend, dominio `nextcar.erewere.com` verificado.
-  Plantillas en `src/lib/plantillasCorreo.ts`
 - **Firma de los correos:** "Equipo Nextcar", WhatsApp 461 239 9969,
   contacto@erewere.com
+
+## Marca
+
+El manual oficial es **"Manual de marca NextCar CRM.pdf"**, en Drive →
+`NEXTCAR/2. Archivos y Documentos/Recursos de Marca/`. **No uses el
+"Brandbook by Pomelli"** que está en la misma carpeta: Luis lo descartó.
+
+Lo que no se negocia, del manual:
+
+- **La aguja roja es el único punto de color.** Todo lo demás es negro o
+  blanco. El rojo solo va en la aguja y en **botones de acción**; nunca como
+  fondo de un área grande.
+- **Máximo dos colores de fondo por pieza.**
+- **Paleta:** Negro `#0F0F10` · Rojo aguja `#D6402A` (botones) · Rojo texto
+  `#A82A17` (texto rojo sobre claro) · Rojo claro `#F2705B` (texto rojo sobre
+  oscuro) · Texto cuerpo `#4A463F` · Línea `#DAD6CE` · Gris fondo `#F6F5F2`.
+- **Tipografía:** Manrope, la única familia. Títulos 800 (−0.02 em);
+  antetítulos y etiquetas 700 en mayúsculas (+0.16 em); lectura 400/500.
+- **Logos** en `public/logo/`: `lockup-claro.png` (sobre claro),
+  `lockup-oscuro.png` (sobre oscuro, versión principal) y
+  `lockup-correo-oscuro.jpg` (para correos: fundido sobre negro, sin
+  transparencia, para que el modo oscuro de Gmail no lo borre). El lockup no
+  baja de 110 px de ancho.
+
+## Correos
+
+- **Salen por el buzón de Hostinger** cuando existen `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USER` y `SMTP_PASS`; si Hostinger falla, **Resend** hace de respaldo.
+  `CORREO_RESPUESTA` es a donde llegan las respuestas — sin ella, contestar un
+  correo del CRM se perdía. Todo pasa por `enviarCorreo()` en `server.ts`.
+- `erewere.com` y `nextcar.erewere.com` tienen SPF, DKIM y DMARC puestos para
+  Hostinger. **`erewere.nextcar.com` no es de Luis**: `nextcar.com` es de otra
+  empresa.
+- Bienvenida e invitación: `src/lib/plantillasCorreo.ts`. Ánimo y resumen
+  semanal: `src/lib/correosDeAnimo.ts` (quién recibe qué, y el diseño).
+- **Los correos de ánimo solo llevan números**, nunca nombres de clientes ni
+  autos: se reenvían y se quedan en bandejas para siempre.
+- **La baja pide apretar un botón.** Abrir el enlace no basta, a propósito:
+  los filtros de Outlook abren solos los enlaces y darían de baja a la gente
+  sin que se entere.
 
 ## Secretos
 

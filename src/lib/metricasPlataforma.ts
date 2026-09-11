@@ -316,8 +316,12 @@ export function calcularMetricas(e: EntradaMetricas) {
       contactos: t.contactos,
       tratos: t.tratos,
       tratosAbiertos: c.tratosAbiertos,
+      tratosNuevos7: c.tratosNuevos7,
       ventas: c.ventas,
+      ventas7: c.ventas7,
       ventas30: c.ventas30,
+      tareasPendientes: c.tareasPendientes,
+      tareasVencidas: c.tareasVencidas,
       ultimaActividad: c.ultimaActividad ? new Date(c.ultimaActividad).toISOString() : null,
       diasSinActividad:
         c.ultimaActividad != null ? Math.floor((ahora - c.ultimaActividad) / DIA) : null,
