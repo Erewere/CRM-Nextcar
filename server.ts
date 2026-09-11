@@ -4,6 +4,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // puras, sin SDK, asi que valen igual de los dos lados. Duplicarlas aqui era
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
+import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
 // El reloj del servidor vive en UTC. Sin decirle la zona, una cita de las 7 de
@@ -2863,138 +2864,150 @@ async function startServer() {
   // Todo se calcula aqui, con el SDK de administrador, y al navegador solo
   // viajan numeros. Asi el master puede ver como va cada agencia sin que su
   // sesion tenga que leer los contactos, los tratos ni el inventario de nadie:
-  // saber cuantos hay no exige poder verlos.
+  // saber cuantos hay no exige poder verlos. El calculo vive en
+  // src/lib/metricasPlataforma.ts, que tiene sus propias reglas de privacidad.
   //
-  // Se usan conteos agregados en vez de traer los documentos. Firestore los
-  // cobra a una lectura por cada mil, de modo que el panel entero cuesta unas
-  // pocas lecturas en lugar de una por registro.
-  app.get("/api/admin/platform-stats", async (req, res) => {
+  // Antes esto usaba conteos agregados, que Firestore cobra a una lectura por
+  // cada mil. Eran baratos, pero un conteo no dice CUANDO fue el ultimo dato, y
+  // sin eso no hay forma de saber quien dejo de usar el CRM. Ahora se leen los
+  // registros -- solo fechas, agencia y vendedor, con select(), nunca el
+  // contenido -- y el resultado se guarda diez minutos. La otra salida era un
+  // indice compuesto por coleccion, que hay que crear a mano en la consola.
+  const METRICAS_VIGENCIA_MS = 10 * 60 * 1000;
+  let metricasEnMemoria: { momento: number; datos: any } | null = null;
+
+  async function leerMetricasDePlataforma(forzar = false) {
+    if (!forzar && metricasEnMemoria && Date.now() - metricasEnMemoria.momento < METRICAS_VIGENCIA_MS) {
+      return metricasEnMemoria.datos;
+    }
+    const adminDb = getAdminDb();
+    if (!adminDb) throw new Error("Base de datos no disponible");
+
+    const leer = (col: string, campos: string[]) =>
+      adminDb.collection(col).select(...campos).get().then((s: any) => s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+
+    const [agencias, usuarios, clientes, tratos, tareas, notas, vehiculos] = await Promise.all([
+      adminDb.collection("agencies").get().then((s: any) => s.docs.map((d: any) => ({ id: d.id, ...d.data() }))),
+      leer("users", ["name", "email", "role", "agencyId", "createdAt", "correosDeAnimo"]),
+      leer("clients", ["agencyId", "sellerId", "origin", "createdAt", "isDeleted"]),
+      leer("deals", ["agencyId", "sellerId", "status", "createdAt", "updatedAt", "soldAt", "isDeleted", "origin"]),
+      leer("tasks", ["agencyId", "sellerId", "createdAt", "completed", "dueDate"]),
+      leer("notes", ["agencyId", "sellerId", "createdBy", "direction", "createdAt"]),
+      leer("vehicles", ["agencyId"]),
+    ]);
+
+    // ---- Dinero de la plataforma, de Stripe. No el de las agencias. ----
+    // Se cuenta solo lo que pagan clientes que son agencias de este CRM, por
+    // si la cuenta de Stripe cobra alguna otra cosa.
+    const clientesDeStripe = new Set(agencias.map((a: any) => a.stripeCustomerId).filter(Boolean));
+    const facturadosPorCliente: Record<string, number> = {};
+    let ingresos: any = null;
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "No autorizado" });
-      }
-      const adminApp = getAdminApp();
-      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
-
-      let decodedToken;
-      try {
-        decodedToken = await getAuth(adminApp).verifyIdToken(authHeader.substring(7));
-      } catch (err) {
-        return res.status(401).json({ error: "Token inválido" });
-      }
-
-      const adminDb = getAdminDb();
-      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
-
-      const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
-      if (!userDoc.exists || userDoc.data()?.role !== "master") {
-        return res.status(403).json({ error: "Se requiere rol master" });
-      }
-
-      const agenciasSnap = await adminDb.collection("agencies").get();
-
-      const contar = async (coleccion: string, agencyId: string) => {
-        try {
-          const agg = await adminDb
-            .collection(coleccion)
-            .where("agencyId", "==", agencyId)
-            .count()
-            .get();
-          return agg.data().count as number;
-        } catch {
-          return -1; // -1 distingue "fallo el conteo" de "hay cero"
+      const stripe = getStripe();
+      const subs = await stripe.subscriptions.list({ status: "active", limit: 100 }).autoPagingToArray({ limit: 1000 });
+      let mensual = 0;
+      for (const s of subs) {
+        const cliente = typeof s.customer === "string" ? s.customer : s.customer?.id;
+        if (!cliente || !clientesDeStripe.has(cliente)) continue;
+        for (const it of s.items.data) {
+          const cantidad = it.quantity ?? 1;
+          facturadosPorCliente[cliente] = (facturadosPorCliente[cliente] || 0) + cantidad;
+          const precio = (it.price?.unit_amount ?? 0) / 100;
+          const cadaMeses = it.price?.recurring?.interval === "year" ? 12 : 1;
+          mensual += (precio * cantidad) / cadaMeses;
         }
+      }
+
+      // Mes en hora de Mexico (UTC-6, sin horario de verano).
+      const mx = new Date(Date.now() - 6 * 3600_000);
+      const inicioMes = Date.UTC(mx.getUTCFullYear(), mx.getUTCMonth(), 1) + 6 * 3600_000;
+      const inicioMesAnterior = Date.UTC(mx.getUTCFullYear(), mx.getUTCMonth() - 1, 1) + 6 * 3600_000;
+      const facturas = await stripe.invoices
+        .list({ status: "paid", created: { gte: Math.floor(inicioMesAnterior / 1000) }, limit: 100 })
+        .autoPagingToArray({ limit: 1000 });
+      let esteMes = 0;
+      let mesAnterior = 0;
+      for (const f of facturas) {
+        const cliente = typeof f.customer === "string" ? f.customer : f.customer?.id;
+        if (!cliente || !clientesDeStripe.has(cliente)) continue;
+        const pagado = (f.amount_paid || 0) / 100;
+        const cuando = (f.status_transitions?.paid_at || f.created) * 1000;
+        if (cuando >= inicioMes) esteMes += pagado;
+        else if (cuando >= inicioMesAnterior) mesAnterior += pagado;
+      }
+      ingresos = {
+        // Lo que suman las suscripciones activas, antes de descuentos.
+        mensualRecurrente: Math.round(mensual),
+        // Lo que de verdad entro, ya con descuentos y cupones.
+        cobradoEsteMes: Math.round(esteMes),
+        cobradoMesAnterior: Math.round(mesAnterior),
+        suscripcionesActivas: Object.keys(facturadosPorCliente).length,
       };
+    } catch (e: any) {
+      // Sin Stripe el panel sigue sirviendo; solo falta el bloque de dinero.
+      console.error("Panel de plataforma: no se pudo leer Stripe:", e?.message);
+    }
 
-      const ahora = Date.now();
-      const agencias: any[] = [];
+    const metricas = calcularMetricas({
+      ahora: Date.now(),
+      agencias,
+      usuarios,
+      clientes,
+      tratos,
+      tareas,
+      notas,
+      vehiculos,
+      facturadosPorCliente,
+    });
 
-      for (const doc of agenciasSnap.docs) {
-        const a: any = doc.data() || {};
+    const datos = {
+      generadoEl: new Date().toISOString(),
+      precioPorUsuario: Number(process.env.VITE_STRIPE_PRICE_AMOUNT) || 199,
+      diasEstancado: DIAS_ESTANCADO,
+      ingresos,
+      ...metricas,
+    };
+    metricasEnMemoria = { momento: Date.now(), datos };
+    return datos;
+  }
 
-        const [usuarios, vehiculos, contactos, tratos] = await Promise.all([
-          contar("users", doc.id),
-          contar("vehicles", doc.id),
-          contar("clients", doc.id),
-          contar("deals", doc.id),
-        ]);
+  /** El master que llama, o null tras responder el error. */
+  async function soloMaster(req: any, res: any) {
+    const cabecera = req.headers.authorization;
+    if (!cabecera || !cabecera.startsWith("Bearer ")) {
+      res.status(401).json({ error: "No autorizado" });
+      return null;
+    }
+    const adminApp = getAdminApp();
+    const adminDb = getAdminDb();
+    if (!adminApp || !adminDb) {
+      res.status(500).json({ error: "Servidor no disponible" });
+      return null;
+    }
+    let token;
+    try {
+      token = await getAuth(adminApp).verifyIdToken(cabecera.substring(7));
+    } catch {
+      res.status(401).json({ error: "Token inválido" });
+      return null;
+    }
+    const doc = await adminDb.collection("users").doc(token.uid).get();
+    if (!doc.exists || doc.data()?.role !== "master") {
+      res.status(403).json({ error: "Se requiere rol master" });
+      return null;
+    }
+    return { uid: token.uid, adminDb };
+  }
 
-        // Estado real de acceso, con la misma logica que usa la aplicacion:
-        // la fecha de fin de prueba manda sobre la de creacion.
-        const finPrueba = a.trialEndsAt ? new Date(a.trialEndsAt).getTime() : null;
-        const enPrueba = finPrueba !== null && finPrueba > ahora;
-        const estado = a.hasFreeAccess
-          ? "cortesia"
-          : a.subscriptionStatus === "active"
-          ? "activa"
-          : enPrueba
-          ? "prueba"
-          : "sin acceso";
-
-        // Cuantos usuarios paga contra cuantos tiene. Stripe fija la cantidad
-        // al contratar y nadie la actualiza despues, asi que una agencia que
-        // crece sigue pagando por los que tenia el primer dia.
-        let usuariosFacturados: number | null = null;
-        if (a.stripeCustomerId) {
-          try {
-            const subs = await getStripe().subscriptions.list({
-              customer: a.stripeCustomerId,
-              status: "active",
-              limit: 1,
-            });
-            const linea = subs.data[0]?.items?.data?.[0];
-            if (linea) usuariosFacturados = linea.quantity ?? null;
-          } catch (e) {
-            usuariosFacturados = null;
-          }
-        }
-
-        agencias.push({
-          id: doc.id,
-          nombre: a.name || doc.id,
-          estado,
-          diasDePruebaRestantes:
-            enPrueba && finPrueba ? Math.ceil((finPrueba - ahora) / 86400000) : null,
-          usuarios,
-          usuariosFacturados,
-          sinFacturar:
-            usuariosFacturados !== null && usuarios > usuariosFacturados
-              ? usuarios - usuariosFacturados
-              : 0,
-          vehiculos,
-          contactos,
-          tratos,
-        });
-      }
-
-      agencias.sort((x, y) => y.usuarios - x.usuarios);
-
-      const activas = agencias.filter((a) => a.estado === "activa");
-      const totalSinFacturar = agencias.reduce((s, a) => s + a.sinFacturar, 0);
-      const facturados = agencias.reduce((s, a) => s + (a.usuariosFacturados || 0), 0);
-
-      res.json({
-        generadoEl: new Date().toISOString(),
-        precioPorUsuario: Number(process.env.VITE_STRIPE_PRICE_AMOUNT) || 199,
-        totales: {
-          agencias: agencias.length,
-          activas: activas.length,
-          enPrueba: agencias.filter((a) => a.estado === "prueba").length,
-          cortesia: agencias.filter((a) => a.estado === "cortesia").length,
-          sinAcceso: agencias.filter((a) => a.estado === "sin acceso").length,
-          usuarios: agencias.reduce((s, a) => s + Math.max(a.usuarios, 0), 0),
-          usuariosFacturados: facturados,
-          usuariosSinFacturar: totalSinFacturar,
-          vehiculos: agencias.reduce((s, a) => s + Math.max(a.vehiculos, 0), 0),
-          contactos: agencias.reduce((s, a) => s + Math.max(a.contactos, 0), 0),
-          tratos: agencias.reduce((s, a) => s + Math.max(a.tratos, 0), 0),
-        },
-        agencias,
-      });
+  app.get("/api/admin/platform-stats", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    try {
+      const datos = await leerMetricasDePlataforma(req.query.fresco === "1");
+      res.json(datos);
     } catch (e: any) {
       console.error("Platform stats error:", e);
-      res.status(500).json({ error: "Error interno", details: e.message });
+      res.status(500).json({ error: "No se pudieron calcular las estadísticas" });
     }
   });
 

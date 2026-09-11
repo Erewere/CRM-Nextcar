@@ -263,7 +263,9 @@ export function Layout() {
       name: "Facturación",
       path: "/billing",
       icon: CreditCard,
-      roles: ["master", "admin"],
+      // Solo quien paga. El master es el dueño de la plataforma: no tiene
+      // suscripción que gestionar, y su dinero lo ve en el panel.
+      roles: ["admin"],
     },
     {
       name: "Integraciones",
