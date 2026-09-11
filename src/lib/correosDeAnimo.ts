@@ -80,7 +80,12 @@ export interface Destinatario {
 function nombreDePila(nombre: string): string {
   const limpio = String(nombre || "").trim();
   if (!limpio || limpio.includes("@")) return "";
-  return limpio.split(/\s+/)[0];
+  let pila = limpio.split(/\s+/)[0];
+  // Hay perfiles capturados en minusculas ("Hola marco") o en mayusculas
+  // ("Hola ÁLVARO"): los dos se leen descuidados. Un nombre ya escrito con
+  // mayusculas y minusculas se respeta tal cual.
+  if (pila === pila.toLocaleUpperCase("es-MX")) pila = pila.toLocaleLowerCase("es-MX");
+  return pila.replace(/(^|-)(\p{L})/gu, (_, sep, letra) => sep + letra.toLocaleUpperCase("es-MX"));
 }
 
 export function destinatariosDeLaSemana(
