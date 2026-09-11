@@ -236,7 +236,7 @@ export function correoInvitacionAgencia(d: {
       Una invitación de Nextcar
     </p>
     <h1 style="margin:0 0 14px;color:${NEGRO};font-size:25px;font-weight:800;letter-spacing:-0.02em;line-height:1.25;">
-      Lo construimos para nosotros.<br>Se lo abrimos a ${esc(saludo)}.
+      Lo construimos para nosotros.<br>Lo compartimos con ${esc(saludo)}.
     </h1>
     <p style="margin:0 0 22px;color:${CUERPO};font-size:15px;line-height:1.65;">
       Somos una agencia de seminuevos, como la suya. Nextcar CRM nació de
