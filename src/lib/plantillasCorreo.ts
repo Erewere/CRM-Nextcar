@@ -37,7 +37,7 @@ export const CONTACTO = {
   whatsapp: "461 239 9969",
   whatsappEnlace: "https://wa.me/524612399969",
   sitio: "https://nextcar.erewere.com",
-  crm: "https://crm.erewere.com",
+  crm: "https://crm.erewere.com/inicio.html",
 };
 
 /**
