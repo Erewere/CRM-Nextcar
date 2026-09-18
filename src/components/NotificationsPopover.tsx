@@ -3,11 +3,12 @@ import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Vehicle, Client } from "../types";
-import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, Check, Phone, Building2 } from "lucide-react";
+import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, Check, Phone, Building2, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router";
 import clsx from "clsx";
 import { isBefore, addDays, startOfDay, isAfter } from "date-fns";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
+import { useChatsPendientes } from "../contexts/ChatsPendientesContext";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
@@ -83,6 +84,7 @@ export function NotificationsPopover() {
   const { matches, ownAgencySharing } = useSharedInventoryMatches();
   const popoverRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { pendientes: chatsPendientes } = useChatsPendientes();
 
   /**
    * Un reloj que avanza cada minuto.
@@ -576,6 +578,29 @@ export function NotificationsPopover() {
   // Sort by urgency / date
   notifications.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  // Clientes esperando respuesta: siempre arriba de todo, porque un lead sin
+  // contestar es lo mas caro que hay. No se descarta: se va sola cuando
+  // alguien contesta, que es de lo que se trata.
+  if (chatsPendientes.length > 0) {
+    const n = chatsPendientes.length;
+    const primero = chatsPendientes[0];
+    notifications.unshift({
+      id: "chats-pendientes",
+      type: "chat-pendiente",
+      title: n === 1 ? `${primero.nombre} espera tu respuesta` : `${n} clientes esperan respuesta`,
+      message:
+        n === 1
+          ? primero.ultimoTexto || "Mensaje sin contestar"
+          : chatsPendientes.slice(0, 3).map((p) => p.nombre).join(", ") + (n > 3 ? "…" : ""),
+      date: primero.ultimoEntranteAt || new Date().toISOString(),
+      icon: <MessageCircle className="w-5 h-5 text-green-600 shrink-0" />,
+      onClick: () =>
+        navigate("/chats", {
+          state: n === 1 ? { abrirConversacion: primero.clientId } : { filtroChats: "sin-responder" },
+        }),
+    });
+  }
+
   /**
    * Avisos en el escritorio.
    *
@@ -719,7 +744,7 @@ export function NotificationsPopover() {
                           ya se pospusieron una vez en la pantalla, y se van
                           solos cuando el dato se llena. Poder callarlos aqui
                           tambien los dejaria sin efecto. */}
-                      {notif.type !== "config-pendiente" && (
+                      {notif.type !== "config-pendiente" && notif.type !== "chat-pendiente" && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

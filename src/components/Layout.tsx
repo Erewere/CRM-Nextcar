@@ -38,6 +38,7 @@ import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
+import { useChatsPendientes } from '../contexts/ChatsPendientesContext';
 
 import { MobileFab } from "./MobileFab";
 import { AvisoMatchesRed } from "./AvisoMatchesRed";
@@ -112,6 +113,12 @@ export function Layout() {
     /^Agencia de /i.test(agencyData.name || '');
   const isMobile = useIsMobile();
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
+  // Clientes esperando respuesta por WhatsApp o Messenger. El globo de Chats
+  // contaba solo el chat interno entre agencias: un WhatsApp nuevo no se veia
+  // en ningun lado fuera de la pantalla de Chats.
+  const { total: chatsPendientes } = useChatsPendientes();
+  // El chat entre agencias no lo ve el vendedor: no se le suma.
+  const globoChats = (userData?.role === 'seller' ? 0 : unreadChatsCount) + chatsPendientes;
   const { matches: sharedMatches, ownAgencySharing } = useSharedInventoryMatches();
 
   useEffect(() => {
@@ -280,7 +287,7 @@ export function Layout() {
       // Los vendedores atienden sus propias conversaciones de WhatsApp, así que
       // también necesitan esta pantalla; antes solo entraban admin y master.
       roles: ["master", "admin", "seller"],
-      badge: unreadChatsCount > 0 ? unreadChatsCount : undefined,
+      badge: globoChats > 0 ? globoChats : undefined,
     },
   ].filter((item) => {
     if (
@@ -711,10 +718,12 @@ export function Layout() {
             { name: "Embudo", path: "/kanban", icon: Trello },
             { name: "Contactos", path: "/persons", icon: Users },
             { name: "Inventario", path: "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0 && location.pathname !== "/inventory") ? sharedMatches.length : undefined },
-            { name: "Chats", path: "/chats", icon: MessageSquare, badge: unreadChatsCount > 0 ? unreadChatsCount : undefined },
+            { name: "Chats", path: "/chats", icon: MessageSquare, badge: globoChats > 0 ? globoChats : undefined },
             { name: "Citas", path: "/tasks", icon: CheckSquare },
           ].filter(item => {
-            if (item.name === "Chats" && userData?.role === "seller") return false;
+            // El vendedor no tenia Chats en el celular: venia de cuando esa
+            // pantalla era solo el chat entre agencias. Hoy ahi contesta sus
+            // WhatsApp, y el celular es donde mas los contesta.
             // Mismo permiso que en el menu de escritorio.
             if (item.name === "Embudo" && userData?.role !== "admin" && userData?.role !== "seller") return false;
             return true;

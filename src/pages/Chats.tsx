@@ -248,6 +248,9 @@ export function Chats() {
           Clientes
           <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline">WhatsApp y Messenger</span>
         </button>
+        {/* El chat entre agencias es de administradores; el vendedor solo
+            atiende a sus clientes. */}
+        {userData?.role !== 'seller' && (
         <button
           onClick={() => setCanal('interno')}
           className={clsx(
@@ -261,6 +264,7 @@ export function Chats() {
           Interno
           <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline">otras agencias</span>
         </button>
+        )}
       </div>
 
       {canal === 'whatsapp' ? (

@@ -427,6 +427,16 @@ function responderA(): string | undefined {
   return process.env.CORREO_RESPUESTA || undefined;
 }
 
+/**
+ * Lo que deja una conversacion como respondida. El estado del chat vive en el
+ * contacto (campos chat*), porque cualquiera de la agencia ya puede leerlo: asi
+ * el aviso y el globo de pendientes funcionan sin reglas nuevas en Firestore.
+ * Ver "Chats: pendientes, archivar, borrar" mas abajo.
+ */
+function chatRespondido(): Record<string, any> {
+  return { chatPendiente: false, chatSinResponder: 0, chatUltimoSalienteAt: new Date().toISOString() };
+}
+
 type ResultadoEnvio = { ok: boolean; via: "hostinger" | "resend" | "ninguno"; error?: string };
 
 async function enviarCorreo(
@@ -1528,7 +1538,7 @@ async function startServer() {
         createdAt: new Date().toISOString(),
       });
 
-      await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
+      await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp(), ...chatRespondido() });
 
       return res.json({ success: true, messageId: metaData?.messages?.[0]?.id });
     } catch (e: any) {
@@ -1630,7 +1640,7 @@ async function startServer() {
         createdAt: new Date().toISOString(),
       });
 
-      await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
+      await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp(), ...chatRespondido() });
 
       return res.json({ success: true, messageId: metaData?.message_id });
     } catch (e: any) {
@@ -1822,7 +1832,7 @@ async function startServer() {
               sentByName: userData?.name || "",
               createdAt: new Date().toISOString(),
             });
-            await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp() });
+            await adminDb.collection("clients").doc(clientId).update({ updatedAt: FieldValue.serverTimestamp(), ...chatRespondido() });
           }
         } catch (regErr) {
           // Registrar es secundario: si falla, el mensaje ya se envió y no
@@ -1955,6 +1965,9 @@ async function startServer() {
                   sentByName: "Buzón de Meta",
                   createdAt: new Date().toISOString(),
                 });
+                // Contestar desde el buzon de Meta tambien es contestar: sin
+                // esto el chat seguiria marcado como pendiente en el CRM.
+                await adminDb.collection("clients").doc(dueno.id).update(chatRespondido()).catch(() => {});
                 continue;
               }
 
@@ -2108,6 +2121,17 @@ async function startServer() {
     const clientUpdate: any = { updatedAt: FieldValue.serverTimestamp() };
     if (origin === "whatsapp") clientUpdate.lastWhatsappInboundAt = ahoraIso;
     if (origin === "messenger") clientUpdate.lastMessengerInboundAt = ahoraIso;
+    if (text) {
+      clientUpdate.chatPendiente = true;
+      clientUpdate.chatSinResponder = FieldValue.increment(1);
+      clientUpdate.chatUltimoEntranteAt = ahoraIso;
+      clientUpdate.chatUltimoTexto = String(text).slice(0, 140);
+      clientUpdate.chatCanal = origin;
+      // Un mensaje nuevo saca el chat del archivo o de la papelera, como en
+      // WhatsApp: nunca se pierde a un cliente que vuelve a escribir. Si se
+      // habia borrado, chatBorradoAt se queda y lo viejo sigue oculto.
+      clientUpdate.chatEstado = "activo";
+    }
     if (existing) {
       await existing.ref.update(clientUpdate);
     } else {
@@ -3402,6 +3426,203 @@ ${extra}
   }
   setTimeout(revisarEnvioAutomatico, 2 * 60 * 1000);
   setInterval(revisarEnvioAutomatico, 30 * 60 * 1000);
+
+  // ===== Chats: pendientes, archivar, borrar =====
+  //
+  // El estado de cada conversacion vive en el contacto, y solo lo escribe el
+  // servidor:
+  //
+  //   chatPendiente     el cliente escribio y nadie ha respondido
+  //   chatSinResponder  cuantos mensajes suyos van desde la ultima respuesta
+  //   chatEstado        activo | archivado | borrado
+  //   chatBorradoAt     al borrar, se ocultan los mensajes hasta ese momento
+  //
+  // Borrar NO destruye nada (decision de Luis): oculta, como WhatsApp. Si esa
+  // persona vuelve a escribir, el chat reaparece solo con lo nuevo. Y quitar
+  // el contacto y su trato es opcional en cada borrado, nunca automatico.
+
+  async function usuarioQuePide(req: any, res: any) {
+    const token = await quienPide(req);
+    if (!token) {
+      res.status(401).json({ error: "Inicia sesión para continuar." });
+      return null;
+    }
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      res.status(500).json({ error: "Base de datos no disponible" });
+      return null;
+    }
+    const snap = await adminDb.collection("users").doc(token.uid).get();
+    const u = snap.exists ? snap.data() : null;
+    if (!u?.agencyId || u.agencyId === "unassigned") {
+      res.status(403).json({ error: "Tu usuario no pertenece a una agencia" });
+      return null;
+    }
+    return { uid: token.uid, rol: String(u.role || ""), agencyId: String(u.agencyId), adminDb };
+  }
+
+  const ACCIONES_DE_CHAT = ["atendido", "archivar", "desarchivar", "borrar", "restaurar"] as const;
+
+  app.post("/api/chats/accion", express.json(), async (req, res) => {
+    const quien = await usuarioQuePide(req, res);
+    if (!quien) return;
+    const accion = String(req.body?.accion || "");
+    const quitarContacto = req.body?.quitarContacto === true;
+    const ids: string[] = Array.isArray(req.body?.clientIds) ? req.body.clientIds.map(String).slice(0, 200) : [];
+    if (!(ACCIONES_DE_CHAT as readonly string[]).includes(accion) || ids.length === 0) {
+      return res.status(400).json({ error: "Acción no válida." });
+    }
+    // Borrar y restaurar, con el mismo permiso que ya pide borrar un trato:
+    // un vendedor no borra conversaciones.
+    const puedeBorrar = puedeRol(quien.rol, "tratos.eliminar");
+    if ((accion === "borrar" || accion === "restaurar" || quitarContacto) && !puedeBorrar) {
+      return res.status(403).json({ error: "Solo un administrador o gerente puede borrar conversaciones." });
+    }
+    // El vendedor solo toca sus propios chats; el resto de roles, los de su agencia.
+    const veTodo = quien.rol !== "seller";
+    const ahora = new Date().toISOString();
+
+    let etapas: any[] | null = null;
+    const etapasDeLaAgencia = async () => {
+      if (!etapas) {
+        const a = await quien.adminDb.collection("agencies").doc(quien.agencyId).get();
+        etapas = Array.isArray(a.data()?.pipelineStages) ? a.data()!.pipelineStages : [];
+      }
+      return etapas!;
+    };
+
+    const resultado = { hechos: 0, omitidos: 0, tratosQuitados: 0, tratosRespetados: [] as string[] };
+    try {
+      for (const id of ids) {
+        const ref = quien.adminDb.collection("clients").doc(id);
+        const snap = await ref.get();
+        const c: any = snap.exists ? snap.data() : null;
+        if (!c || c.agencyId !== quien.agencyId || (!veTodo && c.sellerId !== quien.uid)) {
+          resultado.omitidos++;
+          continue;
+        }
+
+        const cambio: Record<string, any> = {};
+        if (accion === "atendido") Object.assign(cambio, { chatPendiente: false, chatSinResponder: 0, chatAtendidoAt: ahora });
+        if (accion === "archivar") Object.assign(cambio, { chatEstado: "archivado", chatPendiente: false, chatSinResponder: 0, chatArchivadoAt: ahora });
+        if (accion === "desarchivar") Object.assign(cambio, { chatEstado: "activo" });
+        if (accion === "borrar") Object.assign(cambio, { chatEstado: "borrado", chatBorradoAt: ahora, chatPendiente: false, chatSinResponder: 0 });
+        if (accion === "restaurar") Object.assign(cambio, { chatEstado: "activo", chatBorradoAt: FieldValue.delete() });
+
+        const tratosDelContacto = () =>
+          quien.adminDb.collection("deals").where("agencyId", "==", quien.agencyId).where("clientId", "==", id).get();
+
+        if (accion === "borrar" && quitarContacto) {
+          // Como Personas: se marca, no se destruye. Y de sus tratos solo se
+          // quitan los abiertos y sin pagos: una venta ganada o un pago
+          // registrado no desaparece por borrar un chat.
+          Object.assign(cambio, { isDeleted: true, borradoPorChatAt: ahora, updatedAt: ahora });
+          const et = await etapasDeLaAgencia();
+          for (const t of (await tratosDelContacto()).docs) {
+            const d: any = t.data();
+            if (d.isDeleted) continue;
+            const conPagos = (d.saleDetails?.payments?.length || 0) > 0;
+            if (conPagos || checkIsWon(d.status, et)) {
+              resultado.tratosRespetados.push(d.title || "Trato sin nombre");
+              continue;
+            }
+            await t.ref.update({ isDeleted: true, borradoPorChatAt: ahora, updatedAt: ahora });
+            resultado.tratosQuitados++;
+          }
+        }
+
+        // Restaurar deshace el borrado entero: si el contacto y sus tratos se
+        // quitaron junto con el chat, vuelven con el.
+        if (accion === "restaurar" && c.borradoPorChatAt) {
+          Object.assign(cambio, { isDeleted: false, borradoPorChatAt: FieldValue.delete(), updatedAt: ahora });
+          for (const t of (await tratosDelContacto()).docs) {
+            if (t.data()?.borradoPorChatAt === c.borradoPorChatAt) {
+              await t.ref.update({ isDeleted: false, borradoPorChatAt: FieldValue.delete(), updatedAt: ahora });
+            }
+          }
+        }
+
+        await ref.update(cambio);
+        resultado.hechos++;
+      }
+      res.json(resultado);
+    } catch (e: any) {
+      console.error("Chats: fallo la accion", accion, e);
+      res.status(500).json({ error: "No se pudo completar. Vuelve a intentarlo.", ...resultado });
+    }
+  });
+
+  /**
+   * Pone al dia los chats que existian antes de que hubiera estado de chat.
+   *
+   * Los mensajes nuevos ya marcan el contacto al llegar; los viejos no traen
+   * nada. La pantalla de Chats llama aqui cuando encuentra alguno asi. Solo
+   * toca contactos sin estado: lo que el servidor ya lleva al dia no se pisa.
+   * Un chat sin respuesta de hace mas de 30 dias no cuenta como pendiente:
+   * ese cliente ya no espera, y marcarlo haria sonar el globo por nada.
+   */
+  const agenciasSincronizadas = new Set<string>();
+  app.post("/api/chats/sincronizar", async (req, res) => {
+    const quien = await usuarioQuePide(req, res);
+    if (!quien) return;
+    if (agenciasSincronizadas.has(quien.agencyId)) return res.json({ actualizados: 0 });
+    agenciasSincronizadas.add(quien.agencyId);
+    try {
+      const [mensajes, clientes] = await Promise.all([
+        quien.adminDb.collection("whatsappMessages").where("agencyId", "==", quien.agencyId)
+          .select("clientId", "direction", "createdAt", "text", "channel").get(),
+        quien.adminDb.collection("clients").where("agencyId", "==", quien.agencyId)
+          .select("chatEstado").get(),
+      ]);
+      const sinEstado = new Set(clientes.docs.filter((d: any) => d.data()?.chatEstado === undefined).map((d: any) => d.id));
+      const porCliente = new Map<string, any[]>();
+      for (const m of mensajes.docs) {
+        const x: any = m.data();
+        if (!x.clientId || !sinEstado.has(x.clientId)) continue;
+        if (!porCliente.has(x.clientId)) porCliente.set(x.clientId, []);
+        porCliente.get(x.clientId)!.push(x);
+      }
+      const hace30 = Date.now() - 30 * 86_400_000;
+      let lote = quien.adminDb.batch();
+      let enLote = 0;
+      let actualizados = 0;
+      for (const [clientId, lista] of porCliente) {
+        lista.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+        let sinResponder = 0;
+        let ultimoEntrante: any = null;
+        let ultimoSaliente: any = null;
+        for (const m of lista) {
+          if (m.direction === "inbound") { sinResponder++; ultimoEntrante = m; }
+          else { sinResponder = 0; ultimoSaliente = m; }
+        }
+        const reciente = ultimoEntrante && Date.parse(ultimoEntrante.createdAt) >= hace30;
+        const pendiente = sinResponder > 0 && !!reciente;
+        lote.update(quien.adminDb.collection("clients").doc(clientId), {
+          chatEstado: "activo",
+          chatPendiente: pendiente,
+          chatSinResponder: pendiente ? sinResponder : 0,
+          ...(ultimoEntrante ? {
+            chatUltimoEntranteAt: ultimoEntrante.createdAt,
+            chatUltimoTexto: String(ultimoEntrante.text || "").slice(0, 140),
+            chatCanal: ultimoEntrante.channel || "whatsapp",
+          } : {}),
+          ...(ultimoSaliente ? { chatUltimoSalienteAt: ultimoSaliente.createdAt } : {}),
+        });
+        actualizados++;
+        if (++enLote === 400) {
+          await lote.commit();
+          lote = quien.adminDb.batch();
+          enLote = 0;
+        }
+      }
+      if (enLote > 0) await lote.commit();
+      res.json({ actualizados });
+    } catch (e: any) {
+      agenciasSincronizadas.delete(quien.agencyId);
+      console.error("Chats: fallo la sincronizacion", e);
+      res.status(500).json({ error: "No se pudo sincronizar." });
+    }
+  });
 
   // Clave de MCP personal. Cada quien genera y consulta la suya; nadie ve la
   // de otro, ni siquiera un administrador. Lo que la clave permite hacer lo

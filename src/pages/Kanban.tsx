@@ -288,7 +288,11 @@ export function Kanban() {
     const unsubscribeDeals = onSnapshot(
       query(collection(db, "deals"), where("agencyId", "==", userData.agencyId)),
       (snapshot) => {
-        let data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Deal);
+        // Un trato quitado (al borrar el chat de alguien que no era cliente) no
+        // se destruye: se marca. El embudo no lo muestra.
+        let data = snapshot.docs
+          .map((d) => ({ ...d.data(), id: d.id }) as Deal)
+          .filter((d: any) => !d.isDeleted);
         setDealsRecibidos(data.length);
         if (userData.role === "seller") {
           data = data.filter((d) => d.sellerId === userData.id);

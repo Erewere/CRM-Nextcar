@@ -3,6 +3,7 @@ import { NextcarIcono } from './components/NextcarLogo';
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
+import { ChatsPendientesProvider } from './contexts/ChatsPendientesContext';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Kanban } from './pages/Kanban';
@@ -96,7 +97,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
           
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/" element={<ProtectedRoute><ChatsPendientesProvider><Layout /></ChatsPendientesProvider></ProtectedRoute>}>
             <Route index element={<Inicio />} />
             <Route path="intelligence" element={<ProtectedRoute requireRole={['admin']}><IntelligenceDashboard /></ProtectedRoute>} />
             <Route path="platform" element={<ProtectedRoute requireRole={['master']}><PlatformPanel /></ProtectedRoute>} />
@@ -104,7 +105,9 @@ export default function App() {
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />
-            <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin']}><Chats /></ProtectedRoute>} />
+            {/* El vendedor contesta sus WhatsApp aqui. El menu ya le mostraba Chats,
+                pero esta puerta lo regresaba al inicio: nunca pudo entrar. */}
+            <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><Chats /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute requireRole={['admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
