@@ -38,6 +38,9 @@ export const CONTACTO = {
   whatsappEnlace: "https://wa.me/524612399969",
   sitio: "https://nextcar.erewere.com",
   crm: "https://crm.erewere.com/inicio.html",
+  // Dominio sin ruta, para construir URLs de recursos (el logo) que no viven
+  // bajo /inicio.html.
+  crmDominio: "https://crm.erewere.com",
 };
 
 /**
@@ -103,7 +106,7 @@ function envoltura(
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:${BLANCO};border:1px solid ${LINEA};border-radius:12px;overflow:hidden;font-family:${FUENTE};">
     <tr><td style="background:${NEGRO};padding:38px 40px;">
       <a href="${esc(CONTACTO.crm)}" style="text-decoration:none;">
-        <img src="${esc(CONTACTO.crm)}/logo/lockup-correo-oscuro.jpg" width="220" height="46" alt="Nextcar CRM" style="display:block;border:0;outline:none;width:220px;height:46px;">
+        <img src="${esc(CONTACTO.crmDominio)}/logo/lockup-correo-oscuro.jpg" width="220" height="46" alt="Nextcar CRM" style="display:block;border:0;outline:none;width:220px;height:46px;">
       </a>
     </td></tr>
     <tr><td style="padding:38px 40px 18px;">${cuerpo}</td></tr>
