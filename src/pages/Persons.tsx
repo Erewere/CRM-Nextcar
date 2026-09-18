@@ -9,10 +9,10 @@ import {
   where,
   getDocs,
   doc,
+  getDoc,
   setDoc,
-  writeBatch,
-  deleteDoc,
   updateDoc,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Deal, Task, Vehicle } from "../types";
@@ -63,8 +63,13 @@ export function Persons() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showUndoModal, setShowUndoModal] = useState(false);
-  const [undoList, setUndoList] = useState<Client[]>([]);
+  const [ultimoBorrado, setUltimoBorrado] = useState<{
+    sello: string;
+    contactos: Client[];
+    tratosQuitados: number;
+    tratosRespetados: string[];
+  } | null>(null);
+  const [deshaciendo, setDeshaciendo] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Client | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [showImportExcel, setShowImportExcel] = useState(false);
@@ -232,20 +237,89 @@ export function Persons() {
     setShowDeleteConfirm(true);
   };
 
+  // Los tratos de un contacto borrado. Mismo criterio que /api/chats/accion
+  // con quitarContacto: se marcan, no se destruyen, y solo salen los abiertos
+  // y sin pagos. Una venta ganada o un pago registrado no desaparece por
+  // borrar a la persona. El sello deja deshacer justo lo que se quito.
+  const tratosDelContacto = (clientId: string) =>
+    getDocs(
+      query(
+        collection(db, "deals"),
+        where("agencyId", "==", userData?.agencyId || ""),
+        where("clientId", "==", clientId),
+      ),
+    );
+
   const confirmDelete = async () => {
+    if (!userData?.agencyId) return;
+    const sello = new Date().toISOString();
+    const borrados: Client[] = [];
+    const tocados: Client[] = [];
+    const tratosQuitados: string[] = [];
+    const tratosRespetados: string[] = [];
     try {
-      const { updateDoc } = await import("firebase/firestore");
-      await Promise.all(
-        selectedClients.map((id) => updateDoc(doc(db, "clients", id), { isDeleted: true, updatedAt: new Date().toISOString() }))
-      );
-      setPersons((prev) =>
-        prev.filter((p) => !selectedClients.includes(p.id)),
-      );
-      setSelectedClients([]);
-      setShowDeleteConfirm(false);
+      const agencia = await getDoc(doc(db, "agencies", userData.agencyId));
+      const etapas = Array.isArray(agencia.data()?.pipelineStages) ? agencia.data()!.pipelineStages : [];
+      for (const id of selectedClients) {
+        const p = persons.find((x) => x.id === id);
+        // Entra a la lista de deshacer antes de tocar nada: si algo falla a
+        // medias, deshacer igual recupera los tratos que ya se quitaron.
+        if (p) tocados.push(p);
+        for (const t of (await tratosDelContacto(id)).docs) {
+          const d: any = t.data();
+          if (d.isDeleted) continue;
+          const conPagos = (d.saleDetails?.payments?.length || 0) > 0;
+          if (conPagos || checkIsWon(d.status, etapas)) {
+            tratosRespetados.push(d.title || "Trato sin nombre");
+            continue;
+          }
+          await updateDoc(t.ref, { isDeleted: true, borradoConContactoAt: sello, updatedAt: sello });
+          tratosQuitados.push(t.id);
+        }
+        await updateDoc(doc(db, "clients", id), { isDeleted: true, borradoConContactoAt: sello, updatedAt: sello });
+        if (p) borrados.push(p);
+      }
     } catch (err) {
       console.error("Error deleting clients:", err);
-      alert("Error al eliminar contactos");
+      alert("No se pudieron borrar todos los contactos. Revisa la lista y vuelve a intentarlo.");
+    }
+    const idsBorrados = new Set(borrados.map((p) => p.id));
+    setPersons((prev) => prev.filter((p) => !idsBorrados.has(p.id)));
+    setDeals((prev) => prev.filter((d) => !tratosQuitados.includes(d.id)));
+    setSelectedClients([]);
+    setShowDeleteConfirm(false);
+    if (tocados.length > 0) {
+      setUltimoBorrado({ sello, contactos: tocados, tratosQuitados: tratosQuitados.length, tratosRespetados });
+    }
+  };
+
+  // Deshacer el ultimo borrado: vuelven los contactos y solo los tratos que
+  // se quitaron con ellos (los que llevan el mismo sello).
+  const deshacerBorrado = async () => {
+    if (!ultimoBorrado) return;
+    setDeshaciendo(true);
+    const { sello, contactos } = ultimoBorrado;
+    const ahora = new Date().toISOString();
+    const vuelven: Client[] = [];
+    const tratosQueVuelven: Deal[] = [];
+    try {
+      for (const p of contactos) {
+        for (const t of (await tratosDelContacto(p.id)).docs) {
+          if (t.data()?.borradoConContactoAt !== sello) continue;
+          await updateDoc(t.ref, { isDeleted: false, borradoConContactoAt: deleteField(), updatedAt: ahora });
+          tratosQueVuelven.push({ ...t.data(), id: t.id, isDeleted: false } as Deal);
+        }
+        await updateDoc(doc(db, "clients", p.id), { isDeleted: false, borradoConContactoAt: deleteField(), updatedAt: ahora });
+        vuelven.push({ ...p, isDeleted: false });
+      }
+      setUltimoBorrado(null);
+    } catch (err) {
+      console.error("Error restoring clients:", err);
+      alert("No se pudo deshacer todo. Recarga la página para ver cómo quedó.");
+    } finally {
+      setPersons((prev) => [...vuelven, ...prev.filter((p) => !vuelven.some((v) => v.id === p.id))]);
+      setDeals((prev) => [...tratosQueVuelven, ...prev.filter((d) => !tratosQueVuelven.some((v) => v.id === d.id))]);
+      setDeshaciendo(false);
     }
   };
 
@@ -1337,65 +1411,46 @@ export function Persons() {
         </div>
       )}
 
-      {/* Undo Modal */}
-      {showUndoModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
-            <div className="px-6 py-4 flex justify-between items-center border-b border-gray-200 dark:border-slate-700">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
-                Deshacer Importación
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowUndoModal(false)}
-                className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              {undoList.length === 0 ? (
-                <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  No se encontraron contactos importados desde Excel. (Si los contactos ya existían y solo se actualizaron, no se pueden eliminar por aquí).
-                </p>
-              ) : (
-                <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  Se encontraron <strong>{undoList.length}</strong> contactos importados de Excel. ¿Deseas eliminarlos de manera permanente? Esta acción no se puede deshacer.
+      {/* Deshacer el ultimo borrado */}
+      {ultimoBorrado && (
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:max-w-md z-[90] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 text-sm text-slate-700 dark:text-slate-300">
+              <p className="font-semibold text-slate-900 dark:text-white">
+                {ultimoBorrado.contactos.length === 1
+                  ? "Se borró 1 contacto"
+                  : `Se borraron ${ultimoBorrado.contactos.length} contactos`}
+                {ultimoBorrado.tratosQuitados > 0 &&
+                  (ultimoBorrado.tratosQuitados === 1
+                    ? " y 1 trato abierto del embudo"
+                    : ` y ${ultimoBorrado.tratosQuitados} tratos abiertos del embudo`)}
+                .
+              </p>
+              {ultimoBorrado.tratosRespetados.length > 0 && (
+                <p className="mt-1">
+                  Se quedaron en el embudo porque están ganados o tienen pagos:{" "}
+                  <strong>{ultimoBorrado.tratosRespetados.join(", ")}</strong>.
                 </p>
               )}
             </div>
-            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowUndoModal(false)}
-                className="px-4 py-2 text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-200 dark:hover:bg-slate-700 rounded text-sm"
-              >
-                Cerrar
-              </button>
-              {undoList.length > 0 && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const batch = writeBatch(db);
-                      undoList.forEach(p => {
-                        if (p.id) batch.delete(doc(db, "clients", p.id));
-                      });
-                      await batch.commit();
-                      setPersons(prev => prev.filter(p => !undoList.find(u => u.id === p.id)));
-                      setShowUndoModal(false);
-                      setUndoList([]);
-                    } catch (e) {
-                      console.error(e);
-                      alert("Hubo un error al eliminar.");
-                    }
-                  }}
-                  className="px-4 py-2 bg-rose-600 text-white font-medium hover:bg-rose-700 rounded text-sm"
-                >
-                  Eliminar Contactos
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setUltimoBorrado(null)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 shrink-0"
+              aria-label="Cerrar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={deshacerBorrado}
+              disabled={deshaciendo}
+              className="px-4 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-700 dark:bg-slate-600 dark:hover:bg-slate-500 rounded disabled:opacity-50"
+            >
+              {deshaciendo ? "Deshaciendo..." : "Deshacer"}
+            </button>
           </div>
         </div>
       )}
@@ -1770,7 +1825,7 @@ export function Persons() {
                 Confirmar eliminación
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                ¿Estás seguro que deseas eliminar {selectedClients.length} contactos? Esta acción no se puede deshacer.
+                ¿Eliminar {selectedClients.length === 1 ? "1 contacto" : `${selectedClients.length} contactos`}? Sus tratos abiertos y sin pagos también salen del embudo. Los tratos ganados o con pagos se quedan. Podrás deshacerlo justo después.
               </p>
             </div>
             <div className="p-4 bg-[#f4f5f5] dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3">
