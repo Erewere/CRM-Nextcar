@@ -16,6 +16,7 @@ import * as XLSX from "xlsx";
 import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials";
+import { hoyLocal } from "../lib/fechas";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -564,7 +565,7 @@ export function Inventory() {
       if (approve && pv) {
         const targetStatus = newStatus || pv.type || 'sold';
         const approvedPrice = pv.saleDetails?.price || pv.proposedPrice || vehicle?.price || 0;
-        const soldDate = new Date().toISOString().split('T')[0];
+        const soldDate = hoyLocal();
 
         const approvedSaleDetails = pv.saleDetails ? {
           ...pv.saleDetails,

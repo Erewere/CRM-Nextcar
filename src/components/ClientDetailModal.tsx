@@ -7,7 +7,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
 import { useReadOnly } from "../hooks/useReadOnly";
 import { usePermissions } from "../hooks/usePermissions";
-import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
+import { ventaYaRegistrada, avisoDeVentaDuplicada, elegirTratoDeLaVenta, elegirTratoAbierto, tratoConVenta } from "../lib/ventas";
+import { hoyLocal } from "../lib/fechas";
 import { EscribirAlCliente } from "./EscribirAlCliente";
 import { ResumenBusquedaAuto, frasesDeBusqueda } from "./ResumenBusquedaAuto";
 import {
@@ -123,13 +124,17 @@ export function ClientDetailModal({
    * donde se cerro. Solo se crea al cerrar una venta: un contacto sin
    * operacion sigue pudiendo existir sin trato.
    */
-  const asegurarTratoDeVenta = async (clientId: string): Promise<string> => {
+  const tratosDelContacto = async (clientId: string): Promise<any[]> => {
     const q = (userData?.role !== "master" && userData?.agencyId)
       ? query(collection(db, "deals"), where("clientId", "==", clientId), where("agencyId", "==", userData.agencyId))
       : query(collection(db, "deals"), where("clientId", "==", clientId));
     const snap = await getDocs(q);
-    if (!snap.empty) return snap.docs[0].id;
+    return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+  };
 
+  // Crea el trato de la venta cuando el contacto no tiene ninguno que sirva.
+  // Cual de los existentes es "el de la venta" lo decide elegirTratoDeLaVenta.
+  const crearTratoDeVenta = async (clientId: string): Promise<string> => {
     const ref = doc(collection(db, "deals"));
     await setDoc(ref, {
       id: ref.id,
@@ -764,13 +769,14 @@ export function ClientDetailModal({
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         if (!finalDealId) {
-          const q = (userData?.role !== "master" && userData?.agencyId)
-            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
-            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            finalDealId = snap.docs[0].id;
-          }
+          // Nunca el trato que lleva una venta: cambiar la etapa del contacto
+          // desde su ficha no puede regresar ni perder una venta cerrada.
+          const trato = elegirTratoAbierto(
+            await tratosDelContacto(finalClientId as string),
+            formData.vehicleId || client.vehicleId,
+            pipelineStages
+          );
+          finalDealId = trato ? trato.id : null;
         }
 
         if (finalDealId) {
@@ -812,13 +818,14 @@ export function ClientDetailModal({
         let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         if (!finalDealId) {
-          const q = (userData?.role !== "master" && userData?.agencyId)
-            ? query(collection(db, "deals"), where("clientId", "==", finalClientId), where("agencyId", "==", userData.agencyId))
-            : query(collection(db, "deals"), where("clientId", "==", finalClientId));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            finalDealId = snap.docs[0].id;
-          }
+          // Nunca el trato que lleva una venta: cambiar la etapa del contacto
+          // desde su ficha no puede regresar ni perder una venta cerrada.
+          const trato = elegirTratoAbierto(
+            await tratosDelContacto(finalClientId as string),
+            formData.vehicleId || client.vehicleId,
+            pipelineStages
+          );
+          finalDealId = trato ? trato.id : null;
         }
 
         if (finalDealId) {
@@ -847,7 +854,7 @@ export function ClientDetailModal({
     setFormData((prev) => {
       const updates: Partial<Client> = { 
         status: targetStatus,
-        soldAt: new Date().toISOString().split('T')[0],
+        soldAt: hoyLocal(),
         saleDetails,
         dealValue: saleDetails?.price || prev.dealValue
       };
@@ -856,15 +863,34 @@ export function ClientDetailModal({
 
     if (!isNew && client.id) {
       try {
-        // Un auto solo se vende una vez: si otro trato ya registra esta venta,
-        // no se duplica.
-        const idTratoActual = (client.originalClientId && client.originalClientId !== client.id)
+        const finalClientId = client.originalClientId || client.id;
+        let finalDealId: string | null = (client.originalClientId && client.originalClientId !== client.id)
           ? (client.id as string)
           : null;
+
+        // Desde la ficha del contacto no hay trato en la mano: se busca el de
+        // esta venta entre los suyos. Antes se tomaba el primero que llegara,
+        // y la venta podia caer en un trato viejo sin auto mientras el trato
+        // del auto quedaba aparte.
+        let vehiculoDeLaVenta: string | null = formData.vehicleId || client.vehicleId || null;
+        if (!finalDealId) {
+          const trato: any = elegirTratoDeLaVenta(
+            await tratosDelContacto(finalClientId as string),
+            vehiculoDeLaVenta,
+            pipelineStages
+          );
+          if (trato) {
+            finalDealId = trato.id;
+            vehiculoDeLaVenta = vehiculoDeLaVenta || trato.vehicleId || null;
+          }
+        }
+
+        // Un auto solo se vende una vez: si otro trato ya registra esta venta,
+        // no se duplica.
         const conflicto = await ventaYaRegistrada(
-          formData.vehicleId || client.vehicleId,
+          vehiculoDeLaVenta,
           userData?.agencyId,
-          idTratoActual
+          finalDealId
         );
         if (conflicto) {
           alert(avisoDeVentaDuplicada(conflicto));
@@ -873,7 +899,7 @@ export function ClientDetailModal({
 
         const dealUpdates: any = {
           status: targetStatus,
-          soldAt: new Date().toISOString().split('T')[0],
+          soldAt: hoyLocal(),
           saleDetails,
           value: saleDetails?.price || formData.dealValue || 0,
           updatedAt: new Date().toISOString(),
@@ -882,12 +908,9 @@ export function ClientDetailModal({
         // El contacto guarda la referencia; el dinero vive en el trato.
         const clientUpdates: any = {
           status: targetStatus,
-          soldAt: new Date().toISOString().split('T')[0],
+          soldAt: hoyLocal(),
           updatedAt: new Date().toISOString(),
         };
-
-        const finalClientId = client.originalClientId || client.id;
-        let finalDealId = (client.originalClientId && client.originalClientId !== client.id) ? client.id : null;
 
         // La venta tiene que quedar registrada en un trato. Si el que traiamos
         // ya no existe, o el contacto no tiene ninguno, se crea.
@@ -895,15 +918,15 @@ export function ClientDetailModal({
           finalDealId = null;
         }
         if (!finalDealId) {
-          finalDealId = await asegurarTratoDeVenta(finalClientId as string);
+          finalDealId = await crearTratoDeVenta(finalClientId as string);
           await guardarTratoSiExiste(finalDealId, dealUpdates);
         }
 
         clientUpdates.ventaDealId = finalDealId;
         await setDoc(doc(db, "clients", finalClientId), clientUpdates, { merge: true });
         
-        if (formData.vehicleId) {
-          const currentVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
+        if (vehiculoDeLaVenta) {
+          const currentVehicle = inventoryVehicles.find(v => v.id === vehiculoDeLaVenta);
           const originalPrice = currentVehicle?.price || client.dealValue || 0;
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
           const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
@@ -912,7 +935,7 @@ export function ClientDetailModal({
             // Quien cierra la venta ya tiene permiso para confirmarla: el auto
             // sale del inventario ahora, no cuando alguien se acuerde de
             // aprobarlo.
-            await updateDoc(doc(db, "vehicles", formData.vehicleId), vehiculoVendido({
+            await updateDoc(doc(db, "vehicles", vehiculoDeLaVenta), vehiculoVendido({
               clientId: finalClientId,
               clientName: client.name || formData.name,
               dealId: finalDealId,
@@ -920,7 +943,7 @@ export function ClientDetailModal({
               saleDetails,
             }));
           } else {
-          await updateDoc(doc(db, "vehicles", formData.vehicleId), {
+          await updateDoc(doc(db, "vehicles", vehiculoDeLaVenta), {
             pendingValidation: {
               type: "sold",
               requestedBy: userData?.id,
@@ -965,7 +988,7 @@ export function ClientDetailModal({
     
     const newPayment: any = {
       amount: Number(payment.amount) || 0,
-      date: payment.date || new Date().toISOString().split('T')[0],
+      date: payment.date || hoyLocal(),
       method: payment.method || 'efectivo',
       notes: payment.notes || '',
       id: Math.random().toString(36).substr(2, 9),
@@ -983,7 +1006,7 @@ export function ClientDetailModal({
     const finalClientId = (client.originalClientId || client.id) as string;
     const isDeal = Boolean(client.originalClientId && client.originalClientId !== client.id);
     const finalDealId = isDeal ? (client.id as string) : null;
-    const todayIso = new Date().toISOString().split('T')[0];
+    const todayIso = hoyLocal();
 
     let newStatus = formData.status;
 
@@ -3502,24 +3525,46 @@ export function ClientDetailModal({
                                 status: "new",
                                 updatedAt: new Date().toISOString(),
                               };
-                              await setDoc(doc(db, "clients", idCliente), limpieza, { merge: true });
-
-                              // La venta puede estar guardada tambien en el trato
-                              for (const d of deals) {
-                                await guardarTratoSiExiste(d.id, limpieza);
+                              // Solo se limpia el trato de esta venta. Antes se
+                              // limpiaban todos los del contacto: en Autos Vrit
+                              // descartar una venta duplicada borro tambien la
+                              // buena, y el auto regreso a disponible.
+                              const desdeUnTrato = Boolean(client.originalClientId && client.originalClientId !== client.id);
+                              const referencia = (client as any).ventaDealId || (formData as any).ventaDealId;
+                              const tratosDeLaVenta = desdeUnTrato
+                                ? [client.id as string]
+                                : deals
+                                    .filter((d: any) => !d.isDeleted && (d.id === referencia || tratoConVenta(d, pipelineStages)))
+                                    .map((d) => d.id);
+                              for (const id of tratosDeLaVenta) {
+                                await guardarTratoSiExiste(id, limpieza);
                               }
 
-                              // Y el auto pudo quedar marcado como vendido a esta persona
-                              const idAuto = formData.vehicleId || client.vehicleId;
+                              await setDoc(doc(db, "clients", idCliente), { ...limpieza, ventaDealId: null }, { merge: true });
+
+                              // El auto solo vuelve a disponible si esta venta es
+                              // la que tiene registrada; si lo vendio otro trato,
+                              // esa venta no se toca.
+                              const idAuto = formData.vehicleId || client.vehicleId
+                                || (deals.find((d: any) => tratosDeLaVenta.includes(d.id) && d.vehicleId) as any)?.vehicleId;
                               if (idAuto) {
-                                await updateDoc(doc(db, "vehicles", idAuto), {
-                                  status: "available",
-                                  saleDetails: null,
-                                  soldAt: null,
-                                  buyerId: null,
-                                  soldToClientId: null,
-                                  updatedAt: new Date().toISOString(),
-                                }).catch(() => {});
+                                const auto = await getDoc(doc(db, "vehicles", idAuto)).catch(() => null);
+                                const datosAuto: any = auto?.exists() ? auto.data() : null;
+                                const esEstaVenta = datosAuto && (
+                                  tratosDeLaVenta.includes(datosAuto.soldDealId) ||
+                                  (!datosAuto.soldDealId && esElCompradorDelVehiculo(datosAuto, idCliente))
+                                );
+                                if (esEstaVenta) {
+                                  await updateDoc(doc(db, "vehicles", idAuto), {
+                                    status: "available",
+                                    saleDetails: null,
+                                    soldAt: null,
+                                    buyerId: null,
+                                    soldToClientId: null,
+                                    soldDealId: null,
+                                    updatedAt: new Date().toISOString(),
+                                  }).catch(() => {});
+                                }
                               }
                               onClose();
                             } catch (e: any) {

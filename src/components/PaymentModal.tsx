@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calculator, CheckCircle2 } from 'lucide-react';
 import { SaleDetails, Task } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { hoyLocal } from "../lib/fechas";
 
 interface PaymentData {
   amount: number;
@@ -35,7 +36,7 @@ export function PaymentModal({
 }: Props) {
   const { userData } = useAuth();
   const [amount, setAmount] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(hoyLocal());
   const [method, setMethod] = useState<'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'>('transferencia');
   const [notes, setNotes] = useState<string>('');
   const [selectedInstallmentKey, setSelectedInstallmentKey] = useState<string>('');

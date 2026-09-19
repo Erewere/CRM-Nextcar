@@ -45,6 +45,7 @@ import { ventaYaRegistrada, avisoDeVentaDuplicada } from "../lib/ventas";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { Settings, ChevronUp, ChevronDown, Archive, X, Search } from "lucide-react";
 import clsx from "clsx";
+import { hoyLocal } from "../lib/fechas";
 
 const DEFAULT_COLUMNS: PipelineStage[] = [
   { id: "new", title: "Nuevos" },
@@ -672,7 +673,7 @@ export function Kanban() {
 
       const updates: any = {
         status: "won",
-        soldAt: new Date().toISOString().split('T')[0],
+        soldAt: hoyLocal(),
         saleDetails,
         value: saleDetails?.price || client.dealValue || 0,
         updatedAt: new Date().toISOString(),
@@ -708,7 +709,7 @@ export function Kanban() {
         // una venta que ya no existia, con su saldo y todo.
         await updateDoc(doc(db, "clients", actualClientId), {
           status: "won",
-          soldAt: new Date().toISOString().split('T')[0],
+          soldAt: hoyLocal(),
           ventaDealId: idTrato,
           updatedAt: new Date().toISOString()
         });

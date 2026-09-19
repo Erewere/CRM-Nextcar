@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic, Calculator, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { Client, Vehicle } from '../../types';
 import { db } from '../../lib/firebase';
+import { elegirTratoDeLaVenta, elegirTratoAbierto } from "../../lib/ventas";
+import { hoyLocal } from "../../lib/fechas";
 import { doc, setDoc, addDoc, collection, getDoc, updateDoc, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { esElCompradorDelVehiculo } from '../../lib/ventaDeVehiculo';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,7 +41,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       alert("Solamente los administradores pueden registrar pagos.");
       return;
     }
-    const todayIso = new Date().toISOString().split('T')[0];
+    const todayIso = hoyLocal();
     
     const baseDetails = clientData?.saleDetails || {
       price: clientData?.dealValue || client.dealValue || 0,
@@ -468,8 +470,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           ? query(collection(db, 'deals'), where('clientId', '==', client.id!), where('agencyId', '==', userData.agencyId))
           : query(collection(db, 'deals'), where('clientId', '==', client.id!));
         const snap = await getDocs(q);
-        if (!snap.empty) {
-          const dealDoc = snap.docs[0];
+        // Nunca el trato que lleva una venta: ver elegirTratoAbierto.
+        const dealDoc = elegirTratoAbierto(snap.docs.map(d => ({ ...d.data(), id: d.id })), client.vehicleId, pipelineStages);
+        if (dealDoc) {
           await updateDoc(doc(db, 'deals', dealDoc.id), {
             status: newStatus,
             updatedAt: new Date().toISOString()
@@ -521,8 +524,9 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           ? query(collection(db, 'deals'), where('clientId', '==', client.id!), where('agencyId', '==', userData.agencyId))
           : query(collection(db, 'deals'), where('clientId', '==', client.id!));
         const snap = await getDocs(q);
-        if (!snap.empty) {
-          const dealDoc = snap.docs[0];
+        // Nunca el trato que lleva una venta: ver elegirTratoAbierto.
+        const dealDoc = elegirTratoAbierto(snap.docs.map(d => ({ ...d.data(), id: d.id })), client.vehicleId, pipelineStages);
+        if (dealDoc) {
           await updateDoc(doc(db, 'deals', dealDoc.id), {
             status: targetStatus,
             lostReason: fullReason,
@@ -544,6 +548,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     
     try {
       setCurrentStatus(targetStatus);
+      let tratoDeLaVenta: any = null;
       const isDeal = client.originalClientId && client.originalClientId !== client.id;
       const actualClientId = client.originalClientId || client.id;
       
@@ -551,7 +556,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         const dealRef = doc(db, 'deals', client.id!);
         await updateDoc(dealRef, {
           status: targetStatus,
-          soldAt: new Date().toISOString().split('T')[0],
+          soldAt: hoyLocal(),
           saleDetails,
           value: saleDetails?.price || client.dealValue || 0,
           updatedAt: new Date().toISOString()
@@ -561,7 +566,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         const clientRef = doc(db, 'clients', actualClientId!);
         await updateDoc(clientRef, {
           status: targetStatus,
-          soldAt: new Date().toISOString().split('T')[0],
+          soldAt: hoyLocal(),
           ventaDealId: client.id,
           updatedAt: new Date().toISOString()
         });
@@ -569,7 +574,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
         const clientRef = doc(db, 'clients', client.id!);
         await updateDoc(clientRef, {
           status: targetStatus,
-          soldAt: new Date().toISOString().split('T')[0],
+          soldAt: hoyLocal(),
           updatedAt: new Date().toISOString()
         });
         
@@ -577,26 +582,30 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           ? query(collection(db, 'deals'), where('clientId', '==', client.id!), where('agencyId', '==', userData.agencyId))
           : query(collection(db, 'deals'), where('clientId', '==', client.id!));
         const snap = await getDocs(q);
-        if (!snap.empty) {
-          const dealDoc = snap.docs[0];
+        // El trato de esta venta, no el primero de la lista: ver elegirTratoDeLaVenta.
+        const dealDoc: any = elegirTratoDeLaVenta(snap.docs.map(d => ({ ...d.data(), id: d.id })), client.vehicleId, pipelineStages);
+        tratoDeLaVenta = dealDoc;
+        if (dealDoc) {
           await updateDoc(doc(db, 'deals', dealDoc.id), {
             status: targetStatus,
-            soldAt: new Date().toISOString().split('T')[0],
+            soldAt: hoyLocal(),
             saleDetails,
             updatedAt: new Date().toISOString()
           });
+          await updateDoc(clientRef, { ventaDealId: dealDoc.id });
         }
       }
 
-      if (client.vehicleId) {
-        const vDoc = await getDoc(doc(db, 'vehicles', client.vehicleId));
+      const idAutoVenta: string | undefined = client.vehicleId || tratoDeLaVenta?.vehicleId || undefined;
+      if (idAutoVenta) {
+        const vDoc = await getDoc(doc(db, 'vehicles', idAutoVenta));
         if (vDoc.exists()) {
           const vData = vDoc.data() as Vehicle;
           const originalPrice = vData.price || client.dealValue || 0;
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
           const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
 
-          await updateDoc(doc(db, 'vehicles', client.vehicleId), {
+          await updateDoc(doc(db, 'vehicles', idAutoVenta), {
             pendingValidation: {
               type: 'sold',
               requestedBy: userData?.id,

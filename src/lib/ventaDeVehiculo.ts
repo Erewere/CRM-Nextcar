@@ -1,3 +1,5 @@
+import { hoyLocal } from "./fechas";
+
 /**
  * Que le pasa al vehiculo cuando se cierra una venta.
  *
@@ -55,7 +57,7 @@ export function esElCompradorDelVehiculo(
 
 /** Lo que se escribe en el vehiculo cuando la venta ya es firme. */
 export function vehiculoVendido(v: DatosDeVenta) {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyLocal();
   const detalles = v.saleDetails
     ? { ...v.saleDetails, price: v.precio }
     : { price: v.precio, method: 'contado' };

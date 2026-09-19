@@ -17,6 +17,7 @@ import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials'
 import { SeleccionarTratoVenta } from './SeleccionarTratoVenta';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
+import { hoyLocal } from "../lib/fechas";
 
 interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
@@ -526,7 +527,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
 
     const newPayment: any = {
       amount: Number(paymentData.amount) || 0,
-      date: paymentData.date || new Date().toISOString().split('T')[0],
+      date: paymentData.date || hoyLocal(),
       method: paymentData.method || 'efectivo',
       notes: paymentData.notes || '',
       id: Math.random().toString(36).substr(2, 9),
@@ -749,7 +750,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
           vehicleId: docRef.id,
           vehicle: `${formData.year || ''} ${formData.make || ''} ${formData.model || ''}`.trim(),
           value: payload.price || 0,
-          soldAt: payload.soldAt || new Date().toISOString().split('T')[0],
+          soldAt: payload.soldAt || hoyLocal(),
           updatedAt: new Date().toISOString(),
         }, { merge: true });
       }
@@ -1265,7 +1266,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                         const newStatus = e.target.value;
                         const newFormData = { ...formData, status: newStatus };
                         if (newStatus === 'sold' && !formData.soldAt) {
-                          newFormData.soldAt = new Date().toISOString().split('T')[0];
+                          newFormData.soldAt = hoyLocal();
                         }
                         setFormData(newFormData);
                         if (newStatus === 'sold' && !isNew && !tratoVentaId) {
