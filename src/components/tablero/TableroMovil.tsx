@@ -1,8 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { FileSpreadsheet, TrendingUp, TrendingDown, ChevronDown, ChevronUp, X } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, X } from "lucide-react";
 import { calcularAnalitica, hallazgos as calcularHallazgos, RANGOS_DE_PRECIO } from "../../lib/analiticaAgencia";
 import {
-  PERIODOS, rangoDelPeriodo, leer, guardar, dinero, dineroCorto, exportarReporte, ICONO_HALLAZGO,
+  PERIODOS, rangoDelPeriodo, leer, guardar, dinero, dineroCorto, ICONO_HALLAZGO,
   type Periodo, type TableroAgenciaProps,
 } from "./TableroAgencia";
 
@@ -49,15 +49,8 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-extrabold tracking-tight text-slate-800 dark:text-white">Tu agencia en números</h2>
-        <button
-          onClick={() => exportarReporte(a, h, { verCostos: p.verCostos, periodo: CORTO[periodo], agencia: p.agencia }, "todo")}
-          className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-[#D6402A] active:bg-[#A82A17] text-white flex items-center gap-1"
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
-        </button>
-      </div>
+      {/* Sin Excel en el movil: decision de Luis. El reporte se baja en la computadora. */}
+      <h2 className="text-base font-extrabold tracking-tight text-slate-800 dark:text-white">Tu agencia en números</h2>
 
       {/* Periodo */}
       <div className="flex gap-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-1">
