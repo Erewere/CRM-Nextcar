@@ -2416,13 +2416,19 @@ async function startServer() {
   });
 
   // ===== Portal de agencias de nextcar.erewere.com =====
+  // Al pegar la clave en el panel de Hostinger es facil que se cuele un
+  // espacio o unas comillas; la pagina las quita (trim en PHP), asi que aqui
+  // tambien, o las firmas nunca coinciden.
+  const secretoDeLaPagina = () =>
+    String(process.env.PAGINA_NEXTCAR_SECRETO || "").trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+
   //
   // Una sola cuenta por agencia, la del CRM (decision de Luis, sep 2026). La
   // pagina manda a /conectar-pagina; ahi el administrador confirma y este
   // endpoint le da un pase firmado de dos minutos que la pagina comprueba con
   // el mismo secreto. Ver src/lib/pasePagina.ts.
   app.post("/api/pagina/pase", async (req, res) => {
-    const secreto = process.env.PAGINA_NEXTCAR_SECRETO;
+    const secreto = secretoDeLaPagina();
     if (!secreto) return res.status(503).json({ error: "La conexión con la página aún no está configurada." });
     const authHeader = req.headers.authorization || "";
     if (!authHeader.startsWith("Bearer ")) return res.status(401).json({ error: "Inicia sesión de nuevo." });
@@ -2471,7 +2477,7 @@ async function startServer() {
   // lo no publicado, para que vea todo lo que tiene en el CRM. Solo con la
   // firma de la pagina (X-Nextcar-Tiempo / X-Nextcar-Firma). Sin costos.
   app.get("/api/pagina/inventario", async (req, res) => {
-    const secreto = process.env.PAGINA_NEXTCAR_SECRETO;
+    const secreto = secretoDeLaPagina();
     if (!secreto) return res.status(503).json({ error: "No configurado" });
     const agencyId = String(req.query.agencyId || "");
     if (!firmaDeLlamadaValida(agencyId, String(req.headers["x-nextcar-tiempo"] || ""), String(req.headers["x-nextcar-firma"] || ""), secreto)) {
@@ -2515,7 +2521,7 @@ async function startServer() {
   // desde su portal, despues de ver la lista. Idempotente por origenWebId: si
   // la pagina reintenta, no se duplican.
   app.post("/api/pagina/importar", express.json({ limit: "1mb" }), async (req, res) => {
-    const secreto = process.env.PAGINA_NEXTCAR_SECRETO;
+    const secreto = secretoDeLaPagina();
     if (!secreto) return res.status(503).json({ error: "No configurado" });
     const agencyId = String(req.body?.agencyId || "");
     if (!firmaDeLlamadaValida(agencyId, String(req.headers["x-nextcar-tiempo"] || ""), String(req.headers["x-nextcar-firma"] || ""), secreto)) {
