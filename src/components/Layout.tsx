@@ -21,7 +21,6 @@ import {
   Blocks,
   Key,
   Unlink,
-  TrendingUp,
   MessageSquare,
   DollarSign,
   Building2,
@@ -223,12 +222,6 @@ export function Layout() {
       path: "/",
       icon: LayoutDashboard,
       roles: ["admin", "seller"],
-    },
-    {
-      name: "Inteligencia",
-      path: "/intelligence",
-      icon: TrendingUp,
-      roles: ["admin"],
     },
     {
       name: "Inventario",

@@ -42,6 +42,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { useReadOnly } from "../hooks/useReadOnly";
+import { FUENTES } from "../lib/fuentes";
 import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 
@@ -229,6 +230,8 @@ export function Persons() {
   const [nuevaEtapa, setNuevaEtapa] = useState("");
   const [nuevoPropietario, setNuevoPropietario] = useState("");
   const [nuevaVisibilidad, setNuevaVisibilidad] = useState<"all" | "private">("all");
+  // ¿Como llego? Obligatorio al dar de alta a mano (decision de Luis, sep 2026).
+  const [nuevaFuente, setNuevaFuente] = useState("");
 
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -477,6 +480,10 @@ export function Persons() {
   const handleAddPerson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userData) return;
+    if (!nuevaFuente) {
+      alert("Elige cómo llegó este contacto.");
+      return;
+    }
 
     try {
       const primaryPhone = phones
@@ -509,6 +516,7 @@ export function Persons() {
         status: nuevaEtapa,
         visibility: nuevaVisibilidad,
         origin: "manual",
+        fuente: nuevaFuente,
         tags: selectedTags,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -554,6 +562,7 @@ export function Persons() {
       setNuevaEtapa("");
       setNuevoPropietario("");
       setNuevaVisibilidad("all");
+      setNuevaFuente("");
       if (avisoDeTrato) alert(avisoDeTrato);
     } catch (e) {
       console.error(e);
@@ -1485,6 +1494,22 @@ export function Persons() {
                   onChange={(e) => setName(e.target.value)}
                   className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
+              </div>
+              <div>
+                <label className="block text-gray-700 dark:text-slate-300 mb-1">
+                  ¿Cómo llegó? <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={nuevaFuente}
+                  onChange={(e) => setNuevaFuente(e.target.value)}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="">Elige una opción…</option>
+                  {FUENTES.map((f) => (
+                    <option key={f.id} value={f.id}>{f.etiqueta}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-gray-700 dark:text-slate-300 mb-1">

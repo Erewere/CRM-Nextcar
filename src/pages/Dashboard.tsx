@@ -78,6 +78,7 @@ import { LeadScoringEngine } from "../modules/lead-intelligence/services/scoring
 import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
+import { TableroAgencia } from "../components/tablero/TableroAgencia";
 
 
 
@@ -117,8 +118,13 @@ export function Dashboard() {
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
   const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
-  const { conCosto } = useCostosVehiculos();
+  const { conCosto, costoDe, puedeVerCostos } = useCostosVehiculos();
   const vehicles = useMemo(() => conCosto(vehiculosCrudos), [vehiculosCrudos, conCosto]);
+  const costosPorAuto = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    for (const v of vehiculosCrudos) if (v.id && costoDe(v.id) > 0) mapa[v.id] = costoDe(v.id);
+    return mapa;
+  }, [vehiculosCrudos, costoDe]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
@@ -896,6 +902,7 @@ export function Dashboard() {
       </div>
       ) : (
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded border border-gray-200 dark:border-slate-700 shadow-sm">
+          {userData?.role === "admin" ? <div /> : (
           <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
             <div className="flex items-center gap-2 pr-3 border-r border-gray-200 dark:border-slate-700 hidden sm:flex">
               <Filter className="w-4 h-4 text-slate-400" />
@@ -970,6 +977,7 @@ export function Dashboard() {
               Todos
             </button>
           </div>
+          )}
 
           {/* CRM Search Bar */}
           <div className="relative w-full lg:w-96">
@@ -1233,361 +1241,174 @@ export function Dashboard() {
           {/* Desktop Layout */}
           {userData?.role === "admin" ? (
             /* ========================================================================= */
-            /* 1. ADMINISTRATOR DESKTOP VIEW                                             */
+            /* 1. ADMINISTRATOR DESKTOP VIEW: el tablero de la agencia                   */
             /* ========================================================================= */
-            <div className="space-y-6">
-              {/* Admin Headbanner */}
-              <div className="bg-slate-900 text-white rounded p-6 border border-slate-800 shadow-xl relative overflow-hidden">
-                <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 bg-gradient-to-l from-indigo-500 to-transparent pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-widest text-indigo-400 bg-indigo-950 border border-indigo-900/50 px-3 py-1 rounded-full">
-                      Panel de Control General
-                    </span>
-                    <h1 className="text-2xl font-black tracking-tight text-white mt-3">
-                      Consola de Administración: {agencyName || "Nextcar Agency"}
-                    </h1>
-                    <p className="text-slate-400 text-xs mt-1">
-                      Monitoreo en tiempo real de ingresos, rendimiento de asesores e inteligencia comercial.
-                    </p>
-                  </div>
-                  <div className="bg-slate-800 border border-slate-700/50 rounded px-4 py-3 flex items-center gap-3">
-                    <Activity className="w-5 h-5 text-indigo-400 animate-pulse" />
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Estado de Agencia</p>
-                      <p className="text-sm font-extrabold text-slate-200">Operación Activa</p>
+            <TableroAgencia
+              agencia={agencyName}
+              vehiculos={vehiculosCrudos}
+              costos={costosPorAuto}
+              verCostos={puedeVerCostos}
+              clientes={clients}
+              tratos={deals}
+              usuarios={users}
+              etapas={pipelineStages}
+              onAbrirVehiculo={(id) => {
+                const v = vehicles.find((x) => x.id === id);
+                if (v) setSelectedVehicle(v);
+              }}
+              pendientes={
+                <div className="space-y-4">
+                {missingChecklistVehicles.length > 0 && (
+                  <div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-500 rounded p-4 shadow-sm mb-6 flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+                      <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                        Alertas de Inventario (Checklist Faltantes)
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {missingChecklistVehicles.map((v, i) => (
+                        <div 
+                          key={v.id || i} 
+                          onClick={() => setSelectedVehicle(v)}
+                          className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/50 p-3 rounded shadow-sm text-sm cursor-pointer hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-md transition-all group"
+                        >
+                          <div className="font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
+                             <span className="flex items-center gap-1.5 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                               {v.make} {v.model}
+                               <ExternalLink className="w-3.5 h-3.5 text-amber-500 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
+                             </span>
+                             <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{v.year}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{v.vin || 'Sin VIN'}</p>
+                          <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/30 p-2 rounded flex items-center justify-between gap-1">
+                            <span className="truncate">Faltan: {v.missingItems.join(', ')}</span>
+                            <span className="text-[10px] font-bold underline text-amber-800 dark:text-amber-300 shrink-0 group-hover:text-amber-900 dark:group-hover:text-amber-200">
+                              Ver Vehículo →
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Admin KPIs */}
-              {missingChecklistVehicles.length > 0 && (
-                <div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-500 rounded p-4 shadow-sm mb-6 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
-                    <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300">
-                      Alertas de Inventario (Checklist Faltantes)
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {missingChecklistVehicles.map((v, i) => (
-                      <div 
-                        key={v.id || i} 
-                        onClick={() => setSelectedVehicle(v)}
-                        className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/50 p-3 rounded shadow-sm text-sm cursor-pointer hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-md transition-all group"
-                      >
-                        <div className="font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
-                           <span className="flex items-center gap-1.5 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-                             {v.make} {v.model}
-                             <ExternalLink className="w-3.5 h-3.5 text-amber-500 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
-                           </span>
-                           <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{v.year}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{v.vin || 'Sin VIN'}</p>
-                        <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/30 p-2 rounded flex items-center justify-between gap-1">
-                          <span className="truncate">Faltan: {v.missingItems.join(', ')}</span>
-                          <span className="text-[10px] font-bold underline text-amber-800 dark:text-amber-300 shrink-0 group-hover:text-amber-900 dark:group-hover:text-amber-200">
-                            Ver Vehículo →
+                )}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                    {/* Mayor Lead Score Panel for Admin */}
+                    <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5 flex flex-col">
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/30">
+                            <Flame className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500/10" />
+                            Lead Intelligence
                           </span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div 
-                  onClick={() => setIsRevenueModalOpen(true)}
-                  className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md cursor-pointer transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
-                    <DollarSign className="w-12 h-12 text-emerald-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Ingresos de Agencia</p>
-                    <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
-                    </h2>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-3 flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                    Ingresos brutos por ventas cerradas
-                  </p>
-                </div>
-
-                <div 
-                  onClick={() => setIsRevenueModalOpen(true)}
-                  className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-md cursor-pointer transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
-                    <TrendingUp className="w-12 h-12 text-indigo-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Margen de Utilidad Bruta</p>
-                    <h2 className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalProfit)}
-                    </h2>
-                  </div>
-                  <p className="text-[11px] text-indigo-500 mt-3 flex items-center gap-1 font-medium">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Ganancia estimada (Venta - Compra)
-                  </p>
-                </div>
-
-                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
-                    <Users className="w-12 h-12 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Prospectos en Agencia</p>
-                    <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">
-                      {filteredClients.length} <span className="text-xs text-slate-400 font-normal">leads</span>
-                    </h2>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-3 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-blue-500" />
-                    {activeContacts.length} prospectos activos en seguimiento
-                  </p>
-                </div>
-
-                <div className="bg-white dark:bg-slate-800 p-6 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between hover:shadow-sm transition-all relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
-                    <Target className="w-12 h-12 text-orange-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Conversión de la Agencia</p>
-                    <h2 className="text-2xl font-black text-orange-600 dark:text-orange-400">
-                      {conversionRate}%
-                    </h2>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-3 flex items-center gap-1">
-                    <Award className="w-3.5 h-3.5 text-orange-500" />
-                    Porcentaje de cierre sobre base total
-                  </p>
-                </div>
-              </div>
-
-              {/* Admin Main Grid */}
-              <div className="flex flex-col gap-6">
-                
-                {/* Left Column (8/12) */}
-                <div className="space-y-6">
-                  {/* Advisor Performance Board */}
-                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6 overflow-hidden">
-                    <div className="flex justify-between items-center mb-6">
-                      <div>
-                        <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                          <UserCheck className="w-5 h-5 text-indigo-500" />
-                          Rendimiento de Asesores de Ventas
+                        <h3 className="text-base font-black text-slate-800 dark:text-slate-100 mt-2">
+                          Top Leads con Mayor Lead Score
                         </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Métricas de conversión y volumen de ventas generados por el equipo.</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Oportunidades más calientes en la agencia ordenadas por probabilidad de éxito.
+                        </p>
                       </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-gray-200 dark:border-slate-700 pb-3 text-slate-400 text-[11px] uppercase font-black tracking-wider">
-                            <th className="py-3 px-2">Asesor</th>
-                            <th className="py-3 text-center">Prospectos</th>
-                            <th className="py-3 text-center">Cierres</th>
-                            <th className="py-3 text-center">Tasa Cierre</th>
-                            <th className="py-3 text-right">Ventas ($)</th>
-                            <th className="py-3 text-right pr-2">Utilidad Margen</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                          {sellerPerformance.map((seller) => (
-                            <tr key={seller.id} className="border-b border-gray-100 dark:border-slate-800 last:border-0">
-                              <td className="py-4 px-2 flex items-center gap-3">
-                                {seller.photoURL ? (
-                                  <img src={seller.photoURL} alt={seller.name} className="w-8 h-8 rounded-full object-cover border border-gray-200" referrerPolicy="no-referrer" />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-inner">
-                                    {seller.name.substring(0, 2).toUpperCase()}
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{seller.name}</p>
-                                  <p className="text-[10px] text-slate-400">Asesor de Ventas</p>
+  
+                      <div className="space-y-3 divide-y divide-slate-100 dark:divide-slate-700/50">
+                        {clientsWithScores.slice(0, 5).map((client, idx) => {
+                          const sellerObj = allSellersAndAdmins.find(u => u.id === client.sellerId);
+                          return (
+                            <div 
+                              key={`admin-lead-${client.id}`}
+                              onClick={() => setSelectedClient(client)}
+                              className="pt-3 first:pt-0 group cursor-pointer"
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0">
+                                  <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                                    {client.name}
+                                  </h4>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mt-0.5 truncate">
+                                    {getWantedTitle(client)}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
+                                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                                    Asesor: <span className="font-semibold text-slate-600 dark:text-slate-300">{sellerObj?.name || "Sin asignar"}</span>
+                                  </p>
                                 </div>
-                              </td>
-                              <td className="py-4 text-center">
-                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{seller.totalClients}</span>
-                                <span className="text-[10px] text-slate-400 block">{seller.activeClients} activos</span>
-                              </td>
-                              <td className="py-4 text-center">
-                                <span className="inline-block bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full text-xs font-extrabold border border-emerald-100 dark:border-emerald-900/30">
-                                  {seller.wonClients}
-                                </span>
-                              </td>
-                              <td className="py-4 text-center font-bold text-slate-800 dark:text-slate-200 text-sm">
-                                {seller.conversionRate}%
-                              </td>
-                              <td className="py-4 text-right font-black text-slate-900 dark:text-slate-100 text-sm">
-                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(seller.revenue)}
-                              </td>
-                              <td className="py-4 text-right pr-2 font-black text-indigo-600 dark:text-indigo-400 text-sm">
-                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(seller.profit)}
-                              </td>
-                            </tr>
-                          ))}
-                          {sellerPerformance.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="py-8 text-center text-slate-400 italic text-sm">
-                                No hay asesores registrados en la agencia.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Funnel Section */}
-                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
-                          <BarChart2 className="w-5 h-5 text-indigo-500" />
-                          Embudo Comercial Consolidado
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Distribución de oportunidades en las distintas etapas de venta.</p>
+                                <div className="text-right">
+                                  <span className={`inline-block font-black text-xs px-2.5 py-1 rounded-full text-white shadow-sm ${
+                                    client.leadScore >= 75 ? "bg-emerald-500" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
+                                  }`}>
+                                    Score: {client.leadScore}
+                                  </span>
+                                  <span className="block text-[9px] font-black uppercase text-slate-400 tracking-wider mt-1.5">
+                                    Probabilidad {client.probabilityCategory}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {clientsWithScores.length === 0 && (
+                          <div className="py-8 text-center text-slate-400 italic text-xs">
+                            No hay prospectos activos con Lead Score calculado.
+                          </div>
+                        )}
                       </div>
                     </div>
-                    
-                    <div className="h-[220px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <FunnelChart>
-                          <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                          <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                            {funnelData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Funnel>
-                        </FunnelChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column (4/12) */}
-                <div className="space-y-6">
-                  
-                  {/* Mayor Lead Score Panel for Admin */}
-                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5 flex flex-col">
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/30">
-                          <Flame className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500/10" />
-                          Lead Intelligence
-                        </span>
-                      </div>
-                      <h3 className="text-base font-black text-slate-800 dark:text-slate-100 mt-2">
-                        Top Leads con Mayor Lead Score
+  
+                    {/* Inactivity & Alertas for Admin */}
+                    <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5">
+                      <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 mb-4">
+                        <ShieldAlert className="w-4.5 h-4.5 text-red-500" />
+                        Alertas de Inactividad de Agencia
                       </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Oportunidades más calientes en la agencia ordenadas por probabilidad de éxito.
-                      </p>
-                    </div>
-
-                    <div className="space-y-3 divide-y divide-slate-100 dark:divide-slate-700/50">
-                      {clientsWithScores.slice(0, 5).map((client, idx) => {
-                        const sellerObj = allSellersAndAdmins.find(u => u.id === client.sellerId);
-                        return (
-                          <div 
-                            key={`admin-lead-${client.id}`}
-                            onClick={() => setSelectedClient(client)}
-                            className="pt-3 first:pt-0 group cursor-pointer"
-                          >
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="min-w-0">
-                                <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                                  {client.name}
-                                </h4>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mt-0.5 truncate">
-                                  {getWantedTitle(client)}
+                      <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                        {inactiveAlerts.map((alert, index) => {
+                          const sellerObj = allSellersAndAdmins.find(u => u.id === alert.task.sellerId);
+                          const targetClient = alert.client || clients.find(c => c.id === alert.task.clientId);
+                          return (
+                            <div 
+                              key={`admin-alert-${alert.task.id}-${index}`}
+                              onClick={() => {
+                                if (targetClient) {
+                                  setSelectedClient(targetClient);
+                                }
+                              }}
+                              className={`p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded transition-all group ${
+                                targetClient 
+                                  ? "cursor-pointer hover:bg-red-100/70 dark:hover:bg-red-900/30 hover:border-red-300 dark:hover:border-red-700 shadow-2xs" 
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <p className="text-xs font-black text-slate-800 dark:text-slate-200 line-clamp-1 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors">
+                                  {alert.task.title}
                                 </p>
-                                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
-                                  <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                                  Asesor: <span className="font-semibold text-slate-600 dark:text-slate-300">{sellerObj?.name || "Sin asignar"}</span>
-                                </p>
+                                {targetClient && (
+                                  <span className="text-[10px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1 shrink-0 bg-red-100/80 dark:bg-red-900/40 px-1.5 py-0.5 rounded group-hover:bg-red-200 dark:group-hover:bg-red-800/60 transition-colors">
+                                    Ver Prospecto <ExternalLink className="w-3 h-3" />
+                                  </span>
+                                )}
                               </div>
-                              <div className="text-right">
-                                <span className={`inline-block font-black text-xs px-2.5 py-1 rounded-full text-white shadow-sm ${
-                                  client.leadScore >= 75 ? "bg-emerald-500" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                                }`}>
-                                  Score: {client.leadScore}
-                                </span>
-                                <span className="block text-[9px] font-black uppercase text-slate-400 tracking-wider mt-1.5">
-                                  Probabilidad {client.probabilityCategory}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {clientsWithScores.length === 0 && (
-                        <div className="py-8 text-center text-slate-400 italic text-xs">
-                          No hay prospectos activos con Lead Score calculado.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Inactivity & Alertas for Admin */}
-                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5">
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 mb-4">
-                      <ShieldAlert className="w-4.5 h-4.5 text-red-500" />
-                      Alertas de Inactividad de Agencia
-                    </h3>
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
-                      {inactiveAlerts.map((alert, index) => {
-                        const sellerObj = allSellersAndAdmins.find(u => u.id === alert.task.sellerId);
-                        const targetClient = alert.client || clients.find(c => c.id === alert.task.clientId);
-                        return (
-                          <div 
-                            key={`admin-alert-${alert.task.id}-${index}`}
-                            onClick={() => {
-                              if (targetClient) {
-                                setSelectedClient(targetClient);
-                              }
-                            }}
-                            className={`p-3 bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded transition-all group ${
-                              targetClient 
-                                ? "cursor-pointer hover:bg-red-100/70 dark:hover:bg-red-900/30 hover:border-red-300 dark:hover:border-red-700 shadow-2xs" 
-                                : ""
-                            }`}
-                          >
-                            <div className="flex justify-between items-start gap-2">
-                              <p className="text-xs font-black text-slate-800 dark:text-slate-200 line-clamp-1 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors">
-                                {alert.task.title}
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                Cliente: <span className="font-bold text-slate-700 dark:text-slate-200">{targetClient?.name || "N/A"}</span>
                               </p>
-                              {targetClient && (
-                                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1 shrink-0 bg-red-100/80 dark:bg-red-900/40 px-1.5 py-0.5 rounded group-hover:bg-red-200 dark:group-hover:bg-red-800/60 transition-colors">
-                                  Ver Prospecto <ExternalLink className="w-3 h-3" />
-                                </span>
-                              )}
+                              <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-800 text-[9px] text-slate-400">
+                                <span>Vencimiento: {alert.task.dueDate}</span>
+                                <span className="font-bold text-red-600 dark:text-red-400">Responsable: {sellerObj?.name || "Asesor"}</span>
+                              </div>
                             </div>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                              Cliente: <span className="font-bold text-slate-700 dark:text-slate-200">{targetClient?.name || "N/A"}</span>
-                            </p>
-                            <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-800 text-[9px] text-slate-400">
-                              <span>Vencimiento: {alert.task.dueDate}</span>
-                              <span className="font-bold text-red-600 dark:text-red-400">Responsable: {sellerObj?.name || "Asesor"}</span>
-                            </div>
+                          );
+                        })}
+                        {inactiveAlerts.length === 0 && (
+                          <div className="py-8 text-center text-slate-400 italic text-xs">
+                            Excelente. No hay tareas en inactividad crítica.
                           </div>
-                        );
-                      })}
-                      {inactiveAlerts.length === 0 && (
-                        <div className="py-8 text-center text-slate-400 italic text-xs">
-                          Excelente. No hay tareas en inactividad crítica.
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              }
+            />
           ) : (
             /* ========================================================================= */
             /* 2. ADVISOR / SELLER DESKTOP VIEW                                          */

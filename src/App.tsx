@@ -18,7 +18,6 @@ import { auth } from './lib/firebase';
 import { signOut } from 'firebase/auth';
 
 import { Integrations } from './pages/Integrations';
-import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
 import { PlatformPanel } from './pages/PlatformPanel';
 import { ClosedSales } from './pages/ClosedSales';
 import { PaymentInventory } from './pages/PaymentInventory';
@@ -99,7 +98,8 @@ export default function App() {
           
           <Route path="/" element={<ProtectedRoute><ChatsPendientesProvider><Layout /></ChatsPendientesProvider></ProtectedRoute>}>
             <Route index element={<Inicio />} />
-            <Route path="intelligence" element={<ProtectedRoute requireRole={['admin']}><IntelligenceDashboard /></ProtectedRoute>} />
+            {/* Inteligencia se integro al tablero del Dashboard (sep 2026). */}
+            <Route path="intelligence" element={<Navigate to="/" replace />} />
             <Route path="platform" element={<ProtectedRoute requireRole={['master']}><PlatformPanel /></ProtectedRoute>} />
             <Route path="inventory" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />

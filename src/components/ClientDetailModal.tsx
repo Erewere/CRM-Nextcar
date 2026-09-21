@@ -38,6 +38,7 @@ import {
   Tag,
   Clock,
   Building2,
+  Globe,
   Eye,
   Users,
   Edit2, Target, Calculator, Lock, Car, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Search,
@@ -56,6 +57,7 @@ import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 import { aplicarEtapaAlTrato } from "../lib/etapaDelContacto";
+import { FUENTES } from "../lib/fuentes";
 
 import { puedeVenderSinAprobacion, vehiculoVendido, esElCompradorDelVehiculo } from "../lib/ventaDeVehiculo";
 interface Props {
@@ -1168,6 +1170,13 @@ export function ClientDetailModal({
     // Intercept to show the Wanted Vehicle form if needed
     if (hasBuscaAutoTag && !showWantedVehicleMenu && (!formData.wantedVehicle || !formData.wantedVehicle.make)) {
       setShowWantedVehicleMenu(true);
+      return;
+    }
+
+    // ¿Como llego? Obligatorio cuando nace una persona nueva (decision de
+    // Luis, sep 2026). Si se eligio una persona que ya existe, no se pide.
+    if (isNew && !selectedPersonId && !(formData as any).fuente) {
+      alert("Elige cómo llegó este contacto.");
       return;
     }
 
@@ -2515,6 +2524,27 @@ export function ClientDetailModal({
                       className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
                     />
                   </div>
+                  {!(isNew && selectedPersonId) && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Globe className="w-4 h-4 text-gray-400" />
+                      <select
+                        name="fuente"
+                        value={(formData as any).fuente || ""}
+                        onChange={handleChange}
+                        title="¿Cómo llegó?"
+                        className={`w-full bg-transparent text-sm py-1 border-b focus:border-blue-600 focus:outline-none dark:bg-slate-800 ${
+                          isNew && !(formData as any).fuente
+                            ? "border-red-300 text-slate-500"
+                            : "border-transparent hover:border-gray-300 dark:text-slate-200"
+                        }`}
+                      >
+                        <option value="">{isNew ? "¿Cómo llegó? (obligatorio)" : "¿Cómo llegó? Sin dato"}</option>
+                        {FUENTES.map((f) => (
+                          <option key={f.id} value={f.id}>{f.etiqueta}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div
                     className="flex items-center gap-2 mt-2 relative"
                     ref={phoneInputRef}

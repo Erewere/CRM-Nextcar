@@ -176,6 +176,8 @@ export interface Client {
   soldAt?: string;
   saleDetails?: SaleDetails;
   origin: "manual" | "whatsapp" | "messenger" | "web" | "website" | "google_contacts" | "excel_import" | "facebook" | "instagram";
+  /** ¿Como llego? Uno de FUENTES (src/lib/fuentes.ts). Los viejos no lo traen. */
+  fuente?: string;
   tags?: string[];
   dismissedMatches?: string[];
   wantedVehicle?: {

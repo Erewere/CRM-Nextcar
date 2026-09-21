@@ -4,6 +4,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // puras, sin SDK, asi que valen igual de los dos lados. Duplicarlas aqui era
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
+import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
@@ -2108,6 +2109,8 @@ async function startServer() {
           email: "",
           status: "new",
           origin: origin,
+          // ¿Como llego? Lo que entra solo se marca solo (ver src/lib/fuentes.ts).
+          ...(fuenteDesdeOrigen(origin) ? { fuente: fuenteDesdeOrigen(origin) } : {}),
           sellerId: assignedSeller,
           ...(externalId ? { messengerPsid: externalId } : {}),
           createdAt: FieldValue.serverTimestamp(),
@@ -2675,6 +2678,7 @@ async function startServer() {
         email: email || "",
         vehicle: vehicle || "",
         origin: origin || "website",
+        ...(fuenteDesdeOrigen(origin || "website") ? { fuente: fuenteDesdeOrigen(origin || "website") } : {}),
         status: "new",
         sellerId: validatedSellerId,
         createdAt: FieldValue.serverTimestamp(),
@@ -4880,6 +4884,7 @@ ${extra}
           email: email || "",
           vehicle: vehicle || "",
           origin: origin || "mcp_ai",
+          ...(fuenteDesdeOrigen(origin) ? { fuente: fuenteDesdeOrigen(origin) } : {}),
           // Queda a nombre de quien uso su clave, no de "la agencia".
           sellerId: sesion?.userId || null,
           status: "new",
