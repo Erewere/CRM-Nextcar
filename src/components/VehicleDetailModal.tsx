@@ -854,9 +854,14 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     setErrorStatus(null);
     setUploading(true);
     try {
+      // Igual que la pagina de Nextcar (optimizarImagen en su db.php): lado
+      // mayor de 1600 px, calidad 82% y siempre JPG. Con el tope de 1 MB de
+      // antes, la foto tipica quedaba en ~650 KB y los PNG pasaban tal cual.
       const options = {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1920,
+        maxSizeMB: 0.5,
+        maxWidthOrHeight: 1600,
+        initialQuality: 0.82,
+        fileType: 'image/jpeg',
         useWebWorker: true
       };
       
@@ -866,7 +871,8 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const compressedFile = await imageCompression(file, options);
-        const fileName = `${Date.now()}_${compressedFile.name}`;
+        const base = (file.name || 'foto').replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '_').slice(0, 60);
+        const fileName = `${Date.now()}_${i}_${base}.jpg`;
         const storageRef = ref(storage, `users/${userData?.id}/vehicles/${vId}/${fileName}`);
         await uploadBytes(storageRef, compressedFile);
         const url = await getDownloadURL(storageRef);
