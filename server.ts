@@ -2281,6 +2281,82 @@ async function startServer() {
     }
   });
 
+  // ===== Catalogo para nextcar.erewere.com =====
+  //
+  // La pagina de Nextcar (PHP, con su propia base) copia de aqui los autos que
+  // cada agencia marco con «Publicar en nextcar.erewere.com». Solo salen los
+  // disponibles y con al menos una foto; lo vendido o apartado deja de salir, y
+  // la pagina lo quita en su siguiente vuelta. Todo lo que devuelve es lo que
+  // de todos modos se ve en la pagina: nada de costos, compradores ni notas.
+  const CACHE_CATALOGO_WEB_MS = 60 * 1000;
+  let cacheCatalogoWeb: { momento: number; datos: any } | null = null;
+
+  app.get("/api/public/v1/catalogo-web", async (_req, res) => {
+    try {
+      if (cacheCatalogoWeb && Date.now() - cacheCatalogoWeb.momento < CACHE_CATALOGO_WEB_MS) {
+        return res.json(cacheCatalogoWeb.datos);
+      }
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+
+      // Una sola igualdad: no necesita indice compuesto.
+      const snap = await adminDb.collection("vehicles").where("publicarEnWeb", "==", true).get();
+      const candidatos = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as any) }))
+        .filter((v) => {
+          const disponible = !v.status || v.status === "available";
+          const fotos = (Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length) || v.photoUrl;
+          return disponible && fotos && v.agencyId && v.agencyId !== "unassigned" && !v.isDeleted;
+        });
+
+      const idsAgencias = [...new Set(candidatos.map((v) => String(v.agencyId)))];
+      const agencias = new Map<string, any>();
+      await Promise.all(idsAgencias.map(async (id) => {
+        const a = await adminDb.collection("agencies").doc(id).get();
+        if (a.exists) agencias.set(id, a.data());
+      }));
+
+      const autos = candidatos
+        .filter((v) => agencias.has(String(v.agencyId)))
+        .map((v) => {
+          const a = agencias.get(String(v.agencyId)) || {};
+          const fotos = (Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length ? v.photoUrls.filter(Boolean) : [v.photoUrl]).slice(0, 30);
+          return {
+            crmId: v.id,
+            agencyId: v.agencyId,
+            agencia: {
+              nombre: a.name || "",
+              telefono: a.phone || "",
+              whatsapp: a.phoneWhatsApp || a.phone || "",
+              direccion: a.address || "",
+            },
+            marca: String(v.make || "").trim(),
+            modelo: String(v.model || "").trim(),
+            anio: Number(v.year) || null,
+            precio: Number(v.price) || 0,
+            km: Number(v.km) || 0,
+            transmision: v.transmission || "",
+            carroceria: v.bodyType || "",
+            color: v.color || "",
+            pasajeros: Number(v.passengers) || null,
+            cilindros: Number(v.cylinders) || null,
+            litros: Number(v.liters) || null,
+            equipamiento: v.equipment || "",
+            descripcion: v.descripcionWeb || "",
+            fotos,
+            actualizado: v.updatedAt || v.createdAt || null,
+          };
+        });
+
+      const datos = { generadoEn: new Date().toISOString(), total: autos.length, autos };
+      cacheCatalogoWeb = { momento: Date.now(), datos };
+      res.json(datos);
+    } catch (e: any) {
+      console.error("Error armando el catalogo web:", e);
+      res.status(500).json({ error: "No se pudo armar el catalogo" });
+    }
+  });
+
   // ===== Permiso de Google que se renueva solo =====
   //
   // El permiso que Google entrega al navegador dura una hora y no se puede

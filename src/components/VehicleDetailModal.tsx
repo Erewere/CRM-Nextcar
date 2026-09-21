@@ -1433,6 +1433,52 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                   <input type="url" placeholder="https://..." value={formData.websiteUrl || ''} onChange={e=>setFormData({...formData, websiteUrl: e.target.value})} className="w-full px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
                 </div>
 
+                {/* Publicar en la pagina de Nextcar. Decide la agencia, auto por auto
+                    (decision de Luis, sep 2026): nada sale sin que alguien lo marque.
+                    La pagina lo lee de /api/public/v1/catalogo-web. */}
+                {(() => {
+                  const publicado = !!(formData as any).publicarEnWeb;
+                  const puedePublicar = !isReadOnly && userData?.role !== 'seller';
+                  const tieneFotos = !!((formData.photoUrls && formData.photoUrls.length) || formData.photoUrl);
+                  const disponible = !formData.status || formData.status === 'available';
+                  return (
+                    <div className="p-3 rounded border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 space-y-2">
+                      <label className={`flex items-start gap-2.5 ${puedePublicar ? 'cursor-pointer' : 'opacity-70'}`}>
+                        <input
+                          type="checkbox"
+                          className="mt-1 w-4 h-4 accent-[#D6402A]"
+                          checked={publicado}
+                          disabled={!puedePublicar}
+                          onChange={e => setFormData({ ...formData, publicarEnWeb: e.target.checked } as any)}
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Publicar en nextcar.erewere.com</span>
+                          <span className="block text-xs text-slate-500 dark:text-slate-400">
+                            Aparece en la página en unos minutos. Si se vende o se aparta, se quita solo.
+                            {!puedePublicar && !isReadOnly && ' Solo un administrador puede cambiarlo.'}
+                          </span>
+                        </span>
+                      </label>
+                      {publicado && !tieneFotos && (
+                        <p className="text-xs font-semibold text-[#A82A17] dark:text-[#F2705B]">Sin fotos no se publica: sube al menos una.</p>
+                      )}
+                      {publicado && tieneFotos && !disponible && (
+                        <p className="text-xs text-slate-500">No está disponible, así que por ahora no aparece en la página.</p>
+                      )}
+                      {publicado && (
+                        <textarea
+                          rows={3}
+                          value={(formData as any).descripcionWeb || ''}
+                          disabled={!puedePublicar}
+                          onChange={e => setFormData({ ...formData, descripcionWeb: e.target.value } as any)}
+                          placeholder="Texto de venta para la página (opcional): estado, servicios, por qué vale la pena…"
+                          className="w-full px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200"
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cilindros</label>

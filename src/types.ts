@@ -82,6 +82,10 @@ export interface Vehicle {
   buyerName?: string;
   saleDetails?: SaleDetails;
   checklist?: VehicleChecklist;
+  /** La agencia pidio publicarlo en nextcar.erewere.com (ver /api/public/v1/catalogo-web). */
+  publicarEnWeb?: boolean;
+  /** Texto de venta para la pagina; opcional. */
+  descripcionWeb?: string;
 }
 
 export interface Agency {
