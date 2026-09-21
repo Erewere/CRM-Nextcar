@@ -316,9 +316,10 @@ export function Kanban() {
         dataDocs = dataDocs.filter((d) => d.data().sellerId === userData.id);
       }
       const data = dataDocs.map((d) => {
+        // El id del documento va despues: un id guardado adentro no lo pisa.
         return {
-          id: d.id,
           ...d.data(),
+          id: d.id,
         } as Task;
       });
       setTasks(data);
