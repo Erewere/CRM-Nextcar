@@ -91,7 +91,7 @@ export function Chats() {
     const unsubscribe = onSnapshot(qChats, (snapshot) => {
       const list: ChatRoom[] = [];
       snapshot.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as ChatRoom);
+        list.push({ ...doc.data(), id: doc.id } as ChatRoom);
       });
       
       // Sort by last message date desc in JS because composite indexes on array-contains + orderBy require configuration
@@ -129,7 +129,7 @@ export function Chats() {
     const unsubscribe = onSnapshot(mQuery, (snapshot) => {
       const list: Message[] = [];
       snapshot.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as Message);
+        list.push({ ...doc.data(), id: doc.id } as Message);
       });
       setMessages(list);
 
@@ -199,7 +199,7 @@ export function Chats() {
       const refDoc = doc(db, 'vehicles', vehicleId);
       getDoc(refDoc).then(snap => {
         if (snap.exists()) {
-          setVehicle({ id: snap.id, ...snap.data() });
+          setVehicle({ ...snap.data(), id: snap.id });
         }
       }).catch(err => console.error("Error fetching vehicle for chat preview", err));
     }, [vehicleId]);

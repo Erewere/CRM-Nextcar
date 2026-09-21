@@ -129,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 agencyUnsubscribe = onSnapshot(doc(db, 'agencies', newUserData.agencyId), (agencyDoc) => {
                   console.log("AuthContext: Agency snapshot received. Exists:", agencyDoc.exists());
                   if (agencyDoc.exists()) {
-                    const agencyDataObj = { id: agencyDoc.id, ...agencyDoc.data() } as Agency;
+                    const agencyDataObj = { ...agencyDoc.data(), id: agencyDoc.id } as Agency;
                     console.log("AuthContext: Agency data loaded:", agencyDataObj);
                     setAgencyData(agencyDataObj);
                   } else {

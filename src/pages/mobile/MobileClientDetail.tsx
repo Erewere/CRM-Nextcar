@@ -264,7 +264,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     if (vehId) {
       getDoc(doc(db, 'vehicles', vehId)).then(snap => {
         if (snap.exists()) {
-          setAssignedVehicle({ id: snap.id, ...snap.data() } as Vehicle);
+          setAssignedVehicle({ ...snap.data(), id: snap.id } as Vehicle);
         }
       }).catch(err => console.error("Error fetching vehicle:", err));
     }

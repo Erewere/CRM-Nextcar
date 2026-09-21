@@ -1399,7 +1399,16 @@ export function ClientDetailModal({
           tratoGuardado = await guardarTratoSiExiste(finalDealId, sanitizeFirestoreData(dealDataToUpdate));
         }
 
-        await setDoc(doc(db, "clients", finalClientId as string), sanitizeFirestoreData(dataToUpdate), { merge: true });
+        // La tarjeta del embudo trae el id del TRATO y originalClientId. Se
+        // copiaban tal cual al contacto: 22 contactos quedaron con el id de su
+        // trato guardado adentro, y toda pantalla que armaba el contacto como
+        // { id: doc.id, ...datos } escribia despues en un documento que no
+        // existe -- Firebase lo rechaza como "Missing or insufficient
+        // permissions" (poner una etiqueta desde el chat, por ejemplo).
+        const paraElContacto: any = { ...dataToUpdate };
+        delete paraElContacto.id;
+        delete paraElContacto.originalClientId;
+        await setDoc(doc(db, "clients", finalClientId as string), sanitizeFirestoreData(paraElContacto), { merge: true });
 
         // Elegir una etapa en la ficha de un contacto (no de un trato) movia
         // solo la etiqueta del contacto: el embudo se arma con `deals`, asi

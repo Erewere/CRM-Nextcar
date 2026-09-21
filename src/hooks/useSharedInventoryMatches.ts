@@ -190,7 +190,7 @@ export function useSharedInventoryMatches() {
     const unsubscribeClients = onSnapshot(clientsQ, (snap) => {
       const activeClients: Client[] = [];
       snap.forEach((d) => {
-        const c = { id: d.id, ...d.data() } as Client;
+        const c = { ...d.data(), id: d.id } as Client;
         if (
           !c.isDeleted &&
           c.status !== "won" &&

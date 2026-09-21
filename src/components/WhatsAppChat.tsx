@@ -113,7 +113,7 @@ export function WhatsAppChat() {
     if (!userData?.agencyId) return;
     const q = query(collection(db, 'whatsappMessages'), where('agencyId', '==', userData.agencyId));
     const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as WaMessage)));
+      setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id } as WaMessage)));
       setLoading(false);
     }, (err) => {
       console.error('Error cargando mensajes de WhatsApp:', err);
@@ -127,7 +127,7 @@ export function WhatsAppChat() {
     const q = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
     const unsub = onSnapshot(q, (snap) => {
       const map: Record<string, ClientLite> = {};
-      snap.docs.forEach(d => { map[d.id] = { id: d.id, ...d.data() } as ClientLite; });
+      snap.docs.forEach(d => { map[d.id] = { ...d.data(), id: d.id } as ClientLite; });
       setClients(map);
     }, (err) => console.error('Error cargando contactos:', err));
     return () => unsub();
@@ -138,7 +138,7 @@ export function WhatsAppChat() {
     const q = query(collection(db, 'users'), where('agencyId', '==', userData.agencyId));
     const unsub = onSnapshot(q, (snap) => {
       setSellers(snap.docs
-        .map(d => ({ id: d.id, ...(d.data() as any) }))
+        .map(d => ({ ...(d.data() as any), id: d.id }))
         .filter((u: any) => u.role === 'seller')
         .map((u: any) => ({ id: u.id, name: u.name || u.email })));
     }, (err) => console.error('Error cargando vendedores:', err));

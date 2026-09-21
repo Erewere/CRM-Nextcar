@@ -56,7 +56,7 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
     const unsub = onSnapshot(q, (snap) => {
       const d = snap.docs.find(x => x.id === clientId);
       if (!d) return;
-      const data = { id: d.id, ...(d.data() as any) };
+      const data = { ...(d.data() as any), id: d.id };
       setCliente(data);
       // El borrador solo se recarga si el vendedor no esta escribiendo, para que
       // un mensaje entrante no le borre lo que lleva tecleado.
@@ -82,7 +82,7 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
     if (!userData?.agencyId || !abriendoAutos || autos.length) return;
     getDocs(query(collection(db, 'vehicles'), where('agencyId', '==', userData.agencyId)))
       .then(s => setAutos(s.docs
-        .map(d => ({ id: d.id, ...(d.data() as any) }))
+        .map(d => ({ ...(d.data() as any), id: d.id }))
         .filter((v: any) => v.status !== 'sold' && v.status !== 'vendido')))
       .catch(err => console.error('Error cargando inventario:', err));
   }, [userData?.agencyId, abriendoAutos, autos.length]);
@@ -97,7 +97,7 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
       query(collection(db, 'notes'),
         where('agencyId', '==', userData.agencyId),
         where('clientId', '==', clientId)),
-      (snap) => setNotas(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
+      (snap) => setNotas(snap.docs.map(d => ({ ...(d.data() as any), id: d.id }))
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))),
       (err) => console.error('Error cargando notas:', err));
     return () => unsub();
@@ -109,7 +109,7 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
       query(collection(db, 'deals'),
         where('agencyId', '==', userData.agencyId),
         where('clientId', '==', clientId)),
-      (snap) => setTratos(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })).filter(t => !t.isDeleted)),
+      (snap) => setTratos(snap.docs.map(d => ({ ...(d.data() as any), id: d.id })).filter(t => !t.isDeleted)),
       (err) => console.error('Error cargando tratos:', err));
     return () => unsub();
   }, [clientId, userData?.agencyId]);
