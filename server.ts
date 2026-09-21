@@ -6,6 +6,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
 import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
+import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
@@ -2370,8 +2371,10 @@ async function startServer() {
         if (a.exists) agencias.set(id, a.data());
       }));
 
+      // Publicar en la pagina es parte del CRM: si la agencia dejo de pagar (o
+      // se le acabo la prueba), sus autos dejan de salir.
       const autos = candidatos
-        .filter((v) => agencias.has(String(v.agencyId)))
+        .filter((v) => agencias.has(String(v.agencyId)) && hasActiveAccess(agencias.get(String(v.agencyId))))
         .map((v) => {
           const a = agencias.get(String(v.agencyId)) || {};
           const fotos = (Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length ? v.photoUrls.filter(Boolean) : [v.photoUrl]).slice(0, 30);
@@ -2432,7 +2435,15 @@ async function startServer() {
       if (!u || u.role !== "admin" || !u.agencyId || u.agencyId === "unassigned") {
         return res.status(403).json({ error: "Solo el administrador de la agencia puede entrar al portal de la página." });
       }
-      const a = (await adminDb.collection("agencies").doc(String(u.agencyId)).get()).data() || {};
+      const agRef = adminDb.collection("agencies").doc(String(u.agencyId));
+      const a = (await agRef.get()).data() || {};
+      if (!hasActiveAccess(a)) {
+        return res.status(402).json({ error: "Tu suscripción del CRM no está activa. Actívala en Facturación para entrar a la página." });
+      }
+      // Solo las agencias que entraron desde aqui pueden ser consultadas por
+      // la pagina (inventario, importar): aunque se filtrara la clave de la
+      // pagina, no alcanzaria a las agencias que nunca se ligaron.
+      await agRef.set({ paginaLigadaAt: new Date().toISOString() }, { merge: true });
       const pase = firmarPase({
         uid: decoded.uid,
         email: String(u.email || decoded.email || ""),
@@ -2447,6 +2458,15 @@ async function startServer() {
     }
   });
 
+  /** La pagina solo puede pedir cosas de agencias ligadas y con el CRM activo. */
+  async function agenciaDeLaPagina(adminDb: any, agencyId: string): Promise<string | null> {
+    const a = (await adminDb.collection("agencies").doc(agencyId).get()).data();
+    if (!a) return "La agencia no existe";
+    if (!a.paginaLigadaAt) return "La agencia no se ha ligado desde el CRM";
+    if (!hasActiveAccess(a)) return "La suscripción del CRM de la agencia no está activa";
+    return null;
+  }
+
   // El inventario completo de una agencia para su portal en la pagina: tambien
   // lo no publicado, para que vea todo lo que tiene en el CRM. Solo con la
   // firma de la pagina (X-Nextcar-Tiempo / X-Nextcar-Firma). Sin costos.
@@ -2460,6 +2480,8 @@ async function startServer() {
     try {
       const adminDb = getAdminDb();
       if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+      const motivo = await agenciaDeLaPagina(adminDb, agencyId);
+      if (motivo) return res.status(403).json({ error: motivo });
       const snap = await adminDb.collection("vehicles").where("agencyId", "==", agencyId).get();
       const autos = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as any) }))
@@ -2503,9 +2525,8 @@ async function startServer() {
     try {
       const adminDb = getAdminDb();
       if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
-      if (!(await adminDb.collection("agencies").doc(agencyId).get()).exists) {
-        return res.status(400).json({ error: "La agencia no existe" });
-      }
+      const motivo = await agenciaDeLaPagina(adminDb, agencyId);
+      if (motivo) return res.status(403).json({ error: motivo });
       const texto = (x: any, n = 200) => String(x ?? "").trim().slice(0, n);
       const resultado: { siteId: string; crmId: string; nuevo: boolean }[] = [];
       for (const a of autos) {
