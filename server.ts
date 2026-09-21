@@ -2199,25 +2199,74 @@ async function startServer() {
     }
   }
 
-    app.get("/api/proxy-image", async (req, res) => {
+  // Proxy de fotos para armar la ficha en PDF (VehicleDetailModal): el navegador
+  // no puede leer los bytes de Firebase Storage por CORS, así que pasan por aquí.
+  // Solo sirve fotos del Storage de este proyecto. Antes aceptaba cualquier URL
+  // y cualquiera podía usar el servidor para pedir direcciones internas o ajenas.
+  const BUCKETS_DE_FOTOS = new Set([
+    firebaseConfig.storageBucket,
+    `${firebaseConfig.projectId}.appspot.com`,
+  ].filter(Boolean));
+  const FOTO_MAX_BYTES = 15 * 1024 * 1024;
+  const FOTO_TIMEOUT_MS = 10_000;
+
+  const esFotoPermitida = (raw: string): boolean => {
+    let u: URL;
+    try { u = new URL(raw); } catch { return false; }
+    if (u.protocol !== 'https:' || u.username || u.password || u.port) return false;
+    const partes = u.pathname.split('/');
+    // https://firebasestorage.googleapis.com/v0/b/<bucket>/o/<ruta>
+    if (u.hostname === 'firebasestorage.googleapis.com') {
+      return partes[1] === 'v0' && partes[2] === 'b' && BUCKETS_DE_FOTOS.has(partes[3]) && partes[4] === 'o';
+    }
+    // https://storage.googleapis.com/<bucket>/<ruta>
+    if (u.hostname === 'storage.googleapis.com') {
+      return BUCKETS_DE_FOTOS.has(partes[1]);
+    }
+    return false;
+  };
+
+  app.get("/api/proxy-image", async (req, res) => {
     try {
       const url = req.query.url;
-      if (!url || typeof url !== 'string') {
-        return res.status(400).send("Missing url");
+      if (!url || typeof url !== 'string' || !esFotoPermitida(url)) {
+        return res.status(400).send("URL no permitida");
       }
-      const fetchRes = await fetch(url);
-      if (!fetchRes.ok) {
-        return res.status(fetchRes.status).send("Error fetching image");
+      // redirect: 'error' para que un 3xx no nos lleve fuera de la lista.
+      const fetchRes = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(FOTO_TIMEOUT_MS) });
+      if (!fetchRes.ok || !fetchRes.body) {
+        return res.status(502).send("Error fetching image");
       }
-      const buffer = await fetchRes.arrayBuffer();
-      res.set('Content-Type', fetchRes.headers.get('content-type') || 'image/jpeg');
-      // Set CORS headers just in case
-      res.set('Access-Control-Allow-Origin', '*');
+      const tipo = (fetchRes.headers.get('content-type') || '').toLowerCase();
+      // SVG queda fuera: puede llevar scripts y se serviría desde nuestro dominio.
+      if (!tipo.startsWith('image/') || tipo.includes('svg')) {
+        return res.status(415).send("No es una imagen");
+      }
+      const declarado = Number(fetchRes.headers.get('content-length') || 0);
+      if (declarado > FOTO_MAX_BYTES) {
+        return res.status(413).send("Imagen demasiado grande");
+      }
+      const trozos: Buffer[] = [];
+      let total = 0;
+      const lector = fetchRes.body.getReader();
+      while (true) {
+        const { done, value } = await lector.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > FOTO_MAX_BYTES) {
+          await lector.cancel();
+          return res.status(413).send("Imagen demasiado grande");
+        }
+        trozos.push(Buffer.from(value));
+      }
+      res.set('Content-Type', tipo);
+      res.set('X-Content-Type-Options', 'nosniff');
+      res.set('Content-Security-Policy', "default-src 'none'; sandbox");
       res.set('Cache-Control', 'public, max-age=31536000');
-      res.send(Buffer.from(buffer));
+      res.send(Buffer.concat(trozos));
     } catch (err) {
       console.error("Proxy error:", err);
-      res.status(500).send("Error fetching image");
+      if (!res.headersSent) res.status(502).send("Error fetching image");
     }
   });
 
