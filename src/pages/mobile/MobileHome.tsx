@@ -43,6 +43,8 @@ interface MobileHomeProps {
   inactiveAlerts?: any[];
   allClientMatches?: number;
   vehicles?: any[];
+  /** El tablero de la agencia (TableroMovil); reemplaza las cifras de antes. */
+  tablero?: React.ReactNode;
 }
 
 const typeIcons: Record<string, any> = {
@@ -72,7 +74,8 @@ export function MobileHome({
   totalProfit = 0,
   inactiveAlerts = [],
   allClientMatches = 0,
-  vehicles = []
+  vehicles = [],
+  tablero,
 }: MobileHomeProps) {
   
   const navigate = useNavigate();
@@ -230,130 +233,7 @@ export function MobileHome({
           /* ========================================================================= */
           <div className="space-y-6">
             
-            {/* Admin Metrics Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
-                    <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ingresos Totales</p>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-1 truncate">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
-                    <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Utilidad Bruta</p>
-                  <h3 className="text-sm font-black text-indigo-600 dark:text-indigo-400 mt-1 truncate">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalProfit)}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
-                    <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Leads Totales</p>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-1">
-                    {clients.length} <span className="text-[10px] text-slate-400 font-normal">leads</span>
-                  </h3>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
-                    <Target className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tasa Cierre</p>
-                  <h3 className="text-sm font-black text-orange-600 dark:text-orange-400 mt-1">
-                    {conversionRate}%
-                  </h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Advisor Performance Mobile List */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-indigo-500" />
-                <h2 className="text-base font-black text-slate-800 dark:text-white">Rendimiento de Asesores</h2>
-              </div>
-              <div className="space-y-2.5">
-                {sellerPerformance.map((seller) => (
-                  <div key={seller.id} className="bg-white dark:bg-slate-800 rounded p-4 border border-gray-200 dark:border-slate-700 shadow-sm space-y-3">
-                    <div className="flex items-center gap-3">
-                      {seller.photoURL ? (
-                        <img src={seller.photoURL} alt={seller.name} className="w-9 h-9 rounded-full object-cover border border-gray-200" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-inner">
-                          {seller.name.substring(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <h4 className="font-extrabold text-slate-900 dark:text-white text-sm">{seller.name}</h4>
-                        <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Tasa Cierre: {seller.conversionRate}%</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-gray-200 dark:border-slate-750 text-center">
-                      <div>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase">Cierres</p>
-                        <p className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5">{seller.wonClients} de {seller.totalClients}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase">Ventas</p>
-                        <p className="text-xs font-black text-slate-900 dark:text-slate-100 mt-0.5 truncate">
-                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(seller.revenue)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase">Utilidad</p>
-                        <p className="text-xs font-black text-indigo-500 mt-0.5 truncate">
-                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(seller.profit)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {sellerPerformance.length === 0 && (
-                  <p className="text-xs text-slate-400 italic text-center py-4">No hay asesores en la agencia.</p>
-                )}
-              </div>
-            </section>
-
-            {/* Embudo Comercial Horizontal Progress */}
-            <section className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm space-y-4">
-              <div>
-                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-1.5">
-                  <BarChart2 className="w-4 h-4 text-indigo-500" />
-                  Embudo Comercial Consolidador
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Distribución proporcional de leads por etapa</p>
-              </div>
-
-              <div className="space-y-3">
-                {funnelData.map((stage, idx) => (
-                  <div key={`stage-${idx}`} className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="font-bold text-slate-700 dark:text-slate-300">{stage.name}</span>
-                      <span className="font-black text-slate-900 dark:text-slate-100">{stage.value} leads <span className="text-[10px] text-slate-400">({stage.percent}%)</span></span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2">
-                      <div className={clsx("h-2 rounded-full", stage.color)} style={{ width: `${stage.percent}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+            {tablero}
 
             {/* Admin Lead Intelligence (Scores Across Agency) */}
             <section className="space-y-3">

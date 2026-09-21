@@ -79,6 +79,7 @@ import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 import { TableroAgencia } from "../components/tablero/TableroAgencia";
+import { TableroMovil } from "../components/tablero/TableroMovil";
 
 
 
@@ -698,7 +699,31 @@ export function Dashboard() {
           inactiveAlerts={inactiveAlerts}
           allClientMatches={allClientMatches}
           vehicles={vehicles}
+          tablero={
+            userData?.role === "admin" ? (
+              <TableroMovil
+                agencia={agencyName}
+                vehiculos={vehiculosCrudos}
+                costos={costosPorAuto}
+                verCostos={puedeVerCostos}
+                clientes={clients}
+                tratos={deals}
+                usuarios={users}
+                etapas={pipelineStages}
+                parcial={userData.adminMobileViewAllContacts === false}
+                onAbrirVehiculo={(id) => {
+                  const v = vehicles.find((x) => x.id === id);
+                  if (v) setSelectedVehicle(v);
+                }}
+              />
+            ) : undefined
+          }
         />
+        {/* En el movil tocar un auto no abria nada: el modal solo vivia en la
+            vista de escritorio. */}
+        {selectedVehicle && (
+          <VehicleDetailModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
+        )}
         {selectedClient && (
           <div className="fixed inset-0 z-[100] bg-slate-900">
              <MobileClientDetail

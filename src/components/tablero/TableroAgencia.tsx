@@ -24,10 +24,10 @@ const NEGRO = "#334155";
 const ROJO = "#D6402A";
 const GRIS = "#CBD5E1";
 
-type Pestana = "resumen" | "ventas" | "inventario" | "clientes" | "equipo";
-type Periodo = "mes" | "3m" | "anio" | "12m";
+export type Pestana = "resumen" | "ventas" | "inventario" | "clientes" | "equipo";
+export type Periodo = "mes" | "3m" | "anio" | "12m";
 
-const PESTANAS: { id: Pestana; nombre: string }[] = [
+export const PESTANAS: { id: Pestana; nombre: string }[] = [
   { id: "resumen", nombre: "Resumen" },
   { id: "ventas", nombre: "Ventas" },
   { id: "inventario", nombre: "Inventario" },
@@ -35,7 +35,7 @@ const PESTANAS: { id: Pestana; nombre: string }[] = [
   { id: "equipo", nombre: "Equipo" },
 ];
 
-const PERIODOS: { id: Periodo; nombre: string }[] = [
+export const PERIODOS: { id: Periodo; nombre: string }[] = [
   { id: "mes", nombre: "Este mes" },
   { id: "3m", nombre: "Últimos 3 meses" },
   { id: "anio", nombre: "Este año" },
@@ -43,9 +43,9 @@ const PERIODOS: { id: Periodo; nombre: string }[] = [
 ];
 
 const DIA = 86_400_000;
-const MX = 6 * 3_600_000; // Mexico, UTC-6
+export const MX = 6 * 3_600_000; // Mexico, UTC-6
 
-function rangoDelPeriodo(p: Periodo, ahora: number) {
+export function rangoDelPeriodo(p: Periodo, ahora: number) {
   const local = new Date(ahora - MX);
   const y = local.getUTCFullYear();
   const m = local.getUTCMonth();
@@ -55,7 +55,7 @@ function rangoDelPeriodo(p: Periodo, ahora: number) {
   return { desde: ahora - 365 * DIA, hasta: ahora };
 }
 
-const leer = <T extends string>(clave: string, validos: readonly T[], def: T): T => {
+export const leer = <T extends string>(clave: string, validos: readonly T[], def: T): T => {
   try {
     const v = localStorage.getItem(clave) as T | null;
     return v && validos.includes(v) ? v : def;
@@ -63,7 +63,7 @@ const leer = <T extends string>(clave: string, validos: readonly T[], def: T): T
     return def;
   }
 };
-const guardar = (clave: string, v: string) => {
+export const guardar = (clave: string, v: string) => {
   try {
     localStorage.setItem(clave, v);
   } catch {
@@ -71,12 +71,31 @@ const guardar = (clave: string, v: string) => {
   }
 };
 
-const dinero = (n: number) =>
+export const dinero = (n: number) =>
   "$" + new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(Math.round(n || 0));
-const dineroCorto = (n: number) =>
+export const dineroCorto = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} M` : n >= 1000 ? `$${Math.round(n / 1000)} mil` : dinero(n);
 const fechaCorta = (ms: number | null) =>
   ms ? new Date(ms).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
+
+/** Descarga el Excel: una pestaña o el reporte completo. Lo usan escritorio y movil. */
+export function exportarReporte(
+  a: ReturnType<typeof calcularAnalitica>,
+  h: Hallazgo[],
+  o: { verCostos: boolean; periodo: string; agencia: string },
+  cual: Pestana | "todo",
+) {
+  const hojas = hojasDelReporte(a, h, { ...o, agencia: o.agencia || "Agencia" });
+  const hoy = new Date(Date.now() - MX).toISOString().slice(0, 10);
+  const base = (o.agencia || "agencia").normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+  if (cual === "todo") {
+    descargarExcel(`${base}-reporte-completo-${hoy}.xlsx`, [
+      ...hojas.resumen, ...hojas.ventas, ...hojas.inventario, ...hojas.clientes, ...hojas.equipo,
+    ]);
+  } else {
+    descargarExcel(`${base}-${cual}-${hoy}.xlsx`, hojas[cual]);
+  }
+}
 
 export interface TableroAgenciaProps {
   agencia: string;
@@ -113,18 +132,8 @@ export function TableroAgencia(p: TableroAgenciaProps) {
 
   const nombrePeriodo = PERIODOS.find((x) => x.id === periodo)!.nombre;
 
-  const exportar = (todo: boolean) => {
-    const hojas = hojasDelReporte(a, h, { verCostos: p.verCostos, periodo: nombrePeriodo, agencia: p.agencia || "Agencia" });
-    const hoy = new Date(Date.now() - MX).toISOString().slice(0, 10);
-    const base = (p.agencia || "agencia").normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
-    if (todo) {
-      descargarExcel(`${base}-reporte-completo-${hoy}.xlsx`, [
-        ...hojas.resumen, ...hojas.ventas, ...hojas.inventario, ...hojas.clientes, ...hojas.equipo,
-      ]);
-    } else {
-      descargarExcel(`${base}-${pestana}-${hoy}.xlsx`, hojas[pestana]);
-    }
-  };
+  const exportar = (todo: boolean) =>
+    exportarReporte(a, h, { verCostos: p.verCostos, periodo: nombrePeriodo, agencia: p.agencia }, todo ? "todo" : pestana);
 
   return (
     <div className="space-y-4">
@@ -294,7 +303,7 @@ function Barras<T extends Record<string, any>>({ datos, clave, valor, elegido, o
 // ---------------------------------------------------------------------------
 // Resumen
 
-const ICONO_HALLAZGO = { alerta: AlertTriangle, oportunidad: Lightbulb, info: Info };
+export const ICONO_HALLAZGO = { alerta: AlertTriangle, oportunidad: Lightbulb, info: Info };
 
 function Hallazgos({ h }: { h: Hallazgo[] }) {
   if (!h.length) {
