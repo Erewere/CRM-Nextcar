@@ -2354,9 +2354,13 @@ async function startServer() {
       const candidatos = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as any) }))
         .filter((v) => {
-          const disponible = !v.status || v.status === "available";
+          // Disponibles y apartados; los vendidos solo 60 dias, para que la
+          // pagina los muestre como «Vendido» un tiempo y luego los suelte.
+          const vendidoHace = Date.now() - (Date.parse(v.soldAt || v.updatedAt || "") || 0);
+          const estadoOk = !v.status || v.status === "available" || v.status === "reserved"
+            || (v.status === "sold" && vendidoHace < 60 * 86_400_000);
           const fotos = (Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length) || v.photoUrl;
-          return disponible && fotos && v.agencyId && v.agencyId !== "unassigned" && !v.isDeleted;
+          return estadoOk && fotos && v.agencyId && v.agencyId !== "unassigned" && !v.isDeleted;
         });
 
       const idsAgencias = [...new Set(candidatos.map((v) => String(v.agencyId)))];
@@ -2374,6 +2378,7 @@ async function startServer() {
           return {
             crmId: v.id,
             agencyId: v.agencyId,
+            estado: v.status === "sold" ? "vendido" : v.status === "reserved" ? "apartado" : "disponible",
             agencia: {
               nombre: a.name || "",
               telefono: a.phone || "",
@@ -2480,6 +2485,71 @@ async function startServer() {
     } catch (e) {
       console.error("Error del inventario para la pagina:", e);
       res.status(500).json({ error: "No se pudo leer el inventario" });
+    }
+  });
+
+  // Pasar al CRM los autos que una agencia ligada tenia cargados a mano en la
+  // pagina (decision de Luis: todo en un solo lugar). Lo dispara la agencia
+  // desde su portal, despues de ver la lista. Idempotente por origenWebId: si
+  // la pagina reintenta, no se duplican.
+  app.post("/api/pagina/importar", express.json({ limit: "1mb" }), async (req, res) => {
+    const secreto = process.env.PAGINA_NEXTCAR_SECRETO;
+    if (!secreto) return res.status(503).json({ error: "No configurado" });
+    const agencyId = String(req.body?.agencyId || "");
+    if (!firmaDeLlamadaValida(agencyId, String(req.headers["x-nextcar-tiempo"] || ""), String(req.headers["x-nextcar-firma"] || ""), secreto)) {
+      return res.status(401).json({ error: "Firma inválida" });
+    }
+    const autos = Array.isArray(req.body?.autos) ? req.body.autos.slice(0, 100) : [];
+    try {
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+      if (!(await adminDb.collection("agencies").doc(agencyId).get()).exists) {
+        return res.status(400).json({ error: "La agencia no existe" });
+      }
+      const texto = (x: any, n = 200) => String(x ?? "").trim().slice(0, n);
+      const resultado: { siteId: string; crmId: string; nuevo: boolean }[] = [];
+      for (const a of autos) {
+        const siteId = texto(a.siteId, 40);
+        if (!siteId) continue;
+        const origenWebId = `nextcar-web:${siteId}`;
+        const ya = await adminDb.collection("vehicles").where("origenWebId", "==", origenWebId).get();
+        const suyo = ya.docs.find((d) => d.data().agencyId === agencyId);
+        if (suyo) { resultado.push({ siteId, crmId: suyo.id, nuevo: false }); continue; }
+        const fotos = (Array.isArray(a.fotos) ? a.fotos : [])
+          .map((f: any) => texto(f, 500))
+          .filter((f: string) => /^https:\/\//.test(f))
+          .slice(0, 30);
+        const ahora = new Date().toISOString();
+        const ref = adminDb.collection("vehicles").doc();
+        await ref.set({
+          agencyId,
+          make: texto(a.marca, 60),
+          model: texto(a.modelo, 120),
+          year: Number(a.anio) || null,
+          price: Math.max(0, Number(a.precio) || 0),
+          km: Math.max(0, Number(a.km) || 0),
+          transmission: texto(a.transmision, 40),
+          bodyType: texto(a.carroceria, 40),
+          passengers: Number(a.pasajeros) || null,
+          color: "",
+          vin: "",
+          photoUrl: fotos[0] || "",
+          photoUrls: fotos,
+          status: "available",
+          publicarEnWeb: true,
+          descripcionWeb: texto(a.descripcion, 4000),
+          origenWebId,
+          createdAt: ahora,
+          updatedAt: ahora,
+          receivedAt: ahora.slice(0, 10),
+        });
+        resultado.push({ siteId, crmId: ref.id, nuevo: true });
+      }
+      cacheCatalogoWeb = null;
+      res.json({ ok: true, autos: resultado });
+    } catch (e) {
+      console.error("Error importando autos de la pagina:", e);
+      res.status(500).json({ error: "No se pudieron pasar los autos" });
     }
   });
 
