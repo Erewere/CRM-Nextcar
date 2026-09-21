@@ -87,7 +87,9 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         const d = new Date();
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       })(), 
-      cylinders: 4, liters: 0, equipment: '', passengers: 5
+      cylinders: 4, liters: 0, equipment: '', passengers: 5,
+      // Si llega desde «Subir auto» del portal de la pagina, ya va marcado.
+      ...((vehicle as any).publicarEnWeb ? { publicarEnWeb: true } : {})
     } : {
       status: 'available', 
       agencyId: '', 

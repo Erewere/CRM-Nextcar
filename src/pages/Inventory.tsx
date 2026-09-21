@@ -201,6 +201,26 @@ export function Inventory() {
     }
   }, [location.state, vehicles]);
 
+  // Enlaces desde el portal de nextcar.erewere.com: ?auto=<id> abre ese auto y
+  // ?nuevo=1 abre el alta, para que la agencia suba y edite en un solo lugar.
+  const [enlaceAtendido, setEnlaceAtendido] = useState(false);
+  useEffect(() => {
+    if (enlaceAtendido) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('nuevo') === '1') {
+      setSelectedVehicle({ publicarEnWeb: true } as Vehicle);
+      setEnlaceAtendido(true);
+      return;
+    }
+    const auto = params.get('auto');
+    if (!auto) { setEnlaceAtendido(true); return; }
+    const found = vehicles.find((v) => v.id === auto);
+    if (found) {
+      setSelectedVehicle(found);
+      setEnlaceAtendido(true);
+    }
+  }, [vehicles, enlaceAtendido]);
+
   useEffect(() => {
     // Quien no tiene permiso sobre el inventario compartido se queda en el
     // propio, aunque llegue con ?tab=shared en la direccion.

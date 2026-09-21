@@ -5,6 +5,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
+import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
@@ -2403,6 +2404,82 @@ async function startServer() {
     } catch (e: any) {
       console.error("Error armando el catalogo web:", e);
       res.status(500).json({ error: "No se pudo armar el catalogo" });
+    }
+  });
+
+  // ===== Portal de agencias de nextcar.erewere.com =====
+  //
+  // Una sola cuenta por agencia, la del CRM (decision de Luis, sep 2026). La
+  // pagina manda a /conectar-pagina; ahi el administrador confirma y este
+  // endpoint le da un pase firmado de dos minutos que la pagina comprueba con
+  // el mismo secreto. Ver src/lib/pasePagina.ts.
+  app.post("/api/pagina/pase", async (req, res) => {
+    const secreto = process.env.PAGINA_NEXTCAR_SECRETO;
+    if (!secreto) return res.status(503).json({ error: "La conexión con la página aún no está configurada." });
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) return res.status(401).json({ error: "Inicia sesión de nuevo." });
+    try {
+      const adminApp = getAdminApp();
+      const adminDb = getAdminDb();
+      if (!adminApp || !adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+      const decoded = await getAuth(adminApp).verifyIdToken(authHeader.slice(7));
+      const u = (await adminDb.collection("users").doc(decoded.uid).get()).data();
+      if (!u || u.role !== "admin" || !u.agencyId || u.agencyId === "unassigned") {
+        return res.status(403).json({ error: "Solo el administrador de la agencia puede entrar al portal de la página." });
+      }
+      const a = (await adminDb.collection("agencies").doc(String(u.agencyId)).get()).data() || {};
+      const pase = firmarPase({
+        uid: decoded.uid,
+        email: String(u.email || decoded.email || ""),
+        nombre: String(u.name || ""),
+        agencyId: String(u.agencyId),
+        agencia: String(a.name || ""),
+        rol: String(u.role),
+      }, secreto);
+      res.json({ url: `${REGRESO_PAGINA}?pase=${encodeURIComponent(pase)}` });
+    } catch (e) {
+      res.status(401).json({ error: "Inicia sesión de nuevo." });
+    }
+  });
+
+  // El inventario completo de una agencia para su portal en la pagina: tambien
+  // lo no publicado, para que vea todo lo que tiene en el CRM. Solo con la
+  // firma de la pagina (X-Nextcar-Tiempo / X-Nextcar-Firma). Sin costos.
+  app.get("/api/pagina/inventario", async (req, res) => {
+    const secreto = process.env.PAGINA_NEXTCAR_SECRETO;
+    if (!secreto) return res.status(503).json({ error: "No configurado" });
+    const agencyId = String(req.query.agencyId || "");
+    if (!firmaDeLlamadaValida(agencyId, String(req.headers["x-nextcar-tiempo"] || ""), String(req.headers["x-nextcar-firma"] || ""), secreto)) {
+      return res.status(401).json({ error: "Firma inválida" });
+    }
+    try {
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+      const snap = await adminDb.collection("vehicles").where("agencyId", "==", agencyId).get();
+      const autos = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as any) }))
+        .filter((v) => !v.isDeleted && v.status !== "sold")
+        .map((v) => {
+          const fotos = Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length ? v.photoUrls.filter(Boolean) : v.photoUrl ? [v.photoUrl] : [];
+          return {
+            crmId: v.id,
+            marca: String(v.make || "").trim(),
+            modelo: String(v.model || "").trim(),
+            anio: Number(v.year) || null,
+            precio: Number(v.price) || 0,
+            km: Number(v.km) || 0,
+            estado: v.status || "available",
+            publicar: v.publicarEnWeb === true,
+            enLaPagina: v.publicarEnWeb === true && (!v.status || v.status === "available") && fotos.length > 0,
+            foto: fotos[0] || "",
+            fotos: fotos.length,
+            editar: `https://crm.erewere.com/inventory?auto=${encodeURIComponent(v.id)}`,
+          };
+        });
+      res.json({ agencyId, autos, subir: "https://crm.erewere.com/inventory?nuevo=1" });
+    } catch (e) {
+      console.error("Error del inventario para la pagina:", e);
+      res.status(500).json({ error: "No se pudo leer el inventario" });
     }
   });
 

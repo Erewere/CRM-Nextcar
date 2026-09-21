@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { ChatsPendientesProvider } from './contexts/ChatsPendientesContext';
 import { Login } from './pages/Login';
+import { ConectarPagina } from './pages/ConectarPagina';
 import { Dashboard } from './pages/Dashboard';
 import { Kanban } from './pages/Kanban';
 import { Tasks } from './pages/Tasks';
@@ -94,6 +95,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* «Entrar con mi cuenta del CRM» desde nextcar.erewere.com. */}
+          <Route path="/conectar-pagina" element={<ConectarPagina />} />
           <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
           
           <Route path="/" element={<ProtectedRoute><ChatsPendientesProvider><Layout /></ChatsPendientesProvider></ProtectedRoute>}>

@@ -4,6 +4,7 @@ import { signInWithGoogle, signInWithEmail, signUpWithEmail, enviarCorreoDeRecup
 import { updateProfile } from 'firebase/auth';
 import { Navigate, useLocation } from 'react-router';
 import { NextcarLogo, NextcarIcono } from '../components/NextcarLogo';
+import { CLAVE_IR_A_PAGINA } from './ConectarPagina';
 
 export function Login() {
   const { currentUser, loading, connectGoogleServices } = useAuth();
@@ -22,7 +23,15 @@ export function Login() {
       <p className="text-slate-500 font-medium text-sm">Cargando aplicación...</p>
     </div>
   );
-  if (currentUser) return <Navigate to="/" />;
+  if (currentUser) {
+    // Venia de «Entrar con mi cuenta del CRM» en la pagina: regresarlo ahi.
+    let aLaPagina = false;
+    try {
+      aLaPagina = sessionStorage.getItem(CLAVE_IR_A_PAGINA) === "1";
+      sessionStorage.removeItem(CLAVE_IR_A_PAGINA);
+    } catch { /* sin almacenamiento */ }
+    return <Navigate to={aLaPagina ? "/conectar-pagina" : "/"} />;
+  }
 
   // Recuperar la cuenta sin depender de nadie. Antes no habia forma: a quien
   // se le olvidaba la contrasena solo le quedaba pedir que se la cambiaran a
