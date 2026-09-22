@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
-import { auth } from "../lib/firebase";
 import type { Vehicle } from "../types";
 
 /**
  * «Datos para la página»: lo que nextcar.erewere.com muestra y el CRM no
- * tenia (combustible, motor, «Lo que nos encanta»...). El boton usa la misma
- * herramienta de IA con la que se llenan los autos cargados a mano en la
- * pagina, y solo llena lo que esta vacio: nunca pisa lo que la agencia escribio.
+ * tenia (combustible, motor, «Lo que nos encanta»...). Se llenan a mano; lo que
+ * quede vacio lo completa la pagina al publicar el auto.
+ *
+ * Sin boton de IA a proposito (decision de Luis, 22 sep 2026): el Aviso de
+ * Privacidad promete que el CRM no envia nada a ningun servicio de
+ * inteligencia artificial, y en eso se apoyo la verificacion de Google. La IA
+ * vive en la pagina, que es otro servicio.
  */
 
 type Ficha = NonNullable<Vehicle["fichaWeb"]>;
@@ -30,63 +32,15 @@ export function FichaWebCampos({ formData, setFormData, deshabilitado }: {
   deshabilitado: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [llenando, setLlenando] = useState(false);
-  const [aviso, setAviso] = useState("");
   const ficha: Ficha = formData.fichaWeb || {};
   const poner = (cambios: Partial<Ficha>) => setFormData({ ...formData, fichaWeb: { ...ficha, ...cambios } });
-  const llenos = CAMPOS.filter((c) => ficha[c.id]).length + (ficha.loQueNosEncanta ? 1 : 0);
-
-  const llenarConIA = async () => {
-    if (!formData.make || !formData.model) {
-      setAviso("Escribe primero la marca y el modelo.");
-      return;
-    }
-    setLlenando(true);
-    setAviso("");
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const r = await fetch("/api/pagina/ficha-ia", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ marca: formData.make, modelo: formData.model, anio: formData.year }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || "No se pudo consultar la IA.");
-      const nueva: Ficha = { ...ficha };
-      let puestos = 0;
-      for (const c of [...CAMPOS.map((x) => x.id), "loQueNosEncanta" as const]) {
-        if (!nueva[c] && d.ficha?.[c]) { (nueva as any)[c] = d.ficha[c]; puestos++; }
-      }
-      const cambios: Partial<Vehicle> = { fichaWeb: nueva };
-      if (!(formData as any).descripcionWeb && d.descripcion) { (cambios as any).descripcionWeb = d.descripcion; puestos++; }
-      setFormData({ ...formData, ...cambios });
-      setAviso(puestos ? `Listo: se llenaron ${puestos} campos. Revísalos antes de guardar.` : "No había campos vacíos que llenar.");
-      setAbierto(true);
-    } catch (e: any) {
-      setAviso(e.message || "No se pudo consultar la IA.");
-    } finally {
-      setLlenando(false);
-    }
-  };
+  const llenos = CAMPOS.filter((c) => ficha[c.id]).length + (ficha.loQueNosEncanta ? 1 : 0) + (ficha.precioAnterior ? 1 : 0);
 
   return (
     <div className="border-t border-gray-200 dark:border-slate-700 pt-2">
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" onClick={() => setAbierto((v) => !v)} className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-          {abierto ? "▾" : "▸"} Datos para la página <span className="font-normal text-slate-500">({llenos} de 7)</span>
-        </button>
-        {!deshabilitado && (
-          <button
-            type="button"
-            onClick={llenarConIA}
-            disabled={llenando}
-            className="text-xs font-semibold px-2.5 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1"
-          >
-            <Sparkles className="w-3.5 h-3.5" /> {llenando ? "Buscando…" : "Llenar con IA"}
-          </button>
-        )}
-      </div>
-      {aviso && <p className="text-xs text-slate-500 mt-1">{aviso}</p>}
+      <button type="button" onClick={() => setAbierto((v) => !v)} className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {abierto ? "▾" : "▸"} Datos para la página <span className="font-normal text-slate-500">({llenos} de 8, opcional)</span>
+      </button>
       {abierto && (
         <div className="mt-2 space-y-2">
           <div className="grid grid-cols-2 gap-2">
@@ -127,7 +81,7 @@ export function FichaWebCampos({ formData, setFormData, deshabilitado }: {
               className={clase}
             />
           </label>
-          <p className="text-[11px] text-slate-500">Lo que dejes vacío, la página lo completa sola al publicar el auto.</p>
+          <p className="text-[11px] text-slate-500">Lo que dejes vacío, la página de Nextcar lo completa sola al publicar el auto.</p>
         </div>
       )}
     </div>

@@ -88,7 +88,8 @@ export interface Vehicle {
   descripcionWeb?: string;
   /**
    * Lo que la pagina de Nextcar muestra y el CRM no tenia. Lo llena la agencia
-   * o el boton «Llenar con IA»; si llega vacio, la pagina lo completa sola.
+   * a mano; si llega vacio, la pagina lo completa sola (con su propia IA:
+   * el CRM no envia nada a ningun servicio de IA, ver FichaWebCampos).
    */
   fichaWeb?: {
     precioAnterior?: number;
