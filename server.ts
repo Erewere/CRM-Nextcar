@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // Un solo criterio de ganado/perdido para navegador y servidor: son funciones
@@ -2417,24 +2416,17 @@ async function startServer() {
   });
 
   // ===== Portal de agencias de nextcar.erewere.com =====
-  // Al pegar la clave en el panel de Hostinger es facil que se cuele un
-  // espacio o unas comillas; la pagina las quita (trim en PHP), asi que aqui
+  // Al pegar la clave es facil que se cuele un espacio, unas comillas o un
+  // caracter invisible (paso: un acento suelto U+0301 al final); la pagina las quita (trim en PHP), asi que aqui
   // tambien, o las firmas nunca coinciden.
   const secretoDeLaPagina = () =>
-    String(process.env.PAGINA_NEXTCAR_SECRETO || "").trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+    String(process.env.PAGINA_NEXTCAR_SECRETO || "").trim().replace(/^(["'])(.*)\1$/, "$2").replace(/[^\x21-\x7e]/g, "");
 
   //
   // Una sola cuenta por agencia, la del CRM (decision de Luis, sep 2026). La
   // pagina manda a /conectar-pagina; ahi el administrador confirma y este
   // endpoint le da un pase firmado de dos minutos que la pagina comprueba con
   // el mismo secreto. Ver src/lib/pasePagina.ts.
-  // TEMPORAL (21 sep 2026): comparar la clave con la de la pagina sin revelarla.
-  app.get("/api/pagina/huella", (_req, res) => {
-    const k = secretoDeLaPagina();
-    const crudo = String(process.env.PAGINA_NEXTCAR_SECRETO || "");
-    res.json({ largo: k.length, largoCrudo: crudo.length, huella: createHash("sha256").update(k).digest("hex").slice(0, 8) });
-  });
-
   app.post("/api/pagina/pase", async (req, res) => {
     const secreto = secretoDeLaPagina();
     if (!secreto) return res.status(503).json({ error: "La conexión con la página aún no está configurada." });
