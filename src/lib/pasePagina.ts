@@ -69,3 +69,9 @@ export function firmaDeLlamadaValida(agencyId: string, tiempo: string, firma: st
   const recibida = Buffer.from(String(firma || ""));
   return esperada.length === recibida.length && timingSafeEqual(esperada, recibida);
 }
+
+/** Las cabeceras firmadas para llamar a la pagina (misma regla, al reves). */
+export function cabecerasFirmadas(id: string, secreto: string, ahora = Date.now()): Record<string, string> {
+  const t = String(Math.floor(ahora / 1000));
+  return { "X-Nextcar-Tiempo": t, "X-Nextcar-Firma": firmar(`${t}.${id}`, secreto) };
+}

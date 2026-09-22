@@ -5,7 +5,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
-import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
+import { firmarPase, firmaDeLlamadaValida, cabecerasFirmadas, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
@@ -2499,9 +2499,10 @@ async function startServer() {
       const modelo = String(req.body?.modelo || "").trim().slice(0, 120);
       const anio = String(req.body?.anio || "").trim().slice(0, 4);
       if (!marca || !modelo) return res.status(400).json({ error: "Escribe primero la marca y el modelo." });
+      // La herramienta de la pagina ya no contesta a cualquiera: va firmada.
       const r = await fetch("https://www.nextcar.erewere.com/ai_autofill.php", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...cabecerasFirmadas("ficha-ia", secretoDeLaPagina()) },
         body: JSON.stringify({ marca, modelo, anio }),
         signal: AbortSignal.timeout(60_000),
       });
