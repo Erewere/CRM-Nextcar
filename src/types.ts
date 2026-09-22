@@ -86,6 +86,21 @@ export interface Vehicle {
   publicarEnWeb?: boolean;
   /** Texto de venta para la pagina; opcional. */
   descripcionWeb?: string;
+  /**
+   * Lo que la pagina de Nextcar muestra y el CRM no tenia. Lo llena la agencia
+   * o el boton «Llenar con IA»; si llega vacio, la pagina lo completa sola.
+   */
+  fichaWeb?: {
+    precioAnterior?: number;
+    combustible?: string;
+    traccion?: string;
+    motor?: string;
+    potencia?: string;
+    rendimiento?: string;
+    ciudad?: string;
+    /** «Lo que nos encanta»: una idea por renglon. */
+    loQueNosEncanta?: string;
+  };
 }
 
 export interface Agency {

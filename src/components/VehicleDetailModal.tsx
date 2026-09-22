@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import imageCompression from 'browser-image-compression';
+import { FichaWebCampos } from './FichaWebCampos';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc, getDocs, getDoc } from 'firebase/firestore';
@@ -1482,6 +1483,9 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                           placeholder="Texto de venta para la página (opcional): estado, servicios, por qué vale la pena…"
                           className="w-full px-3 py-2 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200"
                         />
+                      )}
+                      {publicado && (
+                        <FichaWebCampos formData={formData} setFormData={setFormData as any} deshabilitado={!puedePublicar} />
                       )}
                     </div>
                   );

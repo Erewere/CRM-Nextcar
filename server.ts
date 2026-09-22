@@ -2401,6 +2401,17 @@ async function startServer() {
             litros: Number(v.liters) || null,
             equipamiento: v.equipment || "",
             descripcion: v.descripcionWeb || "",
+            // Lo que la pagina pide y el CRM no tenia; vacio = la pagina lo completa.
+            ficha: {
+              precioAnterior: Number(v.fichaWeb?.precioAnterior) || 0,
+              combustible: String(v.fichaWeb?.combustible || ""),
+              traccion: String(v.fichaWeb?.traccion || ""),
+              motor: String(v.fichaWeb?.motor || ""),
+              potencia: String(v.fichaWeb?.potencia || ""),
+              rendimiento: String(v.fichaWeb?.rendimiento || ""),
+              ciudad: String(v.fichaWeb?.ciudad || ""),
+              loQueNosEncanta: String(v.fichaWeb?.loQueNosEncanta || ""),
+            },
             fotos,
             actualizado: v.updatedAt || v.createdAt || null,
           };
@@ -2461,6 +2472,56 @@ async function startServer() {
       res.json({ url: `${REGRESO_PAGINA}?pase=${encodeURIComponent(pase)}` });
     } catch (e) {
       res.status(401).json({ error: "Inicia sesión de nuevo." });
+    }
+  });
+
+  // «Llenar con IA» en la ficha del auto: usa la misma herramienta de la pagina
+  // (ai_autofill.php, que ya tiene su llave de Gemini). Solo quien puede editar
+  // autos, y con tope por persona para que un boton no se vuelva un gasto.
+  const usosFichaIA = new Map<string, number[]>();
+  app.post("/api/pagina/ficha-ia", express.json(), async (req, res) => {
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) return res.status(401).json({ error: "Inicia sesión de nuevo." });
+    try {
+      const adminApp = getAdminApp();
+      const adminDb = getAdminDb();
+      if (!adminApp || !adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+      const decoded = await getAuth(adminApp).verifyIdToken(authHeader.slice(7));
+      const u = (await adminDb.collection("users").doc(decoded.uid).get()).data();
+      if (!u || !puedeRol(u.role, "vehiculos.editar")) return res.status(403).json({ error: "No tienes permiso para editar autos." });
+      const ahora = Date.now();
+      const recientes = (usosFichaIA.get(decoded.uid) || []).filter((t) => ahora - t < 3_600_000);
+      if (recientes.length >= 40) return res.status(429).json({ error: "Ya usaste la IA muchas veces en la última hora. Intenta más tarde." });
+      recientes.push(ahora);
+      usosFichaIA.set(decoded.uid, recientes);
+
+      const marca = String(req.body?.marca || "").trim().slice(0, 60);
+      const modelo = String(req.body?.modelo || "").trim().slice(0, 120);
+      const anio = String(req.body?.anio || "").trim().slice(0, 4);
+      if (!marca || !modelo) return res.status(400).json({ error: "Escribe primero la marca y el modelo." });
+      const r = await fetch("https://www.nextcar.erewere.com/ai_autofill.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marca, modelo, anio }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const d: any = await r.json().catch(() => ({}));
+      if (!r.ok || d.error) return res.status(502).json({ error: d.error || "La IA no respondió. Intenta de nuevo." });
+      const texto = (x: any) => (Array.isArray(x) ? x.join("\n") : String(x ?? "")).trim().slice(0, 2000);
+      res.json({
+        ficha: {
+          combustible: texto(d.fuel_type),
+          traccion: texto(d.drivetrain),
+          motor: texto(d.engine),
+          potencia: texto(d.power),
+          rendimiento: texto(d.performance),
+          loQueNosEncanta: texto(d.highlights),
+        },
+        descripcion: texto(d.description).slice(0, 4000),
+      });
+    } catch (e: any) {
+      console.error("Error de la ficha con IA:", e?.message || e);
+      res.status(500).json({ error: "No se pudo consultar la IA." });
     }
   });
 
