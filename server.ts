@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
 import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // Un solo criterio de ganado/perdido para navegador y servidor: son funciones
@@ -2427,6 +2428,13 @@ async function startServer() {
   // pagina manda a /conectar-pagina; ahi el administrador confirma y este
   // endpoint le da un pase firmado de dos minutos que la pagina comprueba con
   // el mismo secreto. Ver src/lib/pasePagina.ts.
+  // TEMPORAL (21 sep 2026): comparar la clave con la de la pagina sin revelarla.
+  app.get("/api/pagina/huella", (_req, res) => {
+    const k = secretoDeLaPagina();
+    const crudo = String(process.env.PAGINA_NEXTCAR_SECRETO || "");
+    res.json({ largo: k.length, largoCrudo: crudo.length, huella: createHash("sha256").update(k).digest("hex").slice(0, 8) });
+  });
+
   app.post("/api/pagina/pase", async (req, res) => {
     const secreto = secretoDeLaPagina();
     if (!secreto) return res.status(503).json({ error: "La conexión con la página aún no está configurada." });
