@@ -2507,6 +2507,12 @@ async function startServer() {
       });
       const d: any = await r.json().catch(() => ({}));
       if (!r.ok || d.error) return res.status(502).json({ error: d.error || "La IA no respondió. Intenta de nuevo." });
+      // Sin Gemini (sin saldo, modelo retirado...), ai_autofill.php contesta con
+      // valores aproximados de relleno, siempre con 'version_detectada'. Llenar
+      // la ficha con eso publicaria datos inventados: mejor avisar.
+      if (d && typeof d === "object" && "version_detectada" in d) {
+        return res.status(503).json({ error: "La IA no está disponible en este momento. Llena los datos a mano o inténtalo más tarde." });
+      }
       const texto = (x: any) => (Array.isArray(x) ? x.join("\n") : String(x ?? "")).trim().slice(0, 2000);
       res.json({
         ficha: {
