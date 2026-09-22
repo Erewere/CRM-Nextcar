@@ -51,7 +51,9 @@ export function FichaWebCampos({ formData, setFormData, deshabilitado }: {
                   type="text"
                   value={(ficha[c.id] as string) || ""}
                   disabled={deshabilitado}
-                  placeholder={c.ejemplo}
+                  placeholder={c.id === "motor" && Number(formData.liters) > 0
+                    ? `${Number(formData.liters).toFixed(1)}L${Number(formData.cylinders) > 1 ? ` ${formData.cylinders} cilindros` : ""} (de Litros y Cilindros)`
+                    : c.ejemplo}
                   onChange={(e) => poner({ [c.id]: e.target.value } as Partial<Ficha>)}
                   className={clase}
                 />

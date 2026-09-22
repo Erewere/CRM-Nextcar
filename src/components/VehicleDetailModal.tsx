@@ -16,7 +16,7 @@ import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials';
 import { SeleccionarTratoVenta } from './SeleccionarTratoVenta';
-import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles } from 'lucide-react';
+import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles, Star } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 import { hoyLocal } from "../lib/fechas";
 
@@ -894,6 +894,20 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     }
   };
 
+  // La primera foto es la principal: la del CRM, la ficha en PDF y la portada
+  // del auto en nextcar.erewere.com. Antes solo se cambiaba borrando las demas.
+  const hacerPrincipal = (index: number) => {
+    setFormData(prev => {
+      const urls = (prev.photoUrls && prev.photoUrls.length > 0)
+        ? [...prev.photoUrls]
+        : (prev.photoUrl ? [prev.photoUrl] : []);
+      if (index <= 0 || index >= urls.length) return prev;
+      const [elegida] = urls.splice(index, 1);
+      urls.unshift(elegida);
+      return { ...prev, photoUrl: elegida, photoUrls: urls };
+    });
+  };
+
   const removePhoto = (index: number) => {
     setFormData(prev => {
       const currentUrls = (prev.photoUrls && prev.photoUrls.length > 0)
@@ -1224,6 +1238,16 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
                     {allPhotos.slice(1).map((url, idx) => (
                       <div key={idx + 1} className="aspect-square relative rounded overflow-hidden border border-gray-200 dark:border-slate-700 group">
                         <img src={url} alt={`Vehicle ${idx + 2}`} className="w-full h-full object-cover" />
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => hacerPrincipal(idx + 1)}
+                            title="Usar como foto principal"
+                            className="absolute bottom-1 left-1 bg-black/65 hover:bg-black text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          >
+                            <Star className="w-3 h-3" /> Principal
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => removePhoto(idx + 1)}

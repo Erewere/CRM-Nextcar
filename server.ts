@@ -2339,6 +2339,13 @@ async function startServer() {
   // disponibles y con al menos una foto; lo vendido o apartado deja de salir, y
   // la pagina lo quita en su siguiente vuelta. Todo lo que devuelve es lo que
   // de todos modos se ve en la pagina: nada de costos, compradores ni notas.
+  /** «2.0L 4 cilindros» a partir de Litros y Cilindros; vacio si no hay litros. */
+  const motorDesdeElCRM = (v: any) => {
+    const litros = Number(v.liters) || 0;
+    if (litros <= 0) return "";
+    const cil = Number(v.cylinders) || 0;
+    return `${litros.toFixed(1)}L${cil > 1 ? ` ${cil} cilindros` : ""}`;
+  };
   const CACHE_CATALOGO_WEB_MS = 60 * 1000;
   let cacheCatalogoWeb: { momento: number; datos: any } | null = null;
 
@@ -2407,6 +2414,10 @@ async function startServer() {
               combustible: String(v.fichaWeb?.combustible || ""),
               traccion: String(v.fichaWeb?.traccion || ""),
               motor: String(v.fichaWeb?.motor || ""),
+              // Lo que ya dice la ficha del CRM (Litros + Cilindros). La pagina lo
+              // combina con lo que tenga: si su motor ya trae esos litros, se
+              // queda el suyo, que suele ser mas completo.
+              motorCRM: motorDesdeElCRM(v),
               potencia: String(v.fichaWeb?.potencia || ""),
               rendimiento: String(v.fichaWeb?.rendimiento || ""),
               ciudad: String(v.fichaWeb?.ciudad || ""),
