@@ -3359,7 +3359,7 @@ export function ClientDetailModal({
                             <span className="text-xs font-bold text-gray-800 dark:text-slate-200">
                               {n.sellerId === userData?.id
                                 ? userData?.email
-                                : "Nota"}
+                                : n.createdByName || "Nota"}
                             </span>
                             <span className="text-[10px] text-gray-400">
                               {typeof n.createdAt === "string"

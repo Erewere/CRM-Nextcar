@@ -1093,7 +1093,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                       {format(new Date(note.createdAt), "dd MMM, HH:mm")}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-800 dark:text-slate-200 break-words [word-break:break-word]">{note.content}</p>
+                  <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words [word-break:break-word]">{note.content}</p>
                 </div>
               ))}
             </div>

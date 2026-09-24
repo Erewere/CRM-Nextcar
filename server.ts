@@ -5,6 +5,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
+import { procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
@@ -2950,130 +2951,23 @@ async function startServer() {
     return res.json({ ok: true });
   });
 
-  app.post("/api/public/v1/leads", express.json(), async (req, res) => {
+  // Lo que llenan en los formularios de nextcar.erewere.com y otras
+  // integraciones. La logica vive en src/lib/leadPublico.ts (ver ahi el porque).
+  app.post("/api/public/v1/leads", express.json({ limit: "32kb" }), async (req, res) => {
     try {
-      const { agencyId, name, phone, email, vehicle, origin, sellerId } = req.body;
-      
-      if (!agencyId || !name) {
-        return res.status(400).json({ error: "agencyId and name are required" });
-      }
-
       const adminDb = getAdminDb();
-      if (!adminDb) {
-        return res.status(500).json({ error: "Base de datos no disponible" });
-      }
-
-      // Esta puerta es publica: quien llama escribe el agencyId a mano. Si no
-      // existe, el contacto se guardaba igual y quedaba en el vacio, sin que
-      // ninguna agencia lo viera. Ya paso con ids mal escritos ("nextcar" en
-      // minusculas, "unassigned"): leads que nadie podia trabajar porque no
-      // pertenecian a nadie. Mejor rechazarlo y que quien integra se entere.
-      const agenciaSnap = await adminDb.collection("agencies").doc(String(agencyId)).get();
-      if (!agenciaSnap.exists) {
-        return res.status(400).json({
-          error: `La agencia "${agencyId}" no existe. Revisa el agencyId de la integracion.`,
-        });
-      }
-
-      // Validate sellerId: check if user exists and belongs to the given agency
-      let validatedSellerId = "";
-      if (sellerId && typeof sellerId === "string" && sellerId.trim() !== "") {
-        try {
-          const sellerDocRef = adminDb.collection("users").doc(sellerId.trim());
-          const sellerSnap = await sellerDocRef.get();
-          if (sellerSnap.exists) {
-            const sellerData = sellerSnap.data();
-            if (sellerData && sellerData.agencyId === agencyId) {
-              validatedSellerId = sellerId.trim();
-            }
-          }
-        } catch (sErr) {
-          console.warn("Error validating sellerId for public lead:", sErr);
-        }
-      }
-
-      const newClient = {
-        agencyId,
-        name,
-        phone: phone || "",
-        email: email || "",
-        vehicle: vehicle || "",
-        origin: origin || "website",
-        ...(fuenteDesdeOrigen(origin || "website") ? { fuente: fuenteDesdeOrigen(origin || "website") } : {}),
-        status: "new",
-        sellerId: validatedSellerId,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      };
-      
-      // Si ya tenemos a esa persona, se le completa lo que falte en vez de
-      // crearle otra ficha. Un mismo cliente que vuelve a escribir no es un
-      // cliente nuevo.
-      const yaEstaba = await buscarContactoPorTelefono(adminDb, agencyId, phone);
-      if (yaEstaba) {
-        const relleno = camposQueFaltan(yaEstaba.data() || {}, {
-          name, email: email || "", vehicle: vehicle || "",
-        });
-        await yaEstaba.ref.set(
-          { ...relleno, updatedAt: FieldValue.serverTimestamp() },
-          { merge: true }
-        );
-
-        // Vuelve a escribir alguien que ya conocemos: solo entra al embudo si
-        // no tiene ya un trato abierto. Si lo tiene, ese es el que se trabaja.
-        let dealId: string | null = null;
-        try {
-          const { etapaId, etapas } = await primeraEtapaDelEmbudo(adminDb, agencyId);
-          if (!(await tieneTratoAbierto(adminDb, agencyId, yaEstaba.id, etapas))) {
-            const anterior = yaEstaba.data() || {};
-            dealId = await crearTratoDelLead(adminDb, {
-              agencyId,
-              clientId: yaEstaba.id,
-              name: anterior.name || name,
-              vehicle: vehicle || anterior.vehicle || "",
-              vehicleId: anterior.vehicleId || null,
-              sellerId: validatedSellerId || anterior.sellerId || "",
-              etapaId,
-            });
-          }
-        } catch (errTrato) {
-          // El contacto ya quedo guardado; que falle el trato no debe perder
-          // el lead. Se registra para poder revisarlo.
-          console.error("No se pudo crear el trato del lead existente:", errTrato);
-        }
-
-        return res.status(200).json({
-          success: true,
-          leadId: yaEstaba.id,
-          dealId,
-          yaExistia: true,
-        });
-      }
-
-      const docRef = await adminDb.collection("clients").add(newClient);
-
-      // Sin trato, el contacto queda solo en el directorio y nadie lo trabaja
-      // porque nadie lo ve. Esa era la fuga: entraban leads de Marketplace y
-      // del formulario de la pagina que jamas aparecian en el embudo.
-      let dealId: string | null = null;
-      try {
-        const { etapaId } = await primeraEtapaDelEmbudo(adminDb, agencyId);
-        dealId = await crearTratoDelLead(adminDb, {
-          agencyId,
-          clientId: docRef.id,
-          name,
-          vehicle: vehicle || "",
-          vehicleId: null,
-          sellerId: validatedSellerId,
-          etapaId,
-        });
-      } catch (errTrato) {
-        console.error("No se pudo crear el trato del lead nuevo:", errTrato);
-      }
-
-      res.status(201).json({ success: true, leadId: docRef.id, dealId });
+      if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
+      const r = await procesarLeadPublico(adminDb, req.body, {
+        buscarContactoPorTelefono,
+        primeraEtapaDelEmbudo,
+        camposQueFaltan,
+        serverTimestamp: () => FieldValue.serverTimestamp(),
+      });
+      res.status(r.status).json(r.body);
     } catch (e: any) {
-      res.status(500).json({ error: e.message, stack: e.stack });
+      // Puerta publica: el detalle del error va al registro, no a quien llama.
+      console.error("Error en /api/public/v1/leads:", e);
+      res.status(500).json({ error: "No se pudo guardar el lead" });
     }
   });
 
