@@ -208,7 +208,8 @@ export async function procesarLeadPublico(adminDb: any, cuerpo: any, deps: DepsL
     yaExistia = true;
     clientId = existente.id;
     datosContacto = existente.data() || {};
-    const relleno = deps.camposQueFaltan(datosContacto, { name, email, vehicle });
+    // Si llego por correo (el Radar no pide telefono) y ahora trae telefono, se completa.
+    const relleno = deps.camposQueFaltan(datosContacto, { name, email, vehicle, phone });
     const cambios: Record<string, any> = { ...relleno, updatedAt: deps.serverTimestamp() };
     if (formatoNuevo) {
       const tags = Array.isArray(datosContacto.tags) ? [...datosContacto.tags] : [];
