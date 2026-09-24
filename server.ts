@@ -2953,7 +2953,9 @@ async function startServer() {
 
   // Lo que llenan en los formularios de nextcar.erewere.com y otras
   // integraciones. La logica vive en src/lib/leadPublico.ts (ver ahi el porque).
-  app.post("/api/public/v1/leads", express.json({ limit: "32kb" }), async (req, res) => {
+  // El cuerpo ya lo lee el express.json() general (tope de 100 KB); los textos
+  // se recortan en leadPublico.ts.
+  app.post("/api/public/v1/leads", async (req, res) => {
     try {
       const adminDb = getAdminDb();
       if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
