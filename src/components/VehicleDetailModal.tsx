@@ -503,6 +503,74 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
     }
   }, [isNew, vehicle?.id, formData.status]);
 
+  // El trato de la venta, en vivo: es donde vive el dinero.
+  const [tratoVentaDatos, setTratoVentaDatos] = useState<any>(null);
+  useEffect(() => {
+    if (!tratoVentaId) { setTratoVentaDatos(null); return; }
+    return onSnapshot(
+      doc(db, 'deals', tratoVentaId),
+      (s) => setTratoVentaDatos(s.exists() ? { ...s.data(), id: s.id } : null),
+      () => setTratoVentaDatos(null)
+    );
+  }, [tratoVentaId]);
+
+  /**
+   * La venta de ESTE auto: precio y pagos del trato, mas los que solo quedaron
+   * en el auto.
+   *
+   * Antes se tomaba la del contacto comprador, y el contacto tiene un solo
+   * lugar para la venta aunque compre varios autos: la X1 que Isaias compro
+   * despues de una Taigun aparecia con el pago de la Taigun, «liquidada» sin
+   * haber pagado nada. Y al reves: los pagos registrados aqui quedaban solo en
+   * el auto, y el siguiente pago los borraba porque partia de la copia del
+   * contacto, que no los tenia. El contacto solo se usa si no hay trato.
+   */
+  const ventaDelAuto = (() => {
+    const delTrato = tratoVentaDatos?.saleDetails;
+    const delAuto = formData.saleDetails;
+    const delContacto = !tratoVentaDatos ? buyerData?.saleDetails : undefined;
+    const base = delTrato || delContacto || delAuto;
+    if (!base) return undefined;
+    // Mismo pago en varios lugares: por contenido, el maximo de cada sitio.
+    const clave = (p: any) => `${p.date || ''}|${Number(p.amount) || 0}|${p.method || ''}|${p.installmentNumber ?? ''}`;
+    const fusion = new Map<string, any[]>();
+    [delTrato?.payments, delContacto?.payments, delAuto?.payments].forEach((lista: any[] | undefined) => {
+      const grupos = new Map<string, any[]>();
+      (lista || []).forEach((p) => { if (p) grupos.set(clave(p), [...(grupos.get(clave(p)) || []), p]); });
+      grupos.forEach((ps, k) => { if (ps.length > (fusion.get(k)?.length || 0)) fusion.set(k, ps); });
+    });
+    const pagos = Array.from(fusion.values()).flat()
+      .sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
+    return { ...base, price: base.price || delAuto?.price, payments: pagos };
+  })();
+
+  /** A quien se le escribe la venta: el auto, su trato, y el contacto solo si esta es su venta vigente. */
+  const destinosDeLaVenta = () => {
+    const vieneDeTrato = Boolean(buyerData?.clientId && buyerData.clientId !== buyerData.id);
+    const tratoId: string | null =
+      tratoVentaId || (vehicle as any)?.soldDealId || (vieneDeTrato ? buyerData.id : null);
+    const contactoId: string | null =
+      (vieneDeTrato ? buyerData.clientId : buyerData?.id) || clientContext?.id ||
+      (vehicle as any)?.soldToClientId || (vehicle as any)?.buyerId || null;
+    const ventaVigente = vieneDeTrato ? buyerData?.clientInfo?.ventaDealId : buyerData?.ventaDealId;
+    const escribirContacto = Boolean(contactoId) && (!tratoId || !ventaVigente || ventaVigente === tratoId);
+    return { tratoId, contactoId: escribirContacto ? contactoId : null };
+  };
+
+  const escribirVenta = async (updateData: any) => {
+    const { tratoId, contactoId } = destinosDeLaVenta();
+    const errores: string[] = [];
+    try { await setDoc(doc(db, "vehicles", vehicle.id!), updateData, { merge: true }); } catch (e) { errores.push('auto'); console.error(e); }
+    // updateDoc y no setDoc: nunca crear un trato ni un contacto que no existan.
+    if (tratoId) {
+      try { await updateDoc(doc(db, "deals", tratoId), updateData); } catch (e) { errores.push('trato'); console.error(e); }
+    }
+    if (contactoId) {
+      try { await updateDoc(doc(db, "clients", contactoId), updateData); } catch (e) { errores.push('contacto'); console.error(e); }
+    }
+    if (errores.length) alert(`El pago no se pudo guardar completo (${errores.join(', ')}). Revisa tu conexión e inténtalo de nuevo.`);
+  };
+
   useEffect(() => {
     if (showPaymentModal) {
       const fetchTasks = async () => {
@@ -540,7 +608,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       newPayment.installmentNumber = paymentData.installmentNumber;
     }
 
-    const baseDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0, method: 'contado' };
+    const baseDetails = ventaDelAuto || { price: formData.price || 0, method: 'contado' };
     const updatedSaleDetails = {
       ...baseDetails,
       payments: [...(baseDetails.payments || []), newPayment]
@@ -563,18 +631,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         saleDetails: updatedSaleDetails,
         updatedAt: new Date().toISOString()
       };
-      const sanitizedData = sanitizeFirestoreData(updateData);
-
-      await setDoc(doc(db, "vehicles", vehicle.id), sanitizedData, { merge: true });
-
-      const clientId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
-      if (clientId) {
-        await setDoc(doc(db, "clients", clientId), sanitizedData, { merge: true });
-      }
-
-      if (buyerData?.id && buyerData.id !== clientId) {
-        await setDoc(doc(db, "deals", buyerData.id), sanitizedData, { merge: true });
-      }
+      await escribirVenta(sanitizeFirestoreData(updateData));
 
       if (paymentData.taskIdToComplete) {
         try {
@@ -592,11 +649,19 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
   };
 
   const handleDeletePayment = async (paymentId: string) => {
-    const baseDetails = buyerData?.saleDetails || formData.saleDetails;
+    const baseDetails = ventaDelAuto;
     if (!baseDetails?.payments) return;
     if (!confirm("¿Estás seguro de eliminar esta exhibición / pago?")) return;
 
-    const updatedPayments = baseDetails.payments.filter((p: any) => p.id !== paymentId);
+    const quitado = baseDetails.payments.find((p: any) => p.id === paymentId);
+    const clave = (p: any) => `${p.date || ''}|${Number(p.amount) || 0}|${p.method || ''}|${p.installmentNumber ?? ''}`;
+    // Por id, y si no, una sola copia con el mismo contenido.
+    let yaQuitado = false;
+    const updatedPayments = baseDetails.payments.filter((p: any) => {
+      if (yaQuitado) return true;
+      if (p.id === paymentId || (quitado && clave(p) === clave(quitado))) { yaQuitado = true; return false; }
+      return true;
+    });
     const updatedSaleDetails = {
       ...baseDetails,
       payments: updatedPayments
@@ -619,16 +684,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         saleDetails: updatedSaleDetails,
         updatedAt: new Date().toISOString()
       };
-      if (vehicle.id) {
-        await setDoc(doc(db, "vehicles", vehicle.id), updateData, { merge: true });
-      }
-      const clientId = buyerData?.clientId || (buyerData?.clientInfo ? buyerData?.id : null) || clientContext?.id;
-      if (clientId) {
-        await setDoc(doc(db, "clients", clientId), updateData, { merge: true });
-      }
-      if (buyerData?.id && buyerData.id !== clientId) {
-        await setDoc(doc(db, "deals", buyerData.id), updateData, { merge: true });
-      }
+      await escribirVenta(sanitizeFirestoreData(updateData));
     } catch (err) {
       console.error("Error deleting payment in VehicleDetailModal:", err);
     }
@@ -2068,7 +2124,7 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
               </div>
 
               {(() => {
-                const sDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0, method: 'contado' };
+                const sDetails = ventaDelAuto || { price: formData.price || 0, method: 'contado' };
                 const actualPrice = sDetails.price || buyerData?.dealValue || buyerData?.value || formData.price || 0;
                 const paymentsList = sDetails.payments || [];
                 const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
@@ -2539,12 +2595,12 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
         <PaymentModal
           onConfirm={handlePaymentConfirm}
           onCancel={() => setShowPaymentModal(false)}
-          saleDetails={buyerData?.saleDetails || formData.saleDetails}
+          saleDetails={ventaDelAuto}
           pendingTasks={pendingTasks}
           isWon={true}
           clientName={buyerData?.name || buyerData?.title || buyerData?.clientInfo?.name || clientContext?.name}
           maxAmount={(() => {
-            const sDetails = buyerData?.saleDetails || formData.saleDetails || { price: formData.price || 0 };
+            const sDetails = ventaDelAuto || { price: formData.price || 0 };
             const actualPrice = sDetails.price || buyerData?.dealValue || buyerData?.value || formData.price || 0;
             const paymentsList = sDetails.payments || [];
             const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);

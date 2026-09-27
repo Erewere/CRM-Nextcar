@@ -1046,7 +1046,11 @@ export function ClientDetailModal({
       if (finalDealId) {
         await guardarTratoSiExiste(finalDealId, sanitizedData);
       }
-      if (finalClientId) {
+      // El contacto guarda UNA venta aunque compre varios autos. Si su venta
+      // vigente es otro trato, el pago de este no se le copia: acababa sumado
+      // tambien a la otra compra.
+      const ventaVigente = (formData as any).ventaDealId;
+      if (finalClientId && (!finalDealId || !ventaVigente || ventaVigente === finalDealId)) {
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
       const isThisClientTheBuyer = Boolean(payment.markSaleAsWon || formData.status === 'won');
@@ -1130,7 +1134,11 @@ export function ClientDetailModal({
       if (finalDealId) {
         await guardarTratoSiExiste(finalDealId, sanitizedData);
       }
-      if (finalClientId) {
+      // El contacto guarda UNA venta aunque compre varios autos. Si su venta
+      // vigente es otro trato, el pago de este no se le copia: acababa sumado
+      // tambien a la otra compra.
+      const ventaVigente = (formData as any).ventaDealId;
+      if (finalClientId && (!finalDealId || !ventaVigente || ventaVigente === finalDealId)) {
         await setDoc(doc(db, "clients", finalClientId), sanitizedData, { merge: true });
       }
       // El auto solo se toca si es el comprador quien esta borrando el pago.

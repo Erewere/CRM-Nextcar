@@ -136,18 +136,36 @@ export function PaymentInventory() {
   // Build unified list of sales
   const itemsFromDeals = deals.map(deal => {
     const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
-    const vehicle = vehicles.find(v => v.id === deal.vehicleId || v.id === person.vehicleId);
+    // Primero el auto del trato. El del contacto es el de su ultima compra: si
+    // compro dos, con el viejo orden el trato de la primera tomaba el segundo auto.
+    const vehicle = vehicles.find(v => v.id === deal.vehicleId) || (!deal.vehicleId ? vehicles.find(v => v.id === person.vehicleId) : undefined);
     
     const isRecordedBuyer = !!vehicle && (
       vehicle.buyerId === person.id ||
       vehicle.soldToClientId === deal.clientId ||
       vehicle.soldToClientId === person.id
     );
-    const dealIsWon = isWon(deal.status) || isWon(person.status) || Boolean(deal.saleDetails?.price || person.saleDetails?.price) || (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
-    const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, person.saleDetails, isRecordedBuyer ? vehicle?.saleDetails : undefined);
+    // El contacto tiene UN solo lugar para la venta, pero puede comprar varios
+    // autos. Si Isaias compra una Taigun y luego una X1, el pago de la Taigun
+    // se queda en su contacto y acababa sumado tambien a la X1. Lo del contacto
+    // solo cuenta para su venta vigente (ventaDealId), o si no tiene otro
+    // trato; y aun asi se quitan los pagos que ya registra otro trato suyo.
+    const otrosTratos = deals.filter(d => d.clientId === deal.clientId && d.id !== deal.id);
+    const ventaDelContacto = (person as any).ventaDealId;
+    const contactoEsDeEsteTrato = ventaDelContacto ? ventaDelContacto === deal.id : otrosTratos.length === 0;
+    const pagosDeOtros = new Set(otrosTratos.flatMap(d => (d.saleDetails?.payments || []).map((p: any) => p?.id).filter(Boolean)));
+    const ventaDelPerfil = contactoEsDeEsteTrato && person.saleDetails
+      ? { ...person.saleDetails, payments: (person.saleDetails.payments || []).filter((p: any) => !pagosDeOtros.has(p?.id)) }
+      : undefined;
 
-    const mergedDealValue = deal.saleDetails?.price ?? person.saleDetails?.price ?? (isRecordedBuyer ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
+    const dealIsWon = isWon(deal.status) || Boolean(deal.saleDetails?.price) ||
+      (contactoEsDeEsteTrato && (isWon(person.status) || Boolean(person.saleDetails?.price))) ||
+      (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
+
+    const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, ventaDelPerfil, isRecordedBuyer ? vehicle?.saleDetails : undefined);
+
+    const mergedDealValue = deal.saleDetails?.price ?? ventaDelPerfil?.price ?? (isRecordedBuyer ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
     const soldAt = deal.soldAt || person.soldAt || vehicle?.soldAt || deal.updatedAt || person.updatedAt;
 
     const statusToUse = dealIsWon ? 'won' : (deal.status || person.status || 'lead');
