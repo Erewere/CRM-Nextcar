@@ -21,6 +21,7 @@ import { SeccionGastos } from '../components/auto/SeccionGastos';
 import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
+import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 
 /**
@@ -103,6 +104,8 @@ export function AutoPagina() {
   const [params, setParams] = useSearchParams();
   const [abrirVenta, setAbrirVenta] = useState(false);
   const [subiendo, setSubiendo] = useState<string>('');
+  const [agencia, setAgencia] = useState<any>(null);
+  const [haciendoFicha, setHaciendoFicha] = useState(false);
   const [compartir, setCompartir] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
@@ -184,6 +187,7 @@ export function AutoPagina() {
   useEffect(() => {
     if (!agencyId || !id || !esMio) return;
     getDoc(doc(db, 'agencies', agencyId)).then((s) => {
+      setAgencia(s.data() || null);
       const e = s.data()?.pipelineStages;
       setEtapas(Array.isArray(e) && e.length ? e : [
         { id: 'new', title: 'Nuevos' }, { id: 'contacted', title: 'Contactados' }, { id: 'negotiation', title: 'Negociación' }, { id: 'won', title: 'Ganados' }, { id: 'lost', title: 'Perdidos' },
@@ -577,7 +581,24 @@ export function AutoPagina() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <button type="button" onClick={() => setCompartir(true)} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><Share2 className="w-4 h-4" /> Compartir</button>
-            <button type="button" onClick={() => window.open(`/print/vehicle/${id}`, '_blank')} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><FileText className="w-4 h-4" /> Ficha PDF</button>
+            <button
+              type="button"
+              disabled={haciendoFicha}
+              onClick={async () => {
+                setHaciendoFicha(true);
+                try {
+                  const blob = await generarFichaPdf({ auto, agencia, asesor: { name: userData?.name, phone: (userData as any)?.phone, email: userData?.email } });
+                  await descargarOCompartir(blob, `${[auto.year, auto.make, auto.model].filter(Boolean).join(' ').replace(/[^\w áéíóúñÁÉÍÓÚÑ.-]+/g, '')}.pdf`, titulo);
+                } catch (e: any) {
+                  alert(`No se pudo hacer la ficha. ${e?.message || ''}`);
+                } finally {
+                  setHaciendoFicha(false);
+                }
+              }}
+              className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <FileText className="w-4 h-4" /> {haciendoFicha ? 'Preparando…' : 'Ficha PDF'}
+            </button>
             {puedeFotos && (
               <label className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 cursor-pointer">
                 <Upload className="w-4 h-4" /> {subiendo || 'Subir fotos'}
