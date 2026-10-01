@@ -22,6 +22,7 @@ import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
 import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
+import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/ElegirFotosFicha';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 
 /**
@@ -106,6 +107,7 @@ export function AutoPagina() {
   const [subiendo, setSubiendo] = useState<string>('');
   const [agencia, setAgencia] = useState<any>(null);
   const [haciendoFicha, setHaciendoFicha] = useState(false);
+  const [eligiendoFotos, setEligiendoFotos] = useState(false);
   const [compartir, setCompartir] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
@@ -322,6 +324,20 @@ export function AutoPagina() {
     const num = n.length === 10 ? `52${n}` : n;
     const texto = `Hola${nombre ? ` ${String(nombre).split(' ')[0]}` : ''}, te comparto el ${titulo} en ${pesos(auto.price)}.${auto.websiteUrl ? `\n${auto.websiteUrl}` : ''}`;
     return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
+  };
+
+  const hacerFicha = async (elegidas: string[], recordar = false) => {
+    setHaciendoFicha(true);
+    try {
+      if (recordar) await guardar({ fotosFicha: elegidas }).catch(() => {});
+      const blob = await generarFichaPdf({ auto, agencia, fotosElegidas: elegidas, asesor: { name: userData?.name, phone: (userData as any)?.phone, email: userData?.email } });
+      setEligiendoFotos(false);
+      await descargarOCompartir(blob, `${[auto.year, auto.make, auto.model].filter(Boolean).join(' ').replace(/[^\w áéíóúñÁÉÍÓÚÑ.-]+/g, '')}.pdf`, titulo);
+    } catch (e: any) {
+      alert(`No se pudo hacer la ficha. ${e?.message || ''}`);
+    } finally {
+      setHaciendoFicha(false);
+    }
   };
 
   const chip = (texto: string, clase: string) => <span className={clsx('text-xs font-extrabold px-2.5 py-1 rounded-full', clase)}>{texto}</span>;
@@ -584,17 +600,8 @@ export function AutoPagina() {
             <button
               type="button"
               disabled={haciendoFicha}
-              onClick={async () => {
-                setHaciendoFicha(true);
-                try {
-                  const blob = await generarFichaPdf({ auto, agencia, asesor: { name: userData?.name, phone: (userData as any)?.phone, email: userData?.email } });
-                  await descargarOCompartir(blob, `${[auto.year, auto.make, auto.model].filter(Boolean).join(' ').replace(/[^\w áéíóúñÁÉÍÓÚÑ.-]+/g, '')}.pdf`, titulo);
-                } catch (e: any) {
-                  alert(`No se pudo hacer la ficha. ${e?.message || ''}`);
-                } finally {
-                  setHaciendoFicha(false);
-                }
-              }}
+              // Con más de 3 fotos, primero se eligen las que lleva; con 3 o menos, va directo.
+              onClick={() => (fotos.length > 3 ? setEligiendoFotos(true) : hacerFicha(fotos))}
               className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-60"
             >
               <FileText className="w-4 h-4" /> {haciendoFicha ? 'Preparando…' : 'Ficha PDF'}
@@ -716,6 +723,16 @@ export function AutoPagina() {
         </div>
       </div>
 
+      {eligiendoFotos && (
+        <ElegirFotosFicha
+          fotos={fotos}
+          inicial={fotosInicialesDeFicha(fotos, (auto as any).fotosFicha)}
+          puedeRecordar={puedeEditar}
+          generando={haciendoFicha}
+          onCancelar={() => setEligiendoFotos(false)}
+          onGenerar={hacerFicha}
+        />
+      )}
       {compartir && <ShareVehicleModal vehicle={auto} onClose={() => setCompartir(false)} />}
     </div>
   );

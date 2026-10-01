@@ -17,6 +17,8 @@ export interface DatosFicha {
   auto: Vehicle;
   agencia?: { name?: string; address?: string; phone?: string; phoneWhatsApp?: string; logoUrl?: string } | null;
   asesor?: { name?: string; phone?: string; email?: string } | null;
+  /** Las fotos que lleva la ficha, en orden (la primera en grande). Sin esto, las primeras del auto. */
+  fotosElegidas?: string[];
 }
 
 const AZUL = [15, 23, 42] as const;      // #0f172a
@@ -119,7 +121,7 @@ async function codigoQR(texto: string): Promise<string> {
   return c.toDataURL('image/png');
 }
 
-export async function generarFichaPdf({ auto, agencia, asesor }: DatosFicha): Promise<Blob> {
+export async function generarFichaPdf({ auto, agencia, asesor, fotosElegidas }: DatosFicha): Promise<Blob> {
   const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = 612, H = 792, M = 36, ANCHO = W - M * 2;
   const color = (c: readonly number[]) => pdf.setTextColor(c[0], c[1], c[2]);
@@ -132,7 +134,7 @@ export async function generarFichaPdf({ auto, agencia, asesor }: DatosFicha): Pr
   // Fotos de celular (4:3): la principal a la izquierda y dos a la derecha,
   // del mismo alto entre las dos, para que no sobre espacio gris.
   const ALTO_FOTO = 270, ANCHO_FOTO = 360, ANCHO_MINI = ANCHO - ANCHO_FOTO - 8, ALTO_MINI = (ALTO_FOTO - 8) / 2;
-  const fotos = (auto.photoUrls?.length ? auto.photoUrls : auto.photoUrl ? [auto.photoUrl] : []).filter(Boolean);
+  const fotos = (fotosElegidas?.length ? fotosElegidas : (auto.photoUrls?.length ? auto.photoUrls : auto.photoUrl ? [auto.photoUrl] : [])).filter(Boolean);
   const ficha: any = (auto as any).fichaWeb || {};
   const [principal, miniaturas, logoAg, qr, iconoWa] = await Promise.all([
     fotoCompleta(fotos[0], ANCHO_FOTO, ALTO_FOTO),
