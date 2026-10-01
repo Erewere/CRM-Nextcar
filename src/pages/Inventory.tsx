@@ -17,6 +17,8 @@ import { useReadOnly } from '../hooks/useReadOnly';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials";
 import { hoyLocal } from "../lib/fechas";
+import { TarjetaAuto } from "../components/inventario/TarjetaAuto";
+import { interesPorAuto, diasDesde } from "../lib/interesPorAuto";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -166,6 +168,11 @@ export function Inventory() {
   const [filterStatus, setFilterStatus] = useState<string>('activos');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [tratos, setTratos] = useState<any[]>([]);
+  // Filtro rapido y orden de las tarjetas (la tabla tiene su propio orden por columna).
+  const [filtroRapido, setFiltroRapido] = useState<'todos' | 'sinInteres' | 'viejos' | 'conTratos'>('todos');
+  const [ordenTarjetas, setOrdenTarjetas] = useState<'dias' | 'interes' | 'precio'>('dias');
+  const [ventaDesdeTarjeta, setVentaDesdeTarjeta] = useState(false);
   const [isPendingMinimized, setIsPendingMinimized] = useState(false);
 
   const { matches } = useSharedInventoryMatches();
@@ -500,10 +507,25 @@ export function Inventory() {
       setExpenses(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as VehicleExpense)));
     });
 
+    // Tratos, solo para contar interesados por auto en las tarjetas. Igual que
+    // con los contactos, un vendedor solo cuenta los suyos.
+    let unsubscribeTratos = () => {};
+    if (userData?.role !== 'master' && userData?.agencyId) {
+      const tratosQ = userData.role === 'seller'
+        ? query(collection(db, 'deals'), where('agencyId', '==', userData.agencyId), where('sellerId', '==', userData.id))
+        : query(collection(db, 'deals'), where('agencyId', '==', userData.agencyId));
+      unsubscribeTratos = onSnapshot(
+        tratosQ,
+        (snapshot) => setTratos(snapshot.docs.map(d => ({ ...d.data(), id: d.id }))),
+        () => setTratos([])
+      );
+    }
+
     return () => {
       unsubscribeVehicles();
       unsubscribeClients();
       unsubscribeExpenses();
+      unsubscribeTratos();
     };
   }, [userData]);
 
@@ -761,6 +783,52 @@ export function Inventory() {
   }, [vehicles, sharedVehicles, activeTab, searchTerm, filterOwnership, filterBodyType, filterStatus, sortConfig, expenses]);
 
   const pendingVehicles = vehicles.filter(v => (v as any).pendingValidation);
+
+  const interes = React.useMemo(() => interesPorAuto(tratos, clients), [tratos, clients]);
+  const diasDe = (v: Vehicle) => diasDesde(v.receivedAt || (typeof (v as any).createdAt === 'string' ? (v as any).createdAt : null));
+  const esMio = (v: Vehicle) => v.agencyId === userData?.agencyId;
+
+  const cumpleFiltro = (f: typeof filtroRapido, v: Vehicle) => {
+    const i = interes.get(v.id);
+    const d = diasDe(v);
+    if (f === 'sinInteres') return esMio(v) && !(i?.interesados);
+    if (f === 'viejos') return d !== null && d > 90;
+    if (f === 'conTratos') return (i?.tratosAbiertos || 0) > 0;
+    return true;
+  };
+  const pasaFiltroRapido = (v: Vehicle) => cumpleFiltro(filtroRapido, v);
+
+  const tarjetas = React.useMemo(() => {
+    const lista = filteredVehicles.filter(pasaFiltroRapido);
+    // Si se eligio un orden por columna en la tabla, ese manda.
+    if (sortConfig) return lista;
+    return [...lista].sort((a, b) => {
+      if (ordenTarjetas === 'precio') return (b.price || 0) - (a.price || 0);
+      if (ordenTarjetas === 'interes') {
+        const dif = (interes.get(b.id)?.interesados || 0) - (interes.get(a.id)?.interesados || 0);
+        if (dif) return dif;
+      }
+      return (diasDe(b) ?? -1) - (diasDe(a) ?? -1);
+    });
+  }, [filteredVehicles, filtroRapido, ordenTarjetas, interes, sortConfig]);
+
+  // Resumen de lo que se ve (sin los vendidos).
+  const resumen = React.useMemo(() => {
+    const enJuego = filteredVehicles.filter(v => v.status !== 'sold');
+    const dias = enJuego.map(diasDe).filter((d): d is number => d !== null);
+    return {
+      autos: enJuego.length,
+      valor: enJuego.reduce((s, v) => s + (Number(v.price) || 0), 0),
+      promedio: dias.length ? Math.round(dias.reduce((a, b) => a + b, 0) / dias.length) : null,
+      viejos: dias.filter(d => d > 90).length,
+      sinInteres: enJuego.filter(v => esMio(v) && !interes.get(v.id)?.interesados).length,
+      tratosAbiertos: enJuego.reduce((s, v) => s + (interes.get(v.id)?.tratosAbiertos || 0), 0),
+      enPagina: enJuego.filter(v => (v as any).publicarEnWeb).length,
+    };
+  }, [filteredVehicles, interes]);
+
+  const cuentaFiltro = (f: typeof filtroRapido) => filteredVehicles.filter(v => cumpleFiltro(f, v)).length;
+
 
   if (isMobile) {
     return <MobileInventory />;
@@ -1039,148 +1107,117 @@ export function Inventory() {
         </div>
         
         {viewMode === 'grid' ? (
-          <div className="flex-1 overflow-auto p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredVehicles.map((vehicle, idx) => {
-                const matches = getVehicleMatches(vehicle, clients);
-                const totalMatches = matches.length;
-
-                return (
-              <div 
-                key={`${vehicle.id}-${idx}`} 
-                className="border rounded overflow-hidden hover:shadow-sm transition-shadow cursor-pointer bg-white dark:bg-slate-800 group relative"
-                onClick={() => setSelectedVehicle(vehicle)}
-              >
-                {totalMatches > 0 && (
-                  <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-                    {matches.map((match, idx) => {
-                      let bgColor = 'bg-indigo-500';
-                      let label = `¡Exacto! (${match.client.name})`;
-                      if (match.level === 'high') { bgColor = 'bg-emerald-500'; label = `Muy similar (${match.client.name})`; }
-                      if (match.level === 'medium') { bgColor = 'bg-yellow-500'; label = `Algo similar (${match.client.name})`; }
-                      if (match.level === 'low') { bgColor = 'bg-orange-500'; label = `Posible match (${match.client.name})`; }
-
-                      return (
-                        <div 
-                          key={idx}
-                          onClick={(e) => { e.stopPropagation(); navigate('/persons', { state: { clientId: match.client.id } }); }}
-                          className={`${bgColor} hover:brightness-110 transition-all text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm flex items-center gap-1 w-max cursor-pointer`}
-                          title="Ver cliente"
-                        >
-                          <Target className="w-3 h-3" /> {label}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <div className="h-48 bg-slate-100 dark:bg-slate-700 relative">
-                  {vehicle.photoUrls?.[0] || vehicle.photoUrl ? (
-                    <img src={vehicle.photoUrls?.[0] || vehicle.photoUrl} alt={`${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300">
-                      <CarIcon className="w-16 h-16" />
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2 flex gap-2">
-                    {vehicle.agencyId === userData?.agencyId && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setVehicleToShare(vehicle); }}
-                        title="Compartir por WhatsApp"
-                        className="p-1.5 bg-white dark:bg-slate-800/90 rounded text-slate-400 hover:text-green-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                    )}
-                    {((userData?.role === 'admin' || userData?.role === 'master') && vehicle.agencyId === userData?.agencyId) && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setVehicleToDelete(vehicle.id); }}
-                        className="p-1.5 bg-white dark:bg-slate-800/90 rounded text-slate-400 hover:text-red-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="absolute bottom-2 left-2 flex gap-2">
-                    <div className="px-2 py-1 bg-black/60 text-white text-xs rounded font-medium backdrop-blur-sm">
-                      {(vehicle as any).pendingValidation ? (
-                        <span className="text-amber-300">
-                           Pendiente: {(vehicle as any).pendingValidation.type === 'sold' ? 'Vendido' : 'Reservado'}
-                        </span>
-                      ) : (
-                        vehicle.status === 'available' ? 'Disponible' : vehicle.status === 'sold' ? 'Vendido' : 'Reservado'
-                      )}
-                    </div>
-                    {vehicle.ownership === 'consignacion' && (
-                      <div className="px-2 py-1 bg-purple-600/80 text-white text-xs rounded font-medium backdrop-blur-sm">
-                        Consignación
-                      </div>
-                    )}
-                    {(vehicle.ownership === 'propio' || !vehicle.ownership) && (
-                      <div className="px-2 py-1 bg-blue-600/80 text-white text-xs rounded font-medium backdrop-blur-sm">
-                        Propio
-                      </div>
-                    )}
-                  </div>
+          <div className="flex-1 overflow-auto p-4 flex flex-col gap-4">
+            {activeTab === 'my' && userData?.role !== 'master' && (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <div className="bg-slate-900 dark:bg-slate-950 text-white rounded-xl p-3.5 flex flex-col">
+                  <span className="text-xs text-slate-300 font-semibold">Valor del inventario</span>
+                  <span className="text-xl font-extrabold tracking-tight">${resumen.valor.toLocaleString('es-MX')}</span>
+                  <span className="text-xs text-slate-300">{resumen.autos} autos</span>
                 </div>
-                <div className="p-4">
-                  {vehicle.agencyId !== userData?.agencyId && (
-                    <div className="mb-2 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold rounded-md border border-indigo-100 dark:border-indigo-900/30 w-max">
-                      Agencia: {agencyNames[vehicle.agencyId] || 'Agencia Externa'}
-                    </div>
-                  )}
-                  <h3 className="font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 mt-1 flex justify-between">
-                    <span>{vehicle.color} • {vehicle.km?.toLocaleString() || 0} km</span>
-                    <span>{vehicle.transmission}</span>
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 mt-1 flex justify-between">
-                    <span>Motor: {vehicle.cylinders || 4} cil, {vehicle.liters || 0}L</span>
-                    <span>Días Inv: {
-                      vehicle.receivedAt && !isNaN(new Date(vehicle.receivedAt).getTime())
-                        ? Math.floor((new Date().getTime() - new Date(vehicle.receivedAt).getTime()) / (1000 * 3600 * 24)) 
-                        : 'N/A'
-                    }</span>
-                  </div>
-                  {vehicle.equipment && (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 truncate" title={vehicle.equipment}>
-                      Eq: {vehicle.equipment}
-                    </div>
-                  )}
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate" title={vehicle.vin}>
-                    VIN: <span className="font-mono">{vehicle.vin}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between mt-4">
-                    <span className="text-lg font-bold text-blue-600">${Number(vehicle.price || 0).toLocaleString()}</span>
-                  </div>
-                  {(userData?.role === 'master' || (userData?.role === 'admin' && vehicle.agencyId === userData?.agencyId)) && vehicle.purchasePrice && (
-                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex flex-col gap-1 border-t pt-2">
-                       <div className="flex justify-between items-center">
-                         <span>Costo: ${Number(vehicle.purchasePrice).toLocaleString()}</span>
-                         <span>
-                           Gastos: ${expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0).toLocaleString()}
-                         </span>
-                       </div>
-                       <div className="flex justify-between items-center">
-                         <span className="font-semibold">Utilidad Neta:</span>
-                         <span className={((vehicle.price || 0) - (vehicle.purchasePrice || 0) - expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0)) >= 0 ? "font-semibold text-green-600" : "font-semibold text-red-600"}>
-                           ${Number((vehicle.price || 0) - (vehicle.purchasePrice || 0) - expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0)).toLocaleString()}
-                         </span>
-                       </div>
-                    </div>
-                  )}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 flex flex-col">
+                  <span className="text-xl font-extrabold text-slate-900 dark:text-white">{resumen.promedio ?? '—'}</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Días promedio en inventario</span>
                 </div>
-              </div>
-              );
-            })}
-            {filteredVehicles.length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center">
-                <CarIcon className="w-12 h-12 mb-3 text-slate-300" />
-                <p>No se encontraron vehículos.</p>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 flex flex-col">
+                  <span className="text-xl font-extrabold text-red-700 dark:text-red-400">{resumen.viejos}</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Con más de 90 días</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 flex flex-col">
+                  <span className="text-xl font-extrabold text-amber-700 dark:text-amber-400">{resumen.sinInteres}</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Sin ningún interesado</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 flex flex-col">
+                  <span className="text-xl font-extrabold text-slate-900 dark:text-white">{resumen.tratosAbiertos}</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Tratos abiertos</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">En la página</span>
+                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">{resumen.enPagina} de {resumen.autos}</span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-700" style={{ width: `${resumen.autos ? Math.round((resumen.enPagina / resumen.autos) * 100) : 0}%` }} />
+                  </div>
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400">nextcar.erewere.com</span>
+                </div>
               </div>
             )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ['todos', 'Todos'],
+                  ['sinInteres', 'Sin interesados'],
+                  ['viejos', 'Más de 90 días'],
+                  ['conTratos', 'Con tratos abiertos'],
+                ] as const).map(([id, texto]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setFiltroRapido(id)}
+                    className={clsx(
+                      'min-h-[36px] px-3.5 rounded-full text-sm font-bold border transition-colors',
+                      filtroRapido === id
+                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    )}
+                  >
+                    {texto} <span className="opacity-70 font-semibold">{id === 'todos' ? filteredVehicles.length : cuentaFiltro(id)}</span>
+                  </button>
+                ))}
+              </div>
+              {!sortConfig && (
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-semibold">
+                  Ordenar
+                  <select
+                    value={ordenTarjetas}
+                    onChange={(e) => setOrdenTarjetas(e.target.value as any)}
+                    className="px-3 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="dias">Más días en inventario</option>
+                    <option value="interes">Más interesados</option>
+                    <option value="precio">Precio más alto</option>
+                  </select>
+                </label>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {tarjetas.map((vehicle, idx) => {
+                const mio = esMio(vehicle);
+                const verCostos = (userData?.role === 'master' || (userData?.role === 'admin' && mio)) && !!vehicle.purchasePrice;
+                return (
+                  <TarjetaAuto
+                    key={`${vehicle.id}-${idx}`}
+                    vehicle={vehicle}
+                    dias={diasDe(vehicle)}
+                    interes={interes.get(vehicle.id)}
+                    coincidencias={getVehicleMatches(vehicle, clients) as any}
+                    nombreAgencia={agencyNames[vehicle.agencyId]}
+                    esDeMiAgencia={mio}
+                    puedeBorrar={(userData?.role === 'admin' || userData?.role === 'master') && mio}
+                    puedeVender={mio && !isReadOnly && vehicle.status !== 'sold' && !(vehicle as any).pendingValidation}
+                    costos={verCostos ? {
+                      costo: Number(vehicle.purchasePrice) || 0,
+                      gastos: expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0),
+                    } : null}
+                    onAbrir={() => { setVentaDesdeTarjeta(false); setSelectedVehicle(vehicle); }}
+                    onVender={() => { setVentaDesdeTarjeta(true); setSelectedVehicle(vehicle); }}
+                    onCompartir={() => setVehicleToShare(vehicle)}
+                    onBorrar={() => setVehicleToDelete(vehicle.id)}
+                    onCoincidencia={(clientId) => navigate('/persons', { state: { clientId } })}
+                  />
+                );
+              })}
+              {tarjetas.length === 0 && (
+                <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center">
+                  <CarIcon className="w-12 h-12 mb-3 text-slate-300" />
+                  <p>No se encontraron vehículos.</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         ) : (
           <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
             <table className="w-full min-w-[1000px] text-left text-sm border-collapse table-fixed select-none">
@@ -1326,7 +1363,8 @@ export function Inventory() {
       {selectedVehicle !== undefined && (
         <VehicleDetailModal 
           vehicle={selectedVehicle as Vehicle} 
-          onClose={() => setSelectedVehicle(undefined)} 
+          onClose={() => { setSelectedVehicle(undefined); setVentaDesdeTarjeta(false); }} 
+          iniciarVenta={ventaDesdeTarjeta}
         />
       )}
 

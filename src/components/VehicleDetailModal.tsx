@@ -24,9 +24,11 @@ interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
   onClose: () => void;
   clientContext?: Client;
+  /** Abierto desde el botón «Vender» de la tarjeta: arranca ya en vendido y pide el trato. */
+  iniciarVenta?: boolean;
 }
 
-export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
+export function VehicleDetailModal({ vehicle, onClose, clientContext, iniciarVenta }: Props) {
   const { userData, agencyData } = useAuth();
   const navigate = useNavigate();
   const isNew = !vehicle.id;
@@ -362,6 +364,16 @@ export function VehicleDetailModal({ vehicle, onClose, clientContext }: Props) {
       setFormData({ ...vehicle });
     }
   }, [vehicle, isNew]);
+
+  // «Vender» desde la tarjeta: lo mismo que elegir «Vendido» en el estado,
+  // sin buscarlo. Nada se guarda hasta que se elige el trato y se pulsa Guardar.
+  const ventaArrancada = React.useRef(false);
+  useEffect(() => {
+    if (!iniciarVenta || isNew || ventaArrancada.current || !vehicle?.id || vehicle.status === 'sold') return;
+    ventaArrancada.current = true;
+    setFormData(prev => ({ ...prev, status: 'sold', soldAt: prev.soldAt || hoyLocal() }));
+    setMostrarSelectorTrato(true);
+  }, [iniciarVenta, isNew, vehicle?.id]);
 
   useEffect(() => {
     if (userData?.role === 'master') {
