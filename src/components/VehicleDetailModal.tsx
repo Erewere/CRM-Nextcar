@@ -28,7 +28,36 @@ interface Props {
   iniciarVenta?: boolean;
 }
 
-export function VehicleDetailModal({ vehicle, onClose, clientContext, iniciarVenta }: Props) {
+/**
+ * Los autos propios ya no se abren en esta ventana: se abre su página
+ * (/inventory/:id) o la del alta (/inventory/nuevo), en pantalla completa.
+ * Cualquier pantalla del CRM que todavía abra la ventana termina ahí, sin
+ * tener que cambiarlas una por una. La ventana queda solo para ver autos de
+ * agencias asociadas, que no se pueden leer directo.
+ */
+export function VehicleDetailModal(props: Props) {
+  const { userData } = useAuth();
+  const navigate = useNavigate();
+  const { vehicle, onClose, iniciarVenta } = props;
+  const nuevo = !vehicle.id;
+  // Sin agencyId llega de pantallas que solo traen el id (Pagos): la página lee
+  // el auto completo y, si fuera de otra agencia, lo dice.
+  const propio = nuevo || !vehicle.agencyId || vehicle.agencyId === userData?.agencyId || userData?.role === 'master';
+  const destino = !propio ? null
+    : nuevo ? `/inventory/nuevo${(vehicle as any).publicarEnWeb ? '?web=1' : ''}`
+    : `/inventory/${vehicle.id}${iniciarVenta ? '?vender=1' : ''}`;
+
+  useEffect(() => {
+    if (!destino) return;
+    onClose();
+    navigate(destino);
+  }, [destino]);
+
+  if (destino) return null;
+  return <VentanaDelAuto {...props} />;
+}
+
+function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props) {
   const { userData, agencyData } = useAuth();
   const navigate = useNavigate();
   const isNew = !vehicle.id;

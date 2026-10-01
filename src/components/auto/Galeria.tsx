@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { Car as CarIcon, ChevronLeft, ChevronRight, Star, X, Maximize2 } from 'lucide-react';
+import { Car as CarIcon, ChevronLeft, ChevronRight, Star, X, Maximize2, Trash2 } from 'lucide-react';
 
 /**
  * Fotos del auto: la grande, miniaturas para cambiarla, flechas del teclado y
@@ -8,7 +8,7 @@ import { Car as CarIcon, ChevronLeft, ChevronRight, Star, X, Maximize2 } from 'l
  * el inventario y en la página Nextcar).
  */
 export function Galeria({
-  fotos, titulo, puedeOrdenar, onHacerPortada, cuadricula,
+  fotos, titulo, puedeOrdenar, onHacerPortada, cuadricula, onQuitar,
 }: {
   fotos: string[];
   titulo: string;
@@ -16,6 +16,8 @@ export function Galeria({
   onHacerPortada: (indice: number) => void;
   /** Sección «Fotos»: todas en cuadrícula. */
   cuadricula?: boolean;
+  /** Quitar una foto (solo en la cuadrícula). */
+  onQuitar?: (indice: number) => void;
 }) {
   const [actual, setActual] = useState(0);
   const [completa, setCompleta] = useState(false);
@@ -70,6 +72,16 @@ export function Galeria({
           className="absolute bottom-1 left-1 bg-black/70 hover:bg-black text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100"
         >
           <Star className="w-2.5 h-2.5" /> Portada
+        </button>
+      )}
+      {cuadricula && onQuitar && (
+        <button
+          type="button"
+          onClick={() => onQuitar(i)}
+          aria-label={`Quitar foto ${i + 1}`}
+          className="absolute top-1 right-1 w-7 h-7 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}
     </div>

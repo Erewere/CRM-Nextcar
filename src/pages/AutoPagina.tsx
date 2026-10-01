@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import { ArrowLeft, Copy, ExternalLink, FileText, MessageCircle, Pencil, Share2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, FileText, MessageCircle, Share2, Upload } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,14 +17,16 @@ import { getVehicleMatches } from './Inventory';
 import { CampoEditable } from '../components/auto/CampoEditable';
 import { Galeria } from '../components/auto/Galeria';
 import { GraficaMercado } from '../components/inventario/GraficaMercado';
-import { VehicleDetailModal } from '../components/VehicleDetailModal';
+import { SeccionGastos } from '../components/auto/SeccionGastos';
+import { SeccionVenta } from '../components/auto/SeccionVenta';
+import { subirFotosDeAuto } from '../lib/fotosDeAuto';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 
 /**
  * La página de un auto: todo lo suyo en una pantalla, y los datos se cambian
- * ahí mismo (clic sobre el dato). Lo delicado sigue pasando por la ventana de
- * siempre: vender (pide el trato y, a un vendedor, la aprobación), subir fotos
- * (las comprime) y los gastos.
+ * ahí mismo (clic sobre el dato). Aquí también se suben fotos, se capturan
+ * gastos, se vende y se registran pagos: la ventana del auto ya no hace falta
+ * para los autos propios (VehicleDetailModal los manda aquí).
  *
  * Solo autos de la propia agencia: los de agencias asociadas no se pueden leer
  * directo (la regla lo niega) y siguen abriéndose en la ventana del inventario.
@@ -97,11 +99,9 @@ export function AutoPagina() {
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [mercado, setMercado] = useState<PrecioMercado | null | undefined>(undefined);
   const [seccion, setSeccion] = useState<Seccion>('resumen');
-  const [modal, setModalCrudo] = useState<'' | 'editar' | 'vender'>('');
-  // La ventana recibe una copia fija del auto: si recibiera el auto en vivo,
-  // cada cambio que llegara mientras esta abierta le borraria lo que se esta
-  // escribiendo (la ventana reinicia su formulario cuando cambia el auto).
-  const [autoDeLaVentana, setAutoDeLaVentana] = useState<Vehicle | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [abrirVenta, setAbrirVenta] = useState(false);
+  const [subiendo, setSubiendo] = useState<string>('');
   const [compartir, setCompartir] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
@@ -124,7 +124,15 @@ export function AutoPagina() {
 
   const auto = useMemo(() => (crudo ? conCosto([crudo])[0] : null), [crudo, conCosto]);
   const esMio = !!auto && (auto.agencyId === agencyId || userData?.role === 'master');
-  const setModal = (m: '' | 'editar' | 'vender') => { setAutoDeLaVentana(m && auto ? { ...auto } : null); setModalCrudo(m); };
+  const vender = () => { setSeccion('venta'); setAbrirVenta(true); };
+  // ?vender=1 (desde el boton «Vender» del inventario) y ?seccion=fotos|costos…
+  useEffect(() => {
+    if (!auto) return;
+    const s = params.get('seccion') as Seccion | null;
+    if (s) setSeccion(s);
+    if (params.get('vender') === '1') vender();
+    if (s || params.get('vender')) setParams({}, { replace: true });
+  }, [!!auto]);
 
   // --- Tratos y contactos de este auto (un vendedor, solo los suyos).
   useEffect(() => {
@@ -161,6 +169,16 @@ export function AutoPagina() {
     });
   }, [tratos]);
 
+  // --- Gastos, en vivo.
+  useEffect(() => {
+    if (!agencyId || !id || !esMio) return;
+    return onSnapshot(
+      query(collection(db, 'vehicleExpenses'), where('agencyId', '==', agencyId), where('vehicleId', '==', id)),
+      (s) => setGastos(s.docs.map((d) => ({ ...d.data(), id: d.id }))),
+      () => setGastos([])
+    );
+  }, [agencyId, id, esMio]);
+
   // --- Lo demás, una vez: etapas, vendedores, gastos, clientes que buscan algo así, mercado.
   useEffect(() => {
     if (!agencyId || !id || !esMio) return;
@@ -171,10 +189,6 @@ export function AutoPagina() {
       ]);
     }).catch(() => {});
     getDocs(query(collection(db, 'users'), where('agencyId', '==', agencyId))).then((s) => setUsuarios(s.docs.map((d) => ({ ...d.data(), id: d.id })))).catch(() => {});
-    if (can('gastos.ver') || puedeVerCostos) {
-      getDocs(query(collection(db, 'vehicleExpenses'), where('agencyId', '==', agencyId), where('vehicleId', '==', id)))
-        .then((s) => setGastos(s.docs.map((d) => ({ ...d.data(), id: d.id })))).catch(() => {});
-    }
     const qc = esVendedor
       ? query(collection(db, 'clients'), where('agencyId', '==', agencyId), where('sellerId', '==', userData!.id))
       : query(collection(db, 'clients'), where('agencyId', '==', agencyId));
@@ -198,6 +212,9 @@ export function AutoPagina() {
   // tratos); a un vendedor el CRM no le deja cambiar precios.
   const puedePrecio = puedeEditar && !esVendedor && !vendido;
   const puedePublicar = esMio && !esVendedor && can('vehiculos.editar');
+  // Los gastos, como en la ventana de antes: no para vendedores salvo permiso.
+  const verGastos = esMio && (!esVendedor || !!(userData as any)?.canManageExpenses);
+  const puedeCapturarGastos = esMio && (can('gastos.crear') || !!(userData as any)?.canManageExpenses);
 
   const guardar = (campos: Record<string, any>) => updateDoc(doc(db, 'vehicles', id), { ...campos, updatedAt: new Date().toISOString() });
   const campo = (nombre: string) => async (valor: any) => { await guardar({ [nombre]: valor === null ? '' : valor }); };
@@ -214,6 +231,26 @@ export function AutoPagina() {
     const [elegida] = urls.splice(i, 1);
     urls.unshift(elegida);
     await guardar({ photoUrls: urls, photoUrl: elegida }).catch((e) => alert(`No se pudo cambiar la portada. ${e?.message || ''}`));
+  };
+
+  const subirFotos = async (archivos: FileList | null) => {
+    if (!archivos || !archivos.length || !auto) return;
+    setSubiendo(`Subiendo 0 de ${archivos.length}…`);
+    try {
+      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', id, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`));
+      const todas = [...fotos, ...nuevas];
+      await guardar({ photoUrls: todas, photoUrl: todas[0] });
+    } catch (e: any) {
+      alert(`No se pudieron subir las fotos. ${e?.message || ''}`);
+    } finally {
+      setSubiendo('');
+    }
+  };
+
+  const quitarFoto = async (i: number) => {
+    if (!window.confirm('¿Quitar esta foto del auto?')) return;
+    const resto = fotos.filter((_, j) => j !== i);
+    await guardar({ photoUrls: resto, photoUrl: resto[0] || '' }).catch((e) => alert(`No se pudo quitar la foto. ${e?.message || ''}`));
   };
 
   const todosLosGastos = useMemo(() => {
@@ -310,6 +347,19 @@ export function AutoPagina() {
         </div>
         {completo && <>
           <CampoEditable etiqueta="Fecha de recepción" valor={auto.receivedAt} tipo="fecha" mostrar={(v) => fechaLarga(v)} puedeEditar={puedeEditar} onGuardar={campo('receivedAt')} />
+          {!vendido && !pendiente && (
+            <CampoEditable
+              etiqueta="Estado"
+              valor={auto.status || 'available'}
+              tipo="opciones"
+              opciones={[{ valor: 'available', texto: 'Disponible' }, { valor: 'reserved', texto: 'Apartado' }]}
+              mostrar={(v) => (v === 'reserved' ? 'Apartado' : 'Disponible')}
+              // Para venderlo esta el boton «Vender» (pide trato y forma de pago).
+              puedeEditar={puedeEditar && !esVendedor}
+              onGuardar={async (v) => { if (v === 'available' || v === 'reserved') await guardar({ status: v }); }}
+            />
+          )}
+          <CampoEditable className="col-span-2" etiqueta="Liga de la publicación (opcional)" valor={auto.websiteUrl} puedeEditar={puedeEditar} onGuardar={campo('websiteUrl')} mostrar={(v) => <span className="text-blue-700 break-all">{v}</span>} />
           <CampoEditable className="col-span-2 md:col-span-4" etiqueta="Equipamiento" valor={auto.equipment} tipo="largo" puedeEditar={puedeEditar} onGuardar={campo('equipment')} />
         </>}
       </div>
@@ -408,7 +458,23 @@ export function AutoPagina() {
           </a>
         )}
         {completo && (
-          <CampoEditable etiqueta="Descripción para la página" valor={(auto as any).descripcionWeb} tipo="largo" puedeEditar={puedePublicar} onGuardar={campo('descripcionWeb')} />
+          <>
+            <CampoEditable etiqueta="Descripción para la página" valor={(auto as any).descripcionWeb} tipo="largo" puedeEditar={puedePublicar} onGuardar={campo('descripcionWeb')} />
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-2.5 flex flex-col gap-2">
+              <h3 className="text-xs font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Datos para la página</h3>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">Lo que quede vacío lo completa la página al publicar el auto.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2.5">
+                {([
+                  ['combustible', 'Combustible'], ['traccion', 'Tracción'], ['motor', 'Motor'], ['potencia', 'Potencia'],
+                  ['rendimiento', 'Rendimiento'], ['ciudad', 'Ciudad'],
+                ] as const).map(([clave, etiqueta]) => (
+                  <CampoEditable key={clave} etiqueta={etiqueta} valor={(auto as any).fichaWeb?.[clave]} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ [`fichaWeb.${clave}`]: v || '' }); }} />
+                ))}
+                <CampoEditable etiqueta="Precio anterior (tachado)" valor={(auto as any).fichaWeb?.precioAnterior} tipo="numero" mostrar={pesos} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ 'fichaWeb.precioAnterior': v || null }); }} />
+              </div>
+              <CampoEditable etiqueta="Lo que nos encanta (una idea por renglón)" valor={(auto as any).fichaWeb?.loQueNosEncanta} tipo="largo" puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ 'fichaWeb.loQueNosEncanta': v || '' }); }} />
+            </div>
+          </>
         )}
       </Tarjeta>
     );
@@ -445,58 +511,40 @@ export function AutoPagina() {
   );
 
   const bloqueCostos = (
-    <Tarjeta titulo="Costos y gastos" accion={puedeEditar && <button type="button" onClick={() => setModal('editar')} className="text-xs font-bold text-blue-700 hover:underline">Agregar gasto</button>}>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <CampoEditable etiqueta="Precio de venta" valor={auto.price} tipo="numero" mostrar={pesos} puedeEditar={puedePrecio} onGuardar={campo('price')} />
-        {puedeVerCostos && (
-          <CampoEditable etiqueta={auto.ownership === 'consignacion' ? 'Se le paga al dueño' : 'Costo de compra'} valor={costo || ''} tipo="numero" mostrar={pesos} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardarCosto(id, auto.agencyId, v); }} />
-        )}
-        <div className="flex flex-col"><span className="text-[11px] text-slate-600 dark:text-slate-400">Gastos</span><span className="text-sm font-bold">{pesos(totalGastos)}</span></div>
-        {puedeVerCostos && (
-          <div className="flex flex-col"><span className="text-[11px] text-slate-600 dark:text-slate-400">Utilidad</span><span className={clsx('text-sm font-extrabold', utilidad >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700')}>{costo ? pesos(utilidad) : '—'}</span></div>
-        )}
+    <SeccionGastos
+      auto={auto}
+      gastos={todosLosGastos}
+      costo={costo}
+      puedeVerCostos={puedeVerCostos}
+      puedeCapturar={puedeCapturarGastos}
+      puedePrecio={puedePrecio}
+      usuarioId={userData?.id}
+      dias={dias}
+      onPrecio={campo('price')}
+      onCambioGastos={() => {}}
+    />
+  );
+
+  // En el resumen, la venta en corto; la sección «Venta» trae todo (pagos incluidos).
+  const bloqueVenta = (
+    <Tarjeta titulo="Venta" accion={<button type="button" onClick={() => setSeccion('venta')} className="text-xs font-bold text-blue-700 hover:underline">Ver venta y pagos</button>}>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col"><span className="text-[11px] text-slate-600 dark:text-slate-400">Comprador</span><span className="text-sm font-bold">{auto.buyerName || '—'}</span></div>
+        <div className="flex flex-col"><span className="text-[11px] text-slate-600 dark:text-slate-400">Fecha</span><span className="text-sm font-bold">{fechaLarga(auto.soldAt) || '—'}</span></div>
+        <div className="flex flex-col"><span className="text-[11px] text-slate-600 dark:text-slate-400">Precio</span><span className="text-sm font-bold">{pesos(auto.saleDetails?.price || auto.price)}</span></div>
       </div>
-      {todosLosGastos.length > 0 ? (
-        <ul className="flex flex-col border-t border-slate-200 dark:border-slate-700 pt-2">
-          {todosLosGastos.map((g, i) => (
-            <li key={g.id || i} className="flex justify-between text-sm py-1">
-              <span className="text-slate-700 dark:text-slate-300">{g.description || 'Gasto'} <span className="text-xs text-slate-500">· {fechaLarga(g.date)}</span></span>
-              <span className="font-bold">{pesos(g.amount)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : <p className="text-xs text-slate-600 dark:text-slate-400">Sin gastos registrados.</p>}
     </Tarjeta>
   );
 
-  const bloqueVenta = (
-    <Tarjeta titulo="Venta">
-      {vendido ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="flex flex-col"><span className="text-[11px] text-slate-600">Comprador</span><span className="text-sm font-bold">{auto.buyerName || '—'}</span></div>
-          <div className="flex flex-col"><span className="text-[11px] text-slate-600">Fecha</span><span className="text-sm font-bold">{fechaLarga(auto.soldAt) || '—'}</span></div>
-          <div className="flex flex-col"><span className="text-[11px] text-slate-600">Precio</span><span className="text-sm font-bold">{pesos(auto.saleDetails?.price || auto.price)}</span></div>
-          <div className="flex flex-col"><span className="text-[11px] text-slate-600">Forma de pago</span><span className="text-sm font-bold capitalize">{auto.saleDetails?.method || '—'}</span></div>
-          {userData?.role !== 'seller' && (
-            <button type="button" onClick={() => navigate('/payments')} className="col-span-2 md:col-span-4 justify-self-start text-xs font-bold text-blue-700 hover:underline">Ver pagos de esta venta</button>
-          )}
-        </div>
-      ) : pendiente ? (
-        <p className="text-sm text-amber-800 dark:text-amber-300">Hay una solicitud de {pendiente.type === 'sold' ? 'venta' : 'apartado'} esperando aprobación en Inventario.</p>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-600 dark:text-slate-400">Este auto sigue disponible.</p>
-          {esMio && can('ventas.cerrar') && <button type="button" onClick={() => setModal('vender')} className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">Vender</button>}
-        </div>
-      )}
-    </Tarjeta>
+  const seccionVenta = (
+    <SeccionVenta auto={auto} userData={userData} abrirVenta={abrirVenta} onAbrirVentaAtendido={() => setAbrirVenta(false)} />
   );
 
   const secciones: [Seccion, string, string | number | null][] = [
     ['resumen', 'Resumen', null],
     ['fotos', 'Fotos', fotos.length || null],
     ['datos', 'Datos del auto', null],
-    ['costos', 'Costos y gastos', todosLosGastos.length || null],
+    ...(verGastos ? [['costos', 'Costos y gastos', todosLosGastos.length || null] as [Seccion, string, number | null]] : []),
     ['documentos', 'Documentos', `${docsListos + accListos}/${DOCUMENTOS.length + ACCESORIOS.length}`],
     ['pagina', 'Página web', publicado ? 'Sí' : null],
     ['interesados', 'Interesados', interesados.length || null],
@@ -526,9 +574,13 @@ export function AutoPagina() {
           <div className="flex gap-2 flex-wrap">
             <button type="button" onClick={() => setCompartir(true)} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><Share2 className="w-4 h-4" /> Compartir</button>
             <button type="button" onClick={() => window.open(`/print/vehicle/${id}`, '_blank')} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><FileText className="w-4 h-4" /> Ficha PDF</button>
-            {puedeFotos && <button type="button" onClick={() => setModal('editar')} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><Upload className="w-4 h-4" /> Fotos</button>}
-            {puedeEditar && <button type="button" onClick={() => setModal('editar')} className="min-h-[38px] px-3 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold flex items-center gap-1.5"><Pencil className="w-4 h-4" /> Editar todo</button>}
-            {!vendido && !pendiente && can('ventas.cerrar') && <button type="button" onClick={() => setModal('vender')} className="min-h-[38px] px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">Vender</button>}
+            {puedeFotos && (
+              <label className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 cursor-pointer">
+                <Upload className="w-4 h-4" /> {subiendo || 'Subir fotos'}
+                <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subirFotos(e.target.files); e.target.value = ''; }} />
+              </label>
+            )}
+            {!vendido && !pendiente && can('ventas.cerrar') && <button type="button" onClick={vender} className="min-h-[38px] px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">Vender</button>}
           </div>
         </header>
 
@@ -552,11 +604,19 @@ export function AutoPagina() {
             <span className="text-2xl font-extrabold">{interesados.length}</span>
             <span className="text-xs text-slate-600 dark:text-slate-400">{tratosAbiertos} tratos abiertos{interesados[0]?.fecha ? ` · último ${haceCuanto(interesados[0].fecha)}` : ''}</span>
           </button>
+          {verGastos ? (
           <button type="button" onClick={() => setSeccion('costos')} className="text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 flex flex-col hover:border-blue-400">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">{puedeVerCostos ? 'Utilidad' : 'Gastos'}</span>
             <span className={clsx('text-2xl font-extrabold', puedeVerCostos && costo && utilidad < 0 && 'text-red-700')}>{puedeVerCostos ? (costo ? pesos(utilidad) : '—') : pesos(totalGastos)}</span>
             <span className="text-xs text-slate-600 dark:text-slate-400">{puedeVerCostos && !costo ? 'Falta el costo de compra' : `${todosLosGastos.length} gastos · ${pesos(totalGastos)}`}</span>
           </button>
+          ) : (
+          <button type="button" onClick={() => setSeccion('fotos')} className="text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 flex flex-col hover:border-blue-400">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Fotos</span>
+            <span className="text-2xl font-extrabold">{fotos.length}</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400">{fotos.length ? 'Ver todas' : 'Sin fotos todavía'}</span>
+          </button>
+          )}
           <button type="button" onClick={() => setSeccion('documentos')} className="text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 flex flex-col gap-1 hover:border-blue-400 col-span-2 lg:col-span-1">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Documentos</span>
             <span className={clsx('text-2xl font-extrabold', docsListos < DOCUMENTOS.length ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700')}>{docsListos} de {DOCUMENTOS.length}</span>
@@ -598,23 +658,32 @@ export function AutoPagina() {
               </div>
             )}
             {seccion === 'fotos' && (
-              <Tarjeta titulo={`Fotos (${fotos.length})`} accion={puedeFotos && <button type="button" onClick={() => setModal('editar')} className="text-xs font-bold text-blue-700 hover:underline">Subir o quitar fotos</button>}>
-                <Galeria fotos={fotos} titulo={titulo} puedeOrdenar={puedeFotos} onHacerPortada={hacerPortada} cuadricula />
+              <Tarjeta titulo={`Fotos (${fotos.length})`} accion={puedeFotos && <span className="text-[11px] text-slate-500">La primera es la portada · pasa el mouse sobre una foto para cambiarla o quitarla</span>}>
+                {puedeFotos && (
+                  <label
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); subirFotos(e.dataTransfer.files); }}
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 py-5 cursor-pointer hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 text-center"
+                  >
+                    <Upload className="w-6 h-6 text-slate-500" />
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{subiendo || 'Arrastra fotos aquí o haz clic para elegirlas'}</span>
+                    <span className="text-xs text-slate-500">Se comprimen solas, igual que en la página Nextcar</span>
+                    <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subirFotos(e.target.files); e.target.value = ''; }} />
+                  </label>
+                )}
+                <Galeria fotos={fotos} titulo={titulo} puedeOrdenar={puedeFotos} onHacerPortada={hacerPortada} cuadricula onQuitar={puedeFotos ? quitarFoto : undefined} />
               </Tarjeta>
             )}
             {seccion === 'datos' && bloqueDatos(true)}
-            {seccion === 'costos' && bloqueCostos}
+            {seccion === 'costos' && verGastos && bloqueCostos}
             {seccion === 'documentos' && bloqueDocumentos}
             {seccion === 'pagina' && bloquePagina(true)}
             {seccion === 'interesados' && bloqueInteresados(true)}
-            {seccion === 'venta' && bloqueVenta}
+            {seccion === 'venta' && seccionVenta}
           </div>
         </div>
       </div>
 
-      {modal && autoDeLaVentana && (
-        <VehicleDetailModal vehicle={autoDeLaVentana} onClose={() => setModal('')} iniciarVenta={modal === 'vender'} />
-      )}
       {compartir && <ShareVehicleModal vehicle={auto} onClose={() => setCompartir(false)} />}
     </div>
   );
