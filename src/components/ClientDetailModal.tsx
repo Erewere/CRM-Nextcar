@@ -53,6 +53,7 @@ import { DealWonModal } from "./DealWonModal";
 import { LostReasonModal } from "./LostReasonModal";
 import { PaymentModal } from "./PaymentModal";
 import { VehicleDetailModal } from "./VehicleDetailModal";
+import { ResumenCliente } from "./ficha/ResumenCliente";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
@@ -2994,6 +2995,18 @@ export function ClientDetailModal({
           <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-slate-900 md:overflow-hidden">
             {!isNew ? (
               <div className={`flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 ${isNew ? "hidden md:block" : ""}`}>
+                {/* Resumen: pendiente, etapa, vendedor, como llego, interes y sus
+                    autos de interes. Solo lee; no escribe nada. */}
+                <ResumenCliente
+                  cliente={formData}
+                  tratos={deals}
+                  tareas={tasks}
+                  etapas={pipelineStages}
+                  usuarios={agencyUsers}
+                  inventario={inventoryVehicles}
+                  onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
+                />
+
                 {/* INTERACTION WIDGET */}
                 <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm">
                   <div className="flex border-b border-gray-200 dark:border-slate-700">
