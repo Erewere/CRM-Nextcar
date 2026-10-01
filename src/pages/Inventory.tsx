@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs, getDoc } from 'firebase/firestore';
 import { getApiUrl } from '../lib/api';
 import { Vehicle, Client, VehicleExpense } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp, Share2, FileText } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 import { MobileInventory } from './mobile/MobileInventory';
@@ -18,6 +18,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials";
 import { hoyLocal } from "../lib/fechas";
 import { TarjetaAuto } from "../components/inventario/TarjetaAuto";
+import { ListaPrecios } from "../components/inventario/ListaPrecios";
 import { interesPorAuto, diasDesde } from "../lib/interesPorAuto";
 import type { PrecioMercado } from "../lib/precioMercado";
 import { auth } from "../lib/firebase";
@@ -147,7 +148,8 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
 };
 
 export function Inventory() {
-  const { userData, currentUser } = useAuth();
+  const { userData, currentUser, agencyData } = useAuth();
+  const [haciendoLista, setHaciendoLista] = useState(false);
   const isMobile = useIsMobile();
   const isReadOnly = useReadOnly();
   const { can } = usePermissions();
@@ -1087,6 +1089,16 @@ export function Inventory() {
             </div>
           )}
 
+          {activeTab === 'my' && userData?.role !== 'master' && (
+            <button
+              type="button"
+              onClick={() => setHaciendoLista(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm shrink-0"
+              title="PDF con los autos disponibles, para compartir o imprimir"
+            >
+              <FileText className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lista de precios</span>
+            </button>
+          )}
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-700 rounded shrink-0">
             <button
               onClick={() => setViewMode('grid')}
@@ -1381,6 +1393,14 @@ export function Inventory() {
         )}
       </div>
 
+      {haciendoLista && (
+        <ListaPrecios
+          autos={filteredVehicles.filter((v) => v.agencyId === userData?.agencyId)}
+          agencia={agencyData}
+          asesor={{ name: userData?.name, phone: (userData as any)?.phone }}
+          onCerrar={() => setHaciendoLista(false)}
+        />
+      )}
       {selectedVehicle !== undefined && (
         <VehicleDetailModal 
           vehicle={selectedVehicle as Vehicle} 
