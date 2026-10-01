@@ -3689,7 +3689,9 @@ ${extra}
   // publicos, asi que va despacio y en el servidor. El resultado vive en
   // mercadoAutos/{vehicleId}, que el navegador no lee directo: lo pide aqui.
   const DIAS_MERCADO = 7;
-  const AUTOS_POR_VUELTA = 12;
+  // Todos los pendientes en una pasada (~7 s por auto, con la pausa): cien
+  // autos son unos 12 minutos, una vez por semana.
+  const AUTOS_POR_VUELTA = 300;
   let mercadoCorriendo = false;
 
   async function actualizarPreciosDeMercado() {
@@ -3731,7 +3733,7 @@ ${extra}
             { merge: true },
           );
         }
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((r) => setTimeout(r, 3000));
       }
       if (pendientes.length) console.log(`Precio de mercado: ${pendientes.length} autos revisados.`);
     } catch (e) {
