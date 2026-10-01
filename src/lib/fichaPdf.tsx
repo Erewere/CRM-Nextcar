@@ -58,18 +58,40 @@ function cargar(src: string): Promise<HTMLImageElement | null> {
   return new Promise((ok) => { if (!src) return ok(null); const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
 }
 
-/** Recorta la foto para llenar el recuadro (como object-fit: cover) y la devuelve en JPG. */
-async function fotoRecortada(url: string | undefined, ancho: number, alto: number, escala = 2): Promise<string> {
+/**
+ * La foto completa dentro del recuadro, sin recortarle nada (como
+ * object-fit: contain), centrada sobre gris claro. Antes se recortaba para
+ * llenar el recuadro y al auto se le iban la defensa o el techo.
+ */
+async function fotoCompleta(url: string | undefined, ancho: number, alto: number, escala = 2): Promise<string> {
   const img = await cargar(await aDataUrl(url));
   if (!img) return '';
   const c = document.createElement('canvas');
   c.width = Math.round(ancho * escala); c.height = Math.round(alto * escala);
   const ctx = c.getContext('2d')!;
-  const r = Math.max(c.width / img.width, c.height / img.height);
+  ctx.fillStyle = '#f1f5f9'; ctx.fillRect(0, 0, c.width, c.height);
+  const r = Math.min(c.width / img.width, c.height / img.height);
   const w = img.width * r, h = img.height * r;
-  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
   ctx.drawImage(img, (c.width - w) / 2, (c.height - h) / 2, w, h);
-  return c.toDataURL('image/jpeg', 0.86);
+  return c.toDataURL('image/jpeg', 0.88);
+}
+
+/** Icono de WhatsApp (blanco sobre verde), para el botón del pie. */
+async function iconoWhatsApp(): Promise<string> {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96"><path fill="#ffffff" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>';
+  const img = await cargar(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+  if (!img) return '';
+  const c = document.createElement('canvas');
+  c.width = 96; c.height = 96;
+  c.getContext('2d')!.drawImage(img, 0, 0, 96, 96);
+  return c.toDataURL('image/png');
+}
+
+/** Número para wa.me: solo dígitos y con 52 si viene de 10. */
+function numeroWhatsApp(tel?: string) {
+  const n = String(tel || '').replace(/\D/g, '');
+  if (n.length < 10) return '';
+  return n.length === 10 ? `52${n}` : n;
 }
 
 /** El logo sin recortar, en PNG (conserva la transparencia), y su proporción. */
@@ -107,14 +129,17 @@ export async function generarFichaPdf({ auto, agencia, asesor }: DatosFicha): Pr
     pdf.setFont('helvetica', estilo); pdf.setFontSize(tam); color(c); pdf.text(t, x, y, opc);
   };
 
-  const ALTO_FOTO = 236, ALTO_MINI = 62;
+  // Fotos de celular (4:3): la principal a la izquierda y dos a la derecha,
+  // del mismo alto entre las dos, para que no sobre espacio gris.
+  const ALTO_FOTO = 270, ANCHO_FOTO = 360, ANCHO_MINI = ANCHO - ANCHO_FOTO - 8, ALTO_MINI = (ALTO_FOTO - 8) / 2;
   const fotos = (auto.photoUrls?.length ? auto.photoUrls : auto.photoUrl ? [auto.photoUrl] : []).filter(Boolean);
   const ficha: any = (auto as any).fichaWeb || {};
-  const [principal, miniaturas, logoAg, qr] = await Promise.all([
-    fotoRecortada(fotos[0], ANCHO, ALTO_FOTO),
-    Promise.all(fotos.slice(1, 5).map((f) => fotoRecortada(f, (ANCHO - 24) / 4, ALTO_MINI))),
+  const [principal, miniaturas, logoAg, qr, iconoWa] = await Promise.all([
+    fotoCompleta(fotos[0], ANCHO_FOTO, ALTO_FOTO),
+    Promise.all(fotos.slice(1, 3).map((f) => fotoCompleta(f, ANCHO_MINI, ALTO_MINI))),
     logo(agencia?.logoUrl),
     auto.websiteUrl ? codigoQR(auto.websiteUrl) : Promise.resolve(''),
+    iconoWhatsApp(),
   ]);
 
   // Fondo blanco explícito: algunos visores pintan de negro una página transparente.
@@ -155,17 +180,15 @@ export async function generarFichaPdf({ auto, agencia, asesor }: DatosFicha): Pr
 
   // --- Fotos
   y += 60;
-  if (principal) pdf.addImage(principal, 'JPEG', M, y, ANCHO, ALTO_FOTO);
-  else { relleno(GRIS_CLARO); pdf.rect(M, y, ANCHO, ALTO_FOTO, 'F'); texto('Sin fotografía', W / 2, y + ALTO_FOTO / 2, 12, 'normal', GRIS, { align: 'center' }); }
-  y += ALTO_FOTO + 8;
   const fotosChicas = miniaturas.filter(Boolean);
-  if (fotosChicas.length) {
-    const w = (ANCHO - 24) / 4;
-    fotosChicas.forEach((src, i) => pdf.addImage(src, 'JPEG', M + i * (w + 8), y, w, ALTO_MINI));
-    y += ALTO_MINI + 18;
-  } else {
-    y += 10;
-  }
+  // Sin fotos chicas, la principal usa todo el ancho.
+  const anchoPrincipal = fotosChicas.length ? ANCHO_FOTO : ANCHO;
+  if (principal) {
+    const src = fotosChicas.length ? principal : await fotoCompleta(fotos[0], ANCHO, ALTO_FOTO);
+    pdf.addImage(src, 'JPEG', M, y, anchoPrincipal, ALTO_FOTO);
+  } else { relleno(GRIS_CLARO); pdf.rect(M, y, ANCHO, ALTO_FOTO, 'F'); texto('Sin fotografía', W / 2, y + ALTO_FOTO / 2, 12, 'normal', GRIS, { align: 'center' }); }
+  fotosChicas.forEach((src, i) => pdf.addImage(src, 'JPEG', M + ANCHO_FOTO + 8, y + i * (ALTO_MINI + 8), ANCHO_MINI, ALTO_MINI));
+  y += ALTO_FOTO + 24;
 
   // --- Ficha técnica: hasta 8 datos, solo los que están llenos
   const datos: [string, string][] = ([
@@ -223,11 +246,26 @@ export async function generarFichaPdf({ auto, agencia, asesor }: DatosFicha): Pr
   relleno(AZUL); pdf.rect(0, pie, W, H - pie, 'F');
   const blanco = [255, 255, 255] as const, gris = [203, 213, 225] as const;
   let px = M;
+  // Botón de WhatsApp: abre el chat con el asesor (o con la agencia) con el
+  // mensaje ya escrito. Funciona al tocarlo en el teléfono o al hacer clic en
+  // la computadora; en papel, el número queda escrito al lado.
+  const telWa = numeroWhatsApp(asesor?.phone) || numeroWhatsApp(agencia?.phoneWhatsApp) || numeroWhatsApp(agencia?.phone);
+  const ligaWa = telWa
+    ? `https://wa.me/${telWa}?text=${encodeURIComponent(`Hola${asesor?.name ? ` ${String(asesor.name).split(' ')[0]}` : ''}, me interesa el ${[auto.year, auto.make, auto.model].filter(Boolean).join(' ')} de ${pesos(auto.price)}.`)}`
+    : '';
   if (asesor?.name || asesor?.phone) {
-    texto('TU ASESOR', px, pie + 24, 7.5, 'bold', gris, { charSpace: 1 });
-    texto(asesor?.name || '', px, pie + 40, 12, 'bold', blanco);
-    texto([asesor?.phone, asesor?.email].filter(Boolean).join('   ·   '), px, pie + 54, 9, 'normal', gris);
+    texto('TU ASESOR', px, pie + 20, 7.5, 'bold', gris, { charSpace: 1 });
+    texto(asesor?.name || '', px, pie + 34, 12, 'bold', blanco);
+    if (asesor?.email) texto(asesor.email, px, pie + 46, 8.5, 'normal', gris);
     px = M + 230;
+  }
+  if (ligaWa) {
+    // Pastilla verde con el icono y el número, toda clicable.
+    const bx = M, by = pie + (asesor?.email ? 53 : 44), bw = 168, bh = 20;
+    pdf.setFillColor(37, 211, 102); pdf.roundedRect(bx, by, bw, bh, 10, 10, 'F');
+    if (iconoWa) pdf.addImage(iconoWa, 'PNG', bx + 6, by + 3.5, 13, 13);
+    texto(`WhatsApp ${asesor?.phone || agencia?.phoneWhatsApp || agencia?.phone || ''}`.trim(), bx + 24, by + 13.5, 9, 'bold', blanco);
+    pdf.link(bx, by, bw, bh, { url: ligaWa });
   }
   if (agencia?.name) {
     texto('VISÍTANOS', px, pie + 24, 7.5, 'bold', gris, { charSpace: 1 });
