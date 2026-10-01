@@ -3748,6 +3748,47 @@ ${extra}
   // hora eran ~6,400 lecturas al dia de Firestore solo para esto.
   setInterval(actualizarPreciosDeMercado, 6 * 60 * 60 * 1000);
 
+  // ===== Liga de la publicacion en la pagina Nextcar =====
+  //
+  // Los autos que se publican desde el CRM no traian su liga en la pagina, y
+  // sin ella la ficha en PDF no lleva el QR ni «ver mas fotos». La pagina
+  // dice cual es la de cada uno (api/crm-ligas.php) y aqui se llena sola.
+  // Barato a proposito: cada hora lee solo los autos de esa lista (~16
+  // lecturas) y escribe solo si la liga falta o era otra de la pagina. Una
+  // liga puesta a mano a otro sitio no se toca.
+  const URL_LIGAS = "https://www.nextcar.erewere.com/api/crm-ligas.php";
+  const PREFIJO_PAGINA = "https://www.nextcar.erewere.com/detalle.php";
+
+  async function llenarLigasDeLaPagina() {
+    const adminDb = getAdminDb();
+    if (!adminDb) return;
+    try {
+      const r = await fetch(URL_LIGAS, { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) return;
+      const ligas: { crm_id: string; url: string }[] = ((await r.json())?.ligas || [])
+        .filter((l: any) => /^[A-Za-z0-9_-]{1,64}$/.test(String(l?.crm_id || "")) && String(l?.url || "").startsWith(PREFIJO_PAGINA));
+      if (!ligas.length) return;
+      const refs = ligas.map((l) => adminDb.collection("vehicles").doc(l.crm_id));
+      const docs = await adminDb.getAll(...refs);
+      let cambios = 0;
+      for (let i = 0; i < docs.length; i++) {
+        const d = docs[i];
+        if (!d.exists) continue;
+        const actual = String(d.data()?.websiteUrl || "").trim();
+        const nueva = ligas[i].url;
+        if (actual === nueva) continue;
+        if (actual && !actual.startsWith(PREFIJO_PAGINA)) continue;
+        await d.ref.update({ websiteUrl: nueva });
+        cambios++;
+      }
+      if (cambios) console.log(`Ligas de la pagina: ${cambios} autos actualizados.`);
+    } catch (e) {
+      console.error("Ligas de la pagina:", e);
+    }
+  }
+  setTimeout(llenarLigasDeLaPagina, 4 * 60 * 1000);
+  setInterval(llenarLigasDeLaPagina, 60 * 60 * 1000);
+
   app.get("/api/mercado/inventario", async (req, res) => {
     const quien = await usuarioQuePide(req, res);
     if (!quien) return;
