@@ -12,6 +12,7 @@ import { Tasks } from './pages/Tasks';
 import { Persons } from './pages/Persons';
 import { AgencyUsers } from './pages/AgencyUsers';
 import { Inventory } from './pages/Inventory';
+import { AutoPagina } from './pages/AutoPagina';
 import { VehiclePrint } from './pages/VehiclePrint';
 import { Billing } from './pages/Billing';
 import { Chats } from './pages/Chats';
@@ -105,6 +106,7 @@ export default function App() {
             <Route path="intelligence" element={<Navigate to="/" replace />} />
             <Route path="platform" element={<ProtectedRoute requireRole={['master']}><PlatformPanel /></ProtectedRoute>} />
             <Route path="inventory" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
+            <Route path="inventory/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><AutoPagina /></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />

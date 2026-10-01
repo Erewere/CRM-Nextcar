@@ -1223,7 +1223,7 @@ export function Inventory() {
                       costo: Number(vehicle.purchasePrice) || 0,
                       gastos: expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0),
                     } : null}
-                    onAbrir={() => { setVentaDesdeTarjeta(false); setSelectedVehicle(vehicle); }}
+                    onAbrir={() => { if (mio) { navigate(`/inventory/${vehicle.id}`); return; } setVentaDesdeTarjeta(false); setSelectedVehicle(vehicle); }}
                     onVender={() => { setVentaDesdeTarjeta(true); setSelectedVehicle(vehicle); }}
                     onCompartir={() => setVehicleToShare(vehicle)}
                     onBorrar={() => setVehicleToDelete(vehicle.id)}
@@ -1293,7 +1293,7 @@ export function Inventory() {
                   const totalMatches = matches.length;
 
                   return (
-                  <tr key={`${vehicle.id}-${idx}`} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => setSelectedVehicle(vehicle)}>
+                  <tr key={`${vehicle.id}-${idx}`} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer" onClick={() => (vehicle.agencyId === userData?.agencyId ? navigate(`/inventory/${vehicle.id}`) : setSelectedVehicle(vehicle))}>
                     {columns.filter(c => c.visible).map(col => {
                       let val: React.ReactNode = '';
                       if (col.id === 'year') val = vehicle.year;
