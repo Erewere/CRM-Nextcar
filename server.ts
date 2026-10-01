@@ -3743,7 +3743,9 @@ ${extra}
     }
   }
   setTimeout(actualizarPreciosDeMercado, 3 * 60 * 1000);
-  setInterval(actualizarPreciosDeMercado, 60 * 60 * 1000);
+  // Cada 6 horas: cada revision lee todos los autos (~270 lecturas). Cada
+  // hora eran ~6,400 lecturas al dia de Firestore solo para esto.
+  setInterval(actualizarPreciosDeMercado, 6 * 60 * 60 * 1000);
 
   app.get("/api/mercado/inventario", async (req, res) => {
     const quien = await usuarioQuePide(req, res);
