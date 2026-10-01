@@ -19,6 +19,7 @@ import { Galeria } from '../components/auto/Galeria';
 import { GraficaMercado } from '../components/inventario/GraficaMercado';
 import { SeccionGastos } from '../components/auto/SeccionGastos';
 import { SeccionVenta } from '../components/auto/SeccionVenta';
+import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 
@@ -32,7 +33,7 @@ import { ShareVehicleModal } from '../components/ShareVehicleModal';
  * directo (la regla lo niega) y siguen abriéndose en la ventana del inventario.
  */
 
-type Seccion = 'resumen' | 'fotos' | 'datos' | 'costos' | 'documentos' | 'pagina' | 'interesados' | 'venta';
+type Seccion = 'resumen' | 'fotos' | 'datos' | 'costos' | 'documentos' | 'notas' | 'pagina' | 'interesados' | 'venta';
 
 const DOCUMENTOS = [
   { key: 'originalInvoice', label: 'Factura original' },
@@ -215,6 +216,8 @@ export function AutoPagina() {
   // Los gastos, como en la ventana de antes: no para vendedores salvo permiso.
   const verGastos = esMio && (!esVendedor || !!(userData as any)?.canManageExpenses);
   const puedeCapturarGastos = esMio && (can('gastos.crear') || !!(userData as any)?.canManageExpenses);
+  // Los archivos (facturas, INE...) solo para administradores y gerentes; el servidor lo vuelve a revisar.
+  const verArchivos = esMio && ['admin', 'manager', 'master'].includes(String(userData?.role));
 
   const guardar = (campos: Record<string, any>) => updateDoc(doc(db, 'vehicles', id), { ...campos, updatedAt: new Date().toISOString() });
   const campo = (nombre: string) => async (valor: any) => { await guardar({ [nombre]: valor === null ? '' : valor }); };
@@ -546,6 +549,7 @@ export function AutoPagina() {
     ['datos', 'Datos del auto', null],
     ...(verGastos ? [['costos', 'Costos y gastos', todosLosGastos.length || null] as [Seccion, string, number | null]] : []),
     ['documentos', 'Documentos', `${docsListos + accListos}/${DOCUMENTOS.length + ACCESORIOS.length}`],
+    ['notas', 'Notas internas', null],
     ['pagina', 'Página web', publicado ? 'Sí' : null],
     ['interesados', 'Interesados', interesados.length || null],
     ['venta', 'Venta', null],
@@ -654,6 +658,7 @@ export function AutoPagina() {
                   {vendido && bloqueVenta}
                   {bloqueInteresados(false)}
                   {bloquePagina(false)}
+                  <NotasDelAuto vehicleId={id} compacto onVerTodas={() => setSeccion('notas')} />
                 </div>
               </div>
             )}
@@ -676,7 +681,13 @@ export function AutoPagina() {
             )}
             {seccion === 'datos' && bloqueDatos(true)}
             {seccion === 'costos' && verGastos && bloqueCostos}
-            {seccion === 'documentos' && bloqueDocumentos}
+            {seccion === 'documentos' && (
+              <div className="flex flex-col gap-3">
+                {verArchivos && <DocumentosDelAuto vehicleId={id} />}
+                {bloqueDocumentos}
+              </div>
+            )}
+            {seccion === 'notas' && <NotasDelAuto vehicleId={id} />}
             {seccion === 'pagina' && bloquePagina(true)}
             {seccion === 'interesados' && bloqueInteresados(true)}
             {seccion === 'venta' && seccionVenta}

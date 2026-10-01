@@ -26,6 +26,7 @@ import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { initializeApp, getApps, cert, App as FirebaseApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getStorage as getAdminStorage } from "firebase-admin/storage";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
 import { Resend } from "resend";
@@ -3764,6 +3765,171 @@ ${extra}
       console.error("mercado/inventario:", e);
       res.status(500).json({ error: "No se pudo leer el precio de mercado." });
     }
+  });
+
+  // ===== Documentos y notas internas de cada auto =====
+  //
+  // Documentos (facturas, tarjeta de circulacion, INE del dueño...): solo los
+  // ven administradores y gerentes de la agencia dueña del auto, y el master.
+  // Por eso todo pasa por aqui y no por el navegador: el archivo se guarda en
+  // Storage sin liga publica, sus datos en documentosAutos (coleccion sin
+  // regla para el navegador: solo la lee el servidor) y cada descarga revisa
+  // agencia y rol. Notas internas: las ve toda la agencia; no salen a la pagina.
+  const ROLES_DOCUMENTOS = new Set(["admin", "manager", "master"]);
+  const DOC_MAX_BYTES = 20 * 1024 * 1024;
+  const TIPOS_DOCUMENTO = /^(application\/pdf|image\/(jpeg|png|webp|heic|heif)|application\/(msword|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet))|application\/vnd\.ms-excel|text\/plain)$/;
+
+  async function autoDeLaAgencia(req: any, res: any) {
+    const quien = await usuarioQuePide(req, res);
+    if (!quien) return null;
+    const id = String(req.params.id || "");
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) { res.status(400).json({ error: "Auto no válido." }); return null; }
+    const snap = await quien.adminDb.collection("vehicles").doc(id).get();
+    const v = snap.exists ? snap.data() : null;
+    if (!v || (v.agencyId !== quien.agencyId && quien.rol !== "master")) {
+      res.status(404).json({ error: "No encontramos este auto en tu agencia." });
+      return null;
+    }
+    return { ...quien, vehicleId: id, auto: v };
+  }
+
+  const bucketDocumentos = () => getAdminStorage(getAdminApp()!).bucket(firebaseConfig.storageBucket);
+
+  app.get("/api/autos/:id/documentos", async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    if (!ROLES_DOCUMENTOS.has(q.rol)) return res.status(403).json({ error: "Solo administradores y gerentes ven los documentos." });
+    const snap = await q.adminDb.collection("documentosAutos").where("vehicleId", "==", q.vehicleId).get();
+    const lista = snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }))
+      .filter((d: any) => d.agencyId === q.auto.agencyId)
+      .map(({ ruta, ...resto }: any) => resto)
+      .sort((a: any, b: any) => String(b.creadoEl).localeCompare(String(a.creadoEl)));
+    res.json({ documentos: lista });
+  });
+
+  app.post("/api/autos/:id/documentos", express.raw({ type: () => true, limit: DOC_MAX_BYTES }), async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    if (!ROLES_DOCUMENTOS.has(q.rol)) return res.status(403).json({ error: "Solo administradores y gerentes suben documentos." });
+    const cuerpo = req.body as Buffer;
+    const tipo = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+    if (!Buffer.isBuffer(cuerpo) || !cuerpo.length) return res.status(400).json({ error: "El archivo llegó vacío." });
+    if (!TIPOS_DOCUMENTO.test(tipo)) return res.status(400).json({ error: "Sube PDF, foto (JPG o PNG), Word o Excel." });
+    let nombre = "documento";
+    try { nombre = decodeURIComponent(String(req.headers["x-nombre"] || "documento")); } catch {}
+    nombre = nombre.replace(/[\u0000-\u001f\\/]+/g, " ").trim().slice(0, 120) || "documento";
+    const categoria = String(req.headers["x-categoria"] || "").replace(/[^\p{L}\p{N} .,-]/gu, "").slice(0, 40);
+    const ref = q.adminDb.collection("documentosAutos").doc();
+    const ruta = `documentosAutos/${q.auto.agencyId}/${q.vehicleId}/${ref.id}`;
+    try {
+      await bucketDocumentos().file(ruta).save(cuerpo, { contentType: tipo, resumable: false });
+      const u = (await q.adminDb.collection("users").doc(q.uid).get()).data() || {};
+      const datos = {
+        vehicleId: q.vehicleId,
+        agencyId: q.auto.agencyId,
+        nombre,
+        categoria,
+        tipo,
+        tamano: cuerpo.length,
+        ruta,
+        subidoPor: q.uid,
+        subidoPorNombre: u.name || u.email || "",
+        creadoEl: new Date().toISOString(),
+      };
+      await ref.set(datos);
+      const { ruta: _r, ...publico } = datos;
+      res.json({ documento: { id: ref.id, ...publico } });
+    } catch (e) {
+      console.error("documentos/subir:", e);
+      res.status(500).json({ error: "No se pudo guardar el documento." });
+    }
+  });
+
+  async function documentoDelAuto(q: any, docId: string) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(docId)) return null;
+    const d = await q.adminDb.collection("documentosAutos").doc(docId).get();
+    const x = d.exists ? d.data() : null;
+    if (!x || x.vehicleId !== q.vehicleId || x.agencyId !== q.auto.agencyId) return null;
+    return { ref: d.ref, ...x };
+  }
+
+  app.get("/api/autos/:id/documentos/:docId", async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    if (!ROLES_DOCUMENTOS.has(q.rol)) return res.status(403).json({ error: "Solo administradores y gerentes ven los documentos." });
+    const d: any = await documentoDelAuto(q, String(req.params.docId));
+    if (!d) return res.status(404).json({ error: "No encontramos ese documento." });
+    try {
+      const [bytes] = await bucketDocumentos().file(d.ruta).download();
+      res.setHeader("Content-Type", d.tipo || "application/octet-stream");
+      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(d.nombre)}`);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.send(bytes);
+    } catch (e) {
+      console.error("documentos/ver:", e);
+      res.status(500).json({ error: "No se pudo abrir el documento." });
+    }
+  });
+
+  app.delete("/api/autos/:id/documentos/:docId", async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    if (!ROLES_DOCUMENTOS.has(q.rol)) return res.status(403).json({ error: "Solo administradores y gerentes quitan documentos." });
+    const d: any = await documentoDelAuto(q, String(req.params.docId));
+    if (!d) return res.status(404).json({ error: "No encontramos ese documento." });
+    try {
+      await bucketDocumentos().file(d.ruta).delete({ ignoreNotFound: true });
+      await d.ref.delete();
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("documentos/quitar:", e);
+      res.status(500).json({ error: "No se pudo quitar el documento." });
+    }
+  });
+
+  app.get("/api/autos/:id/notas", async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    const snap = await q.adminDb.collection("notasAutos").where("vehicleId", "==", q.vehicleId).get();
+    const notas = snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }))
+      .filter((n: any) => n.agencyId === q.auto.agencyId)
+      .sort((a: any, b: any) => String(b.creadoEl).localeCompare(String(a.creadoEl)));
+    res.json({ notas, puedoBorrarTodas: ROLES_DOCUMENTOS.has(q.rol), yo: q.uid });
+  });
+
+  app.post("/api/autos/:id/notas", express.json(), async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    const texto = String(req.body?.texto || "").trim().slice(0, 4000);
+    if (!texto) return res.status(400).json({ error: "La nota está vacía." });
+    const u = (await q.adminDb.collection("users").doc(q.uid).get()).data() || {};
+    const datos = {
+      vehicleId: q.vehicleId,
+      agencyId: q.auto.agencyId,
+      texto,
+      autorId: q.uid,
+      autorNombre: u.name || u.email || "",
+      creadoEl: new Date().toISOString(),
+    };
+    const ref = await q.adminDb.collection("notasAutos").add(datos);
+    res.json({ nota: { id: ref.id, ...datos } });
+  });
+
+  app.delete("/api/autos/:id/notas/:notaId", async (req, res) => {
+    const q = await autoDeLaAgencia(req, res);
+    if (!q) return;
+    const notaId = String(req.params.notaId || "");
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(notaId)) return res.status(400).json({ error: "Nota no válida." });
+    const ref = q.adminDb.collection("notasAutos").doc(notaId);
+    const n = (await ref.get()).data();
+    if (!n || n.vehicleId !== q.vehicleId || n.agencyId !== q.auto.agencyId) return res.status(404).json({ error: "No encontramos esa nota." });
+    // Cada quien borra las suyas; administradores y gerentes, cualquiera.
+    if (n.autorId !== q.uid && !ROLES_DOCUMENTOS.has(q.rol)) return res.status(403).json({ error: "Solo quien escribió la nota o un administrador la puede borrar." });
+    await ref.delete();
+    res.json({ ok: true });
   });
 
   const ACCIONES_DE_CHAT = ["atendido", "archivar", "desarchivar", "borrar", "restaurar"] as const;
