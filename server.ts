@@ -8,6 +8,7 @@ import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
 import { procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
+import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
@@ -3681,6 +3682,85 @@ ${extra}
     }
     return { uid: token.uid, rol: String(u.role || ""), agencyId: String(u.agencyId), adminDb };
   }
+
+  // ===== Precio de mercado (Mercado Libre) para las tarjetas del inventario =====
+  //
+  // Una vez por semana por auto: la consulta tarda ~10 s y lee anuncios
+  // publicos, asi que va despacio y en el servidor. El resultado vive en
+  // mercadoAutos/{vehicleId}, que el navegador no lee directo: lo pide aqui.
+  const DIAS_MERCADO = 7;
+  const AUTOS_POR_VUELTA = 12;
+  let mercadoCorriendo = false;
+
+  async function actualizarPreciosDeMercado() {
+    const adminDb = getAdminDb();
+    if (!adminDb || mercadoCorriendo) return;
+    mercadoCorriendo = true;
+    try {
+      const limite = new Date(Date.now() - DIAS_MERCADO * 86_400_000).toISOString();
+      const [autos, hechos] = await Promise.all([
+        adminDb.collection("vehicles").get(),
+        adminDb.collection("mercadoAutos").get(),
+      ]);
+      const fechaDe = new Map<string, string>();
+      hechos.docs.forEach((d: any) => fechaDe.set(d.id, String(d.data()?.intentoEl || "")));
+      const pendientes = autos.docs
+        .filter((d: any) => {
+          const v = d.data() || {};
+          if (v.isDeleted || v.status === "sold" || !v.make || !v.model || !v.year) return false;
+          return (fechaDe.get(d.id) || "") < limite;
+        })
+        .slice(0, AUTOS_POR_VUELTA);
+
+      for (const d of pendientes) {
+        const v = d.data();
+        const ahora = new Date().toISOString();
+        try {
+          const m = await consultarMercado(String(v.make), String(v.model), v.year);
+          await adminDb.collection("mercadoAutos").doc(d.id).set({
+            vehicleId: d.id,
+            agencyId: v.agencyId || null,
+            intentoEl: ahora,
+            mercado: m,
+          });
+        } catch (e: any) {
+          // Sin respuesta de la pagina: se reintenta en la siguiente semana,
+          // y la tarjeta conserva el ultimo dato bueno si lo habia.
+          await adminDb.collection("mercadoAutos").doc(d.id).set(
+            { vehicleId: d.id, agencyId: v.agencyId || null, intentoEl: ahora, error: String(e?.message || e).slice(0, 200) },
+            { merge: true },
+          );
+        }
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+      if (pendientes.length) console.log(`Precio de mercado: ${pendientes.length} autos revisados.`);
+    } catch (e) {
+      console.error("Precio de mercado:", e);
+    } finally {
+      mercadoCorriendo = false;
+    }
+  }
+  setTimeout(actualizarPreciosDeMercado, 3 * 60 * 1000);
+  setInterval(actualizarPreciosDeMercado, 60 * 60 * 1000);
+
+  app.get("/api/mercado/inventario", async (req, res) => {
+    const quien = await usuarioQuePide(req, res);
+    if (!quien) return;
+    try {
+      const snap = await quien.adminDb.collection("mercadoAutos").where("agencyId", "==", quien.agencyId).get();
+      const porAuto: Record<string, any> = {};
+      snap.docs.forEach((d: any) => {
+        const x = d.data() || {};
+        // null = se consulto y no hay anuncios; sin la clave = aun no se sabe.
+        if (x.mercado) porAuto[d.id] = x.mercado;
+        else if ("mercado" in x) porAuto[d.id] = null;
+      });
+      res.json({ porAuto });
+    } catch (e) {
+      console.error("mercado/inventario:", e);
+      res.status(500).json({ error: "No se pudo leer el precio de mercado." });
+    }
+  });
 
   const ACCIONES_DE_CHAT = ["atendido", "archivar", "desarchivar", "borrar", "restaurar"] as const;
 

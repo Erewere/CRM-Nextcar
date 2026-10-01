@@ -19,6 +19,8 @@ import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials"
 import { hoyLocal } from "../lib/fechas";
 import { TarjetaAuto } from "../components/inventario/TarjetaAuto";
 import { interesPorAuto, diasDesde } from "../lib/interesPorAuto";
+import type { PrecioMercado } from "../lib/precioMercado";
+import { auth } from "../lib/firebase";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
 
@@ -173,6 +175,24 @@ export function Inventory() {
   const [filtroRapido, setFiltroRapido] = useState<'todos' | 'sinInteres' | 'viejos' | 'conTratos'>('todos');
   const [ordenTarjetas, setOrdenTarjetas] = useState<'dias' | 'interes' | 'precio'>('dias');
   const [ventaDesdeTarjeta, setVentaDesdeTarjeta] = useState(false);
+  // Precio de mercado por auto (lo calcula el servidor cada semana).
+  const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
+  useEffect(() => {
+    if (!userData?.agencyId || userData.role === 'master') return;
+    let vigente = true;
+    (async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const r = await fetch(getApiUrl('/api/mercado/inventario'), { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (vigente) setMercado(d.porAuto || {});
+      } catch {
+        // Sin dato de mercado las tarjetas simplemente no muestran la barra.
+      }
+    })();
+    return () => { vigente = false; };
+  }, [userData?.agencyId, userData?.role]);
   const [isPendingMinimized, setIsPendingMinimized] = useState(false);
 
   const { matches } = useSharedInventoryMatches();
@@ -1198,6 +1218,7 @@ export function Inventory() {
                     esDeMiAgencia={mio}
                     puedeBorrar={(userData?.role === 'admin' || userData?.role === 'master') && mio}
                     puedeVender={mio && !isReadOnly && vehicle.status !== 'sold' && !(vehicle as any).pendingValidation}
+                    mercado={mercado && vehicle.id in mercado ? mercado[vehicle.id] : undefined}
                     costos={verCostos ? {
                       costo: Number(vehicle.purchasePrice) || 0,
                       gastos: expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0),

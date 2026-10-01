@@ -3,6 +3,8 @@ import clsx from 'clsx';
 import { Car as CarIcon, Share2, Trash2, Target, Globe } from 'lucide-react';
 import { Vehicle } from '../../types';
 import { InteresDeAuto, haceCuanto } from '../../lib/interesPorAuto';
+import { PrecioMercado } from '../../lib/precioMercado';
+import { GraficaMercado } from './GraficaMercado';
 
 export interface Coincidencia {
   level: string;
@@ -20,6 +22,8 @@ interface Props {
   puedeBorrar: boolean;
   puedeVender: boolean;
   costos?: { costo: number; gastos: number } | null;
+  /** undefined: aún no se sabe (no se muestra nada); null: sin anuncios. */
+  mercado?: PrecioMercado | null;
   onAbrir: () => void;
   onVender: () => void;
   onCompartir: () => void;
@@ -35,7 +39,7 @@ const pesos = (n: number) => `$${Number(n || 0).toLocaleString('es-MX')}`;
 
 export function TarjetaAuto({
   vehicle, dias, interes, coincidencias, nombreAgencia, esDeMiAgencia,
-  puedeBorrar, puedeVender, costos, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia,
+  puedeBorrar, puedeVender, costos, mercado, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia,
 }: Props) {
   const foto = vehicle.photoUrls?.[0] || vehicle.photoUrl;
   const pendiente = (vehicle as any).pendingValidation;
@@ -178,6 +182,10 @@ export function TarjetaAuto({
               </span>
             </div>
           </div>
+        )}
+
+        {esDeMiAgencia && vehicle.status !== 'sold' && (
+          <GraficaMercado precio={Number(vehicle.price) || 0} mercado={mercado} />
         )}
 
         <div className="flex gap-2 mt-auto pt-1">
