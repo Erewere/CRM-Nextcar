@@ -295,6 +295,20 @@ export function ClientDetailModal({
     }));
   }, [deals, isNew]);
   const [activeTab, setActiveTab] = useState<"activity" | "notes" | "files" | "deals">("activity");
+  // Menu de la izquierda (solo en computadora; en el telefono se ve todo en
+  // una columna, como antes). Nada se desmonta al cambiar de seccion: solo se
+  // esconde, asi el formulario y lo que se este escribiendo no se pierden.
+  type Seccion = "resumen" | "datos" | "autos" | "tratos" | "notas" | "archivos";
+  const [seccion, setSeccion] = useState<Seccion>("resumen");
+  const irASeccion = (s: Seccion) => {
+    setSeccion(s);
+    if (s === "resumen") setActiveTab("activity");
+    if (s === "tratos") setActiveTab("deals");
+    if (s === "notas") setActiveTab("notes");
+    if (s === "archivos") setActiveTab("files");
+  };
+  /** En computadora, esconde lo que no es de la seccion elegida. */
+  const soloEn = (...secciones: Seccion[]) => (!isNew && !secciones.includes(seccion) ? "md:hidden" : "");
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
   
   useEffect(() => {
@@ -2175,9 +2189,52 @@ export function ClientDetailModal({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
+          {!isNew && (
+            <nav aria-label="Secciones de la ficha" className="hidden md:flex flex-col gap-0.5 w-[190px] shrink-0 p-2 border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-y-auto">
+              {([
+                ["resumen", "Resumen", null],
+                ["datos", "Datos del cliente", null],
+                ["autos", "Autos de interés", null],
+                ["tratos", "Tratos", deals.length],
+                ["notas", "Notas", notes.length],
+                ["archivos", "Archivos", files.length],
+              ] as [Seccion, string, number | null][]).map(([id, texto, cuenta]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => irASeccion(id)}
+                  aria-current={seccion === id ? "page" : undefined}
+                  className={clsx(
+                    "flex items-center justify-between w-full min-h-[40px] px-3 rounded-lg text-left text-sm transition-colors",
+                    seccion === id
+                      ? "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-bold"
+                      : "text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                  )}
+                >
+                  <span>{texto}</span>
+                  {!!cuenta && <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{cuenta}</span>}
+                </button>
+              ))}
+              {(formData.saleDetails || formData.status === "won") && (
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentDrawer(true)}
+                  className="flex items-center justify-between w-full min-h-[40px] px-3 rounded-lg text-left text-sm font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                >
+                  Venta y pagos
+                </button>
+              )}
+            </nav>
+          )}
           {/* LEFT SIDEBAR (DETAILS) */}
-          <div className="w-full md:w-[320px] shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 md:overflow-y-auto">
+          <div className={clsx(
+            "w-full shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 md:overflow-y-auto",
+            !isNew && seccion === "datos" ? "md:flex-1 md:shrink" : "md:w-[320px]",
+            soloEn("datos")
+          )}>
+            <div className={!isNew && seccion === "datos" ? "md:max-w-2xl" : ""}>
             <div className="p-5">
               <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center justify-between">
                 Perfil
@@ -2989,15 +3046,18 @@ export function ClientDetailModal({
 
               </form>
             </div>
+            </div>
           </div>
 
           {/* RIGHT SIDEBAR (INTERACTIONS & TIMELINE) */}
-          <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-slate-900 md:overflow-hidden">
+          <div className={clsx("flex-1 flex flex-col bg-[#F9FAFB] dark:bg-slate-900 md:overflow-hidden", soloEn("resumen", "autos", "tratos", "notas", "archivos"))}>
             {!isNew ? (
               <div className={`flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 ${isNew ? "hidden md:block" : ""}`}>
                 {/* Resumen: pendiente, etapa, vendedor, como llego, interes y sus
                     autos de interes. Solo lee; no escribe nada. */}
+                <div className={soloEn("resumen", "autos")}>
                 <ResumenCliente
+                  soloAutos={!isNew && seccion === "autos"}
                   cliente={formData}
                   tratos={deals}
                   tareas={tasks}
@@ -3006,10 +3066,12 @@ export function ClientDetailModal({
                   inventario={inventoryVehicles}
                   onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
                 />
+                </div>
 
                 {/* INTERACTION WIDGET */}
-                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm">
-                  <div className="flex border-b border-gray-200 dark:border-slate-700">
+                <div className={clsx("bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm", soloEn("resumen", "tratos", "notas", "archivos"))}>
+                  {/* En computadora las pestañas las sustituye el menu de la izquierda. */}
+                  <div className={clsx("flex border-b border-gray-200 dark:border-slate-700", !isNew && "md:hidden")}>
                     <button
                       onClick={() => setActiveTab("activity")}
                       className={clsx(
@@ -3253,7 +3315,7 @@ export function ClientDetailModal({
 
                 {/* FOCUS SECTION (Pending tasks) */}
                 {pendingTasks.length > 0 && (
-                  <div className="space-y-3">
+                  <div className={clsx("space-y-3", soloEn("resumen"))}>
                     <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 flex items-center gap-2">
                       {" "}
                       Enfoque{" "}
@@ -3308,7 +3370,7 @@ export function ClientDetailModal({
                 )}
 
                 {/* TIMELINE / HISTORY SECTION */}
-                <div className="space-y-4">
+                <div className={clsx("space-y-4", soloEn("resumen", "notas", "archivos"))}>
                   <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 flex items-center gap-2">
                     {" "}
                     Historial{" "}
@@ -3455,6 +3517,8 @@ export function ClientDetailModal({
               </div>
             )}
 
+          </div>
+        </div>
             {/* BOTTOM ACTIONS (mobile: form save, desktop: right aligned save) */}
             <div className={`p-4 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3 shrink-0 ${isNew ? "hidden md:flex" : ""}`}>
               {/* Retomar a un cliente frio sin tener que disfrazarlo de "te
@@ -3484,7 +3548,6 @@ export function ClientDetailModal({
                 </button>
               )}
             </div>
-          </div>
         </div>
         )}
 

@@ -25,6 +25,8 @@ interface Props {
   usuarios: any[];
   inventario: Vehicle[];
   onAbrirAuto?: (v: Vehicle) => void;
+  /** Sección «Autos de interés» del menú: sin los recuadros de arriba. */
+  soloAutos?: boolean;
 }
 
 const pesos = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-MX')}`;
@@ -65,7 +67,7 @@ function Recuadro({ titulo, children }: { titulo: string; children: React.ReactN
   );
 }
 
-export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto }: Props) {
+export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto, soloAutos }: Props) {
   const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
   useEffect(() => {
     let vigente = true;
@@ -155,7 +157,7 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className={clsx("grid grid-cols-2 lg:grid-cols-5 gap-3", soloAutos && "hidden")}>
         <Recuadro titulo="Pendiente">
           {proxima ? (
             <>
@@ -208,6 +210,12 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
           </div>
         </div>
       </div>
+
+      {soloAutos && autos.length === 0 && (
+        <div className="bg-white dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center text-sm text-slate-600 dark:text-slate-400">
+          Este cliente todavía no tiene autos de interés. Asígnale uno en «Datos del cliente» o anota qué busca.
+        </div>
+      )}
 
       {autos.length > 0 && (
         <div className="flex flex-col gap-2.5">
