@@ -19,6 +19,7 @@ import { useCostosVehiculos, guardarCosto } from "../hooks/useVehicleFinancials"
 import { hoyLocal } from "../lib/fechas";
 import { TarjetaAuto } from "../components/inventario/TarjetaAuto";
 import { ListaPrecios } from "../components/inventario/ListaPrecios";
+import { LoQueBuscan } from "../components/inventario/LoQueBuscan";
 import { interesPorAuto, diasDesde } from "../lib/interesPorAuto";
 import type { PrecioMercado } from "../lib/precioMercado";
 import { auth } from "../lib/firebase";
@@ -150,6 +151,7 @@ export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleM
 export function Inventory() {
   const { userData, currentUser, agencyData } = useAuth();
   const [haciendoLista, setHaciendoLista] = useState(false);
+  const [viendoDemanda, setViendoDemanda] = useState(false);
   const isMobile = useIsMobile();
   const isReadOnly = useReadOnly();
   const { can } = usePermissions();
@@ -1089,6 +1091,16 @@ export function Inventory() {
             </div>
           )}
 
+          {activeTab === 'my' && userData?.role !== 'master' && userData?.role !== 'taller' && (
+            <button
+              type="button"
+              onClick={() => setViendoDemanda(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm shrink-0"
+              title="Lo que piden los clientes y no hay en el inventario"
+            >
+              <Search className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lo que buscan</span>
+            </button>
+          )}
           {activeTab === 'my' && userData?.role !== 'master' && (
             <button
               type="button"
@@ -1393,6 +1405,9 @@ export function Inventory() {
         )}
       </div>
 
+      {viendoDemanda && (
+        <LoQueBuscan clientes={clients} autos={vehicles} agencyId={userData?.agencyId} esVendedor={userData?.role === 'seller'} onCerrar={() => setViendoDemanda(false)} />
+      )}
       {haciendoLista && (
         <ListaPrecios
           autos={filteredVehicles.filter((v) => v.agencyId === userData?.agencyId)}
