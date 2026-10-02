@@ -21,6 +21,20 @@ type Canal = 'whatsapp' | 'messenger';
 /** Sin responder · Todos · Archivados · Papelera. */
 type Vista = 'sin-responder' | 'activos' | 'archivados' | 'papelera';
 
+/** El motivo de Meta, en palabras de quien vende autos. */
+function motivoDeFallo(codigo?: number | null, titulo?: string) {
+  switch (Number(codigo)) {
+    case 131042: return 'falta el método de pago en la cuenta de WhatsApp (Meta cobra las plantillas).';
+    case 131049: return 'Meta limita cuántos mensajes de promoción recibe cada persona; inténtalo más tarde o espera a que el cliente escriba.';
+    case 131026: return 'ese número no tiene WhatsApp o no puede recibir el mensaje.';
+    case 131047: return 'pasaron más de 24 horas desde su último mensaje; hay que usar una plantilla.';
+    case 132001: case 132000: case 132012: return 'la plantilla no existe, cambió o está en pausa en Meta.';
+    case 131056: return 'se le mandaron demasiados mensajes seguidos; espera un poco.';
+    case 130472: return 'Meta lo detuvo por ser parte de un experimento de marketing; inténtalo más tarde.';
+    default: return titulo || 'Meta no lo entregó.';
+  }
+}
+
 interface WaMessage {
   id: string;
   clientId: string;
@@ -29,6 +43,8 @@ interface WaMessage {
   createdAt: string;
   status?: string;
   sentByName?: string;
+  errorCode?: number | null;
+  errorTitle?: string;
   // Los mensajes guardados antes de que existiera Messenger no traen canal:
   // todos eran de WhatsApp.
   channel?: Canal;
@@ -794,7 +810,14 @@ export function WhatsAppChat() {
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 px-1">
                       {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       {isMine && m.sentByName ? ` · ${m.sentByName}` : ''}
+                      {isMine && m.status === 'delivered' && ' · Entregado'}
+                      {isMine && m.status === 'read' && ' · Leído'}
                     </span>
+                    {isMine && m.status === 'failed' && (
+                      <span className="text-[11px] font-semibold text-red-700 dark:text-red-400 mt-0.5 px-1 max-w-full text-right">
+                        No le llegó: {motivoDeFallo(m.errorCode, m.errorTitle)}
+                      </span>
+                    )}
                   </div>
                 );
               })}

@@ -1893,6 +1893,33 @@ async function startServer() {
           if (body.object === "whatsapp_business_account" && entry.changes) {
             for (const change of entry.changes) {
               const value = change.value;
+              // Si lo que mandamos llegó, se leyó o falló. Antes se ignoraba, y
+              // una plantilla que Meta aceptaba pero no entregaba (sin método
+              // de pago, límite de mensajes de marketing...) se veía como
+              // enviada en el chat sin que nadie supiera que no llegó.
+              if (value && Array.isArray(value.statuses)) {
+                const rango: Record<string, number> = { sent: 1, delivered: 2, read: 3, failed: 4 };
+                for (const st of value.statuses) {
+                  try {
+                    if (!st?.id || !rango[st.status]) continue;
+                    const q = await adminDb.collection("whatsappMessages").where("waMessageId", "==", st.id).limit(1).get();
+                    if (q.empty) continue;
+                    const actual = String(q.docs[0].data()?.status || "sent");
+                    // Los avisos pueden llegar en desorden: un «entregado» tardío no pisa un «leído».
+                    if (st.status !== "failed" && (rango[actual] || 0) >= rango[st.status]) continue;
+                    const cambio: any = { status: st.status, statusAt: new Date().toISOString() };
+                    if (st.status === "failed") {
+                      const e = st.errors?.[0] || {};
+                      cambio.errorCode = e.code ?? null;
+                      cambio.errorTitle = String(e.title || e.message || "").slice(0, 200);
+                      cambio.errorDetail = String(e.error_data?.details || "").slice(0, 300);
+                    }
+                    await q.docs[0].ref.update(cambio);
+                  } catch (stErr) {
+                    console.error("Estado de mensaje de WhatsApp:", stErr);
+                  }
+                }
+              }
               if (value && value.messages && value.messages[0]) {
                 const phoneNumberId = value.metadata?.phone_number_id;
                 const agenciesRef = adminDb.collection("agencies");
