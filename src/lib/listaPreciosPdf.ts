@@ -89,16 +89,33 @@ export async function generarListaPrecios({ autos, agencia, asesor, conFotos, co
   const encabezado = () => {
     pagina++;
     pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, W, H, 'F');
-    let y = M;
+    // Franja de color y encabezado: logo grande, nombre de la agencia a su lado.
+    pdf.setFillColor(AZUL[0], AZUL[1], AZUL[2]); pdf.rect(0, 0, W, 6, 'F');
+    pdf.setFillColor(ACENTO[0], ACENTO[1], ACENTO[2]); pdf.rect(0, 6, W, 2, 'F');
+    let y = 24;
+    const ALTO_LOGO = 56;
+    let xNombre = M;
     if (logoAg) {
-      const alto = 30, ancho = Math.min(130, alto * logoAg.ratio);
-      pdf.addImage(logoAg.src, 'PNG', M, y, ancho, ancho / logoAg.ratio);
-    } else if (agencia?.name) {
-      texto(agencia.name, M, y + 20, 16, 'bold');
+      const ancho = Math.min(175, ALTO_LOGO * logoAg.ratio);
+      const alto = ancho / logoAg.ratio;
+      pdf.addImage(logoAg.src, 'PNG', M, y + (ALTO_LOGO - alto) / 2, ancho, alto);
+      xNombre = M + ancho + 16;
     }
-    texto('LISTA DE PRECIOS', W - M, y + 10, 9, 'bold', ACENTO, { align: 'right' });
-    texto(`${lista.length} autos disponibles · ${hoy}`, W - M, y + 24, 9, 'normal', GRIS, { align: 'right' });
-    y += 44;
+    // El nombre y los datos bajan de renglón en vez de cortarse.
+    const anchoNombre = W - M - 150 - xNombre;
+    if (agencia?.name) {
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16);
+      const nombre = pdf.splitTextToSize(agencia.name, anchoNombre).slice(0, 2) as string[];
+      let yy = y + (nombre.length > 1 ? 16 : 22);
+      nombre.forEach((l) => { texto(l, xNombre, yy, 16, 'bold', AZUL); yy += 17; });
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5);
+      const datos = [agencia.phone ? `Tel. ${agencia.phone}` : '', agencia.address || ''].filter(Boolean);
+      datos.slice(0, nombre.length > 1 ? 1 : 2).forEach((d) => { texto(pdf.splitTextToSize(d, anchoNombre)[0], xNombre, yy - 2, 8.5, 'normal', GRIS); yy += 11; });
+    }
+    texto('LISTA DE PRECIOS', W - M, y + 22, 13, 'bold', AZUL, { align: 'right' });
+    texto(`${lista.length} autos disponibles`, W - M, y + 37, 9, 'normal', GRIS, { align: 'right' });
+    texto(hoy, W - M, y + 49, 9, 'normal', GRIS, { align: 'right' });
+    y += ALTO_LOGO + 12;
     pdf.setFillColor(ACENTO[0], ACENTO[1], ACENTO[2]); pdf.rect(M, y, 46, 3, 'F');
     pdf.setDrawColor(LINEA[0], LINEA[1], LINEA[2]); pdf.setLineWidth(0.6); pdf.line(M + 50, y + 1.5, W - M, y + 1.5);
     y += 20;
