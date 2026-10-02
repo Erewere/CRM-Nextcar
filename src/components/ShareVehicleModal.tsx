@@ -4,6 +4,7 @@ import { getApiUrl } from '../lib/api';
 import { X, Search, Check, Send, AlertCircle, Car, MessageCircle, FileText } from 'lucide-react';
 import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
 import { abrirWhatsApp, SelectorWhatsApp } from '../lib/whatsappApp';
+import { ElegirFotosFicha, fotosInicialesDeFicha, MAX_FOTOS_FICHA } from './auto/ElegirFotosFicha';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
@@ -22,6 +23,10 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
   const [fichaLista, setFichaLista] = useState<File | null>(null);
   const [preparando, setPreparando] = useState(false);
   const [hecho, setHecho] = useState<'' | 'gratis' | 'plantilla'>('');
+  // Las fotos de la ficha: las que se recordaron para este auto o las primeras tres.
+  const todasLasFotos = (vehicle.photoUrls?.length ? vehicle.photoUrls : vehicle.photoUrl ? [vehicle.photoUrl] : []).filter(Boolean) as string[];
+  const [fotosFicha, setFotosFicha] = useState<string[]>(fotosInicialesDeFicha(todasLasFotos, (vehicle as any).fotosFicha));
+  const [eligiendoFotos, setEligiendoFotos] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -87,7 +92,7 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
   const armarFicha = () => generarFichaPdf({
     auto: vehicle,
     agencia: agencyData as any,
-    fotosElegidas: (vehicle as any).fotosFicha,
+    fotosElegidas: fotosFicha,
     asesor: { name: userData?.name, phone: (userData as any)?.phone, email: userData?.email },
   });
 
@@ -276,6 +281,11 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
             </div>
 
             <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 pb-safe flex flex-col gap-2">
+              {todasLasFotos.length > MAX_FOTOS_FICHA && !fichaLista && (
+                <button type="button" onClick={() => setEligiendoFotos(true)} className="self-center text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline">
+                  Fotos de la ficha: {fotosFicha.length} elegidas · cambiar
+                </button>
+              )}
               {fichaLista ? (
                 <button onClick={compartirFicha} className="w-full bg-green-700 hover:bg-green-800 text-white rounded py-3.5 font-bold flex items-center justify-center gap-2">
                   <FileText className="w-5 h-5" /> Compartir ficha por WhatsApp
@@ -315,6 +325,17 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
           </>
         )}
       </motion.div>
+      {eligiendoFotos && (
+        <ElegirFotosFicha
+          fotos={todasLasFotos}
+          inicial={fotosFicha}
+          puedeRecordar={false}
+          generando={false}
+          textoBoton="Usar estas fotos"
+          onCancelar={() => setEligiendoFotos(false)}
+          onGenerar={(elegidas) => { setFotosFicha(elegidas); setFichaLista(null); setEligiendoFotos(false); }}
+        />
+      )}
     </div>
   );
 }

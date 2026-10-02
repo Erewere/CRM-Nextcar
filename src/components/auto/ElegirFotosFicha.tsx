@@ -14,13 +14,14 @@ export function fotosInicialesDeFicha(fotos: string[], guardadas?: string[]) {
   return validas.length ? validas : fotos.slice(0, MAX_FOTOS_FICHA);
 }
 
-export function ElegirFotosFicha({ fotos, inicial, puedeRecordar, generando, onCancelar, onGenerar }: {
+export function ElegirFotosFicha({ fotos, inicial, puedeRecordar, generando, onCancelar, onGenerar, textoBoton }: {
   fotos: string[];
   inicial: string[];
   puedeRecordar: boolean;
   generando: boolean;
   onCancelar: () => void;
   onGenerar: (elegidas: string[], recordar: boolean) => void;
+  textoBoton?: string;
 }) {
   const [elegidas, setElegidas] = useState<string[]>(inicial);
   const [recordar, setRecordar] = useState(true);
@@ -38,7 +39,7 @@ export function ElegirFotosFicha({ fotos, inicial, puedeRecordar, generando, onC
   const etiqueta = (i: number) => (i === 0 ? 'Principal' : `Foto ${i + 1}`);
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="titulo-fotos-ficha">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="titulo-fotos-ficha">
       <div className="absolute inset-0 bg-slate-900/50" onClick={onCancelar} />
       <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-start justify-between gap-3 p-4 border-b border-slate-200 dark:border-slate-700">
@@ -94,7 +95,7 @@ export function ElegirFotosFicha({ fotos, inicial, puedeRecordar, generando, onC
               onClick={() => onGenerar(elegidas, puedeRecordar && recordar)}
               className="min-h-[40px] px-4 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-sm font-bold flex items-center gap-1.5"
             >
-              <FileText className="w-4 h-4" /> {generando ? 'Preparando…' : 'Hacer ficha'}
+              <FileText className="w-4 h-4" /> {generando ? 'Preparando…' : (textoBoton || 'Hacer ficha')}
             </button>
           </div>
         </div>
