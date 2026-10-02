@@ -211,7 +211,7 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
                 <div className="grid grid-cols-2 gap-3 items-end">
                   <label className={etiqueta}>Enganche en efectivo{conToma ? ' (además de su auto)' : ''}<input value={enganche} onChange={(e) => setEnganche(e.target.value)} inputMode="decimal" className={campo} /></label>
                   <div className="flex gap-1">
-                    {[10, 20, 30, 40].map((p) => (
+                    {[20, 30, 40, 50].map((p) => (
                       <button key={p} type="button" onClick={() => ponerPctEnganche(p)} className="flex-1 min-h-[38px] rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">{p}%</button>
                     ))}
                   </div>
