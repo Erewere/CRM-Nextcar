@@ -6,6 +6,7 @@ import { db } from '../lib/firebase';
 import { calcularCotizacion, folioCotizacion, type DatosCotizacion, type FormaCotizacion } from '../lib/cotizacion';
 import { generarCotizacionPdf } from '../lib/cotizacionPdf';
 import { descargarOCompartir, planDeCredito } from '../lib/fichaPdf';
+import { abrirWhatsApp, SelectorWhatsApp } from '../lib/whatsappApp';
 import type { Vehicle } from '../types';
 
 /**
@@ -133,9 +134,9 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
   const mandarWhatsApp = async () => {
     if (!auto || telCliente.length < 10) return;
     const folio = folioCotizacion();
+    // Primero se abre WhatsApp (justo tras el clic, si no el navegador lo bloquea) y luego se anota.
+    abrirWhatsApp(cliente.phone, `Hola${cliente.name ? ` ${String(cliente.name).split(' ')[0]}` : ''}, te comparto la cotización:\n\n${resumenTexto(folio)}`);
     await guardarEnHistorial(folio);
-    const numero = telCliente.length === 10 ? `52${telCliente}` : telCliente;
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(`Hola${cliente.name ? ` ${String(cliente.name).split(' ')[0]}` : ''}, te comparto la cotización:\n\n${resumenTexto(folio)}`)}`, '_blank');
     onCerrar();
   };
 
@@ -281,7 +282,8 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
           </div>
         </div>
 
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap justify-end gap-2">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-2">
+          {telCliente.length >= 10 && <SelectorWhatsApp className="mr-auto" />}
           <button type="button" onClick={onCerrar} disabled={!!trabajando} className="min-h-[40px] px-4 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Cancelar</button>
           {telCliente.length >= 10 && (
             <button type="button" onClick={mandarWhatsApp} disabled={!!trabajando || !auto || (forma !== 'contado' && !r.opciones.length)} className="min-h-[40px] px-4 rounded-lg bg-green-700 hover:bg-green-800 disabled:opacity-60 text-white text-sm font-bold flex items-center gap-1.5">

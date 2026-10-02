@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { alClicWhatsApp } from '../lib/whatsappApp';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
@@ -426,7 +427,8 @@ export function AutoPagina() {
               <span className={clsx('text-[11px] font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap',
                 est === 'Ganado' ? 'bg-emerald-100 text-emerald-900' : est === 'Perdido' ? 'bg-slate-100 text-slate-600' : 'bg-blue-100 text-blue-900')}>{est}</span>
               {liga && (
-                <a href={liga} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp a ${p.nombre}`} title="Mandarle este auto por WhatsApp" className="p-1.5 rounded-lg text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30">
+                <a href={liga}
+                          onClick={alClicWhatsApp} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp a ${p.nombre}`} title="Mandarle este auto por WhatsApp" className="p-1.5 rounded-lg text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30">
                   <MessageCircle className="w-4 h-4" />
                 </a>
               )}
@@ -443,7 +445,8 @@ export function AutoPagina() {
               <div key={m.client.id} className="flex items-center gap-2.5 py-1">
                 <button type="button" onClick={() => navigate('/persons', { state: { clientId: m.client.id } })} className="flex-1 text-left text-sm font-bold text-slate-900 dark:text-slate-100 hover:underline truncate">{m.client.name}</button>
                 <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">{m.level === 'exact' ? 'Exacto' : m.level === 'high' ? 'Muy similar' : 'Algo similar'}</span>
-                {liga && <a href={liga} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp a ${m.client.name}`} className="p-1.5 rounded-lg text-green-700 hover:bg-green-50"><MessageCircle className="w-4 h-4" /></a>}
+                {liga && <a href={liga}
+                          onClick={alClicWhatsApp} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp a ${m.client.name}`} className="p-1.5 rounded-lg text-green-700 hover:bg-green-50"><MessageCircle className="w-4 h-4" /></a>}
               </div>
             );
           })}

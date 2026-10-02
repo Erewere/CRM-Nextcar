@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { alClicWhatsApp } from '../../lib/whatsappApp';
 import clsx from 'clsx';
 import { Car as CarIcon, MessageCircle } from 'lucide-react';
 import { auth } from '../../lib/firebase';
@@ -278,6 +279,7 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
                       {liga && v.status !== 'sold' && (
                         <a
                           href={liga}
+                          onClick={alClicWhatsApp}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 min-h-[36px] rounded-lg bg-green-700 hover:bg-green-800 text-white text-xs font-bold flex items-center justify-center gap-1"

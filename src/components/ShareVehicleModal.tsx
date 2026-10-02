@@ -1,7 +1,9 @@
 import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
 import { getApiUrl } from '../lib/api';
-import { X, Search, Check, Send, AlertCircle, Car } from 'lucide-react';
+import { X, Search, Check, Send, AlertCircle, Car, MessageCircle, FileText } from 'lucide-react';
+import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
+import { abrirWhatsApp, SelectorWhatsApp } from '../lib/whatsappApp';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
@@ -14,7 +16,12 @@ interface Props {
 }
 
 export function ShareVehicleModal({ vehicle, onClose }: Props) {
-  const { userData, currentUser } = useAuth();
+  const { userData, currentUser, agencyData } = useAuth();
+  // Forma gratis: en el teléfono, primero se arma la ficha y luego se comparte
+  // con un segundo toque (el teléfono solo deja compartir justo tras un toque).
+  const [fichaLista, setFichaLista] = useState<File | null>(null);
+  const [preparando, setPreparando] = useState(false);
+  const [hecho, setHecho] = useState<'' | 'gratis' | 'plantilla'>('');
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -55,6 +62,80 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
     (c.phone && c.phone.includes(searchTerm))
   );
 
+  const enTelefono = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+  const titulo = `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim();
+  const mensajeGratis = (c: Client | null) =>
+    `Hola${c?.name ? ` ${String(c.name).split(' ')[0]}` : ''}, te comparto el ${titulo} en $${Number(vehicle.price || 0).toLocaleString('es-MX')}.` +
+    (vehicle.websiteUrl ? `\nAquí ves todas las fotos: ${vehicle.websiteUrl}` : '') +
+    `\nTe mando su ficha con los datos.`;
+  const nombreFicha = `${titulo}.pdf`.replace(/[^\w áéíóúñÁÉÍÓÚÑ.-]+/g, '');
+
+  const anotarEnHistorial = async (c: Client | null, como: string) => {
+    if (!c) return;
+    const n: Record<string, any> = {
+      clientId: c.id,
+      agencyId: userData?.agencyId || '',
+      content: `Compartido por WhatsApp (${como}): ${titulo} - $${Number(vehicle.price || 0).toLocaleString('es-MX')}`,
+      type: 'whatsapp',
+      createdAt: new Date().toISOString(),
+    };
+    if (userData?.id) { n.createdBy = userData.id; n.sellerId = userData.id; }
+    if (userData?.name) n.createdByName = userData.name;
+    await addDoc(collection(db, 'notes'), n).catch((e) => console.error(e));
+  };
+
+  const armarFicha = () => generarFichaPdf({
+    auto: vehicle,
+    agencia: agencyData as any,
+    fotosElegidas: (vehicle as any).fotosFicha,
+    asesor: { name: userData?.name, phone: (userData as any)?.phone, email: userData?.email },
+  });
+
+  /** Gratis, desde el WhatsApp del vendedor: mensaje con la liga + la ficha en PDF. */
+  const mandarGratis = async () => {
+    if (enTelefono) {
+      setPreparando(true);
+      try {
+        const blob = await armarFicha();
+        setFichaLista(new File([blob], nombreFicha, { type: 'application/pdf' }));
+      } catch (e: any) {
+        alert(`No se pudo armar la ficha. ${e?.message || ''}`);
+      } finally {
+        setPreparando(false);
+      }
+      return;
+    }
+    // Computadora: se abre el chat del cliente con el mensaje (antes de esperar,
+    // para que el navegador no lo bloquee) y se descarga la ficha para adjuntarla.
+    abrirWhatsApp(selectedClient?.phone, mensajeGratis(selectedClient));
+    setPreparando(true);
+    try {
+      const blob = await armarFicha();
+      await descargarOCompartir(blob, nombreFicha, titulo);
+      await anotarEnHistorial(selectedClient, 'gratis');
+      setHecho('gratis');
+      setSuccess(true);
+    } catch (e: any) {
+      alert(`Se abrió WhatsApp, pero no se pudo armar la ficha. ${e?.message || ''}`);
+    } finally {
+      setPreparando(false);
+    }
+  };
+
+  const compartirFicha = async () => {
+    if (!fichaLista) return;
+    try {
+      if (navigator.canShare?.({ files: [fichaLista] })) {
+        await navigator.share({ files: [fichaLista], text: mensajeGratis(selectedClient), title: titulo });
+      } else {
+        await descargarOCompartir(fichaLista, nombreFicha, titulo);
+      }
+      await anotarEnHistorial(selectedClient, 'gratis');
+      setHecho('gratis');
+      setSuccess(true);
+    } catch { /* si cierran el menú, no pasa nada */ }
+  };
+
   const handleSend = async () => {
     if (!selectedClient) return;
     setSending(true);
@@ -87,24 +168,12 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error sending message');
       
-      // Save interaction note
-      const notePayload: Record<string, any> = {
-        clientId: selectedClient.id,
-        agencyId: userData?.agencyId || "",
-        content: `Compartido vía WhatsApp: ${vehicle.make} ${vehicle.model} ${vehicle.year} - $${vehicle.price?.toLocaleString()}`,
-        type: 'whatsapp',
-        createdAt: new Date().toISOString(),
-      };
-      if (userData?.id) notePayload.createdBy = userData.id;
-      if (userData?.name) notePayload.createdByName = userData.name;
-      Object.keys(notePayload).forEach((k) => notePayload[k] === undefined && delete notePayload[k]);
-
-      await addDoc(collection(db, 'notes'), notePayload);
-
+      await anotarEnHistorial(selectedClient, 'plantilla oficial');
+      setHecho('plantilla');
       setSuccess(true);
       setTimeout(() => {
         onClose();
-      }, 2000);
+      }, 4000);
     } catch (err: any) {
       console.error(err);
       alert(err?.message || 'Error al enviar el mensaje');
@@ -137,9 +206,11 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
               <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">¡Enviado con éxito!</h3>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{hecho === 'gratis' ? '¡Listo!' : 'Plantilla enviada a Meta'}</h3>
             <p className="text-slate-500 dark:text-slate-400">
-              Se ha enviado un mensaje de WhatsApp a {selectedClient?.name} y se ha registrado en su historial.
+              {hecho === 'gratis'
+                ? `Termina el envío en tu WhatsApp${!enTelefono ? ': adjunta la ficha que se descargó' : ''}. Quedó anotado en el historial de ${selectedClient?.name || 'el cliente'}.`
+                : `En el chat de ${selectedClient?.name || 'el cliente'} verás si le llegó, si lo leyó o por qué no le llegó.`}
             </p>
           </div>
         ) : (
@@ -204,25 +275,40 @@ export function ShareVehicleModal({ vehicle, onClose }: Props) {
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 pb-safe">
+            <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 pb-safe flex flex-col gap-2">
+              {fichaLista ? (
+                <button onClick={compartirFicha} className="w-full bg-green-700 hover:bg-green-800 text-white rounded py-3.5 font-bold flex items-center justify-center gap-2">
+                  <FileText className="w-5 h-5" /> Compartir ficha por WhatsApp
+                </button>
+              ) : (
+                <button
+                  disabled={!selectedClient || preparando || (!enTelefono && !selectedClient?.phone)}
+                  onClick={mandarGratis}
+                  className="w-full bg-green-700 hover:bg-green-800 text-white rounded py-3 font-bold flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="flex items-center gap-2"><MessageCircle className="w-5 h-5" /> {preparando ? 'Armando la ficha…' : 'Mandar gratis desde mi WhatsApp'}</span>
+                  <span className="text-[11px] font-medium opacity-90">Mensaje con la liga del auto + la ficha en PDF</span>
+                </button>
+              )}
+              {!enTelefono || !fichaLista ? <SelectorWhatsApp className="justify-center" /> : null}
               <button
-                disabled={!selectedClient || sending || !selectedClient.phone}
+                disabled={!selectedClient || sending || !selectedClient?.phone}
                 onClick={handleSend}
-                className="w-full bg-blue-600 text-white rounded py-3.5 font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                className="w-full border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded py-2.5 font-bold flex flex-col items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sending ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
-                    <Send className="w-5 h-5" />
-                    Enviar WhatsApp
+                    <span className="flex items-center gap-2 text-sm"><Send className="w-4 h-4" /> Plantilla oficial de la agencia</span>
+                    <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Meta cobra cada envío · solo texto, sin foto · úsala si el cliente no te ha escrito</span>
                   </>
                 )}
               </button>
               {selectedClient && !selectedClient.phone && (
-                <div className="flex items-center gap-1.5 text-xs text-amber-600 mt-2 justify-center">
+                <div className="flex items-center gap-1.5 text-xs text-amber-600 justify-center">
                   <AlertCircle className="w-4 h-4" />
-                  El cliente seleccionado no tiene teléfono registrado
+                  El cliente no tiene teléfono registrado{enTelefono ? ': con «gratis» eliges el contacto en WhatsApp' : ''}
                 </div>
               )}
             </div>
