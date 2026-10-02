@@ -25,6 +25,8 @@ interface Props {
   usuarios: any[];
   inventario: Vehicle[];
   onAbrirAuto?: (v: Vehicle) => void;
+  /** Cotizar un auto a este cliente (sin auto: elegirlo del inventario). */
+  onCotizar?: (v: Vehicle | null) => void;
   /** Sección «Autos de interés» del menú: sin los recuadros de arriba. */
   soloAutos?: boolean;
 }
@@ -67,7 +69,7 @@ function Recuadro({ titulo, children }: { titulo: string; children: React.ReactN
   );
 }
 
-export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto, soloAutos }: Props) {
+export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto, onCotizar, soloAutos }: Props) {
   const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
   useEffect(() => {
     let vigente = true;
@@ -219,9 +221,12 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
 
       {autos.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-            Autos de interés <span className="text-slate-500 font-semibold">{autos.length}</span>
-          </h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+              Autos de interés <span className="text-slate-500 font-semibold">{autos.length}</span>
+            </h3>
+            {onCotizar && <button type="button" onClick={() => onCotizar(null)} className="text-xs font-bold text-blue-700 hover:underline">Cotizar otro auto</button>}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {autos.map(({ v, etiqueta, tipo }) => {
               const foto = v.photoUrls?.[0] || v.photoUrl;
@@ -259,6 +264,15 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
                           className="flex-1 min-h-[36px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           Ver auto
+                        </button>
+                      )}
+                      {onCotizar && v.status !== 'sold' && (
+                        <button
+                          type="button"
+                          onClick={() => onCotizar(v)}
+                          className="flex-1 min-h-[36px] rounded-lg border border-blue-700 text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-800 text-xs font-bold hover:bg-blue-50"
+                        >
+                          Cotizar
                         </button>
                       )}
                       {liga && v.status !== 'sold' && (

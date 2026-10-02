@@ -23,6 +23,7 @@ import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYN
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
 import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
 import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/ElegirFotosFicha';
+import { Cotizador } from '../components/Cotizador';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 
 /**
@@ -108,6 +109,7 @@ export function AutoPagina() {
   const [agencia, setAgencia] = useState<any>(null);
   const [haciendoFicha, setHaciendoFicha] = useState(false);
   const [eligiendoFotos, setEligiendoFotos] = useState(false);
+  const [cotizando, setCotizando] = useState<{ id?: string; name?: string; phone?: string } | null | false>(false);
   const [compartir, setCompartir] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
@@ -612,6 +614,7 @@ export function AutoPagina() {
                 <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subirFotos(e.target.files); e.target.value = ''; }} />
               </label>
             )}
+            {!vendido && <button type="button" onClick={() => setCotizando(null)} className="min-h-[38px] px-3 rounded-lg border border-blue-700 text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-800 text-sm font-bold hover:bg-blue-50">Cotizar</button>}
             {!vendido && !pendiente && can('ventas.cerrar') && <button type="button" onClick={vender} className="min-h-[38px] px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">Vender</button>}
           </div>
         </header>
@@ -723,6 +726,24 @@ export function AutoPagina() {
         </div>
       </div>
 
+      {cotizando !== false && (
+        <Cotizador
+          auto={auto}
+          cliente={cotizando}
+          clientes={(() => {
+            // Primero quienes ya preguntaron por este auto; luego el resto de la cartera.
+            const vistos = new Set<string>();
+            return [
+              ...interesados.map((p) => ({ id: p.clientId, name: p.nombre, phone: p.telefono })),
+              ...clientesAgencia.map((c) => ({ id: c.id, name: c.name, phone: c.phone })),
+            ].filter((c) => c.id && !vistos.has(c.id) && vistos.add(c.id));
+          })()}
+          agencia={agencia}
+          asesor={{ name: userData?.name, phone: (userData as any)?.phone, email: userData?.email }}
+          userData={userData}
+          onCerrar={() => setCotizando(false)}
+        />
+      )}
       {eligiendoFotos && (
         <ElegirFotosFicha
           fotos={fotos}

@@ -54,6 +54,7 @@ import { LostReasonModal } from "./LostReasonModal";
 import { PaymentModal } from "./PaymentModal";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 import { ResumenCliente } from "./ficha/ResumenCliente";
+import { Cotizador } from "./Cotizador";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
@@ -74,7 +75,9 @@ export function ClientDetailModal({
   onClose,
   onUpdated,
 }: Props) {
-  const { userData } = useAuth();
+  const { userData, agencyData } = useAuth();
+  // Cotizar: false = cerrado; null = elegir el auto; un auto = ese.
+  const [cotizandoAuto, setCotizandoAuto] = useState<Vehicle | null | false>(false);
   const controlesArrastre = useDragControls();
   // Cerrar en dos tiempos: primero se anima la salida, y cuando termina se
   // avisa de verdad a quien abrio la ventana. Antes se desmontaba en el acto y
@@ -3065,6 +3068,7 @@ export function ClientDetailModal({
                   usuarios={agencyUsers}
                   inventario={inventoryVehicles}
                   onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
+                  onCotizar={(v) => setCotizandoAuto(v)}
                 />
                 </div>
 
@@ -4033,6 +4037,18 @@ export function ClientDetailModal({
               console.error("Error creating task:", err);
             }
           }}
+        />
+      )}
+
+      {cotizandoAuto !== false && (
+        <Cotizador
+          auto={cotizandoAuto}
+          autos={inventoryVehicles.filter((v) => v.status !== 'sold' && Number(v.price) > 0)}
+          cliente={{ id: (client.originalClientId || client.id) as string, name: formData.name, phone: formData.phone }}
+          agencia={agencyData}
+          asesor={{ name: userData?.name, phone: (userData as any)?.phone, email: userData?.email }}
+          userData={userData}
+          onCerrar={() => setCotizandoAuto(false)}
         />
       )}
 
