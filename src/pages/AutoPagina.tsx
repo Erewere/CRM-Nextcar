@@ -3,7 +3,7 @@ import { alClicWhatsApp } from '../lib/whatsappApp';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import { ArrowLeft, Copy, ExternalLink, FileText, MessageCircle, Share2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, FileText, Image as ImageIcon, MessageCircle, Share2, Upload } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,7 @@ import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
 import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/ElegirFotosFicha';
 import { Cotizador } from '../components/Cotizador';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
+import { ImagenesRedes } from '../components/auto/ImagenesRedes';
 
 /**
  * La página de un auto: todo lo suyo en una pantalla, y los datos se cambian
@@ -108,6 +109,7 @@ export function AutoPagina() {
   const [abrirVenta, setAbrirVenta] = useState(false);
   const [subiendo, setSubiendo] = useState<string>('');
   const [agencia, setAgencia] = useState<any>(null);
+  const [paraRedes, setParaRedes] = useState(false);
   const [haciendoFicha, setHaciendoFicha] = useState(false);
   const [eligiendoFotos, setEligiendoFotos] = useState(false);
   const [cotizando, setCotizando] = useState<{ id?: string; name?: string; phone?: string } | null | false>(false);
@@ -611,6 +613,9 @@ export function AutoPagina() {
             >
               <FileText className="w-4 h-4" /> {haciendoFicha ? 'Preparando…' : 'Ficha PDF'}
             </button>
+            {fotos.length > 0 && (
+              <button type="button" onClick={() => setParaRedes(true)} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><ImageIcon className="w-4 h-4" /> Para redes</button>
+            )}
             {puedeFotos && (
               <label className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 cursor-pointer">
                 <Upload className="w-4 h-4" /> {subiendo || 'Subir fotos'}
@@ -756,6 +761,9 @@ export function AutoPagina() {
           onCancelar={() => setEligiendoFotos(false)}
           onGenerar={hacerFicha}
         />
+      )}
+      {paraRedes && (
+        <ImagenesRedes auto={auto} fotos={fotos} agencia={agencia} telefonoAsesor={(userData as any)?.phone} onCerrar={() => setParaRedes(false)} />
       )}
       {compartir && <ShareVehicleModal vehicle={auto} onClose={() => setCompartir(false)} />}
     </div>
