@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { Vehicle } from '../types';
 import { fotoCompleta, iconoWhatsApp, logo, numeroWhatsApp } from './fichaPdf';
-import { calcularCotizacion, type DatosCotizacion } from './cotizacion';
+import { calcularCotizacion, LEYENDA_COTIZACION, type DatosCotizacion } from './cotizacion';
 
 /**
  * Cotización en PDF para el cliente: el auto, el precio, la toma a cuenta y
@@ -102,17 +102,22 @@ export async function generarCotizacionPdf({ folio, auto, cliente, datos, agenci
     texto(banco ? 'CRÉDITO BANCARIO (ESTIMADO)' : 'PLAN DE CRÉDITO', M, y, 9, 'bold', ACENTO, { charSpace: 1 });
     texto(banco ? `Tasa anual de referencia ${datos.tasa}%` : `Interés ${datos.tasa}% mensual sobre el monto a financiar`, W - M, y, 8.5, 'normal', GRIS, { align: 'right' });
     y += 12;
-    // Resumen del enganche
-    relleno(CLARO); pdf.roundedRect(M, y, ANCHO, 46, 8, 8, 'F');
-    const col3 = ANCHO / 3;
-    const bloque = (i: number, etq: string, val: string) => {
-      texto(etq, M + 16 + i * col3, y + 18, 8, 'bold', GRIS, { charSpace: 0.5 });
-      texto(val, M + 16 + i * col3, y + 36, 13, 'bold');
-    };
-    bloque(0, r.toma > 0 ? 'ENGANCHE (CON TU AUTO)' : 'ENGANCHE', pesos(r.engancheTotal));
-    bloque(1, 'MONTO A FINANCIAR', pesos(r.financiar));
-    bloque(2, 'PLAZOS', r.opciones.map((o) => `${o.meses}`).join(' · ') + ' meses');
-    y += 46 + 14;
+    // Resumen: enganche, comisión por apertura, pago inicial y monto a financiar
+    const conComision = r.comision > 0;
+    relleno(CLARO); pdf.roundedRect(M, y, ANCHO, 54, 8, 8, 'F');
+    const bloques: [string, string, string][] = [
+      [r.toma > 0 ? 'ENGANCHE (CON TU AUTO)' : 'ENGANCHE', pesos(r.engancheTotal), r.toma > 0 ? `${pesos(r.engancheEfectivo)} en efectivo` : ''],
+      ...(conComision ? [['COMISIÓN POR APERTURA', pesos(r.comision), `${datos.comisionPct}% · ${r.comisionFinanciada ? 'incluida en el crédito' : 'de contado'}`] as [string, string, string]] : []),
+      ['PAGO INICIAL', pesos(r.pagoInicial), conComision && !r.comisionFinanciada ? 'enganche + comisión' : 'en efectivo'],
+      ['MONTO A FINANCIAR', pesos(r.financiar), conComision && r.comisionFinanciada ? 'incluye la comisión' : ''],
+    ];
+    const colB = ANCHO / bloques.length;
+    bloques.forEach(([etq, val, sub], i) => {
+      texto(etq, M + 14 + i * colB, y + 16, 7.5, 'bold', GRIS);
+      texto(val, M + 14 + i * colB, y + 33, 13, 'bold');
+      if (sub) texto(sub, M + 14 + i * colB, y + 45, 7.5, 'normal', GRIS);
+    });
+    y += 54 + 14;
     // Tarjetas por plazo
     const n = Math.max(1, Math.min(4, r.opciones.length));
     const gap = 10, w = (ANCHO - gap * (n - 1)) / n, h = 108;
@@ -137,8 +142,14 @@ export async function generarCotizacionPdf({ folio, auto, cliente, datos, agenci
     y += 15 + lineas.length * 12 + 8;
   }
 
-  // --- Pie
+  // --- Leyenda: informativa y sin seguro
   const pie = H - 96;
+  if (datos.forma !== 'contado') {
+    const ly = Math.min(y, pie - 40);
+    pdf.setFillColor(254, 243, 199); pdf.roundedRect(M, ly, ANCHO, 28, 6, 6, 'F');
+    texto(pdf.splitTextToSize(LEYENDA_COTIZACION, ANCHO - 24), M + 12, ly + 17, 8.5, 'bold', [120, 53, 15]);
+  }
+
   relleno(AZUL); pdf.rect(0, pie, W, H - pie, 'F');
   const blanco = [255, 255, 255] as const, gris = [203, 213, 225] as const;
   if (asesor?.name) {

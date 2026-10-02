@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { FileText, MessageCircle, X } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { calcularCotizacion, folioCotizacion, type DatosCotizacion, type FormaCotizacion } from '../lib/cotizacion';
+import { calcularCotizacion, folioCotizacion, LEYENDA_COTIZACION, type DatosCotizacion, type FormaCotizacion } from '../lib/cotizacion';
 import { generarCotizacionPdf } from '../lib/cotizacionPdf';
 import { descargarOCompartir, planDeCredito } from '../lib/fichaPdf';
 import { abrirWhatsApp, SelectorWhatsApp } from '../lib/whatsappApp';
@@ -50,6 +50,8 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
   const [plazos, setPlazos] = useState<number[]>([24, 36, 48]);
   const [tasaPropio, setTasaPropio] = useState('1.5');
   const [tasaBanco, setTasaBanco] = useState(plan ? plan.tasa.replace('%', '') : '15.99');
+  const [comisionPct, setComisionPct] = useState('3');
+  const [comisionFinanciada, setComisionFinanciada] = useState(false);
   const [vigencia, setVigencia] = useState(7);
   const [notas, setNotas] = useState('');
   const [trabajando, setTrabajando] = useState('');
@@ -70,6 +72,8 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
     enganche: num(enganche),
     plazos: plazos.slice(0, 4),
     tasa: forma === 'credito' ? num(tasaPropio) : num(tasaBanco),
+    comisionPct: num(comisionPct),
+    comisionFinanciada: forma === 'credito' && comisionFinanciada,
     vigenciaDias: vigencia,
     notas,
   };
@@ -89,11 +93,14 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
     if (r.toma) lineas.push(`A cuenta: ${tomaDesc || 'su auto'} ${pesos(r.toma)}`);
     if (forma === 'contado') lineas.push(`De contado: ${pesos(r.saldoContado)}`);
     else {
-      lineas.push(`Enganche: ${pesos(r.engancheTotal)} · A financiar: ${pesos(r.financiar)}`);
+      lineas.push(`Enganche: ${pesos(r.engancheTotal)}`);
+      if (r.comision) lineas.push(`Comisión por apertura (${datos.comisionPct}%): ${pesos(r.comision)} ${r.comisionFinanciada ? '(incluida en el financiamiento)' : '(de contado)'}`);
+      lineas.push(`Pago inicial: ${pesos(r.pagoInicial)} · A financiar: ${pesos(r.financiar)}`);
       r.opciones.forEach((o) => lineas.push(`${o.meses} meses: ${pesos(o.mensualidad)} al mes`));
       lineas.push(forma === 'credito' ? `Interés ${datos.tasa}% mensual` : `Tasa anual de referencia ${datos.tasa}% (estimado)`);
     }
     lineas.push(`Vigente ${vigencia} días.`);
+    if (forma !== 'contado') lineas.push(LEYENDA_COTIZACION);
     if (notas.trim()) lineas.push(`Notas: ${notas.trim()}`);
     return lineas.filter(Boolean).join('\n');
   };
@@ -109,7 +116,7 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
       type: 'cotizacion',
       createdAt: new Date().toISOString(),
       createdByName: userData?.name || '',
-      cotizacion: { folio, vehicleId: auto.id, ...datos, precioFinal: r.precio, engancheTotal: r.engancheTotal, financiar: r.financiar, opciones: r.opciones.map((o) => ({ meses: o.meses, mensualidad: Math.round(o.mensualidad) })) },
+      cotizacion: { folio, vehicleId: auto.id, ...datos, precioFinal: r.precio, engancheTotal: r.engancheTotal, comision: Math.round(r.comision), pagoInicial: Math.round(r.pagoInicial), financiar: r.financiar, opciones: r.opciones.map((o) => ({ meses: o.meses, mensualidad: Math.round(o.mensualidad) })) },
     };
     await setDoc(doc(collection(db, 'notes')), JSON.parse(JSON.stringify(n))).catch((e) => console.error('Cotización en historial:', e));
   };
@@ -230,6 +237,24 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
                   {forma === 'credito' ? 'Interés mensual (%) — el mismo que usas al cerrar la venta' : 'Tasa anual de referencia (%)'}
                   <input value={forma === 'credito' ? tasaPropio : tasaBanco} onChange={(e) => (forma === 'credito' ? setTasaPropio : setTasaBanco)(e.target.value)} inputMode="decimal" className={clsx(campo, 'sm:max-w-[200px]')} />
                 </label>
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_minmax(0,1fr)] gap-3 items-end">
+                  <label className={etiqueta}>Comisión por apertura (%)
+                    <input value={comisionPct} onChange={(e) => setComisionPct(e.target.value)} inputMode="decimal" className={campo} />
+                  </label>
+                  {forma === 'credito' ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">La comisión se paga</span>
+                      <div className="grid grid-cols-2 gap-1.5" role="radiogroup">
+                        {([[false, 'De contado, con el enganche'], [true, 'Dentro del financiamiento']] as const).map(([v, t]) => (
+                          <button key={String(v)} type="button" role="radio" aria-checked={comisionFinanciada === v} onClick={() => setComisionFinanciada(v)}
+                            className={clsx('min-h-[38px] px-2 rounded-lg text-xs font-bold border', comisionFinanciada === v ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900' : 'border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300')}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 dark:text-slate-400 pb-2">En crédito bancario la comisión se paga siempre de contado, junto con el enganche.</p>
+                  )}
+                </div>
               </>
             )}
 
@@ -263,7 +288,11 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
                 <div className="flex justify-between items-baseline pt-2 mt-1 border-t border-slate-200 dark:border-slate-700"><span className="font-bold">{r.toma ? 'Diferencia' : 'Total de contado'}</span><span className="text-2xl font-extrabold">{pesos(r.saldoContado)}</span></div>
               ) : (
                 <>
-                  <div className="flex justify-between py-1"><span className="text-slate-600 dark:text-slate-400">Enganche total</span><span className="font-bold">{pesos(r.engancheTotal)}</span></div>
+                  <div className="flex justify-between py-1"><span className="text-slate-600 dark:text-slate-400">Enganche total{r.toma ? ' (con su auto)' : ''}</span><span className="font-bold">{pesos(r.engancheTotal)}</span></div>
+                  {r.comision > 0 && (
+                    <div className="flex justify-between py-1"><span className="text-slate-600 dark:text-slate-400">Comisión por apertura ({datos.comisionPct}%) · {r.comisionFinanciada ? 'financiada' : 'de contado'}</span><span className="font-bold">{pesos(r.comision)}</span></div>
+                  )}
+                  <div className="flex justify-between py-1"><span className="text-slate-600 dark:text-slate-400">Pago inicial en efectivo</span><span className="font-bold">{pesos(r.pagoInicial)}</span></div>
                   <div className="flex justify-between py-1"><span className="text-slate-600 dark:text-slate-400">A financiar</span><span className="font-bold">{pesos(r.financiar)}</span></div>
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     {r.opciones.map((o) => (
@@ -278,6 +307,7 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
                 </>
               )}
             </div>
+            {forma !== 'contado' && <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-2.5 py-2">{LEYENDA_COTIZACION}</p>}
             {!cliente.id && <p className="text-xs text-slate-600 dark:text-slate-400">Este cliente no está en el CRM: la cotización no se guardará en ningún historial.</p>}
           </div>
         </div>
