@@ -30,6 +30,8 @@ interface Props {
   onCotizar?: (v: Vehicle | null) => void;
   /** Sección «Autos de interés» del menú: sin los recuadros de arriba. */
   soloAutos?: boolean;
+  /** Columna angosta de la ficha en pantalla completa: interés y autos en lista. */
+  columna?: boolean;
 }
 
 const pesos = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-MX')}`;
@@ -70,7 +72,7 @@ function Recuadro({ titulo, children }: { titulo: string; children: React.ReactN
   );
 }
 
-export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto, onCotizar, soloAutos }: Props) {
+export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto, onCotizar, soloAutos, columna }: Props) {
   const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
   useEffect(() => {
     let vigente = true;
@@ -139,11 +141,11 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
         .filter((v) => !vistos.has(v.id))
         .map((v) => ({ v, m: getVehicleMatches(v, [cliente])[0] }))
         .filter((x) => x.m && x.m.level !== 'low')
-        .slice(0, 3)
+        .slice(0, columna ? 4 : 3)
         .forEach(({ v }) => lista.push({ v, etiqueta: 'Coincide con lo que busca', tipo: 'coincide' }));
     }
-    return lista.slice(0, 6);
-  }, [inventario, tratos, cliente, etapas, ganado]);
+    return lista.slice(0, columna ? 8 : 6);
+  }, [inventario, tratos, cliente, etapas, ganado, columna]);
 
   const telefono = String(cliente.phone || '').replace(/\D/g, '');
   const whatsapp = (v: Vehicle) => {
@@ -157,6 +159,66 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
 
   const estiloEtiqueta = (tipo: string) =>
     tipo === 'trato' ? 'bg-blue-700 text-white' : tipo === 'coincide' ? 'bg-emerald-700 text-white' : 'bg-white text-slate-900';
+
+  if (columna) {
+    const propios = autos.filter((a) => a.tipo !== 'coincide');
+    const sugeridos = autos.filter((a) => a.tipo === 'coincide');
+    const fila = ({ v, etiqueta, tipo }: (typeof autos)[number]) => {
+      const foto = v.photoUrls?.[0] || v.photoUrl;
+      const liga = whatsapp(v);
+      return (
+        <li key={v.id} className="flex gap-3 items-center">
+          <button type="button" onClick={() => onAbrirAuto?.(v)} className="w-20 h-14 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0" aria-label={`Ver ${v.make} ${v.model}`}>
+            {foto ? <img src={foto} alt="" loading="lazy" className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><CarIcon className="w-6 h-6" /></span>}
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{v.year} {v.make} {v.model}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              <b className="text-slate-900 dark:text-white">{pesos(v.price || 0)}</b>
+              {tipo !== 'coincide' && <> · {etiqueta}</>}
+              {v.status === 'sold' && <> · Vendido</>}
+            </p>
+            <div className="flex gap-3 mt-0.5 text-xs font-bold">
+              {onCotizar && v.status !== 'sold' && <button type="button" onClick={() => onCotizar(v)} className="text-blue-700 dark:text-blue-300 hover:underline">Cotizar</button>}
+              {liga && v.status !== 'sold' && <a href={liga} onClick={alClicWhatsApp} target="_blank" rel="noopener noreferrer" className="text-green-700 dark:text-green-400 hover:underline">Mandar</a>}
+              {onAbrirAuto && <button type="button" onClick={() => onAbrirAuto(v)} className="text-slate-600 dark:text-slate-300 hover:underline">Ver auto</button>}
+            </div>
+          </div>
+        </li>
+      );
+    };
+    return (
+      <div className="flex flex-col gap-4">
+        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: `conic-gradient(${interes.color} 0 ${interes.pct}%, #e2e8f0 ${interes.pct}% 100%)` }} aria-hidden>
+            <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-800" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Interés</span>
+            <span className={clsx('text-sm font-extrabold', interes.clase)}>{interes.nivel}</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400 truncate">{ultimoDelCliente ? `Escribió ${cuando(ultimoDelCliente)}` : 'Aún no escribe por WhatsApp'}</span>
+          </div>
+        </section>
+
+        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="font-extrabold text-slate-900 dark:text-white">Autos de interés</h2>
+            {onCotizar && <button type="button" onClick={() => onCotizar(null)} className="text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline">Cotizar otro</button>}
+          </div>
+          {propios.length ? <ul className="flex flex-col gap-3">{propios.map(fila)}</ul>
+            : <p className="text-sm text-slate-500 dark:text-slate-400">Sin auto asignado. Elígelo en «Datos del cliente».</p>}
+        </section>
+
+        {sugeridos.length > 0 && (
+          <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+            <h2 className="font-extrabold text-slate-900 dark:text-white">Le pueden servir</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">De tu inventario, según lo que busca</p>
+            <ul className="flex flex-col gap-3">{sugeridos.map(fila)}</ul>
+          </section>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

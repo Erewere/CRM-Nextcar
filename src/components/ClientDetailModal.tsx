@@ -1,4 +1,4 @@
-import { motion, AnimatePresence, useDragControls } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import imageCompression from "browser-image-compression";
 import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
@@ -59,7 +59,7 @@ import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 import { aplicarEtapaAlTrato } from "../lib/etapaDelContacto";
-import { FUENTES } from "../lib/fuentes";
+import { FUENTES, etiquetaDeFuente, fuenteDelContacto } from "../lib/fuentes";
 
 import { puedeVenderSinAprobacion, vehiculoVendido, esElCompradorDelVehiculo } from "../lib/ventaDeVehiculo";
 interface Props {
@@ -78,7 +78,6 @@ export function ClientDetailModal({
   const { userData, agencyData } = useAuth();
   // Cotizar: false = cerrado; null = elegir el auto; un auto = ese.
   const [cotizandoAuto, setCotizandoAuto] = useState<Vehicle | null | false>(false);
-  const controlesArrastre = useDragControls();
   // Cerrar en dos tiempos: primero se anima la salida, y cuando termina se
   // avisa de verdad a quien abrio la ventana. Antes se desmontaba en el acto y
   // la animacion de salida no llegaba a verse nunca.
@@ -305,13 +304,7 @@ export function ClientDetailModal({
   const [seccion, setSeccion] = useState<Seccion>("resumen");
   const irASeccion = (s: Seccion) => {
     setSeccion(s);
-    if (s === "resumen") setActiveTab("activity");
-    if (s === "tratos") setActiveTab("deals");
-    if (s === "notas") setActiveTab("notes");
-    if (s === "archivos") setActiveTab("files");
   };
-  /** En computadora, esconde lo que no es de la seccion elegida. */
-  const soloEn = (...secciones: Seccion[]) => (!isNew && !secciones.includes(seccion) ? "md:hidden" : "");
   const [businessHours, setBusinessHours] = useState({ start: 8, end: 20 });
   
   useEffect(() => {
@@ -1723,6 +1716,51 @@ export function ClientDetailModal({
   const pendingTasks = tasks.filter((t) => !t.completed);
   const completedTasks = tasks.filter((t) => t.completed);
 
+  /** Cambiar de etapa: lo mismo que hacía la lista desplegable, ahora con las flechas. */
+  const cambiarEtapa = (newStatus: string) => {
+    if (checkIsLost(newStatus, pipelineStages) || checkIsWon(newStatus, pipelineStages)) {
+      handleStatusChange(newStatus);
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      status: newStatus,
+      dealTitle: prev.dealTitle || (prev.name ? `${prev.name} deal` : "Nuevo Trato"),
+    }));
+    handleStatusChange(newStatus);
+  };
+  const etapasFlecha = pipelineStages.filter((st) => !checkIsLost(st.id, pipelineStages) && !checkIsWon(st.id, pipelineStages));
+  const indiceFlecha = etapasFlecha.findIndex((st) => st.id === formData.status);
+  const esGanado = checkIsWon(formData.status, pipelineStages);
+  const telDigitos = String(formData.phone || "").replace(/\D/g, "");
+  const iniciales = String(formData.name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join("") || "?";
+  const llegoHace = (() => {
+    const c: any = (formData as any).createdAt;
+    const d = !c ? null : typeof c === "string" ? new Date(c) : typeof c?.toDate === "function" ? c.toDate() : typeof c?.seconds === "number" ? new Date(c.seconds * 1000) : null;
+    if (!d || Number.isNaN(d.getTime())) return "";
+    const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+    return dias <= 0 ? "hoy" : dias === 1 ? "ayer" : `hace ${dias} días`;
+  })();
+  const ventaResumen = (formData.saleDetails || formData.status === "won") ? (() => {
+    const soldV = inventoryVehicles.find((v) => v.id === formData.vehicleId);
+    const precio = formData.saleDetails?.price || formData.dealValue || soldV?.price || 0;
+    const pagos = formData.saleDetails?.payments || [];
+    const pagado = pagos.reduce((acc: number, pg: any) => acc + (pg.amount || 0), 0);
+    return { precio, pagado, saldo: Math.max(0, precio - pagado), cuantos: pagos.length, pct: precio > 0 ? Math.min(100, Math.round((pagado / precio) * 100)) : 100 };
+  })() : null;
+  const pesosMx = (n: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(n || 0);
+  // Tareas pendientes en orden de fecha: la primera es el «próximo paso».
+  const pendientesEnOrden = [...pendingTasks].sort((a, b) =>
+    `${a.dueDate || "9999"} ${a.startTime || a.dueTime || ""}`.localeCompare(`${b.dueDate || "9999"} ${b.startTime || b.dueTime || ""}`));
+  const proximoPaso = pendientesEnOrden[0];
+  const hoyIso = new Date().toLocaleDateString("en-CA");
+  const proximoVencido = !!proximoPaso?.dueDate && proximoPaso.dueDate.slice(0, 10) < hoyIso;
+  const composerRef = useRef<HTMLDivElement>(null);
+  const irANota = () => {
+    setActiveTab("notes");
+    setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+
   return (
     // La animacion de salida ya existia pero no llegaba a verse: quien abre
     // esta ventana la quita de golpe, y sin AnimatePresence no hay momento en
@@ -1730,297 +1768,262 @@ export function ClientDetailModal({
     // la usan, y el cierre de verdad ocurre cuando la animacion termina.
     <AnimatePresence onExitComplete={onClose}>
       {!cerrando && (
-    <motion.div key="ventana-trato" className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
-      {/* Backdrop */}
-      <motion.div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={cerrar}
-      />
-      {/* La entrada y la salida viven en esta capa, y el arrastre en la de
-          dentro. Estaban en el mismo elemento, y `animate` fijaba la posicion
-          en cero: cada redibujado cancelaba el arrastre, asi que la hoja no se
-          movia al deslizarla por mas que el gesto si funcionara. */}
-      <motion.div
-        className="w-full max-w-6xl relative z-10 flex"
-        initial={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem" }}
-        animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1, borderRadius: "1.5rem" }}
-        exit={{ y: "60vh", scaleX: 0.3, scaleY: 0.05, opacity: 0, borderRadius: "10rem", transition: { duration: 0.25, ease: "easeInOut" } }}
-        transition={{ type: "spring", damping: 22, stiffness: 280, mass: 0.8 }}
-        style={{ transformOrigin: "bottom center" }}
-      >
-      <motion.div
-        className="bg-white dark:bg-slate-800 w-full md:rounded rounded-t-3xl shadow-2xl flex flex-col overflow-hidden h-[95dvh] relative"
-        // Solo arrastra desde el tirador (`dragListener` apagado): si escuchara
-        // en toda la ventana, cada intento de leer el historial hacia abajo la
-        // cerraria.
-        drag="y"
-        dragControls={controlesArrastre}
-        dragListener={false}
-        // Solo tope arriba: hacia abajo la ventana sigue al dedo sin resistirse,
-        // que es lo que hace que se sienta una hoja y no un boton disfrazado.
-        // Antes tenia tope tambien abajo y apenas se movia: se cerraba de golpe
-        // al soltar, sin que nada acompañara el gesto.
-        dragConstraints={{ top: 0 }}
-        dragElastic={{ top: 0, bottom: 1 }}
-        // Si no se baja lo suficiente, vuelve a su sitio con un rebote.
-        dragSnapToOrigin
-        onDragEnd={(_, info) => {
-          // Cuenta la distancia o el impulso: un tiron corto y rapido tambien
-          // cierra, como en cualquier app del telefono.
-          if (info.offset.y > 120 || info.velocity.y > 700) cerrar();
-        }}
-      >
+    <motion.div
+      key="ventana-trato"
+      className="fixed inset-0 z-50 flex flex-col bg-slate-100 dark:bg-slate-900"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 16, transition: { duration: 0.18 } }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+    >
+      {/* Pantalla completa: antes era una ventana flotante sobre la página. */}
+      <div className="flex flex-col flex-1 min-h-0 relative">
+        {/* CABECERA: quién es, qué se puede hacer con él y en qué etapa va.
+            Se queda fija arriba; lo demás se desplaza debajo. */}
+        <div className="shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+          <div className="max-w-[1440px] mx-auto px-3 md:px-6 py-2 md:py-3 flex flex-col gap-2.5 md:gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={cerrar}
+                className="flex items-center gap-1 min-h-[36px] pr-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              >
+                <ChevronLeft className="w-4 h-4" /> Regresar
+              </button>
+              <span className="text-sm text-slate-300 dark:text-slate-600">/</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">{isNew ? "Nuevo" : isDealContext ? "Trato" : "Contacto"}</span>
+              <div className="ml-auto flex items-center gap-2">
+                {canModify && (
+                  <button
+                    form="client-form"
+                    type="submit"
+                    className={clsx(
+                      "h-9 px-5 rounded-lg bg-slate-900 hover:bg-black dark:bg-white dark:hover:bg-slate-200 dark:text-slate-900 text-white text-sm font-bold items-center",
+                      isNew ? "hidden md:inline-flex" : "hidden lg:inline-flex"
+                    )}
+                  >
+                    Guardar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={cerrar}
+                  aria-label="Cerrar"
+                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-11 h-11 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-base md:text-xl font-extrabold flex items-center justify-center shrink-0">
+                  {iniciales}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <input
+                    name={isDealContext ? "dealTitle" : "name"}
+                    value={isDealContext ? (formData.dealTitle || "") : (formData.name || "")}
+                    onChange={(e) => {
+                      if (isDealContext) {
+                        handleChange(e); // Updates dealTitle
+                      } else {
+                        handleChange({ target: { name: 'name', value: e.target.value } } as any); // Updates name if no deal
+                      }
+                    }}
+                    placeholder={isDealContext ? "Nuevo Trato" : "Nombre"}
+                    aria-label={isDealContext ? "Nombre del trato" : "Nombre"}
+                    className="w-full text-lg md:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-600 focus:outline-none"
+                  />
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5 text-xs md:text-sm text-slate-600 dark:text-slate-400">
+                    {isDealContext && formData.name && <span className="font-semibold text-slate-800 dark:text-slate-200">{formData.name}</span>}
+                    {formData.phone && <span>{formData.phone}</span>}
+                    {formData.email && <span className="truncate max-w-[240px]">{formData.email}</span>}
+                    {!isNew && (
+                      <span>
+                        Llegó por <b className="text-slate-800 dark:text-slate-200">{etiquetaDeFuente(fuenteDelContacto(formData))}</b>
+                        {llegoHace ? ` ${llegoHace}` : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {!isNew && telDigitos && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEscribiendoWhatsApp(true)}
+                      className="hidden lg:inline-flex h-10 px-3.5 rounded-lg bg-[#1fa855] hover:bg-[#178a45] text-white text-sm font-bold items-center gap-1.5"
+                    >
+                      <MessageCircle className="w-4 h-4" /> WhatsApp
+                    </button>
+                    <a
+                      href={`tel:${telDigitos}`}
+                      className="hidden lg:inline-flex h-10 px-3.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      <Phone className="w-4 h-4" /> Llamar
+                    </a>
+                  </>
+                )}
+                {!isNew && (
+                  <button
+                    type="button"
+                    onClick={() => setCotizandoAuto(inventoryVehicles.find((v) => v.id === formData.vehicleId && v.status !== "sold") || null)}
+                    className="h-10 px-3.5 rounded-lg border border-blue-700 text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-800 text-sm font-bold hover:bg-blue-50 dark:hover:bg-slate-700"
+                  >
+                    Cotizar
+                  </button>
+                )}
+                {!isNew &&
+                  formData.dealTitle &&
+                  !checkIsWon(formData.status, pipelineStages) &&
+                  !checkIsLost(formData.status, pipelineStages) && (
+                    <>
+                      {/* «Perdido» marca el trato como perdido y pide el motivo;
+                          no borra nada. */}
+                      <span className="hidden sm:block w-px h-7 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange("won")}
+                        className="flex-1 sm:flex-none h-10 px-3.5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold"
+                      >
+                        <Trophy className="w-4 h-4 shrink-0" /> Ganado
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange("lost")}
+                        className="flex-1 sm:flex-none h-10 px-3.5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-sm font-bold"
+                      >
+                        <XCircle className="w-4 h-4 shrink-0" /> Perdido
+                      </button>
+                    </>
+                  )}
+                {!isNew && checkIsWon(formData.status, pipelineStages) && (
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange("new")}
+                    className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-bold"
+                  >
+                    <RotateCcw className="w-4 h-4 shrink-0" /> Reabrir trato
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Etapas del embudo: se cambia tocando la flecha. */}
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+              {etapasFlecha.length > 0 && (
+                <div className="flex-1 min-w-0 flex gap-0.5 overflow-x-auto" role="group" aria-label="Etapa del trato">
+                  {etapasFlecha.map((st, i) => {
+                    const actual = st.id === formData.status;
+                    const hecha = esGanado || (indiceFlecha >= 0 && i < indiceFlecha);
+                    return (
+                      <button
+                        key={`flecha-${st.id}`}
+                        type="button"
+                        disabled={!canModify || esGanado}
+                        onClick={() => !actual && cambiarEtapa(st.id)}
+                        aria-current={actual ? "step" : undefined}
+                        title={st.title}
+                        className={clsx(
+                          "flex-1 min-w-[96px] h-8 md:h-9 pl-4 pr-3 text-[11px] md:text-xs font-bold truncate transition-colors disabled:cursor-default",
+                          esGanado
+                            ? "bg-emerald-600 text-white"
+                            : actual
+                              ? "bg-blue-700 text-white"
+                              : hecha
+                                ? "bg-blue-400 dark:bg-blue-800 text-white hover:bg-blue-500"
+                                : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                        )}
+                        style={{
+                          clipPath: i === 0
+                            ? "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)"
+                            : "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
+                        }}
+                      >
+                        {st.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 shrink-0">
+                {esGanado ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Ganado</span>
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">Fecha de venta</label>
+                    <input
+                      type="date"
+                      value={formData.soldAt || ''}
+                      onChange={(e) => setFormData(p => ({ ...p, soldAt: e.target.value }))}
+                      className="text-sm border-slate-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md py-1"
+                    />
+                  </div>
+                ) : !isNew && indiceFlecha < 0 ? (
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    {formData.dealTitle ? "Solo contacto" : "Contacto sin trato activo: toca una etapa para abrir uno"}
+                  </span>
+                ) : null}
+                {isDealContext && (
+                  <label className="flex flex-col">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Valor del trato</span>
+                    <span className="flex items-center text-base md:text-lg font-extrabold text-slate-900 dark:text-white">
+                      $
+                      <input
+                        type="number"
+                        name="dealValue"
+                        value={formData.dealValue !== undefined ? formData.dealValue : ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData(prev => {
+                            const updated = { ...prev, dealValue: val ? Number(val) : 0 };
+                            if (updated.saleDetails) {
+                              updated.saleDetails = { ...updated.saleDetails, price: val ? Number(val) : 0 };
+                            }
+                            return updated;
+                          });
+                        }}
+                        placeholder="Monto"
+                        className="w-28 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-600 focus:outline-none"
+                      />
+                    </span>
+                  </label>
+                )}
+                {ventaResumen && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentDrawer(true)}
+                    className="flex items-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 text-left hover:bg-emerald-100 dark:hover:bg-emerald-950/60"
+                    title="Ver la venta y los pagos"
+                  >
+                    <Calculator className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                    <span className="flex flex-col leading-tight">
+                      <span className="text-xs font-extrabold text-emerald-900 dark:text-emerald-200">
+                        {pesosMx(ventaResumen.pagado)} de {pesosMx(ventaResumen.precio)}
+                        <span className={clsx("ml-1.5 px-1.5 py-0.5 rounded-full text-[9px]",
+                          ventaResumen.saldo === 0 && ventaResumen.precio > 0 ? "bg-emerald-200 text-emerald-900" : ventaResumen.pagado > 0 ? "bg-amber-100 text-amber-900" : "bg-rose-100 text-rose-900")}>
+                          {ventaResumen.saldo === 0 && ventaResumen.precio > 0 ? "LIQUIDADO" : ventaResumen.pagado > 0 ? `${ventaResumen.pct}%` : "PENDIENTE"}
+                        </span>
+                      </span>
+                      <span className="text-[11px] text-emerald-800/80 dark:text-emerald-400">{ventaResumen.cuantos} pago(s) · Saldo {pesosMx(ventaResumen.saldo)} · Venta y pagos ›</span>
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {avisoDeCreado && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded shadow-lg">
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">
             <Check className="w-4 h-4 shrink-0" />
             Trato creado. Ya puedes añadir notas y actividades aquí mismo.
           </div>
         )}
-        {/* Tirador para cerrar deslizando hacia abajo, como cualquier hoja del
-            telefono. Antes solo se salia con el boton de atras del sistema, que
-            no cierra la ventana: te saca de la pantalla entera. */}
-        <div
-          onPointerDown={(e) => controlesArrastre.start(e)}
-          className="md:hidden pt-3 pb-1 flex justify-center shrink-0 cursor-grab active:cursor-grabbing touch-none"
-        >
-          <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-        </div>
-
-        {/* Cerrar, siempre visible. La X vivia al final de la fila de botones
-            de accion, que en un telefono se sale de la pantalla: quedaba
-            inalcanzable justo cuando mas falta hace. */}
-        <button
-          onClick={cerrar}
-          aria-label="Cerrar"
-          className="md:hidden absolute top-2.5 right-3 z-20 p-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* TOP HEADER */}
-        {/* La cabecera se queda fija mientras el resto se desplaza, asi que
-            cada pixel de mas aqui es un pixel menos de informacion. En el
-            telefono va apretada: la inicial mas chica, el titulo mas corto y
-            el monto en la misma linea. */}
-        <div className="flex flex-wrap md:flex-nowrap justify-between items-start md:items-center gap-y-1.5 md:gap-y-2 px-4 md:px-6 py-2 md:py-4 border-b border-gray-200 bg-white dark:bg-slate-800 shrink-0">
-          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
-            <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 rounded-full bg-blue-100 justify-center text-blue-700 font-bold text-base md:text-lg flex items-center">
-              {String(formData.name || "U")
-                .charAt(0)
-                .toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0 md:min-w-[200px]">
-              <input
-                name={isDealContext ? "dealTitle" : "name"}
-                value={isDealContext ? (formData.dealTitle || "") : (formData.name || "")}
-                onChange={(e) => {
-                  if (isDealContext) {
-                    handleChange(e); // Updates dealTitle
-                  } else {
-                    handleChange({ target: { name: 'name', value: e.target.value } } as any); // Updates name if no deal
-                  }
-                }}
-                placeholder={isDealContext ? "Nuevo Trato" : "Nombre"}
-                className="text-base md:text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight w-full pr-10 md:pr-0 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
-              />
-              
-              {/* El monto y la etapa comparten linea: la etapa estaba sola en
-                  una fila entera con todo el ancho vacio a su derecha, y esa
-                  fila es altura de cabecera fija que se le quita al contenido.
-                  Si no caben juntos, la etapa baja sola. */}
-              <div className="flex items-center flex-wrap justify-between md:justify-start w-full gap-x-3 gap-y-1 mt-0.5">
-              {isDealContext && (
-                <div className="flex items-center">
-                  <span className="text-gray-500 font-medium mr-1">$</span>
-                  <input
-                    type="number"
-                    name="dealValue"
-                    value={formData.dealValue !== undefined ? formData.dealValue : ""}
-                    onChange={(e) => {
-                       const val = e.target.value;
-                       setFormData(prev => {
-                          const updated = { ...prev, dealValue: val ? Number(val) : 0 };
-                          if (updated.saleDetails) {
-                             updated.saleDetails = { ...updated.saleDetails, price: val ? Number(val) : 0 };
-                          }
-                          return updated;
-                       });
-                    }}
-                    placeholder="Monto"
-                    className="w-20 md:w-24 text-sm bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none text-gray-700 dark:text-slate-300"
-                  />
-                </div>
-              )}
-              
-              {formData.status === "won" ? (
-                <p
-                  className="text-sm border inline-block px-2 py-0.5 rounded mt-0.5 font-medium border-green-200 bg-green-50 text-green-700"
-                >
-                  Ganado
-                </p>
-              ) : (
-                <select
-                  name="status"
-                  value={formData.status || ""}
-                  onChange={(e) => {
-                    const newStatus = e.target.value;
-                    if (checkIsLost(newStatus, pipelineStages)) {
-                      handleStatusChange(newStatus);
-                    } else if (checkIsWon(newStatus, pipelineStages)) {
-                      handleStatusChange(newStatus);
-                    } else {
-                      setFormData((prev) => ({
-                        ...prev,
-                        status: newStatus,
-                        dealTitle: prev.dealTitle || (prev.name ? `${prev.name} deal` : "Nuevo Trato"),
-                      }));
-                      handleStatusChange(newStatus);
-                    }
-                  }}
-                  className="block max-w-[46vw] md:max-w-none text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 border-0 rounded-full py-1 md:py-1.5 pl-2.5 md:pl-3 pr-7 md:pr-8 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-                >
-                  {!formData.dealTitle && !isNew && (
-                    <option value="" disabled>Contacto sin trato activo</option>
-                  )}
-                  {pipelineStages.map((stage) => (
-                    <option key={`stage-${stage.id}`} value={stage.id}>
-                      {stage.id === "lost" ? "Contacto" : stage.title}
-                    </option>
-                  ))}
-                </select>
-              )}
-              </div>
-              {formData.status === 'won' && (
-                <div className="mt-2 flex items-center gap-2">
-                  <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase whitespace-nowrap">
-                    Fecha Venta
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.soldAt || ''}
-                    onChange={(e) => setFormData(p => ({ ...p, soldAt: e.target.value }))}
-                    className="block text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-          
-          
-              {(formData.saleDetails || formData.status === 'won') && (() => {
-                const soldVehicle = inventoryVehicles.find(v => v.id === formData.vehicleId);
-                const sDetails = formData.saleDetails || {
-                  price: formData.dealValue || soldVehicle?.price || 0,
-                  method: 'contado'
-                };
-                const actualPrice = sDetails.price || formData.dealValue || soldVehicle?.price || 0;
-                const paymentsList = sDetails.payments || [];
-                const totalPaid = paymentsList.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
-                const remaining = Math.max(0, actualPrice - totalPaid);
-                const pct = actualPrice > 0 ? Math.min(100, Math.round((totalPaid / actualPrice) * 100)) : 100;
-
-                return (
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-teal-50/90 dark:from-emerald-950/40 dark:to-teal-950/30 p-2 px-3 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-sm mx-2 shrink-0">
-                    <div className="p-1.5 rounded-lg bg-emerald-600 text-white shrink-0">
-                      <Calculator className="w-4 h-4" />
-                    </div>
-                    <div className="hidden sm:block text-left min-w-[150px]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
-                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalPaid)} / {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(actualPrice)}
-                        </span>
-                        {remaining === 0 && actualPrice > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300/50">
-                            LIQUIDADO
-                          </span>
-                        ) : totalPaid > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300/50">
-                            {pct}%
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300 border border-rose-300/50">
-                            PENDIENTE
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium truncate">
-                        {paymentsList.length} pago(s) • Saldo: {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(remaining)}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentDrawer(true)}
-                      className="text-xs px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 shrink-0"
-                      title="Abrir panel lateral de detalle de venta y pagos"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                      <span>Ver Venta / Pagos</span>
-                    </button>
-                  </div>
-                );
-              })()}
-
-          {/* En el telefono estos botones se amontonaban en una sola fila que
-              se salia de la pantalla. Ahora bajan de linea y ocupan el ancho
-              completo, con la X aparte arriba a la derecha. */}
-          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto mt-2.5 md:mt-0">
-            {!isNew &&
-              formData.dealTitle &&
-              !checkIsWon(formData.status, pipelineStages) &&
-              !checkIsLost(formData.status, pipelineStages) && (
-                <>
-                  {/* «Solo contacto» no decia lo que hace: marca el trato como
-                      perdido y pide el motivo. No borra nada, asi que tampoco
-                      puede llamarse «borrar»: seria peor mentira que la
-                      anterior, y en la direccion peligrosa.
-                      Van juntos y a lo ancho en el telefono, no apilados: uno
-                      debajo del otro sumaba altura a una cabecera que hay que
-                      hacer mas chica, no mas grande. */}
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange("won")}
-                    className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 md:px-4 py-2 md:py-1.5 rounded-xl shadow-sm shadow-emerald-600/25 ring-1 ring-inset ring-white/20 active:scale-95 transition-all"
-                  >
-                    <Trophy className="w-4 h-4 shrink-0" />
-                    Ganado
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange("lost")}
-                    className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 text-sm font-semibold px-3 md:px-4 py-2 md:py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
-                  >
-                    <XCircle className="w-4 h-4 shrink-0" />
-                    Perdido
-                  </button>
-                </>
-              )}
-            {!isNew &&
-              checkIsWon(formData.status, pipelineStages) && (
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange("new")}
-                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-semibold px-3 md:px-4 py-2 md:py-1.5 rounded-xl border border-gray-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
-                >
-                  <RotateCcw className="w-4 h-4 shrink-0" />
-                  Reabrir trato
-                </button>
-              )}
-            {/* En el telefono esta X sobra: hay otra fija arriba a la derecha.
-                Antes no se veia porque la fila se salia de la pantalla; al
-                hacer que baje de linea aparecieron las dos. */}
-            <div className="hidden md:block w-px h-6 bg-gray-300 mx-1"></div>
-            <button
-              onClick={cerrar}
-              className="hidden md:block p-1 text-gray-400 hover:text-gray-700 dark:text-slate-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
 
         {isAdminReadOnly && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/30 px-6 py-2.5 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-semibold shrink-0">
@@ -2192,58 +2195,39 @@ export function ClientDetailModal({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col flex-1 min-h-0">
-          <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
-          {!isNew && (
-            <nav aria-label="Secciones de la ficha" className="hidden md:flex flex-col gap-0.5 w-[190px] shrink-0 p-2 border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-y-auto">
-              {([
-                ["resumen", "Resumen", null],
-                ["datos", "Datos del cliente", null],
-                ["autos", "Autos de interés", null],
-                ["tratos", "Tratos", deals.length],
-                ["notas", "Notas", notes.length],
-                ["archivos", "Archivos", files.length],
-              ] as [Seccion, string, number | null][]).map(([id, texto, cuenta]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => irASeccion(id)}
-                  aria-current={seccion === id ? "page" : undefined}
-                  className={clsx(
-                    "flex items-center justify-between w-full min-h-[40px] px-3 rounded-lg text-left text-sm transition-colors",
-                    seccion === id
-                      ? "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-bold"
-                      : "text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                  )}
-                >
-                  <span>{texto}</span>
-                  {!!cuenta && <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{cuenta}</span>}
-                </button>
-              ))}
-              {(formData.saleDetails || formData.status === "won") && (
-                <button
-                  type="button"
-                  onClick={() => setShowPaymentDrawer(true)}
-                  className="flex items-center justify-between w-full min-h-[40px] px-3 rounded-lg text-left text-sm font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                >
-                  Venta y pagos
-                </button>
-              )}
-            </nav>
-          )}
-          {/* LEFT SIDEBAR (DETAILS) */}
+          <>
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <div className={clsx(
-            "w-full shrink-0 border-b md:border-b-0 md:border-r border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 md:overflow-y-auto",
-            !isNew && seccion === "datos" ? "md:flex-1 md:shrink" : "md:w-[320px]",
-            soloEn("datos")
+            "max-w-[1440px] mx-auto px-3 md:px-6 py-4 md:py-5 grid grid-cols-1 gap-4 md:gap-5 items-start",
+            isNew ? "lg:grid-cols-[380px_minmax(0,1fr)]" : "lg:grid-cols-[300px_minmax(0,1fr)_340px]"
           )}>
-            <div className={!isNew && seccion === "datos" ? "md:max-w-2xl" : ""}>
-            <div className="p-5">
-              <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center justify-between">
-                Perfil
-                <MoreHorizontal className="w-4 h-4 text-gray-400" />
-              </h3>
 
+          {/* IZQUIERDA: quién es (en el teléfono va al final) */}
+          <aside className={clsx("flex flex-col gap-4 min-w-0", isNew ? "order-1" : "order-3 lg:order-1")}>
+            {!isNew && (
+              <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <h2 className="font-extrabold text-slate-900 dark:text-white">Lo que busca</h2>
+                  {canModify && (
+                    <button
+                      type="button"
+                      onClick={() => setShowWantedVehicleMenu(true)}
+                      className="text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                    >
+                      {frasesDeBusqueda(formData.wantedVehicle).length > 0 ? "Editar" : "Capturar"}
+                    </button>
+                  )}
+                </div>
+                {frasesDeBusqueda(formData.wantedVehicle).length > 0 ? (
+                  <ResumenBusquedaAuto buscado={formData.wantedVehicle} compacto className="!bg-transparent !border-0 !p-0" />
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Aún no se captura qué auto busca. Con eso el CRM le encuentra coincidencias en tu inventario.</p>
+                )}
+              </section>
+            )}
+
+            <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+              <h2 className="font-extrabold text-slate-900 dark:text-white mb-3">Datos del cliente</h2>
               <form
                 id="client-form"
                 onSubmit={handleSave}
@@ -2497,36 +2481,6 @@ export function ClientDetailModal({
                   })()}
                 </div>
 
-                {(formData.saleDetails || formData.status === 'won') && (() => {
-                  const soldV = inventoryVehicles.find(v => v.id === formData.vehicleId);
-                  const actualPrice = formData.saleDetails?.price || formData.dealValue || soldV?.price || 0;
-                  const payments = formData.saleDetails?.payments || [];
-                  const paid = payments.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
-                  const remaining = Math.max(0, actualPrice - paid);
-
-                  return (
-                    <div className="p-2.5 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs my-2 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                          <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span>Venta & Pagos</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowPaymentDrawer(true)}
-                          className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold hover:underline flex items-center gap-0.5"
-                        >
-                          <span>Ver detalle</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300">
-                        <span>Pagado: <strong className="text-emerald-700 dark:text-emerald-400">${new Intl.NumberFormat('es-MX').format(paid)}</strong></span>
-                        <span>Saldo: <strong className={remaining > 0 ? "text-rose-600 font-bold" : "text-emerald-600 font-bold"}>${new Intl.NumberFormat('es-MX').format(remaining)}</strong></span>
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 <div className={`pt-2 border-t border-gray-100 dark:border-slate-700 space-y-1 ${isNew && currentStep !== 1 ? "hidden md:block" : ""}`}>
                   <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
@@ -2930,85 +2884,6 @@ export function ClientDetailModal({
                     </p>
                   )}
 
-                  {/* Antes solo se miraba la marca: quien capturo "SUV, 5
-                      pasajeros" sin marca no veia nada. Basta con que haya algo
-                      capturado, o con que traiga la etiqueta de busqueda. */}
-                  {(frasesDeBusqueda(formData.wantedVehicle).length > 0 || formData.tags?.some(t => {
-                    const lower = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    return lower.includes('busca de auto') || lower.includes('busca auto') || lower.includes('buscan auto') || lower.includes('busqueda');
-                  })) && (
-                    <div className="mt-3 flex flex-col gap-2">
-                      {/* Lo que busca, siempre visible. Antes habia que abrir el
-                          formulario de once campos para saber si queria SUV o
-                          sedan: es el dato que mas se consulta y estaba a dos
-                          clics. */}
-                      <ResumenBusquedaAuto buscado={formData.wantedVehicle} />
-
-                      <button
-                        type="button"
-                        onClick={() => setShowWantedVehicleMenu(true)}
-                        className="w-full text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/50 py-1.5 rounded transition-colors"
-                      >
-                        {frasesDeBusqueda(formData.wantedVehicle).length > 0
-                          ? "Editar lo que busca"
-                          : "Capturar lo que busca"}
-                      </button>
-                      
-                      {(() => {
-                        if (!formData.wantedVehicle) return null;
-                        
-                        // Rule 1: Only admin can see matches for a client not registered to them.
-                        const isSeller = userData?.role === 'seller';
-                        const isMyClient = formData.sellerId === userData?.id || (formData as any).createdById === userData?.id || (formData as any).userId === userData?.id;
-                        if (isSeller && !isMyClient) return null;
-
-                        // Rule 2: Sellers can ONLY see matches for vehicles in their own agency.
-                        const candidateVehicles = isSeller
-                          ? inventoryVehicles.filter(v => v.agencyId === userData?.agencyId)
-                          : inventoryVehicles;
-
-                        const rawMatches = getClientMatches(formData as Client, candidateVehicles);
-                        const matches = rawMatches.filter(m => !(formData as Client).dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`));
-                        if (matches.length === 0) return null;
-                        
-                        return (
-                          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 rounded shadow-sm">
-                            <h4 className="text-xs font-bold text-green-800 dark:text-green-300 mb-2 flex items-center gap-1.5">
-                              <Target className="w-3.5 h-3.5" />
-                              Posibles Matches en Inventario ({matches.length})
-                            </h4>
-                            <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto pr-1">
-                              {matches.map((m, idx) => (
-                                <div key={m.vehicle.id || idx} className="flex flex-col p-2 bg-white dark:bg-slate-800 rounded border border-green-100 dark:border-green-800/30 text-xs">
-                                  <div className="flex justify-between items-start mb-1">
-                                    <span className="font-bold text-slate-800 dark:text-slate-200">
-                                      {m.vehicle.year} {m.vehicle.make} {m.vehicle.model}
-                                    </span>
-                                    <span className="font-semibold text-green-700 dark:text-green-400">
-                                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(m.vehicle.price)}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                                      m.level === 'exact' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' :
-                                      m.level === 'high' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' :
-                                      m.level === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' :
-                                      'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
-                                    }`}>
-                                      {m.level === 'exact' ? 'Exacto' : m.level === 'high' ? 'Muy Similar' : m.level === 'medium' ? 'Similar' : 'Posible'}
-                                    </span>
-                                    <span className="text-gray-500 dark:text-slate-400 truncate">
-                                      VIN: {m.vehicle.vin}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
                 </div>
 
                 <div className="pt-4 border-t border-gray-100 dark:border-slate-700">
@@ -3048,89 +2923,83 @@ export function ClientDetailModal({
                 )}
 
               </form>
-            </div>
-            </div>
-          </div>
+            </section>
+          </aside>
 
-          {/* RIGHT SIDEBAR (INTERACTIONS & TIMELINE) */}
-          <div className={clsx("flex-1 flex flex-col bg-[#F9FAFB] dark:bg-slate-900 md:overflow-hidden", soloEn("resumen", "autos", "tratos", "notas", "archivos"))}>
+          {/* CENTRO: qué está pasando */}
+          <section className={clsx("flex flex-col gap-4 min-w-0", isNew ? "order-2" : "order-1 lg:order-2")}>
             {!isNew ? (
-              <div className={`flex-1 md:overflow-y-auto p-4 md:p-6 space-y-6 ${isNew ? "hidden md:block" : ""}`}>
-                {/* Resumen: pendiente, etapa, vendedor, como llego, interes y sus
-                    autos de interes. Solo lee; no escribe nada. */}
-                <div className={soloEn("resumen", "autos")}>
-                <ResumenCliente
-                  soloAutos={!isNew && seccion === "autos"}
-                  cliente={formData}
-                  tratos={deals}
-                  tareas={tasks}
-                  etapas={pipelineStages}
-                  usuarios={agencyUsers}
-                  inventario={inventoryVehicles}
-                  onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
-                  onCotizar={(v) => setCotizandoAuto(v)}
-                />
-                </div>
-
-                {/* INTERACTION WIDGET */}
-                <div className={clsx("bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm", soloEn("resumen", "tratos", "notas", "archivos"))}>
-                  {/* En computadora las pestañas las sustituye el menu de la izquierda. */}
-                  <div className={clsx("flex border-b border-gray-200 dark:border-slate-700", !isNew && "md:hidden")}>
-                    <button
-                      onClick={() => setActiveTab("activity")}
-                      className={clsx(
-                        "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                        activeTab === "activity"
-                          ? "border-blue-600 text-blue-700 bg-blue-50/50"
-                          : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900",
-                      )}
-                    >
-                      <Calendar className="w-4 h-4" /> Actividad
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("notes")}
-                      className={clsx(
-                        "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                        activeTab === "notes"
-                          ? "border-blue-600 text-blue-700 bg-blue-50/50"
-                          : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900",
-                      )}
-                    >
-                      <FileText className="w-4 h-4" /> Notas
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("files")}
-                      className={clsx(
-                        "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                        activeTab === "files"
-                          ? "border-blue-600 text-blue-700 bg-blue-50/50"
-                          : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900",
-                      )}
-                    >
-                      <Upload className="w-4 h-4" /> Archivos
-                    </button>
-                    {/* Esta pestaña existia en el codigo pero no habia forma de
-                        llegar a ella: la seccion de tratos, con renombrar,
-                        marcar ganado y eliminar, quedaba inalcanzable. */}
-                    <button
-                      onClick={() => setActiveTab("deals")}
-                      className={clsx(
-                        "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                        activeTab === "deals"
-                          ? "border-blue-600 text-blue-700 bg-blue-50/50"
-                          : "border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:bg-slate-900",
-                      )}
-                    >
-                      <Target className="w-4 h-4" /> Tratos
-                      {deals.length > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold">
-                          {deals.length}
-                        </span>
-                      )}
-                    </button>
+              <>
+                {/* Próximo paso: la tarea pendiente más cercana, a la vista. */}
+                {proximoPaso ? (
+                  <div className={clsx(
+                    "rounded-2xl border-2 p-3.5 md:p-4 flex flex-col sm:flex-row sm:items-center gap-3",
+                    proximoVencido ? "border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30" : "border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/30"
+                  )}>
+                    <div className={clsx("w-10 h-10 rounded-xl text-white flex items-center justify-center shrink-0", proximoVencido ? "bg-red-600" : "bg-blue-700")}>
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={clsx("text-[11px] font-extrabold uppercase tracking-wide", proximoVencido ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-300")}>
+                        Próximo paso{proximoVencido ? " · vencido" : ""}{pendientesEnOrden.length > 1 ? ` · ${pendientesEnOrden.length} pendientes` : ""}
+                      </p>
+                      <p className="font-bold text-slate-900 dark:text-white truncate">{proximoPaso.title}</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {proximoPaso.dueDate
+                          ? new Date(`${proximoPaso.dueDate.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })
+                          : "Sin fecha"}
+                        {(proximoPaso.startTime || proximoPaso.dueTime) ? `, ${proximoPaso.startTime || proximoPaso.dueTime}${proximoPaso.endTime ? ` a ${proximoPaso.endTime}` : ""}` : ""}
+                      </p>
+                    </div>
+                    {!isAdminReadOnly && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { handleEditTaskClick(proximoPaso); setActiveTab("activity"); setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }}
+                          className="h-9 px-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700"
+                        >
+                          Reprogramar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleTaskCompletion(proximoPaso)}
+                          className="h-9 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center gap-1"
+                        >
+                          <Check className="w-4 h-4" /> Hecho
+                        </button>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-white/60 dark:bg-slate-800/60 px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                    Sin pendientes con este cliente. Programa la siguiente llamada o visita para que no se enfríe.
+                  </div>
+                )}
 
-                  <div className="p-4 bg-white dark:bg-slate-800">
+                {/* Escribir: tarea, nota o archivo */}
+                <div ref={composerRef} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex gap-1 px-3 pt-3" role="tablist" aria-label="Qué quieres agregar">
+                    {([
+                      ["activity", "Tarea", Calendar],
+                      ["notes", "Nota", FileText],
+                      ["files", "Archivo", Upload],
+                    ] as const).map(([id, texto, Icono]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === id}
+                        onClick={() => setActiveTab(id)}
+                        className={clsx(
+                          "h-8 px-3 rounded-lg text-sm font-bold flex items-center gap-1.5",
+                          activeTab === id ? "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        )}
+                      >
+                        <Icono className="w-4 h-4" /> {texto}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-3 md:p-4">
                     {isAdminReadOnly ? (
                       <div className="text-center py-6 text-slate-500 dark:text-slate-400">
                         <Lock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
@@ -3199,7 +3068,93 @@ export function ClientDetailModal({
                         </div>
                       </div>
                     )}
-                    {activeTab === "deals" && (
+    {activeTab === "files" && (
+                      <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+                        <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                        <label className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
+                          Haz clic para subir un archivo
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={handleFileUpload}
+                          />
+                        </label>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Imágenes o documentos PDF
+                        </p>
+                      </div>
+                    )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pestañas: actividad, tratos, notas, archivos y la venta */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex gap-4 md:gap-5 px-4 border-b border-slate-200 dark:border-slate-700 overflow-x-auto" role="tablist" aria-label="Secciones de la ficha">
+                    {([
+                      ["resumen", "Actividad", null],
+                      ["tratos", "Tratos", deals.length],
+                      ["notas", "Notas", notes.length],
+                      ["archivos", "Archivos", files.length],
+                    ] as [Seccion, string, number | null][]).map(([id, texto, cuenta]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={seccion === id}
+                        onClick={() => irASeccion(id)}
+                        className={clsx(
+                          "py-3 text-sm font-bold border-b-2 whitespace-nowrap flex items-center gap-1.5",
+                          seccion === id ? "border-blue-700 text-blue-800 dark:text-blue-300 dark:border-blue-400" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                        )}
+                      >
+                        {texto}
+                        {!!cuenta && <span className="text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full px-1.5">{cuenta}</span>}
+                      </button>
+                    ))}
+                    {ventaResumen && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentDrawer(true)}
+                        className="py-3 text-sm font-bold border-b-2 border-transparent whitespace-nowrap text-emerald-700 dark:text-emerald-400 hover:text-emerald-900"
+                      >
+                        Venta y pagos
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-4 md:p-5 flex flex-col gap-5">
+                    {/* Las demás tareas pendientes (la primera ya está arriba). */}
+                    {seccion === "resumen" && pendientesEnOrden.length > 1 && (
+                      <div>
+                        <h3 className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Otras tareas pendientes</h3>
+                        <ul className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+                          {pendientesEnOrden.slice(1).map((t) => (
+                            <li key={`task-${t.id}`} className="flex items-center justify-between gap-3 p-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTaskCompletion(t)}
+                                  aria-label={`Marcar como hecha: ${t.title}`}
+                                  className="w-5 h-5 rounded-full border-2 border-slate-300 hover:border-emerald-500 shrink-0"
+                                />
+                                <button type="button" onClick={() => handleEditTaskClick(t)} className="text-sm font-medium text-slate-800 dark:text-slate-200 hover:text-blue-700 truncate text-left">
+                                  {t.title}
+                                </button>
+                              </div>
+                              <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                                <Clock className="w-3.5 h-3.5" />
+                                {t.dueDate}
+                                {(t.startTime || t.dueTime) && <b className="text-slate-700 dark:text-slate-200">{t.startTime || t.dueTime}{t.endTime ? ` a ${t.endTime}` : ""}</b>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {seccion === "tratos" && (
       <div className="flex flex-col gap-3">
         <button
           onClick={async () => {
@@ -3296,92 +3251,14 @@ export function ClientDetailModal({
         )}
       </div>
     )}
-    {activeTab === "files" && (
-                      <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-                        <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                        <label className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
-                          Haz clic para subir un archivo
-                          <input
-                            type="file"
-                            className="hidden"
-                            onChange={handleFileUpload}
-                          />
-                        </label>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Imágenes o documentos PDF
-                        </p>
-                      </div>
-                    )}
-                      </>
-                    )}
-                  </div>
-                </div>
 
-                {/* FOCUS SECTION (Pending tasks) */}
-                {pendingTasks.length > 0 && (
-                  <div className={clsx("space-y-3", soloEn("resumen"))}>
-                    <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 flex items-center gap-2">
-                      {" "}
-                      Enfoque{" "}
-                    </h3>
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm">
-                      {pendingTasks.map((t, idx) => (
-                        <div
-                          key={`task-${t.id}`}
-                          className={clsx(
-                            "flex items-center justify-between p-3",
-                            idx !== pendingTasks.length - 1 &&
-                              "border-b border-gray-100 dark:border-slate-700",
-                          )}
-                        >
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => toggleTaskCompletion(t)}
-                              className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-green-500 transition-colors"
-                            ></button>
-                            <span 
-                              onClick={() => handleEditTaskClick(t)}
-                              className="text-sm font-medium text-gray-800 dark:text-slate-200 cursor-pointer hover:text-blue-600 transition-colors"
-                              title="Editar tarea"
-                            >
-                              {t.title}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400 font-medium">
-                            <Clock className="w-3.5 h-3.5" />
-                            {/* Antes solo salia la fecha: para saber a que hora
-                                era la cita habia que abrir la tarea. Es el dato
-                                que se mira de reojo antes de llamar. */}
-                            {t.dueDate}
-                            {(t.startTime || t.dueTime) && (
-                              <span className="font-bold text-slate-700 dark:text-slate-200">
-                                {t.startTime || t.dueTime}
-                                {t.endTime ? ` a ${t.endTime}` : ""}
-                              </span>
-                            )}
-                            <button
-                              onClick={() => handleEditTaskClick(t)}
-                              className="ml-2 text-gray-400 hover:text-blue-600 transition-colors"
-                              title="Editar tarea"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* TIMELINE / HISTORY SECTION */}
-                <div className={clsx("space-y-4", soloEn("resumen", "notas", "archivos"))}>
-                  <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 flex items-center gap-2">
-                    {" "}
-                    Historial{" "}
-                  </h3>
-
+                    {seccion !== "tratos" && (
+                      <div>
+                        {seccion === "resumen" && <h3 className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Historial</h3>}
+                        {seccion === "notas" && notes.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">Aún no hay notas.</p>}
+                        {seccion === "archivos" && files.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">Aún no hay archivos. Súbelos desde «Archivo», arriba.</p>}
                   <div className="relative pl-6 space-y-6 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-gray-200">
-                    {formData.soldAt && (
+                    {seccion === "resumen" && formData.soldAt && (
                       <div className="relative">
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm flex items-center justify-center">
                           <CheckSquare className="w-2.5 h-2.5 text-white" />
@@ -3402,7 +3279,7 @@ export function ClientDetailModal({
                       </div>
                     )}
                     {/* History items: Files and Completed Tasks interleaved pseudo-chronologically */}
-                    {completedTasks.map((t) => (
+                    {seccion === "resumen" && completedTasks.map((t) => (
                       <div key={`hist-t-${t.id}`} className="relative">
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white shadow-sm flex items-center justify-center">
                           <CheckSquare className="w-2.5 h-2.5 text-white" />
@@ -3436,7 +3313,7 @@ export function ClientDetailModal({
                       </div>
                     ))}
 
-                    {notes.map((n) => (
+                    {(seccion === "resumen" || seccion === "notas") && notes.map((n) => (
                       <div key={`hist-n-${n.id}`} className="relative">
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-yellow-500 border-2 border-white shadow-sm flex items-center justify-center">
                           <FileText className="w-2.5 h-2.5 text-white" />
@@ -3461,7 +3338,7 @@ export function ClientDetailModal({
                       </div>
                     ))}
 
-                    {files.map((f) => (
+                    {(seccion === "resumen" || seccion === "archivos") && files.map((f) => (
                       <div key={`hist-f-${f.id}`} className="relative">
                         <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-sm flex items-center justify-center">
                           <Upload className="w-2 h-2 text-white" />
@@ -3490,6 +3367,7 @@ export function ClientDetailModal({
                       </div>
                     ))}
 
+                    {seccion === "resumen" && (
                     <div className="relative">
                       <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-gray-300 border-2 border-white shadow-sm"></div>
                       <div className="text-sm text-gray-500 dark:text-slate-400 ml-1">
@@ -3501,11 +3379,15 @@ export function ClientDetailModal({
                         <span className="font-semibold">{formData.origin || "manual"}</span>
                       </div>
                     </div>
+                    )}
+                  </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-10 flex items-center justify-center">
                 <div className="text-center max-w-sm">
                   <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                     <User className="w-8 h-8" />
@@ -3520,39 +3402,92 @@ export function ClientDetailModal({
                 </div>
               </div>
             )}
+          </section>
 
-          </div>
-        </div>
-            {/* BOTTOM ACTIONS (mobile: form save, desktop: right aligned save) */}
-            <div className={`p-4 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3 shrink-0 ${isNew ? "hidden md:flex" : ""}`}>
-              {/* Retomar a un cliente frio sin tener que disfrazarlo de "te
-                  comparto un auto", que era el unico camino que habia. */}
-              {!isNew && (client.phone || "").trim() && (
-                <button
-                  type="button"
-                  onClick={() => setEscribiendoWhatsApp(true)}
-                  className="mr-auto px-4 py-2 text-sm font-bold text-green-700 dark:text-green-400 border border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
-                >
-                  Escribirle por WhatsApp
-                </button>
+          {/* DERECHA: los autos y sus tratos */}
+          {!isNew && (
+            <aside className="order-2 lg:order-3 flex flex-col gap-4 min-w-0">
+              <ResumenCliente
+                columna
+                cliente={formData}
+                tratos={deals}
+                tareas={tasks}
+                etapas={pipelineStages}
+                usuarios={agencyUsers}
+                inventario={inventoryVehicles}
+                onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
+                onCotizar={(v) => setCotizandoAuto(v)}
+              />
+              {deals.length > 0 && (
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h2 className="font-extrabold text-slate-900 dark:text-white">Tratos</h2>
+                    <button type="button" onClick={() => irASeccion("tratos")} className="text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline">Ver todos</button>
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {deals.slice(0, 4).map((d: any) => {
+                      const ganadoT = checkIsWon(d.status, pipelineStages);
+                      const perdidoT = checkIsLost(d.status, pipelineStages);
+                      const etapaT = ganadoT ? "Ganado" : perdidoT ? "Perdido" : (pipelineStages.find((st) => st.id === d.status)?.title || "Abierto");
+                      return (
+                        <li key={`mini-${d.id}`} className={clsx(
+                          "flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm",
+                          ganadoT ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/60"
+                            : perdidoT ? "bg-slate-50 border-slate-200 dark:bg-slate-900/40 dark:border-slate-700"
+                            : "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900/60"
+                        )}>
+                          <span className={clsx("font-bold truncate", perdidoT ? "text-slate-500" : "text-slate-900 dark:text-slate-100")}>{d.title || "Trato"}</span>
+                          <span className={clsx("text-xs font-bold shrink-0", ganadoT ? "text-emerald-800 dark:text-emerald-300" : perdidoT ? "text-slate-500" : "text-blue-800 dark:text-blue-300")}>{etapaT}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               )}
+            </aside>
+          )}
+          </div>
+          </div>
+
+          {/* En el teléfono: lo más usado, siempre a la mano. */}
+          {!isNew && (
+            <div className="lg:hidden shrink-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-3 py-2 grid grid-cols-4 gap-2" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
               <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                type="button"
+                disabled={!telDigitos}
+                onClick={() => setEscribiendoWhatsApp(true)}
+                className="h-11 rounded-xl bg-[#1fa855] disabled:opacity-40 text-white text-xs font-bold flex flex-col items-center justify-center"
               >
-                Cancelar
+                <MessageCircle className="w-4 h-4" /> WhatsApp
               </button>
-              {canModify && (
+              <a
+                href={telDigitos ? `tel:${telDigitos}` : undefined}
+                aria-disabled={!telDigitos}
+                className={clsx("h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold flex flex-col items-center justify-center", !telDigitos && "opacity-40 pointer-events-none")}
+              >
+                <Phone className="w-4 h-4" /> Llamar
+              </a>
+              <button
+                type="button"
+                onClick={irANota}
+                className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold flex flex-col items-center justify-center"
+              >
+                <FileText className="w-4 h-4" /> Nota
+              </button>
+              {canModify ? (
                 <button
                   form="client-form"
                   type="submit"
-                  className="px-6 py-2 bg-[#2E353B] hover:bg-black transition-colors text-white text-sm font-bold rounded shadow-sm"
+                  className="h-11 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-xs font-bold"
                 >
                   Guardar
                 </button>
+              ) : (
+                <button type="button" onClick={cerrar} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold">Cerrar</button>
               )}
             </div>
-        </div>
+          )}
+          </>
         )}
 
         {/* SLIDE-OVER DRAWER FOR SALE & PAYMENT DETAILS */}
@@ -3934,8 +3869,7 @@ export function ClientDetailModal({
             );
           })()}
         </AnimatePresence>
-      </motion.div>
-      </motion.div>
+      </div>
             {/* New Activity Modal */}
       {showNewTaskModal && (
         <NewActivityModal
