@@ -28,6 +28,8 @@ import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/Eleg
 import { Cotizador } from '../components/Cotizador';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 import { ImagenesRedes } from '../components/auto/ImagenesRedes';
+import { ConsultaRepuveAuto } from '../components/auto/ConsultaRepuve';
+import { TEXTO_RESULTADO } from '../lib/niv';
 
 /**
  * La página de un auto: todo lo suyo en una pantalla, y los datos se cambian
@@ -387,6 +389,7 @@ export function AutoPagina() {
             </button>
           )}
         </div>
+        <CampoEditable etiqueta="Placas" valor={(auto as any).licensePlate} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ licensePlate: String(v || '').toUpperCase().trim() }); }} />
         {completo && <>
           <CampoEditable etiqueta="Fecha de recepción" valor={auto.receivedAt} tipo="fecha" mostrar={(v) => fechaLarga(v)} puedeEditar={puedeEditar} onGuardar={campo('receivedAt')} />
           {!vendido && !pendiente && (
@@ -613,6 +616,16 @@ export function AutoPagina() {
                 : chip('Disponible', 'bg-emerald-100 text-emerald-900')}
               {chip(auto.ownership === 'consignacion' ? 'Consignación' : 'Propio', auto.ownership === 'consignacion' ? 'bg-purple-100 text-purple-900' : 'bg-blue-100 text-blue-900')}
               {dias !== null && !vendido && chip(`${dias} ${dias === 1 ? 'día' : 'días'}`, colorDias)}
+              {esMio && (() => {
+                const r = (auto as any).repuve?.resultado as keyof typeof TEXTO_RESULTADO | undefined;
+                return (
+                  <button type="button" onClick={() => setSeccion('datos')} title="Ver la consulta REPUVE"
+                    className={clsx('text-xs font-extrabold px-2.5 py-1 rounded-full',
+                      r === 'con_reporte' ? 'bg-red-600 text-white' : r === 'sin_reporte' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900')}>
+                    {r ? `REPUVE: ${TEXTO_RESULTADO[r].toLowerCase()}` : 'REPUVE sin consultar'}
+                  </button>
+                );
+              })()}
               {chip(publicado ? 'En la página' : 'No está en la página', publicado ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200')}
             </div>
           </div>
@@ -651,6 +664,13 @@ export function AutoPagina() {
             {!vendido && !pendiente && can('ventas.cerrar') && <button type="button" onClick={vender} className="min-h-[38px] px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">Vender</button>}
           </div>
         </header>
+
+        {esMio && (auto as any).repuve?.resultado === 'con_reporte' && (
+          <div role="alert" className="rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/50 px-4 py-3 text-red-900 dark:text-red-200">
+            <p className="font-extrabold">Este auto salió CON REPORTE DE ROBO en el REPUVE</p>
+            <p className="text-sm">Consultado el {new Date((auto as any).repuve.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })} por {(auto as any).repuve.porNombre}. No lo vendas ni lo compres hasta aclararlo con las autoridades.</p>
+          </div>
+        )}
 
         {/* Recuadros */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5">
@@ -743,7 +763,19 @@ export function AutoPagina() {
                 <Galeria fotos={fotos} titulo={titulo} puedeOrdenar={puedeFotos} onHacerPortada={hacerPortada} cuadricula onQuitar={puedeFotos ? quitarFoto : undefined} />
               </Tarjeta>
             )}
-            {seccion === 'datos' && bloqueDatos(true)}
+            {seccion === 'datos' && (
+              <div className="flex flex-col gap-3">
+                {bloqueDatos(true)}
+                {esMio && (
+                  <ConsultaRepuveAuto
+                    auto={auto}
+                    puedeRegistrar={puedeEditar}
+                    usuario={{ id: userData?.id, name: userData?.name, email: userData?.email }}
+                    onGuardar={(c, historial) => guardar({ repuve: c, repuveHistorial: historial })}
+                  />
+                )}
+              </div>
+            )}
             {seccion === 'costos' && verGastos && bloqueCostos}
             {seccion === 'documentos' && (
               <div className="flex flex-col gap-3">
