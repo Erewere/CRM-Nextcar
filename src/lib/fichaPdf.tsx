@@ -107,7 +107,7 @@ export async function logo(url?: string): Promise<{ src: string; ratio: number }
   return { src: c.toDataURL('image/png'), ratio: img.width / img.height };
 }
 
-async function codigoQR(texto: string): Promise<string> {
+export async function codigoQR(texto: string): Promise<string> {
   let svg = renderToStaticMarkup(<QRCodeSVG value={texto} size={240} level="M" />);
   // Como imagen suelta, el navegador solo carga el SVG si declara su espacio de nombres.
   if (!svg.includes('xmlns=')) svg = svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');

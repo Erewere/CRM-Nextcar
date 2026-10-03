@@ -1106,9 +1106,9 @@ export function Inventory() {
               type="button"
               onClick={() => setHaciendoLista(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm shrink-0"
-              title="PDF con los autos disponibles, para compartir o imprimir"
+              title="Lista de precios o hojas para el parabrisas de los autos disponibles"
             >
-              <FileText className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lista de precios</span>
+              <FileText className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lista y parabrisas</span>
             </button>
           )}
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-700 rounded shrink-0">

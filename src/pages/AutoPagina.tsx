@@ -3,7 +3,7 @@ import { alClicWhatsApp } from '../lib/whatsappApp';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import { ArrowLeft, Copy, ExternalLink, FileText, Image as ImageIcon, MessageCircle, Share2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, FileText, Image as ImageIcon, MessageCircle, Printer, Share2, Upload } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,6 +23,7 @@ import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
 import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
+import { generarHojasParabrisas } from '../lib/hojaParabrisasPdf';
 import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/ElegirFotosFicha';
 import { Cotizador } from '../components/Cotizador';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
@@ -111,6 +112,7 @@ export function AutoPagina() {
   const [agencia, setAgencia] = useState<any>(null);
   const [paraRedes, setParaRedes] = useState(false);
   const [haciendoFicha, setHaciendoFicha] = useState(false);
+  const [haciendoHoja, setHaciendoHoja] = useState(false);
   const [eligiendoFotos, setEligiendoFotos] = useState(false);
   const [cotizando, setCotizando] = useState<{ id?: string; name?: string; phone?: string } | null | false>(false);
   const [compartir, setCompartir] = useState(false);
@@ -342,6 +344,18 @@ export function AutoPagina() {
       alert(`No se pudo hacer la ficha. ${e?.message || ''}`);
     } finally {
       setHaciendoFicha(false);
+    }
+  };
+
+  const hacerHoja = async () => {
+    setHaciendoHoja(true);
+    try {
+      const blob = await generarHojasParabrisas({ autos: [auto], agencia, asesor: { name: userData?.name, phone: (userData as any)?.phone } });
+      await descargarOCompartir(blob, `Parabrisas ${[auto.year, auto.make, auto.model].filter(Boolean).join(' ').replace(/[^\w áéíóúñÁÉÍÓÚÑ.-]+/g, '')}.pdf`, 'Hoja para el parabrisas');
+    } catch (e: any) {
+      alert(`No se pudo hacer la hoja. ${e?.message || ''}`);
+    } finally {
+      setHaciendoHoja(false);
     }
   };
 
@@ -613,6 +627,17 @@ export function AutoPagina() {
             >
               <FileText className="w-4 h-4" /> {haciendoFicha ? 'Preparando…' : 'Ficha PDF'}
             </button>
+            {!vendido && (
+              <button
+                type="button"
+                disabled={haciendoHoja}
+                onClick={hacerHoja}
+                title="Hoja tamaño carta para pegar en el parabrisas"
+                className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-60"
+              >
+                <Printer className="w-4 h-4" /> {haciendoHoja ? 'Preparando…' : 'Parabrisas'}
+              </button>
+            )}
             {fotos.length > 0 && (
               <button type="button" onClick={() => setParaRedes(true)} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><ImageIcon className="w-4 h-4" /> Para redes</button>
             )}
