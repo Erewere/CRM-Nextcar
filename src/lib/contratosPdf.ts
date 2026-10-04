@@ -67,6 +67,8 @@ class Escritor {
   inicio = M;
   /** Lo que va al fondo de cada hoja (la marca de agua), antes del texto. */
   fondo: () => void = () => {};
+  /** Cuántos huecos repartibles dejó el último documento (lo usa la carta factura). */
+  huecos = 0;
   constructor(public pdf: jsPDF, private pie: string) {}
 
   nuevaHoja() {
@@ -119,19 +121,33 @@ class Escritor {
   }
 
   /** Tabla de dos columnas etiqueta / valor. */
-  datos(filas: [string, string][]) {
-    const col = 150;
+  datos(filas: [string, string][], o: { tam?: number; inter?: number; col?: number } = {}) {
+    const col = o.col || 150, tam = o.tam || 10, inter = o.inter || 14;
     filas.forEach(([e, v]) => {
-      this.pdf.setFontSize(10);
+      this.pdf.setFontSize(tam);
       const lineas: string[] = this.pdf.splitTextToSize(v, ANCHO - col);
-      this.espacio(lineas.length * 14 + 2);
+      this.espacio(lineas.length * inter + 2);
       this.pdf.setFont('helvetica', 'bold'); this.pdf.setTextColor(...GRIS);
       this.pdf.text(e, M, this.y);
       this.pdf.setFont('helvetica', 'normal'); this.pdf.setTextColor(...NEGRO);
-      this.pdf.text(lineas, M + col, this.y);
-      this.y += lineas.length * 14;
+      this.pdf.text(lineas, M + col, this.y, { lineHeightFactor: inter / tam });
+      this.y += lineas.length * inter;
     });
     this.y += 6;
+  }
+
+  /** Una sola firma, centrada en la hoja. */
+  firmaCentrada(rol: string, nombre: string) {
+    const ancho = 260, x = (W - ancho) / 2;
+    this.espacio(90);
+    this.y += 56;
+    this.pdf.setDrawColor(...NEGRO); this.pdf.setLineWidth(0.8);
+    this.pdf.line(x, this.y, x + ancho, this.y);
+    this.pdf.setFont('helvetica', 'bold'); this.pdf.setFontSize(11); this.pdf.setTextColor(...NEGRO);
+    this.pdf.text(rol, W / 2, this.y + 15, { align: 'center' });
+    this.pdf.setFont('helvetica', 'normal');
+    if (nombre) this.pdf.text(nombre, W / 2, this.y + 29, { align: 'center' });
+    this.y += 34;
   }
 
   firmas(personas: { rol: string; nombre: string }[]) {
@@ -230,16 +246,27 @@ function sumarDias(iso: string, dias: number) {
   return d.toLocaleDateString('en-CA');
 }
 
-function cartaFactura(e: Escritor, d: DatosDocumentos) {
+/**
+ * Carta factura: una sola hoja, con letra más grande, y el espacio que sobra
+ * se reparte entre sus partes para que ocupe la hoja completa (antes quedaba
+ * todo arriba y media hoja vacía). `extra` es lo que se suma en cada hueco.
+ */
+function cartaFactura(e: Escritor, d: DatosDocumentos, extra = 0) {
   const agencia = d.vendedor;
   const cf = d.cartaFactura || { vigenciaDias: 30 };
   const vigencia = Number(cf.vigenciaDias) || 30;
-  e.titulo('CARTA FACTURA');
-  e.pdf.setFont('helvetica', 'normal'); e.pdf.setFontSize(10.5); e.pdf.setTextColor(...NEGRO);
+  const hueco = () => { e.y += extra; e.huecos++; };
+  const T = 12;
+  e.titulo('CARTA FACTURA', 17);
+  hueco();
+  e.pdf.setFont('helvetica', 'normal'); e.pdf.setFontSize(T); e.pdf.setTextColor(...NEGRO);
   e.pdf.text(`${dato(d.ciudad)}, a ${fechaEnLetra(d.fecha)}`, W - M, e.y, { align: 'right' });
-  e.y += 26;
-  e.parrafo('A QUIEN CORRESPONDA:', { negritas: true });
-  e.parrafo(`${dato(agencia.nombre)}${agencia.representante ? `, por conducto de ${agencia.representante}` : ''}, con domicilio en ${dato(agencia.domicilio)}, hace constar que el ${fechaEnLetra(d.fecha)} vendió a ${dato(d.comprador.nombre)}, con domicilio en ${dato(d.comprador.domicilio)}, el vehículo con las siguientes características:`);
+  e.y += 30;
+  hueco();
+  e.parrafo('A QUIEN CORRESPONDA:', { negritas: true, tam: T });
+  hueco();
+  e.parrafo(`${dato(agencia.nombre)}${agencia.representante ? `, por conducto de ${agencia.representante}` : ''}, con domicilio en ${dato(agencia.domicilio)}, hace constar que el ${fechaEnLetra(d.fecha)} vendió a ${dato(d.comprador.nombre)}, con domicilio en ${dato(d.comprador.domicilio)}, el vehículo con las siguientes características:`, { tam: T });
+  hueco();
   e.datos([
     ['Marca', dato(d.vehiculo.marca)],
     ['Modelo / versión', dato(d.vehiculo.modelo)],
@@ -248,22 +275,22 @@ function cartaFactura(e: Escritor, d: DatosDocumentos) {
     ['NIV (número de serie)', dato(d.vehiculo.niv)],
     ['Número de motor', dato(d.vehiculo.motor)],
     ['Factura', dato(d.vehiculo.factura)],
-  ]);
-  e.parrafo(`Por medio de la presente se autoriza a ${dato(d.comprador.nombre)} a circular con el vehículo descrito y a realizar los trámites de alta de placas, tarjeta de circulación, pago de derechos y verificación ante las autoridades correspondientes.`);
-  e.parrafo(`Esta carta factura tiene una vigencia de ${vigencia} días naturales a partir de su fecha de expedición, es decir, hasta el ${fechaEnLetra(sumarDias(d.fecha, vigencia))}.`);
-  if (agencia.telefono) e.parrafo(`Para cualquier aclaración o para confirmar la autenticidad de este documento, comunicarse al teléfono ${agencia.telefono}.`);
-  e.y += 6;
-  e.parrafo('ATENTAMENTE', { negritas: true });
-  // Firma a la izquierda y, a su altura, el espacio para el sello de la agencia.
-  e.espacio(110);
-  const ySello = e.y;
-  e.firmas([{ rol: dato(agencia.nombre, ''), nombre: agencia.representante || '' }]);
-  e.pdf.setDrawColor(...GRIS); e.pdf.setLineWidth(0.6);
-  e.pdf.setLineDashPattern([3, 3], 0);
-  e.pdf.roundedRect(W - M - 140, ySello + 10, 140, 80, 6, 6, 'S');
-  e.pdf.setLineDashPattern([], 0);
-  e.pdf.setFont('helvetica', 'normal'); e.pdf.setFontSize(8.5); e.pdf.setTextColor(...GRIS);
-  e.pdf.text('Sello de la agencia', W - M - 70, ySello + 54, { align: 'center' });
+  ], { tam: 11.5, inter: 19, col: 175 });
+  hueco();
+  e.parrafo(`Por medio de la presente se autoriza a ${dato(d.comprador.nombre)} a circular con el vehículo descrito y a realizar los trámites de alta de placas, tarjeta de circulación, pago de derechos y verificación ante las autoridades correspondientes.`, { tam: T });
+  hueco();
+  e.parrafo(`Esta carta factura tiene una vigencia de ${vigencia} días naturales a partir de su fecha de expedición, es decir, hasta el ${fechaEnLetra(sumarDias(d.fecha, vigencia))}.`, { tam: T });
+  if (agencia.telefono) {
+    hueco();
+    e.parrafo(`Para cualquier aclaración o para confirmar la autenticidad de este documento, comunicarse al teléfono ${agencia.telefono}.`, { tam: T });
+  }
+  hueco();
+  e.pdf.setFont('helvetica', 'bold'); e.pdf.setFontSize(T); e.pdf.setTextColor(...NEGRO);
+  e.y += 8;
+  e.pdf.text('ATENTAMENTE', W / 2, e.y, { align: 'center' });
+  e.y += 10;
+  hueco();
+  e.firmaCentrada(dato(agencia.nombre, ''), agencia.representante || '');
 }
 
 /** Espacio que se deja arriba cuando la agencia imprime en su papel membretado. */
@@ -333,7 +360,18 @@ export async function generarDocumentosVenta(d: DatosDocumentos): Promise<Blob> 
     if (!primero) e.nuevaHoja();
     primero = false;
     encabezado();
-    escribir(e, d);
+    if (escribir === cartaFactura) {
+      // Se escribe primero en una hoja de prueba para medir cuánto espacio
+      // sobra, y ese espacio se reparte entre los huecos de la carta.
+      const prueba = new Escritor(new jsPDF({ unit: 'pt', format: 'letter' }), '');
+      prueba.y = e.y;
+      cartaFactura(prueba, d, 0);
+      const sobra = (H - 70) - prueba.y;
+      const extra = prueba.y > e.y && sobra > 0 && prueba.huecos > 0 ? Math.min(40, sobra / prueba.huecos) : 0;
+      cartaFactura(e, d, extra);
+    } else {
+      escribir(e, d);
+    }
   }
   e.numerar();
   return pdf.output('blob');
