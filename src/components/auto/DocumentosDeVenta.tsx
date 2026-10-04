@@ -46,6 +46,11 @@ export function DocumentosDeVenta({ auto, agencia, clientes, compradorId, usuari
   const esCreditoCasa = (auto.saleDetails as any)?.method === 'credito';
   const [incluir, setIncluir] = useState({ contrato: true, responsiva: true, cartaFactura: esCreditoCasa });
   const [vigencia, setVigencia] = useState('30');
+  // Se recuerda en cada aparato: una agencia con papel membretado lo apaga una vez.
+  const leer = (k: string, porOmision: boolean) => { try { const v = localStorage.getItem(k); return v === null ? porOmision : v === '1'; } catch { return porOmision; } };
+  const [conLogo, setConLogo] = useState(() => leer('nc.docs.logo', true));
+  const [marcaDeAgua, setMarcaDeAgua] = useState(() => leer('nc.docs.marcaAgua', false));
+  const recordar = (k: string, v: boolean) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   const [agenciaParte, setAgenciaParte] = useState<Parte>({
     nombre: agencia?.name || '', representante: usuario.name || '', domicilio: agencia?.address || '', identificacion: '', telefono: agencia?.phone || '',
   });
@@ -100,6 +105,7 @@ export function DocumentosDeVenta({ auto, agencia, clientes, compradorId, usuari
         diasCambioPropietario: Number(dias) || 30,
         testigos, incluir, agencia,
         cartaFactura: { vigenciaDias: Number(vigencia) || 30 },
+        conLogo, marcaDeAgua,
       };
       const blob = await generarDocumentosVenta(datos);
       const nombres = [incluir.contrato && 'Contrato', incluir.responsiva && 'Responsiva', incluir.cartaFactura && operacion === 'venta' && 'Carta factura'].filter(Boolean) as string[];
@@ -183,6 +189,18 @@ export function DocumentosDeVenta({ auto, agencia, clientes, compradorId, usuari
                 <input type="checkbox" checked={!!incluir.cartaFactura} onChange={(e) => setIncluir({ ...incluir, cartaFactura: e.target.checked })} className="w-4 h-4 accent-blue-700" /> Carta factura
               </label>
             )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 px-3 py-2.5">
+            <span className="text-xs font-extrabold uppercase tracking-wide text-slate-500">Logo de la agencia</span>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+              <input type="checkbox" checked={conLogo} onChange={(e) => { setConLogo(e.target.checked); recordar('nc.docs.logo', e.target.checked); }} className="w-4 h-4 accent-blue-700" /> Logo arriba
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+              <input type="checkbox" checked={marcaDeAgua} onChange={(e) => { setMarcaDeAgua(e.target.checked); recordar('nc.docs.marcaAgua', e.target.checked); }} className="w-4 h-4 accent-blue-700" /> Marca de agua
+            </label>
+            {!agencia?.logoUrl && <span className="text-xs text-amber-700 dark:text-amber-400">Tu agencia no tiene logo cargado.</span>}
+            {!conLogo && <span className="text-xs text-slate-600 dark:text-slate-400">Se deja espacio arriba para tu papel membretado.</span>}
           </div>
 
           {operacion === 'venta' && incluir.contrato && (

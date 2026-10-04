@@ -41,6 +41,10 @@ export interface DatosDocumentos {
   /** Carta factura: cuántos días vale. */
   cartaFactura?: { vigenciaDias: number };
   agencia?: { name?: string; logoUrl?: string } | null;
+  /** Logo arriba de cada documento. Apagado: se deja el espacio del membrete impreso. */
+  conLogo?: boolean;
+  /** Logo grande y tenue al centro de cada hoja. */
+  marcaDeAgua?: boolean;
 }
 
 const W = 612, H = 792, M = 56, ANCHO = W - 2 * M;
@@ -59,12 +63,17 @@ export function fechaEnLetra(iso: string) {
 /** Escritor con cursor: párrafos justificados que saltan de hoja solos. */
 class Escritor {
   y = M;
+  /** Dónde empieza el texto en cada hoja (más abajo si hay papel membretado). */
+  inicio = M;
+  /** Lo que va al fondo de cada hoja (la marca de agua), antes del texto. */
+  fondo: () => void = () => {};
   constructor(public pdf: jsPDF, private pie: string) {}
 
   nuevaHoja() {
     this.numerar();
     this.pdf.addPage('letter', 'portrait');
-    this.y = M;
+    this.fondo();
+    this.y = this.inicio;
   }
   numerar() {
     this.pdf.setFont('helvetica', 'normal'); this.pdf.setFontSize(8); this.pdf.setTextColor(...GRIS);
@@ -257,16 +266,65 @@ function cartaFactura(e: Escritor, d: DatosDocumentos) {
   e.pdf.text('Sello de la agencia', W - M - 70, ySello + 54, { align: 'center' });
 }
 
+/** Espacio que se deja arriba cuando la agencia imprime en su papel membretado. */
+const ESPACIO_MEMBRETE = 85;
+
+/**
+ * El logo para la marca de agua, sin su fondo: muchos logos traen un fondo
+ * blanco o gris claro que, tenue y en grande, se veía como un rectángulo.
+ * Se vuelven transparentes los pixeles claros y casi sin color.
+ */
+async function sinFondoClaro(src: string): Promise<string> {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      try {
+        const datos = ctx.getImageData(0, 0, c.width, c.height);
+        const p = datos.data;
+        for (let i = 0; i < p.length; i += 4) {
+          const max = Math.max(p[i], p[i + 1], p[i + 2]), min = Math.min(p[i], p[i + 1], p[i + 2]);
+          if (min > 215 && max - min < 25) p[i + 3] = 0;
+        }
+        ctx.putImageData(datos, 0, 0);
+        ok(c.toDataURL('image/png'));
+      } catch { ok(src); }
+    };
+    img.onerror = () => ok(src);
+    img.src = src;
+  });
+}
+
 export async function generarDocumentosVenta(d: DatosDocumentos): Promise<Blob> {
   const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
-  const lg = await logo(d.agencia?.logoUrl || undefined);
+  const conLogo = d.conLogo !== false;
+  const lg = (conLogo || d.marcaDeAgua) ? await logo(d.agencia?.logoUrl || undefined) : null;
   const pie = `${d.vehiculo.marca} ${d.vehiculo.modelo} ${d.vehiculo.anio} · NIV ${d.vehiculo.niv || '—'}`;
   const e = new Escritor(pdf, pie);
+  e.inicio = conLogo ? M : M + ESPACIO_MEMBRETE;
+  e.y = e.inicio;
+  const marca = d.marcaDeAgua && lg ? await sinFondoClaro(lg.src) : '';
+  if (d.marcaDeAgua && lg) {
+    e.fondo = () => {
+      const ancho = Math.min(380, 300 * lg.ratio), alto = ancho / lg.ratio;
+      const GState = (pdf as any).GState;
+      pdf.setGState(new GState({ opacity: 0.08 }));
+      pdf.addImage(marca, 'PNG', (W - ancho) / 2, (H - alto) / 2, ancho, alto);
+      pdf.setGState(new GState({ opacity: 1 }));
+    };
+  }
+  e.fondo();
+  // Logo arriba, más grande que antes: hasta 60 pt de alto y 220 de ancho.
   const encabezado = () => {
-    if (lg) {
-      const h = Math.min(34, 140 / lg.ratio);
-      pdf.addImage(lg.src, 'PNG', M, M - 14, h * lg.ratio, h);
-      e.y = M + h + 10;
+    if (conLogo && lg) {
+      const h = Math.min(60, 220 / lg.ratio);
+      pdf.addImage(lg.src, 'PNG', M, M - 16, h * lg.ratio, h);
+      e.y = M + h + 6;
+    } else {
+      e.y = e.inicio;
     }
   };
   let primero = true;
