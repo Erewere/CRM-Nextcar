@@ -1,12 +1,12 @@
 import { motion } from "motion/react";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Calculator, AlertTriangle } from 'lucide-react';
 import { Client, SaleDetails, Vehicle } from '../types';
 
 interface Props {
   client: Client;
   vehicle?: Vehicle | null;
-  onConfirm: (details: SaleDetails) => void;
+  onConfirm: (details: SaleDetails) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -72,10 +72,22 @@ export function DealWonModal({ client, vehicle, onConfirm, onCancel }: Props) {
     });
   }, [method, price, downPayment, termMonths, interestRate, interestType, firstPaymentDate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Un solo envío: la venta tarda unos segundos en guardarse y, mientras, un
+  // segundo clic volvía a registrarla y duplicaba las tareas de cada pago.
+  const enviadoRef = useRef(false);
+  const [guardando, setGuardando] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (summary) {
-      onConfirm(summary);
+    if (!summary || enviadoRef.current) return;
+    enviadoRef.current = true;
+    setGuardando(true);
+    try {
+      await onConfirm(summary);
+    } finally {
+      // Si la ventana sigue abierta (por ejemplo, la venta no se pudo
+      // registrar), se puede volver a intentar.
+      enviadoRef.current = false;
+      setGuardando(false);
     }
   };
 
@@ -290,9 +302,10 @@ export function DealWonModal({ client, vehicle, onConfirm, onCancel }: Props) {
           <button
             type="submit"
             form="deal-won-form"
-            className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors shadow-sm"
+            disabled={guardando}
+            className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-wait rounded transition-colors shadow-sm"
           >
-            Guardar Venta
+            {guardando ? 'Guardando…' : 'Guardar Venta'}
           </button>
         </div>
       </motion.div>
