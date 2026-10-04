@@ -10,6 +10,7 @@ import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials'
 import { hoyLocal } from '../lib/fechas';
 import { sanitizeFirestoreData } from '../lib/clientUtils';
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
+import { configLogoDe, prepararLogo } from '../lib/logoEnFoto';
 
 /**
  * Alta de un auto en pantalla completa. Pide lo indispensable para publicarlo
@@ -32,7 +33,7 @@ function Campo({ etiqueta, obligatorio, children, className }: { etiqueta: strin
 export function AutoNuevo() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { userData } = useAuth();
+  const { userData, agencyData } = useAuth();
   const { can } = usePermissions();
   const { puedeVerCostos } = useCostosVehiculos();
   const esMaster = userData?.role === 'master';
@@ -74,7 +75,12 @@ export function AutoNuevo() {
     if (!archivos?.length) return;
     setSubiendo(`Subiendo 0 de ${archivos.length}…`);
     try {
-      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', nuevoId, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`));
+      // Logo de la agencia en las fotos, si la agencia lo tiene activado
+      // (el master que da de alta para otra agencia las sube sin logo).
+      const cfg = configLogoDe(agencyData);
+      const conLogo = cfg.activo && !!agencyData?.logoUrl && !esMaster;
+      const logo = conLogo ? await prepararLogo(agencyData!.logoUrl, cfg.sinFondo) : null;
+      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', nuevoId, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`), logo ? { logo, config: cfg } : null);
       setFotos((prev) => [...prev, ...nuevas]);
     } catch (e: any) {
       setError(`No se pudieron subir las fotos. ${e?.message || ''}`);
@@ -159,7 +165,7 @@ export function AutoNuevo() {
             >
               <Upload className="w-7 h-7 text-slate-500" />
               <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{subiendo || 'Arrastra las fotos aquí o haz clic para elegirlas'}</span>
-              <span className="text-xs text-slate-500">La primera será la portada. Se comprimen solas.</span>
+              <span className="text-xs text-slate-500">La primera será la portada. Se comprimen solas.{!esMaster && configLogoDe(agencyData).activo && agencyData?.logoUrl ? ' Llevarán el logo de la agencia.' : ''}</span>
               <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subir(e.target.files); e.target.value = ''; }} />
             </label>
             {fotos.length > 0 && (

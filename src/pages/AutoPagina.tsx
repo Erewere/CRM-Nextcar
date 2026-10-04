@@ -21,7 +21,9 @@ import { GraficaMercado } from '../components/inventario/GraficaMercado';
 import { SeccionGastos } from '../components/auto/SeccionGastos';
 import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
-import { subirFotosDeAuto } from '../lib/fotosDeAuto';
+import { subirFotosDeAuto, ponerLogoAFotos } from '../lib/fotosDeAuto';
+import { configLogoDe, prepararLogo, type ConfigLogoFotos } from '../lib/logoEnFoto';
+import { AjusteLogoEnFotos } from '../components/auto/LogoEnFotos';
 import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
 import { generarHojasParabrisas } from '../lib/hojaParabrisasPdf';
 import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/ElegirFotosFicha';
@@ -115,6 +117,8 @@ export function AutoPagina() {
   const [agencia, setAgencia] = useState<any>(null);
   const [paraRedes, setParaRedes] = useState(false);
   const [haciendoContrato, setHaciendoContrato] = useState(false);
+  const [ajustandoLogo, setAjustandoLogo] = useState(false);
+  const [poniendoLogo, setPoniendoLogo] = useState('');
   const [haciendoFicha, setHaciendoFicha] = useState(false);
   const [haciendoHoja, setHaciendoHoja] = useState(false);
   const [eligiendoFotos, setEligiendoFotos] = useState(false);
@@ -253,11 +257,48 @@ export function AutoPagina() {
     await guardar({ photoUrls: urls, photoUrl: elegida }).catch((e) => alert(`No se pudo cambiar la portada. ${e?.message || ''}`));
   };
 
+  // --- Logo de la agencia en las fotos (ajuste de la agencia).
+  const configLogo = configLogoDe(agencia);
+  const logoActivo = configLogo.activo && !!agencia?.logoUrl;
+  const paresLogo: { original: string; conLogo: string }[] = (auto as any)?.fotosOriginales || [];
+  const fotosConLogo = new Set(paresLogo.map((p) => p.conLogo));
+  const marcaParaFotos = async () => (agencia?.logoUrl ? { logo: (await prepararLogo(agencia.logoUrl, configLogo.sinFondo))!, config: configLogo } : null);
+
+  const guardarAjusteLogo = async (c: ConfigLogoFotos) => {
+    await updateDoc(doc(db, 'agencies', agencyId!), { fotosConLogo: c });
+    setAgencia((a: any) => ({ ...(a || {}), fotosConLogo: c }));
+  };
+
+  const ponerLogo = async () => {
+    const faltan = fotos.filter((u) => !fotosConLogo.has(u));
+    if (!faltan.length) return;
+    if (!window.confirm(`¿Poner el logo a ${faltan.length} ${faltan.length === 1 ? 'foto' : 'fotos'}? Las originales se guardan y puedes regresarlas con «Quitar logo».`)) return;
+    setPoniendoLogo(`Preparando 0 de ${faltan.length}…`);
+    try {
+      const marca = await marcaParaFotos();
+      if (!marca?.logo) throw new Error('No se pudo cargar el logo de la agencia.');
+      const pares = await ponerLogoAFotos(faltan, userData?.id || 'sin-usuario', id, marca, (h, t) => setPoniendoLogo(`Preparando ${h} de ${t}…`));
+      const nuevas = fotos.map((u) => pares.find((p) => p.original === u)?.conLogo || u);
+      await guardar({ photoUrls: nuevas, photoUrl: nuevas[0], fotosOriginales: [...paresLogo, ...pares] });
+    } catch (e: any) {
+      alert(`No se pudo poner el logo. ${e?.message || ''}`);
+    } finally {
+      setPoniendoLogo('');
+    }
+  };
+
+  const quitarLogo = async () => {
+    if (!window.confirm('¿Regresar las fotos originales, sin logo?')) return;
+    const nuevas = fotos.map((u) => paresLogo.find((p) => p.conLogo === u)?.original || u);
+    await guardar({ photoUrls: nuevas, photoUrl: nuevas[0] || '', fotosOriginales: [] }).catch((e) => alert(`No se pudo. ${e?.message || ''}`));
+  };
+
   const subirFotos = async (archivos: FileList | null) => {
     if (!archivos || !archivos.length || !auto) return;
     setSubiendo(`Subiendo 0 de ${archivos.length}…`);
     try {
-      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', id, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`));
+      const marca = logoActivo ? await marcaParaFotos() : null;
+      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', id, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`), marca?.logo ? marca : null);
       const todas = [...fotos, ...nuevas];
       await guardar({ photoUrls: todas, photoUrl: todas[0] });
     } catch (e: any) {
@@ -750,6 +791,29 @@ export function AutoPagina() {
                 </div>
               </div>
             )}
+            {seccion === 'fotos' && esMio && (
+              <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white">Logo de la agencia en las fotos</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    {!agencia?.logoUrl ? 'Tu agencia aún no tiene logo cargado.'
+                      : logoActivo ? 'Activado: las fotos que subas llevarán el logo.' : 'Desactivado: las fotos se suben sin logo.'}
+                    {paresLogo.length > 0 && ` · ${fotos.filter((u) => fotosConLogo.has(u)).length} de ${fotos.length} con logo`}
+                  </p>
+                </div>
+                {['admin', 'master'].includes(String(userData?.role)) && (
+                  <button type="button" onClick={() => setAjustandoLogo(true)} className="min-h-[36px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700">Ajustar</button>
+                )}
+                {puedeFotos && agencia?.logoUrl && fotos.some((u) => !fotosConLogo.has(u)) && (
+                  <button type="button" onClick={ponerLogo} disabled={!!poniendoLogo} className="min-h-[36px] px-3 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white text-sm font-bold">
+                    {poniendoLogo || 'Poner logo a estas fotos'}
+                  </button>
+                )}
+                {puedeFotos && fotos.some((u) => fotosConLogo.has(u)) && (
+                  <button type="button" onClick={quitarLogo} disabled={!!poniendoLogo} className="min-h-[36px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700">Quitar logo</button>
+                )}
+              </div>
+            )}
             {seccion === 'fotos' && (
               <Tarjeta titulo={`Fotos (${fotos.length})`} accion={puedeFotos && <span className="text-[11px] text-slate-500">La primera es la portada · pasa el mouse sobre una foto para cambiarla o quitarla</span>}>
                 {puedeFotos && (
@@ -847,6 +911,15 @@ export function AutoPagina() {
           generando={haciendoFicha}
           onCancelar={() => setEligiendoFotos(false)}
           onGenerar={hacerFicha}
+        />
+      )}
+      {ajustandoLogo && (
+        <AjusteLogoEnFotos
+          inicial={configLogo}
+          logoUrl={agencia?.logoUrl}
+          fotoMuestra={fotos[0]}
+          onGuardar={guardarAjusteLogo}
+          onCerrar={() => setAjustandoLogo(false)}
         />
       )}
       {haciendoContrato && (
