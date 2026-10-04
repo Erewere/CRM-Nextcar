@@ -46,9 +46,6 @@ export function DocumentosDeVenta({ auto, agencia, clientes, compradorId, usuari
   const esCreditoCasa = (auto.saleDetails as any)?.method === 'credito';
   const [incluir, setIncluir] = useState({ contrato: true, responsiva: true, cartaFactura: esCreditoCasa });
   const [vigencia, setVigencia] = useState('30');
-  const [resguardo, setResguardo] = useState(esCreditoCasa
-    ? 'en tanto el comprador liquida el crédito que le otorgó la agencia; se le entregará al cubrir el total del precio pactado.'
-    : 'mientras se concluye la entrega de la documentación del vehículo.');
   const [agenciaParte, setAgenciaParte] = useState<Parte>({
     nombre: agencia?.name || '', representante: usuario.name || '', domicilio: agencia?.address || '', identificacion: '', telefono: agencia?.phone || '',
   });
@@ -102,7 +99,7 @@ export function DocumentosDeVenta({ auto, agencia, clientes, compradorId, usuari
         garantia: operacion === 'venta' ? garantia : '',
         diasCambioPropietario: Number(dias) || 30,
         testigos, incluir, agencia,
-        cartaFactura: { vigenciaDias: Number(vigencia) || 30, resguardo },
+        cartaFactura: { vigenciaDias: Number(vigencia) || 30 },
       };
       const blob = await generarDocumentosVenta(datos);
       const nombres = [incluir.contrato && 'Contrato', incluir.responsiva && 'Responsiva', incluir.cartaFactura && operacion === 'venta' && 'Carta factura'].filter(Boolean) as string[];
@@ -208,14 +205,9 @@ export function DocumentosDeVenta({ auto, agencia, clientes, compradorId, usuari
           {operacion === 'venta' && incluir.cartaFactura && (
             <fieldset className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
               <legend className="px-1 text-sm font-extrabold text-slate-900 dark:text-white">Carta factura</legend>
-              <div className="grid grid-cols-1 md:grid-cols-[140px_minmax(0,1fr)] gap-2.5">
-                <label className={etiqueta}>Vigencia (días)
-                  <input value={vigencia} onChange={(e) => setVigencia(e.target.value)} inputMode="numeric" className={campo} />
-                </label>
-                <label className={etiqueta}>La factura original queda en resguardo de la agencia…
-                  <input value={resguardo} onChange={(e) => setResguardo(e.target.value)} className={campo} />
-                </label>
-              </div>
+              <label className={clsx(etiqueta, 'max-w-[160px]')}>Vigencia (días)
+                <input value={vigencia} onChange={(e) => setVigencia(e.target.value)} inputMode="numeric" className={campo} />
+              </label>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">Autoriza al comprador a circular y a emplacar el auto. Va firmada por la agencia, con espacio para el sello.</p>
             </fieldset>
           )}

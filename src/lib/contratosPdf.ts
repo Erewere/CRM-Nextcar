@@ -38,8 +38,8 @@ export interface DatosDocumentos {
   diasCambioPropietario: number;
   testigos: string[];
   incluir: { contrato: boolean; responsiva: boolean; cartaFactura?: boolean };
-  /** Carta factura: cuántos días vale y por qué la agencia guarda la factura original. */
-  cartaFactura?: { vigenciaDias: number; resguardo: string };
+  /** Carta factura: cuántos días vale. */
+  cartaFactura?: { vigenciaDias: number };
   agencia?: { name?: string; logoUrl?: string } | null;
 }
 
@@ -223,7 +223,7 @@ function sumarDias(iso: string, dias: number) {
 
 function cartaFactura(e: Escritor, d: DatosDocumentos) {
   const agencia = d.vendedor;
-  const cf = d.cartaFactura || { vigenciaDias: 30, resguardo: '' };
+  const cf = d.cartaFactura || { vigenciaDias: 30 };
   const vigencia = Number(cf.vigenciaDias) || 30;
   e.titulo('CARTA FACTURA');
   e.pdf.setFont('helvetica', 'normal'); e.pdf.setFontSize(10.5); e.pdf.setTextColor(...NEGRO);
@@ -240,8 +240,6 @@ function cartaFactura(e: Escritor, d: DatosDocumentos) {
     ['Número de motor', dato(d.vehiculo.motor)],
     ['Factura', dato(d.vehiculo.factura)],
   ]);
-  const resguardo = String(cf.resguardo || '').trim();
-  e.parrafo(`La factura original del vehículo queda en resguardo de ${dato(agencia.nombre)}${resguardo ? ` ${resguardo.replace(/^[,.\s]+/, '')}` : ''}${/[.]$/.test(resguardo) ? '' : '.'}`);
   e.parrafo(`Por medio de la presente se autoriza a ${dato(d.comprador.nombre)} a circular con el vehículo descrito y a realizar los trámites de alta de placas, tarjeta de circulación, pago de derechos y verificación ante las autoridades correspondientes.`);
   e.parrafo(`Esta carta factura tiene una vigencia de ${vigencia} días naturales a partir de su fecha de expedición, es decir, hasta el ${fechaEnLetra(sumarDias(d.fecha, vigencia))}.`);
   if (agencia.telefono) e.parrafo(`Para cualquier aclaración o para confirmar la autenticidad de este documento, comunicarse al teléfono ${agencia.telefono}.`);
