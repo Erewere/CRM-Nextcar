@@ -3,7 +3,7 @@ import { alClicWhatsApp } from '../lib/whatsappApp';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import { ArrowLeft, Copy, ExternalLink, FileText, Image as ImageIcon, MessageCircle, Printer, Share2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, FileSignature, FileText, Image as ImageIcon, MessageCircle, Printer, Share2, Upload } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,6 +29,7 @@ import { Cotizador } from '../components/Cotizador';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 import { ImagenesRedes } from '../components/auto/ImagenesRedes';
 import { ConsultaRepuveAuto } from '../components/auto/ConsultaRepuve';
+import { DocumentosDeVenta } from '../components/auto/DocumentosDeVenta';
 import { TEXTO_RESULTADO } from '../lib/niv';
 
 /**
@@ -113,6 +114,7 @@ export function AutoPagina() {
   const [subiendo, setSubiendo] = useState<string>('');
   const [agencia, setAgencia] = useState<any>(null);
   const [paraRedes, setParaRedes] = useState(false);
+  const [haciendoContrato, setHaciendoContrato] = useState(false);
   const [haciendoFicha, setHaciendoFicha] = useState(false);
   const [haciendoHoja, setHaciendoHoja] = useState(false);
   const [eligiendoFotos, setEligiendoFotos] = useState(false);
@@ -381,14 +383,16 @@ export function AutoPagina() {
         <CampoEditable etiqueta="Carrocería" valor={auto.bodyType} tipo="opciones" opciones={opciones(CARROCERIAS)} puedeEditar={puedeEditar} onGuardar={campo('bodyType')} />
         <CampoEditable etiqueta="Pasajeros" valor={auto.passengers} tipo="numero" puedeEditar={puedeEditar} onGuardar={campo('passengers')} />
         <CampoEditable etiqueta="Propiedad" valor={auto.ownership || 'propio'} tipo="opciones" opciones={[{ valor: 'propio', texto: 'Propio' }, { valor: 'consignacion', texto: 'Consignación' }]} mostrar={(v) => (v === 'consignacion' ? 'Consignación' : 'Propio')} puedeEditar={puedeEditar} onGuardar={campo('ownership')} />
-        <div className="flex items-end gap-1 min-w-0">
-          <CampoEditable className="flex-1" etiqueta="VIN" valor={auto.vin} puedeEditar={puedeEditar} marcarSiFalta onGuardar={async (v) => { await guardar({ vin: String(v || '').toUpperCase() }); }} />
+        {/* Doble ancho: el VIN son 17 caracteres y en una columna se partía en dos renglones. */}
+        <div className="col-span-2 flex items-end gap-1 min-w-0">
+          <CampoEditable className="flex-1" claseValor="whitespace-nowrap tracking-wide" etiqueta="VIN" valor={auto.vin} puedeEditar={puedeEditar} marcarSiFalta onGuardar={async (v) => { await guardar({ vin: String(v || '').toUpperCase() }); }} />
           {auto.vin && (
             <button type="button" aria-label="Copiar VIN" title={copiado ? 'Copiado' : 'Copiar VIN'} onClick={() => { navigator.clipboard?.writeText(auto.vin); setCopiado(true); setTimeout(() => setCopiado(false), 1500); }} className="p-1 mb-0.5 rounded text-slate-500 hover:text-blue-700 hover:bg-slate-100 dark:hover:bg-slate-700">
               <Copy className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
+        <CampoEditable etiqueta="Número de motor" valor={auto.engineNumber} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ engineNumber: String(v || '').toUpperCase().trim() }); }} />
         <CampoEditable etiqueta="Placas" valor={(auto as any).licensePlate} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ licensePlate: String(v || '').toUpperCase().trim() }); }} />
         {completo && <>
           <CampoEditable etiqueta="Fecha de recepción" valor={auto.receivedAt} tipo="fecha" mostrar={(v) => fechaLarga(v)} puedeEditar={puedeEditar} onGuardar={campo('receivedAt')} />
@@ -779,6 +783,17 @@ export function AutoPagina() {
             {seccion === 'costos' && verGastos && bloqueCostos}
             {seccion === 'documentos' && (
               <div className="flex flex-col gap-3">
+                {esMio && (
+                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 dark:text-white">Contrato y carta responsiva</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Prellenados con el auto, la agencia y el cliente, listos para imprimir y firmar.</p>
+                    </div>
+                    <button type="button" onClick={() => setHaciendoContrato(true)} className="min-h-[38px] px-4 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold flex items-center gap-1.5">
+                      <FileSignature className="w-4 h-4" /> Hacer documentos
+                    </button>
+                  </div>
+                )}
                 {verArchivos && <DocumentosDelAuto vehicleId={id} />}
                 {bloqueDocumentos}
               </div>
@@ -786,7 +801,22 @@ export function AutoPagina() {
             {seccion === 'notas' && <NotasDelAuto vehicleId={id} />}
             {seccion === 'pagina' && bloquePagina(true)}
             {seccion === 'interesados' && bloqueInteresados(true)}
-            {seccion === 'venta' && seccionVenta}
+            {seccion === 'venta' && (
+              <div className="flex flex-col gap-3">
+                {esMio && (
+                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 dark:text-white">Contrato y carta responsiva</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Prellenados con el auto, la agencia y el cliente, listos para imprimir y firmar.</p>
+                    </div>
+                    <button type="button" onClick={() => setHaciendoContrato(true)} className="min-h-[38px] px-4 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold flex items-center gap-1.5">
+                      <FileSignature className="w-4 h-4" /> Hacer documentos
+                    </button>
+                  </div>
+                )}
+                {seccionVenta}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -817,6 +847,17 @@ export function AutoPagina() {
           generando={haciendoFicha}
           onCancelar={() => setEligiendoFotos(false)}
           onGenerar={hacerFicha}
+        />
+      )}
+      {haciendoContrato && (
+        <DocumentosDeVenta
+          auto={auto}
+          agencia={agencia}
+          clientes={clientesAgencia}
+          compradorId={(auto as any).soldToClientId || (auto as any).buyerId}
+          usuario={{ name: userData?.name }}
+          entregables={[...DOCUMENTOS, ...ACCESORIOS].filter((d) => checklist[d.key]).map((d) => d.label)}
+          onCerrar={() => setHaciendoContrato(false)}
         />
       )}
       {paraRedes && (

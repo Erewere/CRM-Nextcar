@@ -44,7 +44,7 @@ export function AutoNuevo() {
     agencyId: userData?.agencyId && userData.agencyId !== 'unassigned' ? userData.agencyId : '',
     make: '', model: '', year: String(new Date().getFullYear()), price: '', costo: '',
     km: '', color: '', transmission: 'Automática', bodyType: 'Sedán', ownership: 'propio',
-    receivedAt: hoyLocal(), vin: '', passengers: '5', liters: '', cylinders: '4', equipment: '',
+    receivedAt: hoyLocal(), vin: '', engineNumber: '', licensePlate: '', passengers: '5', liters: '', cylinders: '4', equipment: '',
     publicarEnWeb: params.get('web') === '1',
   });
   const [fotos, setFotos] = useState<string[]>([]);
@@ -108,6 +108,8 @@ export function AutoNuevo() {
         ownership: f.ownership,
         receivedAt: f.receivedAt,
         vin: f.vin.trim().toUpperCase(),
+        engineNumber: f.engineNumber.trim().toUpperCase(),
+        licensePlate: f.licensePlate.trim().toUpperCase(),
         passengers: numero(f.passengers),
         liters: numero(f.liters),
         cylinders: numero(f.cylinders),
@@ -212,6 +214,8 @@ export function AutoNuevo() {
               <Campo etiqueta="Cilindros"><input value={f.cylinders} onChange={poner('cylinders')} inputMode="numeric" className={campoClase} /></Campo>
               <Campo etiqueta="Pasajeros"><input value={f.passengers} onChange={poner('passengers')} inputMode="numeric" className={campoClase} /></Campo>
               <Campo etiqueta="VIN" className="md:col-span-2"><input value={f.vin} onChange={poner('vin')} className={clsx(campoClase, 'uppercase')} /></Campo>
+              <Campo etiqueta="Número de motor"><input value={f.engineNumber} onChange={poner('engineNumber')} className={clsx(campoClase, 'uppercase')} /></Campo>
+              <Campo etiqueta="Placas"><input value={f.licensePlate} onChange={poner('licensePlate')} className={clsx(campoClase, 'uppercase')} /></Campo>
               <Campo etiqueta="Equipamiento" className="col-span-2 md:col-span-4"><textarea value={f.equipment} onChange={poner('equipment')} rows={2} className={campoClase} /></Campo>
             </div>
             {userData?.role !== 'seller' && (

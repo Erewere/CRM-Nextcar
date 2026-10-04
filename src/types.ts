@@ -65,6 +65,10 @@ export interface Vehicle {
   purchasePrice: number;
   vin: string;
   websiteUrl?: string;
+  /** Número de motor (viene en la factura); lo usan el contrato y la responsiva. */
+  engineNumber?: string;
+  /** Placas actuales. */
+  licensePlate?: string;
   status: string;
   createdAt: string;
   updatedAt: string;
