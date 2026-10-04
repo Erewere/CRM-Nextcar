@@ -786,7 +786,7 @@ export function AutoPagina() {
                 {esMio && (
                   <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-extrabold text-slate-900 dark:text-white">Contrato y carta responsiva</h3>
+                      <h3 className="font-extrabold text-slate-900 dark:text-white">Contrato, responsiva y carta factura</h3>
                       <p className="text-xs text-slate-600 dark:text-slate-400">Prellenados con el auto, la agencia y el cliente, listos para imprimir y firmar.</p>
                     </div>
                     <button type="button" onClick={() => setHaciendoContrato(true)} className="min-h-[38px] px-4 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold flex items-center gap-1.5">
@@ -806,7 +806,7 @@ export function AutoPagina() {
                 {esMio && (
                   <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-extrabold text-slate-900 dark:text-white">Contrato y carta responsiva</h3>
+                      <h3 className="font-extrabold text-slate-900 dark:text-white">Contrato, responsiva y carta factura</h3>
                       <p className="text-xs text-slate-600 dark:text-slate-400">Prellenados con el auto, la agencia y el cliente, listos para imprimir y firmar.</p>
                     </div>
                     <button type="button" onClick={() => setHaciendoContrato(true)} className="min-h-[38px] px-4 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold flex items-center gap-1.5">

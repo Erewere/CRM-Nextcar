@@ -37,7 +37,9 @@ export interface DatosDocumentos {
   garantia: string;
   diasCambioPropietario: number;
   testigos: string[];
-  incluir: { contrato: boolean; responsiva: boolean };
+  incluir: { contrato: boolean; responsiva: boolean; cartaFactura?: boolean };
+  /** Carta factura: cuántos días vale y por qué la agencia guarda la factura original. */
+  cartaFactura?: { vigenciaDias: number; resguardo: string };
   agencia?: { name?: string; logoUrl?: string } | null;
 }
 
@@ -212,6 +214,51 @@ function responsiva(e: Escritor, d: DatosDocumentos) {
   ]);
 }
 
+function sumarDias(iso: string, dias: number) {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + dias);
+  return d.toLocaleDateString('en-CA');
+}
+
+function cartaFactura(e: Escritor, d: DatosDocumentos) {
+  const agencia = d.vendedor;
+  const cf = d.cartaFactura || { vigenciaDias: 30, resguardo: '' };
+  const vigencia = Number(cf.vigenciaDias) || 30;
+  e.titulo('CARTA FACTURA');
+  e.pdf.setFont('helvetica', 'normal'); e.pdf.setFontSize(10.5); e.pdf.setTextColor(...NEGRO);
+  e.pdf.text(`${dato(d.ciudad)}, a ${fechaEnLetra(d.fecha)}`, W - M, e.y, { align: 'right' });
+  e.y += 26;
+  e.parrafo('A QUIEN CORRESPONDA:', { negritas: true });
+  e.parrafo(`${dato(agencia.nombre)}${agencia.representante ? `, por conducto de ${agencia.representante}` : ''}, con domicilio en ${dato(agencia.domicilio)}, hace constar que el ${fechaEnLetra(d.fecha)} vendió a ${dato(d.comprador.nombre)}, con domicilio en ${dato(d.comprador.domicilio)}, el vehículo con las siguientes características:`);
+  e.datos([
+    ['Marca', dato(d.vehiculo.marca)],
+    ['Modelo / versión', dato(d.vehiculo.modelo)],
+    ['Año modelo', dato(d.vehiculo.anio)],
+    ['Color', dato(d.vehiculo.color)],
+    ['NIV (número de serie)', dato(d.vehiculo.niv)],
+    ['Número de motor', dato(d.vehiculo.motor)],
+    ['Factura', dato(d.vehiculo.factura)],
+  ]);
+  const resguardo = String(cf.resguardo || '').trim();
+  e.parrafo(`La factura original del vehículo queda en resguardo de ${dato(agencia.nombre)}${resguardo ? ` ${resguardo.replace(/^[,.\s]+/, '')}` : ''}${/[.]$/.test(resguardo) ? '' : '.'}`);
+  e.parrafo(`Por medio de la presente se autoriza a ${dato(d.comprador.nombre)} a circular con el vehículo descrito y a realizar los trámites de alta de placas, tarjeta de circulación, pago de derechos y verificación ante las autoridades correspondientes.`);
+  e.parrafo(`Esta carta factura tiene una vigencia de ${vigencia} días naturales a partir de su fecha de expedición, es decir, hasta el ${fechaEnLetra(sumarDias(d.fecha, vigencia))}.`);
+  if (agencia.telefono) e.parrafo(`Para cualquier aclaración o para confirmar la autenticidad de este documento, comunicarse al teléfono ${agencia.telefono}.`);
+  e.y += 6;
+  e.parrafo('ATENTAMENTE', { negritas: true });
+  // Firma a la izquierda y, a su altura, el espacio para el sello de la agencia.
+  e.espacio(110);
+  const ySello = e.y;
+  e.firmas([{ rol: dato(agencia.nombre, ''), nombre: agencia.representante || '' }]);
+  e.pdf.setDrawColor(...GRIS); e.pdf.setLineWidth(0.6);
+  e.pdf.setLineDashPattern([3, 3], 0);
+  e.pdf.roundedRect(W - M - 140, ySello + 10, 140, 80, 6, 6, 'S');
+  e.pdf.setLineDashPattern([], 0);
+  e.pdf.setFont('helvetica', 'normal'); e.pdf.setFontSize(8.5); e.pdf.setTextColor(...GRIS);
+  e.pdf.text('Sello de la agencia', W - M - 70, ySello + 54, { align: 'center' });
+}
+
 export async function generarDocumentosVenta(d: DatosDocumentos): Promise<Blob> {
   const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
   const lg = await logo(d.agencia?.logoUrl || undefined);
@@ -225,7 +272,7 @@ export async function generarDocumentosVenta(d: DatosDocumentos): Promise<Blob> 
     }
   };
   let primero = true;
-  for (const [incluir, escribir] of [[d.incluir.contrato, contrato], [d.incluir.responsiva, responsiva]] as const) {
+  for (const [incluir, escribir] of [[d.incluir.contrato, contrato], [d.incluir.responsiva, responsiva], [!!d.incluir.cartaFactura && d.operacion === 'venta', cartaFactura]] as const) {
     if (!incluir) continue;
     if (!primero) e.nuevaHoja();
     primero = false;
