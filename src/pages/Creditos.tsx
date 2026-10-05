@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Landmark, Loader2, Plus, Settings, X } from 'lucide-react';
+import { Check, Landmark, Loader2, Plus, Settings, X } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { creditosApi } from '../lib/creditosApi';
@@ -210,10 +210,35 @@ function NuevaSolicitud({ clienteInicial, autoInicial, onCerrar, onCreada }: { c
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-bold">Cliente</span>
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nombre o teléfono…" className={campo} />
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={campo} size={Math.min(6, Math.max(2, visibles.length + 1))}>
-              <option value="">— Elige al cliente —</option>
-              {visibles.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
-            </select>
+            {(() => {
+              const elegido = clientes.find((c) => c.id === clientId);
+              const lista = elegido && !visibles.some((c) => c.id === clientId) ? [elegido, ...visibles] : visibles;
+              return (
+                <div role="listbox" aria-label="Clientes" className="max-h-60 overflow-y-auto rounded-lg border border-slate-300 dark:border-slate-600 divide-y divide-slate-100 dark:divide-slate-700">
+                  {lista.length === 0 && <p className="px-3 py-3 text-sm text-slate-500">{busca.trim() ? 'Ningún cliente coincide con la búsqueda.' : 'Cargando clientes…'}</p>}
+                  {lista.map((c) => {
+                    const activo = c.id === clientId;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        role="option"
+                        aria-selected={activo}
+                        onClick={() => setClientId(c.id)}
+                        className={clsx('w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm',
+                          activo ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50')}
+                      >
+                        <span className="min-w-0">
+                          <span className="block font-semibold truncate">{c.name || 'Sin nombre'}</span>
+                          {c.phone && <span className="block text-xs text-slate-500">{c.phone}</span>}
+                        </span>
+                        {activo && <Check className="w-4 h-4 shrink-0 text-blue-600" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-bold">Auto</span>
