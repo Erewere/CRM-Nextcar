@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { PRECIO_POR_USUARIO } from '../lib/subscription';
+import { AvisoSinPublicarMaster } from '../components/auto/AvisoPaginaWeb';
 
 /**
  * Panel de control de la plataforma, para el usuario master.
@@ -347,6 +348,8 @@ export function PlatformPanel() {
             </button>
           </div>
         </div>
+
+        <AvisoSinPublicarMaster />
 
         {/* Pestañas */}
         <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700 mb-6 overflow-x-auto">

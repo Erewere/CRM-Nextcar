@@ -13,6 +13,7 @@ import { subirFotosDeAuto, avisoFallidas } from '../lib/fotosDeAuto';
 import { configLogoDe, prepararLogo } from '../lib/logoEnFoto';
 import { auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
+import { AvisoPaginaWeb } from '../components/auto/AvisoPaginaWeb';
 import { LlenarDesdeVin } from '../components/auto/LlenarDesdeVin';
 
 /**
@@ -263,6 +264,7 @@ export function AutoNuevo() {
                 </span>
               </label>
             )}
+            {f.publicarEnWeb && <AvisoPaginaWeb marcado />}
             <p className="text-xs text-slate-600 dark:text-slate-400">Documentos, gastos y datos para la página los completas después en la página del auto, con un clic sobre cada dato.</p>
           </section>
         </div>

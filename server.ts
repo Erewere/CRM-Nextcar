@@ -6,7 +6,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
 import { procesarLeadPublico } from "./src/lib/leadPublico.ts";
-import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
+import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
@@ -3817,6 +3817,82 @@ ${extra}
   }
   setTimeout(llenarLigasDeLaPagina, 4 * 60 * 1000);
   setInterval(llenarLigasDeLaPagina, 60 * 60 * 1000);
+
+  // ===== ¿La agencia ya está en la página? =====
+  //
+  // La página solo publica autos de agencias ligadas a su cuenta del CRM y
+  // aprobadas por Luis. Antes una agencia podía marcar «Publicar» sin estar
+  // conectada y sus autos nunca salían, sin que nadie supiera por qué
+  // (HHHSeminuevos, oct 2026). La página dice cuáles están (firmado, solo ids
+  // y estado) y aquí se avisa. Se guarda 5 minutos.
+  const URL_AGENCIAS_PAGINA = "https://www.nextcar.erewere.com/api/crm-agencias.php";
+  let agenciasEnPagina: { cuando: number; mapa: Record<string, string> } | null = null;
+
+  async function estadosEnPagina(): Promise<Record<string, string> | null> {
+    if (agenciasEnPagina && Date.now() - agenciasEnPagina.cuando < 5 * 60 * 1000) return agenciasEnPagina.mapa;
+    const secreto = secretoDeLaPagina();
+    if (!secreto) return agenciasEnPagina?.mapa || null;
+    try {
+      const r = await fetch(URL_AGENCIAS_PAGINA, { headers: cabecerasFirmadas("agencias-ligadas", secreto), signal: AbortSignal.timeout(15000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const mapa: Record<string, string> = {};
+      for (const a of (await r.json())?.agencias || []) {
+        const id = String(a?.crm_agency_id || "");
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) continue;
+        // Si hubiera dos cuentas para la misma agencia, cuenta la aprobada.
+        if (mapa[id] !== "aprobado") mapa[id] = String(a?.estado || "");
+      }
+      agenciasEnPagina = { cuando: Date.now(), mapa };
+      return mapa;
+    } catch (e) {
+      console.error("Agencias en la pagina:", e);
+      return agenciasEnPagina?.mapa || null; // sin respuesta: no se avisa nada falso
+    }
+  }
+  const estadoDe = (mapa: Record<string, string> | null, agencyId: string) =>
+    !mapa ? "desconocido" : mapa[agencyId] === "aprobado" ? "aprobado" : mapa[agencyId] ? "pendiente" : "sin-ligar";
+
+  // Diagnóstico sin sesión: solo si la página contesta y cuántas agencias
+  // tiene ligadas y aprobadas. Ni ids ni nombres.
+  app.get("/api/pagina/conexion", async (_req, res) => {
+    const mapa = await estadosEnPagina();
+    res.json({ secreto: !!secretoDeLaPagina(), paginaResponde: !!mapa, ligadas: mapa ? Object.keys(mapa).length : 0, aprobadas: mapa ? Object.values(mapa).filter((e) => e === "aprobado").length : 0 });
+  });
+
+  // Para el aviso junto a «Publicar en nextcar.erewere.com».
+  app.get("/api/pagina/mi-estado", async (req, res) => {
+    const quien = await usuarioQuePide(req, res);
+    if (!quien) return;
+    res.json({ estado: estadoDe(await estadosEnPagina(), quien.agencyId), esAdmin: quien.rol === "admin" });
+  });
+
+  // Para Luis: agencias con autos marcados que no van a salir.
+  app.get("/api/pagina/sin-publicar", async (req, res) => {
+    const quien = await usuarioQuePide(req, res);
+    if (!quien) return;
+    if (quien.rol !== "master") return res.status(403).json({ error: "Solo el administrador de la plataforma." });
+    try {
+      const mapa = await estadosEnPagina();
+      if (!mapa) return res.json({ agencias: [], desconocido: true });
+      const snap = await quien.adminDb.collection("vehicles").where("publicarEnWeb", "==", true).get();
+      const porAgencia: Record<string, number> = {};
+      for (const d of snap.docs) {
+        const v: any = d.data();
+        if (v.status !== "available" || !(Array.isArray(v.photoUrls) && v.photoUrls.length)) continue;
+        if (estadoDe(mapa, v.agencyId) === "aprobado") continue;
+        porAgencia[v.agencyId] = (porAgencia[v.agencyId] || 0) + 1;
+      }
+      const ids = Object.keys(porAgencia);
+      const docs = ids.length ? await quien.adminDb.getAll(...ids.map((id) => quien.adminDb.collection("agencies").doc(id))) : [];
+      res.json({
+        agencias: docs.map((d: any, i: number) => ({ agencyId: ids[i], nombre: d.data()?.name || ids[i], autos: porAgencia[ids[i]], estado: estadoDe(mapa, ids[i]) }))
+          .sort((a: any, b: any) => b.autos - a.autos),
+      });
+    } catch (e) {
+      console.error("pagina/sin-publicar:", e);
+      res.status(500).json({ error: "No se pudo revisar." });
+    }
+  });
 
   app.get("/api/mercado/inventario", async (req, res) => {
     const quien = await usuarioQuePide(req, res);

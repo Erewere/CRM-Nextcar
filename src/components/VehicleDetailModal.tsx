@@ -19,6 +19,7 @@ import { SeleccionarTratoVenta } from './SeleccionarTratoVenta';
 import { X, Upload, Trash2, Plus, DollarSign, Edit2, Printer, Share2, MessageSquare, Sparkles, Star } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 import { hoyLocal } from "../lib/fechas";
+import { AvisoPaginaWeb } from './auto/AvisoPaginaWeb';
 
 interface Props {
   vehicle: Vehicle | Partial<Vehicle>;
@@ -1589,6 +1590,7 @@ function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props
                           </span>
                         </span>
                       </label>
+                      {publicado && !isReadOnly && <AvisoPaginaWeb marcado />}
                       {publicado && !tieneFotos && (
                         <p className="text-xs font-semibold text-[#A82A17] dark:text-[#F2705B]">Sin fotos no se publica: sube al menos una.</p>
                       )}

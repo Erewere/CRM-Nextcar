@@ -21,6 +21,7 @@ import { GraficaMercado } from '../components/inventario/GraficaMercado';
 import { SeccionGastos } from '../components/auto/SeccionGastos';
 import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
+import { AvisoPaginaWeb } from '../components/auto/AvisoPaginaWeb';
 import { subirFotosDeAuto, ponerLogoAFotos, avisoFallidas } from '../lib/fotosDeAuto';
 import { configLogoDe, prepararLogo, type ConfigLogoFotos } from '../lib/logoEnFoto';
 import { AjusteLogoEnFotos } from '../components/auto/LogoEnFotos';
@@ -547,6 +548,7 @@ export function AutoPagina() {
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{publicado ? 'Publicado' : 'Sin publicar'}</span>
           )}
         </div>
+        {(publicado || puedePublicar) && <AvisoPaginaWeb marcado={publicado} />}
         {auto.websiteUrl && (
           <a href={auto.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
             Ver en la página <ExternalLink className="w-3 h-3" />
