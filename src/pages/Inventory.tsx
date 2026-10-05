@@ -156,7 +156,6 @@ export function Inventory() {
   const isReadOnly = useReadOnly();
   const { can } = usePermissions();
   const puedeVerCompartido = can('vehiculos.compartido');
-  const puedeVerPagos = can('pagos.gestionar');
   const navigate = useNavigate();
   const [vehiculosCrudos, setVehicles] = useState<Vehicle[]>([]);
   // El costo llega por separado y se vuelve a unir al auto aqui, de modo
@@ -999,22 +998,24 @@ export function Inventory() {
         {/* Todo en una linea: buscador y filtros a la izquierda, pestanas y
             acciones a la derecha. Los botones vivian en una fila propia
             encima del recuadro y se comian una franja entera de pantalla. */}
-        <div className="px-4 py-2.5 border-b flex items-center justify-between gap-3">
-          <div className="flex flex-1 max-w-xl gap-3 min-w-0">
-            <div className="relative flex-1">
+        <div className="px-4 py-2.5 border-b flex flex-wrap items-center gap-2">
+          {/* El buscador nunca baja de ~260px: si no caben los botones, ellos
+              pasan al siguiente renglón en vez de aplastarlo. */}
+          <div className="flex flex-1 basis-[560px] gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+            <div className="relative flex-1 min-w-[260px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text" 
                 placeholder="Buscar por marca, modelo, año, VIN, carrocería..." 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-9 pl-9 pr-4 border rounded-lg bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <select
               value={filterBodyType}
               onChange={(e) => setFilterBodyType(e.target.value)}
-              className="px-3 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+              className="h-9 px-3 border rounded-lg bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
             >
               <option value="all">Carrocería</option>
               {uniqueBodyTypes.map(t => (
@@ -1024,7 +1025,7 @@ export function Inventory() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-1.5 border rounded bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-9 px-3 border rounded-lg bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="activos">En inventario (sin vendidos)</option>
               <option value="all">Todos, incluidos vendidos</option>
@@ -1039,13 +1040,13 @@ export function Inventory() {
               -"todos menos master y vendedor"- de modo que cualquier rol nuevo
               quedaba dentro sin quererlo: el taller veia el inventario de otras
               agencias y el acceso a Pagos. */}
-          {userData?.role !== 'master' && (puedeVerCompartido || puedeVerPagos) && (
-            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded border border-gray-200 dark:border-slate-700">
+          {userData?.role !== 'master' && puedeVerCompartido && (
+            <div className="flex items-center h-9 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setActiveTab('my')}
                 className={clsx(
-                  "px-4 py-1.5 rounded-md text-xs font-semibold transition-all",
+                  "h-full px-3 rounded-md text-sm font-semibold transition-all",
                   activeTab === 'my'
                     ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm"
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
@@ -1064,7 +1065,7 @@ export function Inventory() {
                   setActiveTab('shared');
                 }}
                 className={clsx(
-                  "px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5",
+                  "h-full px-3 rounded-md text-sm font-semibold transition-all flex items-center gap-1.5",
                   activeTab === 'shared'
                     ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm"
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300"
@@ -1079,15 +1080,6 @@ export function Inventory() {
                 )}
               </button>
               )}
-              {puedeVerPagos && (
-                <button
-                  type="button"
-                  onClick={() => navigate('/payments')}
-                  className="px-4 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
-                >
-                  Pagos
-                </button>
-              )}
             </div>
           )}
 
@@ -1095,7 +1087,7 @@ export function Inventory() {
             <button
               type="button"
               onClick={() => setViendoDemanda(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm shrink-0"
+              className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 text-sm shrink-0"
               title="Lo que piden los clientes y no hay en el inventario"
             >
               <Search className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lo que buscan</span>
@@ -1105,13 +1097,13 @@ export function Inventory() {
             <button
               type="button"
               onClick={() => setHaciendoLista(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm shrink-0"
+              className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 text-sm shrink-0"
               title="Lista de precios o hojas para el parabrisas de los autos disponibles"
             >
               <FileText className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lista y parabrisas</span>
             </button>
           )}
-          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-700 rounded shrink-0">
+          <div className="flex items-center h-9 p-0.5 bg-slate-100 dark:bg-slate-700 rounded-lg shrink-0">
             <button
               onClick={() => setViewMode('grid')}
               className={clsx(
@@ -1134,17 +1126,17 @@ export function Inventory() {
 
           {!isReadOnly && (userData?.role !== "seller" || userData?.canManageVehicles) && (
             <>
-              <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm cursor-pointer shrink-0">
-                <Download className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Importar Excel</span>
+              <label className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 text-sm shrink-0 cursor-pointer" title="Importar inventario desde Excel">
+                <Download className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Importar</span>
                 <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
               </label>
               <button
                 onClick={() => setSelectedVehicle({} as Vehicle)}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-3 py-1.5 rounded font-semibold flex items-center gap-2 text-xs md:text-sm shrink-0"
+                className="h-9 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center gap-1.5 text-sm shrink-0"
+                title="Agregar vehículo"
               >
                 <Plus className="w-4 h-4 shrink-0" />
-                <span className="hidden lg:inline">Agregar Vehículo</span>
-                <span className="lg:hidden">Agregar</span>
+                Agregar
               </button>
             </>
           )}
