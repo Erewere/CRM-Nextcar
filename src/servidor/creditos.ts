@@ -59,6 +59,8 @@ function resumen(id: string, x: any) {
     clientId: x.clientId,
     auto: x.auto || "",
     vehicleId: x.vehicleId || null,
+    dealId: x.dealId || null,
+    origen: x.origen || 'manual',
     vendedorId: x.vendedorId,
     vendedorNombre: x.vendedorNombre || "",
     etapa: x.etapa,
@@ -152,6 +154,8 @@ export function registrarCreditos(app: any, deps: {
     try {
       let consulta = col(q.adminDb).where("agencyId", "==", q.agencyId);
       if (!ROLES_TODO.has(q.rol)) consulta = consulta.where("vendedorId", "==", q.uid);
+      const cliente = String(req.query?.clientId || "");
+      if (idValido(cliente)) consulta = consulta.where("clientId", "==", cliente);
       const snap = await consulta.limit(500).get();
       res.json({ solicitudes: snap.docs.map((d: any) => resumen(d.id, d.data())) });
     } catch (e) {
@@ -160,65 +164,112 @@ export function registrarCreditos(app: any, deps: {
     }
   });
 
+  /** Crea una solicitud con los datos del cliente. La usan «Nueva solicitud» y el embudo. */
+  async function crearSolicitud(q: { uid: string; rol: string; agencyId: string; adminDb: any }, p: { clientId: string; vehicleId?: string | null; bancos?: any[]; todosLosBancos?: boolean; operacion?: any; dealId?: string | null; origen?: string }) {
+    const c = (await q.adminDb.collection("clients").doc(String(p.clientId)).get()).data();
+    if (!c || c.agencyId !== q.agencyId) return { status: 404, error: "No encontramos ese cliente en tu agencia." };
+    if (!ROLES_TODO.has(q.rol) && c.sellerId !== q.uid) return { status: 403, error: "Solo puedes abrir solicitudes de tus clientes." };
+    let auto = "";
+    let vid: string | null = null;
+    let precioAuto = 0;
+    if (p.vehicleId && idValido(String(p.vehicleId))) {
+      const v = (await q.adminDb.collection("vehicles").doc(String(p.vehicleId)).get()).data();
+      if (v && v.agencyId === q.agencyId) { auto = `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(); vid = String(p.vehicleId); precioAuto = Number(v.price) || 0; }
+    }
+    const visibles = await formatosVisibles(q.adminDb, q.agencyId);
+    const elegidos: any[] = [];
+    const lista = p.todosLosBancos ? visibles.map((f: any) => f.id) : (Array.isArray(p.bancos) ? p.bancos.slice(0, 6) : []);
+    for (const b of lista) {
+      if (b === "casa") elegidos.push({ clave: "casa", nombre: "Crédito de la casa", formatoId: null, estado: "pendiente" });
+      else { const f = visibles.find((x: any) => x.id === b); if (f) elegidos.push({ clave: f.clave, nombre: f.nombre, formatoId: f.id, estado: "pendiente" }); }
+    }
+    if (!elegidos.length) return { status: 400, error: "Elige al menos un banco o crédito de la casa." };
+    const n = partirNombre(c.name);
+    const datos = limpiarDatos({
+      ...n,
+      email: c.email || "",
+      celular: String(c.phone || "").replace(/\D/g, "").slice(-10),
+      dom: { calle: c.street || "", numExt: c.exteriorNumber || "", colonia: c.neighborhood || "", ciudad: c.city || "", cp: c.zipCode || "" },
+      paisNacimiento: "México",
+      nacionalidad: "mexicana",
+    }) || {};
+    const vendedorId = c.sellerId || q.uid;
+    const ahora = new Date().toISOString();
+    const quien = await nombreDe(q.adminDb, q.uid);
+    let operacion = limpiarDatos(p.operacion || {}) || {};
+    if (!operacion.precio && precioAuto) operacion = { precio: precioAuto, enganche: Math.round(precioAuto * 0.2), plazo: 48, ...operacion };
+    if (operacion.precio && !operacion.enganche) operacion = { ...operacion, enganche: Math.round(Number(operacion.precio) * 0.2), plazo: operacion.plazo || 48 };
+    const doc = {
+      agencyId: q.agencyId,
+      clientId: String(p.clientId),
+      clienteNombre: c.name || "",
+      clienteTelefono: c.phone || "",
+      vehicleId: vid,
+      auto,
+      dealId: p.dealId || null,
+      origen: p.origen || "manual",
+      vendedorId,
+      vendedorNombre: vendedorId === q.uid ? quien : await nombreDe(q.adminDb, vendedorId),
+      etapa: "recibida",
+      bancos: elegidos,
+      operacion,
+      datos,
+      documentos: [],
+      historial: [historial(p.origen === "embudo" ? `${quien} pasó el trato a la etapa de crédito en el embudo: se abrió la solicitud.` : `Solicitud creada por ${quien}.`, q.uid)],
+      ligaHash: null,
+      ligaVence: null,
+      creadoEl: ahora,
+      actualizadoEl: ahora,
+    };
+    const ref = await col(q.adminDb).add(doc);
+    return { solicitud: completa(ref.id, doc) };
+  }
+
   app.post("/api/creditos", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
     if (!q) return;
     const { clientId, vehicleId, bancos, operacion } = req.body || {};
     if (!idValido(String(clientId || ""))) return res.status(400).json({ error: "Elige un cliente." });
     try {
-      const c = (await q.adminDb.collection("clients").doc(String(clientId)).get()).data();
-      if (!c || c.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese cliente en tu agencia." });
-      if (!ROLES_TODO.has(q.rol) && c.sellerId !== q.uid) return res.status(403).json({ error: "Solo puedes abrir solicitudes de tus clientes." });
-      let auto = "";
-      let vid: string | null = null;
-      if (vehicleId && idValido(String(vehicleId))) {
-        const v = (await q.adminDb.collection("vehicles").doc(String(vehicleId)).get()).data();
-        if (v && v.agencyId === q.agencyId) { auto = `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(); vid = String(vehicleId); }
-      }
-      const visibles = await formatosVisibles(q.adminDb, q.agencyId);
-      const elegidos: any[] = [];
-      for (const b of Array.isArray(bancos) ? bancos.slice(0, 6) : []) {
-        if (b === "casa") elegidos.push({ clave: "casa", nombre: "Crédito de la casa", formatoId: null, estado: "pendiente" });
-        else { const f = visibles.find((x: any) => x.id === b); if (f) elegidos.push({ clave: f.clave, nombre: f.nombre, formatoId: f.id, estado: "pendiente" }); }
-      }
-      if (!elegidos.length) return res.status(400).json({ error: "Elige al menos un banco o crédito de la casa." });
-      const n = partirNombre(c.name);
-      const datos = limpiarDatos({
-        ...n,
-        email: c.email || "",
-        celular: String(c.phone || "").replace(/\D/g, "").slice(-10),
-        dom: { calle: c.street || "", numExt: c.exteriorNumber || "", colonia: c.neighborhood || "", ciudad: c.city || "", cp: c.zipCode || "" },
-        paisNacimiento: "México",
-        nacionalidad: "mexicana",
-      }) || {};
-      const vendedorId = c.sellerId || q.uid;
-      const ahora = new Date().toISOString();
-      const quien = await nombreDe(q.adminDb, q.uid);
-      const doc = {
-        agencyId: q.agencyId,
-        clientId: String(clientId),
-        clienteNombre: c.name || "",
-        clienteTelefono: c.phone || "",
-        vehicleId: vid,
-        auto,
-        vendedorId,
-        vendedorNombre: vendedorId === q.uid ? quien : await nombreDe(q.adminDb, vendedorId),
-        etapa: "recibida",
-        bancos: elegidos,
-        operacion: limpiarDatos(operacion || {}) || {},
-        datos,
-        documentos: [],
-        historial: [historial(`Solicitud creada por ${quien}.`, q.uid)],
-        ligaHash: null,
-        ligaVence: null,
-        creadoEl: ahora,
-        actualizadoEl: ahora,
-      };
-      const ref = await col(q.adminDb).add(doc);
-      res.json({ solicitud: completa(ref.id, doc) });
+      const r: any = await crearSolicitud(q, { clientId, vehicleId, bancos, operacion });
+      if (r.error) return res.status(r.status).json({ error: r.error });
+      res.json({ solicitud: r.solicitud });
     } catch (e) {
       console.error("creditos/crear:", e);
       res.status(500).json({ error: "No se pudo crear la solicitud." });
+    }
+  });
+
+  /** ¿Esta etapa del embudo es la de crédito? Por su nombre: cada agencia nombra sus etapas. */
+  const esEtapaCredito = (titulo: string) => /credito/.test(String(titulo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+
+  // Un trato llegó a la etapa «Crédito» del embudo: se abre (o se liga) su solicitud.
+  app.post("/api/creditos/desde-trato", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    const dealId = String(req.body?.dealId || "");
+    if (!idValido(dealId)) return res.status(400).json({ error: "Trato no válido." });
+    try {
+      const d = (await q.adminDb.collection("deals").doc(dealId).get()).data();
+      if (!d || d.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese trato." });
+      const ag = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
+      const etapa = (ag.pipelineStages || []).find((e: any) => e.id === d.status);
+      if (!etapa || !esEtapaCredito(etapa.title)) return res.json({ creada: false, motivo: "no-es-credito" });
+      const clientId = String(d.clientId || "");
+      if (!idValido(clientId)) return res.json({ creada: false, motivo: "sin-cliente" });
+      // Sin duplicados: si el cliente ya tiene una solicitud activa, se liga a este trato.
+      const previas = await col(q.adminDb).where("agencyId", "==", q.agencyId).where("clientId", "==", clientId).get();
+      const activa = previas.docs.find((x: any) => !["cerrada", "cancelada"].includes(x.data().etapa));
+      if (activa) {
+        if (!activa.data().dealId) await activa.ref.update({ dealId, actualizadoEl: new Date().toISOString() });
+        return res.json({ creada: false, motivo: "ya-existe", id: activa.id, clienteNombre: activa.data().clienteNombre });
+      }
+      const r: any = await crearSolicitud(q, { clientId, vehicleId: d.vehicleId || null, todosLosBancos: true, operacion: d.value ? { precio: Number(d.value) || 0 } : {}, dealId, origen: "embudo" });
+      if (r.error) return res.status(r.status).json({ error: r.error });
+      res.json({ creada: true, id: r.solicitud.id, clienteNombre: r.solicitud.clienteNombre });
+    } catch (e) {
+      console.error("creditos/desde-trato:", e);
+      res.status(500).json({ error: "No se pudo abrir la solicitud de crédito." });
     }
   });
 

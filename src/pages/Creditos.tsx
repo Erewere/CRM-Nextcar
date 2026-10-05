@@ -124,6 +124,7 @@ export function Creditos() {
                         <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{s.clienteNombre || 'Cliente'}</p>
                         <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{[s.auto, s.operacion?.precio ? `$${Number(s.operacion.precio).toLocaleString('es-MX')}` : ''].filter(Boolean).join(' · ') || 'Sin auto elegido'}</p>
                         <div className="flex flex-wrap gap-1 mt-2">
+                          {s.origen === 'embudo' && <span className="text-[10px] font-bold rounded-full px-2 py-0.5 bg-violet-100 text-violet-900">Del embudo</span>}
                           {s.bancos.map((b: any) => <span key={b.clave} className={clsx('text-[10px] font-bold rounded-full px-2 py-0.5', ESTILO_BANCO[b.estado])}>{b.nombre}{b.estado !== 'pendiente' ? ` · ${TEXTO_ESTADO_BANCO[b.estado]}` : ''}</span>)}
                         </div>
                         {['recibida', 'datos'].includes(s.etapa) && (

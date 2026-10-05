@@ -15,6 +15,7 @@ import { LostReasonModal } from '../../components/LostReasonModal';
 import { PaymentModal } from '../../components/PaymentModal';
 import { VehicleDetailModal } from '../../components/VehicleDetailModal';
 import { createPaymentTasks } from '../../lib/paymentTasks';
+import { avisarEtapaCredito } from '../../lib/creditoDesdeEmbudo';
 
 interface Props {
   client: Client;
@@ -451,6 +452,8 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           updatedAt: new Date().toISOString()
         });
         
+        avisarEtapaCredito(client.id!, newStatus, pipelineStages);
+
         // Also update the client
         const clientRef = doc(db, 'clients', actualClientId!);
         await updateDoc(clientRef, {
@@ -477,6 +480,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
             status: newStatus,
             updatedAt: new Date().toISOString()
           });
+          avisarEtapaCredito(dealDoc.id, newStatus, pipelineStages);
         }
       }
       

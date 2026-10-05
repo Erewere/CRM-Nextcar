@@ -60,6 +60,7 @@ import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 import { aplicarEtapaAlTrato } from "../lib/etapaDelContacto";
+import { avisarEtapaCredito } from "../lib/creditoDesdeEmbudo";
 import { FUENTES, etiquetaDeFuente, fuenteDelContacto } from "../lib/fuentes";
 
 import { puedeVenderSinAprobacion, vehiculoVendido, esElCompradorDelVehiculo } from "../lib/ventaDeVehiculo";
@@ -796,6 +797,7 @@ export function ClientDetailModal({
 
         if (finalDealId) {
           await guardarTratoSiExiste(finalDealId, updates);
+          avisarEtapaCredito(finalDealId as string, newStatus, pipelineStages);
         }
 
         await setDoc(doc(db, "clients", finalClientId), {
@@ -1882,7 +1884,16 @@ export function ClientDetailModal({
                 {!isNew && (
                   <button
                     type="button"
-                    onClick={() => navigate(`/creditos?cliente=${client.originalClientId || client.id}${formData.vehicleId ? `&auto=${formData.vehicleId}` : ""}`)}
+                    onClick={async () => {
+                      // Si ya tiene una solicitud abierta, a esa; si no, una nueva con sus datos.
+                      const idCliente = (client.originalClientId || client.id) as string;
+                      try {
+                        const { creditosApi } = await import("../lib/creditosApi");
+                        const activa = (await creditosApi.lista(idCliente)).find((x: any) => !["cerrada", "cancelada"].includes(x.etapa));
+                        if (activa) { navigate(`/creditos/${activa.id}`); return; }
+                      } catch { /* sin conexión: se abre una nueva */ }
+                      navigate(`/creditos?cliente=${idCliente}${formData.vehicleId ? `&auto=${formData.vehicleId}` : ""}`);
+                    }}
                     className="h-10 px-3.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700"
                     title="Solicitud de crédito"
                   >

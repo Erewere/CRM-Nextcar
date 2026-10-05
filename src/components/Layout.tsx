@@ -53,6 +53,14 @@ export function Layout() {
   const trialDaysLeft = getTrialDaysLeft(agencyData);
   const isGlobalReadOnly = useReadOnly();
   const navigate = useNavigate();
+  // Aviso cuando el embudo abre una solicitud de crédito (ver creditoDesdeEmbudo).
+  const [avisoCredito, setAvisoCredito] = useState<null | { id: string; clienteNombre?: string; creada?: boolean }>(null);
+  useEffect(() => {
+    let t: any;
+    const alAbrir = (e: any) => { setAvisoCredito(e.detail); clearTimeout(t); t = setTimeout(() => setAvisoCredito(null), 12000); };
+    window.addEventListener('nc-credito-abierto', alAbrir);
+    return () => { window.removeEventListener('nc-credito-abierto', alAbrir); clearTimeout(t); };
+  }, []);
   const location = useLocation();
   const [agencyName, setAgencyName] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -696,6 +704,17 @@ export function Layout() {
           )}
 
           <Outlet />
+          {avisoCredito && (
+            <div role="status" className="fixed bottom-20 md:bottom-6 right-4 left-4 md:left-auto z-[120] md:max-w-sm bg-slate-900 text-white rounded-xl shadow-2xl p-4 flex items-start gap-3">
+              <Landmark className="w-5 h-5 shrink-0 mt-0.5 text-emerald-300" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold">{avisoCredito.creada ? 'Se abrió la solicitud de crédito' : 'Ya tenía una solicitud de crédito'}</p>
+                <p className="text-xs text-slate-300 truncate">{avisoCredito.clienteNombre || ''}{avisoCredito.creada ? ' · con sus datos del CRM' : ' · se ligó a este trato'}</p>
+                <button type="button" onClick={() => { navigate(`/creditos/${avisoCredito.id}`); setAvisoCredito(null); }} className="mt-2 h-8 px-3 rounded-lg bg-white text-slate-900 text-xs font-bold">Ver solicitud</button>
+              </div>
+              <button type="button" onClick={() => setAvisoCredito(null)} aria-label="Cerrar aviso" className="text-slate-400 hover:text-white text-lg leading-none">×</button>
+            </div>
+          )}
         </div>
       </main>
       

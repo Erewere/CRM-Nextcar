@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "./clientUtils";
+import { avisarEtapaCredito } from "./creditoDesdeEmbudo";
 
 /**
  * Elegir una etapa en la ficha de un contacto.
@@ -83,6 +84,7 @@ export async function aplicarEtapaAlTrato(datos: {
       status: etapa,
       updatedAt: new Date().toISOString(),
     });
+    avisarEtapaCredito(abierto.id, etapa, etapas);
     return { accion: "movido", dealId: abierto.id };
   }
 
@@ -107,5 +109,6 @@ export async function aplicarEtapaAlTrato(datos: {
       updatedAt: new Date().toISOString(),
     }),
   );
+  avisarEtapaCredito(ref.id, etapa, etapas);
   return { accion: "creado", dealId: ref.id };
 }

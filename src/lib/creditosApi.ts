@@ -16,7 +16,7 @@ async function json(r: Response) {
 }
 
 export const creditosApi = {
-  lista: async () => (await json(await api('/api/creditos'))).solicitudes as any[],
+  lista: async (clientId?: string) => (await json(await api(`/api/creditos${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ''}`))).solicitudes as any[],
   crear: async (cuerpo: any) => (await json(await api('/api/creditos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) }))).solicitud,
   ver: async (id: string) => (await json(await api(`/api/creditos/${id}`))).solicitud,
   cambiar: async (id: string, cambios: any) => (await json(await api(`/api/creditos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cambios) }))).solicitud,

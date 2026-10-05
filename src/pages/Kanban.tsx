@@ -37,6 +37,7 @@ import { ClientCard, SortableClientCard } from "../components/ClientCard";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { PipelineSettingsModal } from "../components/PipelineSettingsModal";
 import { DealWonModal } from "../components/DealWonModal";
+import { avisarEtapaCredito } from "../lib/creditoDesdeEmbudo";
 import { LostReasonModal } from "../components/LostReasonModal";
 import { MoverTratoMovil } from "../components/MoverTratoMovil";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
@@ -573,11 +574,14 @@ export function Kanban() {
       const updates: any = { status: destinoId, updatedAt: new Date().toISOString() };
       const actualClientId = client.originalClientId || client.id;
 
+      let idDelTrato: string | null = null;
       if (deals.some((d) => d.id === client.id)) {
         await setDoc(doc(db, "deals", client.id as string), updates, { merge: true });
+        idDelTrato = client.id as string;
       } else {
         // Es un contacto antiguo sin trato: se le crea uno al moverlo.
         const dealRef = doc(collection(db, "deals"));
+        idDelTrato = dealRef.id;
         await setDoc(dealRef, {
           ...updates,
           id: dealRef.id,
@@ -598,6 +602,8 @@ export function Kanban() {
           updatedAt: new Date().toISOString(),
         });
       }
+      // Si la etapa es la de crédito, se abre la solicitud del cliente.
+      avisarEtapaCredito(idDelTrato, destinoId, columns.map((c: any) => ({ id: c.id, title: c.title })));
     } catch (e) {
       console.error("Status update error", e);
     }
