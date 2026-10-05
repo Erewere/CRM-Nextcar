@@ -428,12 +428,14 @@ export async function abrirPdf(bytes: ArrayBuffer | Uint8Array) {
 
 /** Los campos de un PDF, para el mapa. */
 export async function camposDelPdf(bytes: ArrayBuffer | Uint8Array): Promise<CampoPdf[]> {
+  const lib: any = await import('@cantoo/pdf-lib');
   const pdf: any = await abrirPdf(bytes);
   const paginas = pdf.getPages();
   const lista: CampoPdf[] = [];
   for (const f of pdf.getForm().getFields()) {
-    const tipoClase = f.constructor.name;
-    const tipo: CampoPdf['tipo'] = tipoClase === 'PDFTextField' ? 'texto' : (tipoClase === 'PDFRadioGroup' || tipoClase === 'PDFCheckBox') ? 'opcion' : 'otro';
+    // Por tipo real (instanceof), no por el nombre de la clase: al publicar,
+    // el código se comprime y esos nombres cambian.
+    const tipo: CampoPdf['tipo'] = f instanceof lib.PDFTextField ? 'texto' : (f instanceof lib.PDFRadioGroup || f instanceof lib.PDFCheckBox) ? 'opcion' : 'otro';
     const widgets = f.acroField.getWidgets();
     const w0 = widgets[0];
     const r = w0?.getRectangle?.() || { x: 0, y: 0, width: 0, height: 0 };
@@ -474,15 +476,16 @@ export async function llenarFormato(bytes: ArrayBuffer | Uint8Array, formato: Pi
     let f: any;
     try { f = form.getField(nombre); } catch { continue; }
     if (!f || (!m.clave && m.fijo === undefined)) continue;
-    const clase = f.constructor.name;
-    if (clase === 'PDFTextField') {
+    // Por tipo real: comprimido para publicar, el nombre de la clase cambia y
+    // ningún campo se reconocía (la solicitud salía vacía).
+    if (f instanceof lib.PDFTextField) {
       let texto = m.fijo !== undefined && m.fijo !== '' ? m.fijo : textoDe(plano, m.clave || '');
       if (formato.mayusculas) texto = texto.toUpperCase();
       const max = f.getMaxLength?.();
       // Si no cabe, en números se quedan las últimas cifras (2026 → 26).
       if (max && texto.length > max) texto = /^\d+$/.test(texto) ? texto.slice(-max) : texto.slice(0, max);
       try { f.setText(texto || ''); ajustarLetra(f, texto); } catch { /* campo raro: se deja vacío */ }
-    } else if (clase === 'PDFRadioGroup' || clase === 'PDFCheckBox') {
+    } else if (f instanceof lib.PDFRadioGroup || f instanceof lib.PDFCheckBox) {
       const valorCrm = m.fijo !== undefined && m.fijo !== '' ? m.fijo : (plano[m.clave || ''] ?? '');
       const valorPdf = m.opciones ? m.opciones[valorCrm] : undefined;
       // Se marca a bajo nivel: hay formatos con varias casillas del mismo
@@ -513,10 +516,10 @@ export async function llenarFormato(bytes: ArrayBuffer | Uint8Array, formato: Pi
     const N = (n: string) => lib.PDFName.of(n);
     for (const [ref, obj] of pdf.context.enumerateIndirectObjects()) {
       const o: any = obj;
-      const dict = o?.dict || (o?.constructor?.name === 'PDFDict' ? o : null);
+      const dict = o?.dict || (o instanceof lib.PDFDict ? o : null);
       const esXref = dict && String(dict.get?.(N('Type')) || '') === '/XRef';
       const esCifrado = dict && dict.has?.(N('StmF')) && dict.has?.(N('O')) && dict.has?.(N('U'));
-      if (o?.constructor?.name === 'PDFInvalidObject' || esXref || esCifrado) pdf.context.delete(ref);
+      if (o instanceof lib.PDFInvalidObject || esXref || esCifrado) pdf.context.delete(ref);
     }
   } catch { /* sin limpiar: igual se puede abrir */ }
   return pdf.save({ updateFieldAppearances: false, useObjectStreams: false });
