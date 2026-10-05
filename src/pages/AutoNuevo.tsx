@@ -9,7 +9,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useCostosVehiculos, guardarCosto } from '../hooks/useVehicleFinancials';
 import { hoyLocal } from '../lib/fechas';
 import { sanitizeFirestoreData } from '../lib/clientUtils';
-import { subirFotosDeAuto } from '../lib/fotosDeAuto';
+import { subirFotosDeAuto, avisoFallidas } from '../lib/fotosDeAuto';
 import { configLogoDe, prepararLogo } from '../lib/logoEnFoto';
 import { auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
@@ -93,8 +93,9 @@ export function AutoNuevo() {
       const cfg = configLogoDe(agencyData);
       const conLogo = cfg.activo && !!agencyData?.logoUrl && !esMaster;
       const logo = conLogo ? await prepararLogo(agencyData!.logoUrl, cfg.sinFondo) : null;
-      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', nuevoId, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`), logo ? { logo, config: cfg } : null);
+      const { urls: nuevas, fallidas } = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', nuevoId, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`), logo ? { logo, config: cfg } : null);
       setFotos((prev) => [...prev, ...nuevas]);
+      if (fallidas.length) setError(avisoFallidas(fallidas));
     } catch (e: any) {
       setError(`No se pudieron subir las fotos. ${e?.message || ''}`);
     } finally {
@@ -173,7 +174,7 @@ export function AutoNuevo() {
           </div>
         </header>
 
-        {error && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 text-sm font-semibold px-3 py-2">{error}</div>}
+        {error && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 text-sm font-semibold px-3 py-2 whitespace-pre-line">{error}</div>}
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-3">
           {/* Fotos */}

@@ -21,7 +21,7 @@ import { GraficaMercado } from '../components/inventario/GraficaMercado';
 import { SeccionGastos } from '../components/auto/SeccionGastos';
 import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
-import { subirFotosDeAuto, ponerLogoAFotos } from '../lib/fotosDeAuto';
+import { subirFotosDeAuto, ponerLogoAFotos, avisoFallidas } from '../lib/fotosDeAuto';
 import { configLogoDe, prepararLogo, type ConfigLogoFotos } from '../lib/logoEnFoto';
 import { AjusteLogoEnFotos } from '../components/auto/LogoEnFotos';
 import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
@@ -298,9 +298,12 @@ export function AutoPagina() {
     setSubiendo(`Subiendo 0 de ${archivos.length}…`);
     try {
       const marca = logoActivo ? await marcaParaFotos() : null;
-      const nuevas = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', id, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`), marca?.logo ? marca : null);
-      const todas = [...fotos, ...nuevas];
-      await guardar({ photoUrls: todas, photoUrl: todas[0] });
+      const { urls: nuevas, fallidas } = await subirFotosDeAuto(archivos, userData?.id || 'sin-usuario', id, (h, t) => setSubiendo(`Subiendo ${h} de ${t}…`), marca?.logo ? marca : null);
+      if (nuevas.length) {
+        const todas = [...fotos, ...nuevas];
+        await guardar({ photoUrls: todas, photoUrl: todas[0] });
+      }
+      if (fallidas.length) alert(avisoFallidas(fallidas));
     } catch (e: any) {
       alert(`No se pudieron subir las fotos. ${e?.message || ''}`);
     } finally {
