@@ -9,6 +9,7 @@ import { procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
+import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
@@ -3956,6 +3957,9 @@ ${extra}
       res.status(500).json({ error: "No se pudo quitar el documento." });
     }
   });
+
+  // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
+  registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos });
 
   app.get("/api/autos/:id/notas", async (req, res) => {
     const q = await autoDeLaAgencia(req, res);

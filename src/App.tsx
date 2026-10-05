@@ -24,6 +24,11 @@ import { Integrations } from './pages/Integrations';
 import { PlatformPanel } from './pages/PlatformPanel';
 import { ClosedSales } from './pages/ClosedSales';
 import { PaymentInventory } from './pages/PaymentInventory';
+// Créditos se cargan aparte: traen la librería de PDF y casi nadie las abre en cada visita.
+const Creditos = React.lazy(() => import('./pages/Creditos').then((m) => ({ default: m.Creditos })));
+const CreditoExpediente = React.lazy(() => import('./pages/CreditoExpediente').then((m) => ({ default: m.CreditoExpediente })));
+const SolicitudPublica = React.lazy(() => import('./pages/SolicitudPublica').then((m) => ({ default: m.SolicitudPublica })));
+const Cargando = () => <div className="min-h-[50vh] flex items-center justify-center text-sm text-slate-500">Cargando…</div>;
 import { hasActiveAccess } from './lib/subscription';
 
 /**
@@ -99,6 +104,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           {/* «Entrar con mi cuenta del CRM» desde nextcar.erewere.com. */}
           <Route path="/conectar-pagina" element={<ConectarPagina />} />
+          <Route path="/solicitud/:token" element={<React.Suspense fallback={<Cargando />}><SolicitudPublica /></React.Suspense>} />
           <Route path="/print/vehicle/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><VehiclePrint /></ProtectedRoute>} />
           
           <Route path="/" element={<ProtectedRoute><ChatsPendientesProvider><Layout /></ChatsPendientesProvider></ProtectedRoute>}>
@@ -109,6 +115,8 @@ export default function App() {
             <Route path="inventory" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><Inventory /></ProtectedRoute>} />
             <Route path="inventory/nuevo" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><AutoNuevo /></ProtectedRoute>} />
             <Route path="inventory/:id" element={<ProtectedRoute requireRole={['admin', 'seller', 'taller']}><AutoPagina /></ProtectedRoute>} />
+            <Route path="creditos" element={<ProtectedRoute requireRole={['admin', 'seller']}><React.Suspense fallback={<Cargando />}><Creditos /></React.Suspense></ProtectedRoute>} />
+            <Route path="creditos/:id" element={<ProtectedRoute requireRole={['admin', 'seller']}><React.Suspense fallback={<Cargando />}><CreditoExpediente /></React.Suspense></ProtectedRoute>} />
             <Route path="kanban" element={<ProtectedRoute requireRole={['admin', 'seller']}><Kanban /></ProtectedRoute>} />
             <Route path="persons" element={<ProtectedRoute requireRole={['admin', 'seller']}><Persons /></ProtectedRoute>} />
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />

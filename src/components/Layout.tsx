@@ -5,6 +5,7 @@ import { logout, db } from "../lib/firebase";
 import {
   LayoutDashboard,
   Trello,
+  Landmark,
   CheckSquare,
   Users,
   LogOut,
@@ -239,6 +240,12 @@ export function Layout() {
       name: "Embudo",
       path: "/kanban",
       icon: Trello,
+      roles: ["admin", "seller"],
+    },
+    {
+      name: "Créditos",
+      path: "/creditos",
+      icon: Landmark,
       roles: ["admin", "seller"],
     },
     {

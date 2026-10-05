@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router";
 import imageCompression from "browser-image-compression";
 import { Client, Task, ClientFile, Vehicle, Deal } from "../types";
 import { getClientMatches } from "../services/matchingEngine";
@@ -76,6 +77,7 @@ export function ClientDetailModal({
   onUpdated,
 }: Props) {
   const { userData, agencyData } = useAuth();
+  const navigate = useNavigate();
   // Cotizar: false = cerrado; null = elegir el auto; un auto = ese.
   const [cotizandoAuto, setCotizandoAuto] = useState<Vehicle | null | false>(false);
   // Cerrar en dos tiempos: primero se anima la salida, y cuando termina se
@@ -1875,6 +1877,16 @@ export function ClientDetailModal({
                     className="h-10 px-3.5 rounded-lg border border-blue-700 text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-800 text-sm font-bold hover:bg-blue-50 dark:hover:bg-slate-700"
                   >
                     Cotizar
+                  </button>
+                )}
+                {!isNew && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/creditos?cliente=${client.originalClientId || client.id}${formData.vehicleId ? `&auto=${formData.vehicleId}` : ""}`)}
+                    className="h-10 px-3.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700"
+                    title="Solicitud de crédito"
+                  >
+                    Crédito
                   </button>
                 )}
                 {!isNew &&
