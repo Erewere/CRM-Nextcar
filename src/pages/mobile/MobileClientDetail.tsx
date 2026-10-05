@@ -16,6 +16,7 @@ import { PaymentModal } from '../../components/PaymentModal';
 import { VehicleDetailModal } from '../../components/VehicleDetailModal';
 import { createPaymentTasks } from '../../lib/paymentTasks';
 import { avisarEtapaCredito } from '../../lib/creditoDesdeEmbudo';
+import { useNavigate } from 'react-router';
 
 interface Props {
   client: Client;
@@ -29,6 +30,10 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [currentStatus, setCurrentStatus] = useState(client.status || 'new');
   const [clientData, setClientData] = useState<Partial<Client>>(client);
+  const navigate = useNavigate();
+  // Los pagos se registran en la página de la venta (todo pasa por el servidor).
+  const tratoDeLaVenta = (clientData as any)?.ventaDealId || ((client as any).originalClientId && (client as any).originalClientId !== client.id ? client.id : null);
+  const irAPagos = () => { if (tratoDeLaVenta) navigate(`/venta/${tratoDeLaVenta}`); else setShowPaymentModal(true); };
   const [showDealWonModal, setShowDealWonModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLostReasonModal, setShowLostReasonModal] = useState(false);
@@ -839,7 +844,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                 {(userData?.role === 'master' || userData?.role === 'admin') && (
                   <button
                     type="button"
-                    onClick={() => setShowPaymentModal(true)}
+                    onClick={irAPagos}
                     className="text-xs px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow transition-colors flex items-center gap-1 shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -964,7 +969,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                         {(userData?.role === 'master' || userData?.role === 'admin') && payment.id && (
                           <button
                             type="button"
-                            onClick={() => handleDeletePayment(payment.id)}
+                            onClick={() => (tratoDeLaVenta ? irAPagos() : handleDeletePayment(payment.id))}
                             className="p-1 text-slate-400 hover:text-rose-600 rounded"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -986,7 +991,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
                     {(userData?.role === 'master' || userData?.role === 'admin') && (
                       <button
                         type="button"
-                        onClick={() => setShowPaymentModal(true)}
+                        onClick={irAPagos}
                         className="text-emerald-600 font-semibold text-xs mt-0.5"
                       >
                         + Registrar pago

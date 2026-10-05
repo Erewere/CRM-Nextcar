@@ -284,6 +284,20 @@ export function Tasks() {
   }, [userData, refreshKey]);
 
   const toggleTask = async (taskId: string, current: boolean) => {
+    // Una mensualidad no se palomea: se da por pagada cuando se registra el
+    // pago. Antes se marcaba hecha sin que entrara dinero (César Augusto,
+    // HHHSeminuevos, oct 2026). Se lleva a la página de la venta.
+    const info = tasks.find((t) => t.task.id === taskId);
+    if (info?.task?.type === 'payment' && /^Pago \d+\/\d+ /.test(String(info.task.title || ''))) {
+      const cliente: any = clients.find((c) => c.id === info.task.clientId);
+      const trato = info.task.dealId || cliente?.ventaDealId;
+      if (trato) {
+        if (window.confirm(current
+          ? 'Esta mensualidad está marcada como pagada porque hay un pago que la cubre. Para cambiarlo, anula el pago en «Venta y pagos». ¿Abrirla?'
+          : 'Para marcar esta mensualidad como pagada, registra el pago. ¿Abrir «Venta y pagos»?')) navigate(`/venta/${trato}`);
+        return;
+      }
+    }
     try {
       await updateDoc(doc(db, "tasks", taskId), { completed: !current });
       

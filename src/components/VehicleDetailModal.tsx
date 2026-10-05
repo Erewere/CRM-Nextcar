@@ -386,6 +386,11 @@ function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props
   // A que trato pertenece la venta. Marcar un auto como vendido sin decirlo
   // dejaba la venta sin dueño, sin nombre y sin seguimiento.
   const [tratoVentaId, setTratoVentaId] = useState<string>('');
+  // Los pagos se registran en la página de la venta (todo pasa por el servidor).
+  const irAPagos = () => {
+    const id = tratoVentaId || (vehicle as any)?.soldDealId;
+    if (id) { onClose(); navigate(`/venta/${id}`); } else setShowPaymentModal(true);
+  };
   const [tratoVentaEtiqueta, setTratoVentaEtiqueta] = useState<string>('');
   const [mostrarSelectorTrato, setMostrarSelectorTrato] = useState(false);
 
@@ -2243,7 +2248,7 @@ function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props
                           </span>
                           <button
                             type="button"
-                            onClick={() => setShowPaymentModal(true)}
+                            onClick={irAPagos}
                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -2280,7 +2285,7 @@ function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props
                               {payment.id && (
                                 <button
                                   type="button"
-                                  onClick={() => handleDeletePayment(payment.id)}
+                                  onClick={() => ((tratoVentaId || (vehicle as any)?.soldDealId) ? irAPagos() : handleDeletePayment(payment.id))}
                                   title="Eliminar este pago"
                                   className="text-slate-300 hover:text-red-500 transition-colors p-1 rounded"
                                 >

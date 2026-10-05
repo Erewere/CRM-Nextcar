@@ -9,8 +9,11 @@ import { checkIsWon } from '../lib/clientUtils';
 import clsx from 'clsx';
 import { ClientDetailModal } from '../components/ClientDetailModal';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
+import { useNavigate } from 'react-router';
+import { deFormaVieja, estadoDeCuenta } from '../lib/planDePagos';
 
 export function PaymentInventory() {
+  const navigate = useNavigate();
   const { userData } = useAuth();
 
   if (userData?.role === 'seller') {
@@ -322,7 +325,7 @@ export function PaymentInventory() {
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Vehículo</th>
                   <th className="px-4 py-3">Forma de Pago</th>
-                  <th className="px-4 py-3">Precio Acordado</th>
+                  <th className="px-4 py-3" title="En crédito de la casa incluye intereses">Total a pagar</th>
                   <th className="px-4 py-3">Total Pagado</th>
                   <th className="px-4 py-3">Saldo Pendiente</th>
                   <th className="px-4 py-3">Progreso</th>
@@ -339,11 +342,15 @@ export function PaymentInventory() {
                   filteredSales.map((client) => {
                     const vehicle = vehicles.find(v => v.id === client.vehicleId);
                     const sale = client.saleDetails;
-                    const price = sale?.price || client.dealValue || vehicle?.price || 0;
-                    const payments = sale?.payments || [];
-                    const totalPaid = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
-                    const balance = Math.max(0, price - totalPaid);
-                    const progress = price > 0 ? Math.min(100, Math.round((totalPaid / price) * 100)) : 0;
+                    // Misma regla que «Venta y pagos»: en crédito de la casa el total
+                    // incluye intereses (antes el saldo se calculaba contra el precio).
+                    const ec = estadoDeCuenta({ ...(sale || {}), price: sale?.price || client.dealValue || vehicle?.price || 0 } as any,
+                      (sale?.payments || []).map((p: any) => ({ ...deFormaVieja(p, sale?.method === 'credito'), id: String(p.id) })));
+                    const price = ec.totalAPagar;
+                    const totalPaid = ec.pagado;
+                    const balance = ec.saldo;
+                    const progress = price > 0 ? Math.min(100, Math.round(((ec.pagado + ec.descontado) / price) * 100)) : 0;
+                    const tratoDeLaVenta = ((client as any).originalClientId && (client as any).originalClientId !== client.id) ? client.id : (client as any).ventaDealId;
                     
                     return (
                       <tr key={client.id} className="hover:bg-[#f4f5f5] dark:hover:bg-slate-800/50 transition-colors">
@@ -402,7 +409,11 @@ export function PaymentInventory() {
                               />
                             </div>
                             <span className="text-xs font-medium text-slate-600 dark:text-slate-300 w-8">{progress}%</span>
+                            {tratoDeLaVenta && (
+                              <button type="button" onClick={() => navigate(`/venta/${tratoDeLaVenta}`)} className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline whitespace-nowrap">Ver pagos</button>
+                            )}
                           </div>
+                          {ec.atrasadas > 0 && <p className="text-[11px] font-bold text-red-700 dark:text-red-400 mt-1">{ec.atrasadas} {ec.atrasadas === 1 ? 'mensualidad atrasada' : 'mensualidades atrasadas'}</p>}
                         </td>
                       </tr>
                     );

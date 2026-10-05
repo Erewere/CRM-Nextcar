@@ -11,6 +11,7 @@ import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
+import { registrarVentas } from "./src/servidor/ventas.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
 import { eventoDeActividad } from "./src/lib/google.ts";
 
@@ -4038,6 +4039,7 @@ ${extra}
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
   registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos });
   registrarPlacasInfo(app, { usuarioQuePide, getAdminDb });
+  registrarVentas(app, { usuarioQuePide, getAdminDb });
 
   app.get("/api/autos/:id/notas", async (req, res) => {
     const q = await autoDeLaAgencia(req, res);

@@ -10,7 +10,8 @@ import { puedeVenderSinAprobacion, vehiculoVendido } from '../../lib/ventaDeVehi
 import { avisoDeVentaDuplicada, ventaYaRegistrada } from '../../lib/ventas';
 import { SeleccionarTratoVenta } from '../SeleccionarTratoVenta';
 import { DealWonModal } from '../DealWonModal';
-import { PaymentModal } from '../PaymentModal';
+import { useNavigate } from 'react-router';
+import { ventasApi } from '../../lib/ventasApi';
 import type { Client, Vehicle } from '../../types';
 
 /**
@@ -36,6 +37,7 @@ export function SeccionVenta({ auto, userData, abrirVenta, onAbrirVentaAtendido 
   abrirVenta: boolean;
   onAbrirVentaAtendido: () => void;
 }) {
+  const navigate = useNavigate();
   const [paso, setPaso] = useState<'' | 'trato' | 'detalles'>('');
   const [trato, setTrato] = useState<{ id: string; etiqueta: string; datos: any; cliente: any } | null>(null);
   const [tratoVenta, setTratoVenta] = useState<any>(null);
@@ -136,9 +138,8 @@ export function SeccionVenta({ auto, userData, abrirVenta, onAbrirVentaAtendido 
           },
         });
       }
-      if (trato.cliente) {
-        await createPaymentTasks(db, { ...trato.cliente, id: clientId }, detalles, userData).catch(() => {});
-      }
+      // Pagos ya registrados y tareas de cobro según el plan (en el servidor).
+      await ventasApi.reflejar(trato.id);
       setPaso('');
       setTrato(null);
       if (!puedeVenderSinAprobacion(userData?.role)) alert('Listo: la venta quedó pendiente de aprobación de un administrador.');
@@ -214,24 +215,12 @@ export function SeccionVenta({ auto, userData, abrirVenta, onAbrirVentaAtendido 
             <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden"><div className="h-full bg-emerald-600" style={{ width: `${venta?.price ? Math.min(100, (pagado / venta.price) * 100) : 0}%` }} /></div>
           </div>
 
-          {(venta?.payments || []).length > 0 && (
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-400"><th className="py-1">Fecha</th><th className="py-1">Forma</th><th className="py-1">Nota</th><th className="py-1 text-right">Monto</th><th /></tr></thead>
-              <tbody>
-                {(venta?.payments || []).map((p: any, i: number) => (
-                  <tr key={p.id || i} className="border-t border-slate-100 dark:border-slate-700">
-                    <td className="py-1.5 whitespace-nowrap">{p.date}</td>
-                    <td className="py-1.5 capitalize">{p.method}</td>
-                    <td className="py-1.5 text-slate-600 dark:text-slate-400">{p.notes}</td>
-                    <td className="py-1.5 text-right font-bold">{pesos(p.amount)}</td>
-                    <td className="py-1.5 text-right">{puedePagos && <button type="button" aria-label="Quitar pago" onClick={() => quitarPago(p)} className="p-1 rounded text-slate-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {puedePagos && (
-            <button type="button" onClick={() => setPagando(true)} className="self-start min-h-[38px] px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">Registrar pago</button>
+          {soldDealId ? (
+            <button type="button" onClick={() => navigate(`/venta/${soldDealId}`)} className="self-start min-h-[40px] px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold">
+              Ver venta y pagos{(venta?.payments || []).length ? ` (${(venta?.payments || []).length})` : ''}
+            </button>
+          ) : (
+            <p className="text-xs text-slate-600 dark:text-slate-400">Esta venta no está ligada a un trato: los pagos se llevan desde la ficha del cliente.</p>
           )}
         </>
       ) : pendiente ? (
@@ -259,19 +248,9 @@ export function SeccionVenta({ auto, userData, abrirVenta, onAbrirVentaAtendido 
         <DealWonModal
           client={{ ...(trato.cliente || {}), id: trato.datos.clientId, dealValue: trato.datos.value || auto.price, vehicleId: auto.id } as Client}
           vehicle={auto}
+          inicial={trato.datos.saleDetails || null}
           onConfirm={confirmarVenta}
           onCancel={() => { setPaso(''); setTrato(null); }}
-        />
-      )}
-      {pagando && (
-        <PaymentModal
-          onConfirm={registrarPago}
-          onCancel={() => setPagando(false)}
-          saleDetails={venta || undefined}
-          pendingTasks={[]}
-          isWon={true}
-          clientName={(auto as any).buyerName}
-          maxAmount={saldo}
         />
       )}
     </section>

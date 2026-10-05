@@ -47,6 +47,7 @@ import { createPaymentTasks } from "../lib/paymentTasks";
 import { Settings, ChevronUp, ChevronDown, Archive, X, Search } from "lucide-react";
 import clsx from "clsx";
 import { hoyLocal } from "../lib/fechas";
+import { ventasApi } from "../lib/ventasApi";
 
 const DEFAULT_COLUMNS: PipelineStage[] = [
   { id: "new", title: "Nuevos" },
@@ -692,7 +693,9 @@ export function Kanban() {
       let idTrato: string;
       if (isExistingDeal) {
         idTrato = client.id as string;
-        await setDoc(doc(db, "deals", idTrato), updates, { merge: true });
+        // updateDoc reemplaza la venta completa; con setDoc+merge se mezclaba
+        // con la anterior (así quedó un crédito como «contado», 5 oct 2026).
+        await updateDoc(doc(db, "deals", idTrato), updates);
       } else {
         const dealRef = doc(collection(db, "deals"));
         idTrato = dealRef.id;
@@ -762,7 +765,8 @@ export function Kanban() {
         }
       }
 
-      await createPaymentTasks(db, client, saleDetails, userData);
+      // Pagos ya registrados y tareas de cobro según el plan (en el servidor).
+      await ventasApi.reflejar(idTrato);
 
       confetti({
         particleCount: 150,
@@ -1149,6 +1153,7 @@ export function Kanban() {
         <DealWonModal
           client={clientToMarkWon.client}
           vehicle={vehicles.find(v => v.id === clientToMarkWon.client.vehicleId)}
+          inicial={deals.some(d => d.id === clientToMarkWon.client.id) ? (clientToMarkWon.client as any).saleDetails : null}
           onConfirm={handleDealWonConfirm}
           onCancel={handleDealWonCancel}
         />

@@ -301,7 +301,7 @@ const ESPACIO_MEMBRETE = 85;
  * blanco o gris claro que, tenue y en grande, se veía como un rectángulo.
  * Se vuelven transparentes los pixeles claros y casi sin color.
  */
-async function sinFondoClaro(src: string): Promise<string> {
+export async function sinFondoClaro(src: string): Promise<string> {
   return new Promise((ok) => {
     const img = new Image();
     img.onload = () => {

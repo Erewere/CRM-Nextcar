@@ -58,6 +58,7 @@ import { ResumenCliente } from "./ficha/ResumenCliente";
 import { Cotizador } from "./Cotizador";
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
+import { ventasApi } from "../lib/ventasApi";
 import { checkIsWon, checkIsLost, sanitizeFirestoreData } from "../lib/clientUtils";
 import { aplicarEtapaAlTrato } from "../lib/etapaDelContacto";
 import { avisarEtapaCredito } from "../lib/creditoDesdeEmbudo";
@@ -163,7 +164,9 @@ export function ClientDetailModal({
     const ref = doc(db, "deals", dealId);
     const actual = await getDoc(ref);
     if (!actual.exists()) return false;
-    await setDoc(ref, datos, { merge: true });
+    // updateDoc, no setDoc con merge: merge mezclaba la venta nueva con la
+    // anterior campo por campo (un «contado» encima de un plan de crédito).
+    await updateDoc(ref, datos);
     return true;
   };
 
@@ -866,7 +869,6 @@ export function ClientDetailModal({
 
   const handleDealWonConfirm = async (saleDetails: any) => {
     setShowDealWonModal(false);
-    setShowPaymentDrawer(true);
     const targetStatus = pendingStatus || "won";
     
     setFormData((prev) => {
@@ -982,8 +984,13 @@ export function ClientDetailModal({
           }
         }
 
-        await createPaymentTasks(db, {...client, ...formData}, saleDetails, userData);
+        // Los pagos ya registrados y las tareas de cobro, de acuerdo con el plan nuevo.
+        await ventasApi.reflejar(finalDealId as string);
         onUpdated?.();
+        if (finalDealId && window.confirm("Venta registrada. ¿Abrir «Venta y pagos» para registrar el enganche o el primer pago?")) {
+          onClose();
+          navigate(`/venta/${finalDealId}`);
+        }
       } catch (err) {
         console.error("Error updating status:", err);
       }
@@ -1746,6 +1753,15 @@ export function ClientDetailModal({
     const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
     return dias <= 0 ? "hoy" : dias === 1 ? "ayer" : `hace ${dias} días`;
   })();
+  // La venta y sus pagos se ven y se cobran en su página completa (/venta/:trato).
+  const idDeLaVenta: string | null = (client.originalClientId && client.originalClientId !== client.id)
+    ? (client.id as string) : ((formData as any).ventaDealId || null);
+  const abrirVentaYPagos = () => {
+    if (!idDeLaVenta) { setShowPaymentDrawer(true); return; } // venta muy vieja sin trato
+    onClose();
+    navigate(`/venta/${idDeLaVenta}`);
+  };
+
   const ventaResumen = (formData.saleDetails || formData.status === "won") ? (() => {
     const soldV = inventoryVehicles.find((v) => v.id === formData.vehicleId);
     const precio = formData.saleDetails?.price || formData.dealValue || soldV?.price || 0;
@@ -2020,7 +2036,7 @@ export function ClientDetailModal({
                 {ventaResumen && (
                   <button
                     type="button"
-                    onClick={() => setShowPaymentDrawer(true)}
+                    onClick={abrirVentaYPagos}
                     className="flex items-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 text-left hover:bg-emerald-100 dark:hover:bg-emerald-950/60"
                     title="Ver la venta y los pagos"
                   >
@@ -3140,7 +3156,7 @@ export function ClientDetailModal({
                     {ventaResumen && (
                       <button
                         type="button"
-                        onClick={() => setShowPaymentDrawer(true)}
+                        onClick={abrirVentaYPagos}
                         className="py-3 text-sm font-bold border-b-2 border-transparent whitespace-nowrap text-emerald-700 dark:text-emerald-400 hover:text-emerald-900"
                       >
                         Venta y pagos
@@ -4014,6 +4030,7 @@ export function ClientDetailModal({
         <DealWonModal
           client={{ ...client, dealValue: formData.dealValue, vehicleId: formData.vehicleId } as Client}
           vehicle={inventoryVehicles.find(v => v.id === formData.vehicleId)}
+          inicial={formData.saleDetails || null}
           onConfirm={handleDealWonConfirm}
           onCancel={() => setShowDealWonModal(false)}
         />

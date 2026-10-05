@@ -13,6 +13,7 @@ import { VehicleDetailModal } from "./VehicleDetailModal";
 
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { useAvisosDescartados, descartarAviso, idDeMatch } from "../lib/avisosDescartados";
+import { deFormaVieja, estadoDeCuenta } from '../lib/planDePagos';
 
 const parseDate = (val: any): Date | null => {
   if (!val) return null;
@@ -308,56 +309,41 @@ export function NotificationsPopover() {
     const sDetails = client.saleDetails;
     if (!sDetails || sDetails.method !== 'credito' || !sDetails.termMonths || !sDetails.firstPaymentDate) return;
 
-    const termMonths = sDetails.termMonths;
-    const monthlyPayment = sDetails.calculatedMonthlyPayment || 0;
-    const existingPayments = sDetails.payments || [];
-
-    let currentDate = new Date(sDetails.firstPaymentDate);
-    currentDate.setHours(12, 0, 0, 0);
-
-    for (let i = 1; i <= termMonths; i++) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      const isPaid = existingPayments.some(p => p.installmentNumber === i);
-
-      if (!isPaid) {
-        const notifId = `notif-credit-sched-${client.id}-m${i}`;
-        if (!dismissedIds.has(notifId)) {
-          const dueMs = currentDate.getTime();
-          const todayMs = new Date(`${todayStr}T12:00:00`).getTime();
-          const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
-
-          if (dateStr < todayStr) {
-            notifications.push({
-              id: notifId,
-              type: "payment-missing",
-              title: `⚠️ Mensualidad #${i} Faltante (${client.name})`,
-              message: `Monto de $${monthlyPayment.toLocaleString('es-MX')} venció el ${dateStr} y no está registrado.`,
-              date: currentDate.toISOString(),
-              icon: <CreditCard className="w-5 h-5 text-red-500 shrink-0 animate-bounce" />,
-              clientId: client.id,
-              onClick: () => {
-                navigate("/persons", { state: { clientId: client.id } });
-              },
-            });
-          } else if (diffDays >= 0 && diffDays <= 2) {
-            const tag = diffDays === 0 ? "Vence HOY" : diffDays === 1 ? "Vence MAÑANA" : "Vence en 2 días";
-            notifications.push({
-              id: notifId,
-              type: "payment-upcoming",
-              title: `⏰ Próxima Mensualidad #${i} (${tag})`,
-              message: `${client.name}: $${monthlyPayment.toLocaleString('es-MX')} vence el ${dateStr}.`,
-              date: currentDate.toISOString(),
-              icon: <CreditCard className="w-5 h-5 text-amber-500 shrink-0" />,
-              clientId: client.id,
-              onClick: () => {
-                navigate("/persons", { state: { clientId: client.id } });
-              },
-            });
-          }
-        }
+    // Misma regla que «Venta y pagos»: una mensualidad está cubierta si hay
+    // dinero que la cubra, no si algún pago trae su número.
+    const ec = estadoDeCuenta(sDetails as any, (sDetails.payments || []).map((p: any) => ({ ...deFormaVieja(p, true), id: String(p.id) })), todayStr);
+    const ventaId = (client as any).ventaDealId;
+    const abrir = () => { if (ventaId) navigate(`/venta/${ventaId}`); else navigate("/persons", { state: { clientId: client.id } }); };
+    for (const m of ec.mensualidades) {
+      if (m.estado === 'pagada') continue;
+      const notifId = `notif-credit-sched-${client.id}-m${m.n}`;
+      if (dismissedIds.has(notifId)) continue;
+      const falta = m.monto - m.cubierto;
+      const diffDays = Math.round((Date.parse(`${m.fecha}T12:00:00`) - Date.parse(`${todayStr}T12:00:00`)) / 86400000);
+      if (m.estado === 'atrasada') {
+        notifications.push({
+          id: notifId,
+          type: "payment-missing",
+          title: `⚠️ Mensualidad #${m.n} atrasada (${client.name})`,
+          message: `Faltan $${falta.toLocaleString('es-MX', { maximumFractionDigits: 2 })}; venció el ${m.fecha}.`,
+          date: new Date(`${m.fecha}T12:00:00`).toISOString(),
+          icon: <CreditCard className="w-5 h-5 text-red-500 shrink-0 animate-bounce" />,
+          clientId: client.id,
+          onClick: abrir,
+        });
+      } else if (diffDays >= 0 && diffDays <= 2) {
+        const tag = diffDays === 0 ? "Vence HOY" : diffDays === 1 ? "Vence MAÑANA" : "Vence en 2 días";
+        notifications.push({
+          id: notifId,
+          type: "payment-upcoming",
+          title: `⏰ Próxima Mensualidad #${m.n} (${tag})`,
+          message: `${client.name}: $${falta.toLocaleString('es-MX', { maximumFractionDigits: 2 })} vence el ${m.fecha}.`,
+          date: new Date(`${m.fecha}T12:00:00`).toISOString(),
+          icon: <CreditCard className="w-5 h-5 text-amber-500 shrink-0" />,
+          clientId: client.id,
+          onClick: abrir,
+        });
       }
-
-      currentDate.setMonth(currentDate.getMonth() + 1);
     }
   });
 
