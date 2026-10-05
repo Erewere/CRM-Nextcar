@@ -83,6 +83,11 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
     } catch { return x; }
   }
 
+  // Diagnóstico sin sesión: solo dice si el servidor tiene llave, nunca la muestra.
+  app.get("/api/placasinfo/estado", (_req: any, res: any) => {
+    res.json({ llave: !!token() });
+  });
+
   // ¿Está disponible para mi agencia? (para mostrar o no el botón)
   app.get("/api/placasinfo/disponible", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
