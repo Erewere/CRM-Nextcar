@@ -434,7 +434,7 @@ export function AutoPagina() {
           )}
         </div>
         <CampoEditable etiqueta="Número de motor" valor={auto.engineNumber} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ engineNumber: String(v || '').toUpperCase().trim() }); }} />
-        <CampoEditable etiqueta="Placas" valor={(auto as any).licensePlate} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ licensePlate: String(v || '').toUpperCase().trim() }); }} />
+        <CampoEditable etiqueta="Placas" valor={(auto as any).licensePlate || (auto as any).checklist?.platesAndCard} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ licensePlate: String(v || '').toUpperCase().trim() }); }} />
         {completo && <>
           <CampoEditable etiqueta="Fecha de recepción" valor={auto.receivedAt} tipo="fecha" mostrar={(v) => fechaLarga(v)} puedeEditar={puedeEditar} onGuardar={campo('receivedAt')} />
           {!vendido && !pendiente && (
@@ -595,7 +595,8 @@ export function AutoPagina() {
         </div>
       ))}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200 dark:border-slate-700 pt-2.5">
-        <CampoEditable etiqueta="Placas y tarjeta" valor={checklist.platesAndCard} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ 'checklist.platesAndCard': v || '' }); }} />
+        {/* Las mismas placas de «Datos del auto»: un solo dato, se edita en cualquiera de los dos. */}
+        <CampoEditable etiqueta="Placas" valor={(auto as any).licensePlate || checklist.platesAndCard} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ licensePlate: String(v || '').toUpperCase().trim() }); }} />
         <CampoEditable etiqueta="Estado de placas" valor={checklist.platesState} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ 'checklist.platesState': v || '' }); }} />
         <CampoEditable etiqueta="Número de dueños" valor={checklist.ownersCount} puedeEditar={puedeEditar} onGuardar={async (v) => { await guardar({ 'checklist.ownersCount': v || '' }); }} />
       </div>

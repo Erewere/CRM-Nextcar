@@ -90,9 +90,11 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
   }
 
   // RAPI — procedencia ilícita CDMX (tiene_delito es booleano de verdad).
+  // Solo CDMX y falla seguido: si no respondió se avisa, pero no vuelve
+  // «incompleto» el resultado (la función de su guía ni siquiera lo revisa).
   const rapi = r?.rapi;
-  if (conError(rapi)) caidas.push('rapi');
-  else if (esObj(rapi) && rapi.tiene_delito === true) {
+  const rapiCaido = conError(rapi);
+  if (!rapiCaido && esObj(rapi) && rapi.tiene_delito === true) {
     const estado = t(rapi.estado_vehiculo).toUpperCase();
     const txt = `Procedencia ilícita (CDMX): ${t(rapi.delito) || 'con delito'}${estado ? ` [${estado}]` : ''}`;
     (estado === 'PROCEDENCIA ILICITA' || estado === 'ROBADO' ? alertas : historial).push(txt);
@@ -121,7 +123,7 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
     entidad: t(f.ENTIDAD_EMPLACO), movimiento: t(f.MOVIMIENTO),
   } : undefined;
 
-  const fuentesCaidas = carfaxSinDato ? [...caidas, 'carfax'] : caidas;
+  const fuentesCaidas = [...caidas, ...(rapiCaido ? ['rapi'] : []), ...(carfaxSinDato ? ['carfax'] : [])];
   const veredicto: VeredictoPlacas = alertas.length ? 'vigente'
     : caidas.length ? 'incompleto'
       : historial.length ? 'antecedente' : 'limpio';

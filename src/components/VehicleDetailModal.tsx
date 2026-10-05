@@ -2003,19 +2003,19 @@ function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props
                 ))}
                 
                 <div className="flex flex-col gap-1 p-3 border rounded border-gray-200 dark:border-slate-700">
-                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Placas y tarjeta</label>
+                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Placas</label>
                    <input 
                      type="text" 
-                     placeholder="Escribe detalles..."
-                     className="mt-1 w-full p-2 border rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-                     value={formData.checklist?.platesAndCard || ''}
+                     placeholder="Ej. GVG033E"
+                     className="mt-1 w-full p-2 border rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm uppercase"
+                     value={(formData as any).licensePlate || formData.checklist?.platesAndCard || ''}
                      disabled={isReadOnly}
-                     onChange={(e) => setFormData(prev => ({ ...prev, checklist: { ...prev.checklist, platesAndCard: e.target.value } }))}
+                     onChange={(e) => setFormData(prev => ({ ...prev, licensePlate: e.target.value.toUpperCase() } as any))}
                      onBlur={async (e) => {
                        if (!isReadOnly && vehicle.id) {
                           try {
                             const { doc, updateDoc } = await import('firebase/firestore');
-                            await updateDoc(doc(db, 'vehicles', vehicle.id), { checklist: { ...formData.checklist, platesAndCard: e.target.value } });
+                            await updateDoc(doc(db, 'vehicles', vehicle.id), { licensePlate: e.target.value.toUpperCase().trim() });
                           } catch (err) {}
                         }
                      }}

@@ -342,7 +342,7 @@ export function Dashboard() {
       const vin = (v.vin || "").toLowerCase();
       const color = (v.color || "").toLowerCase();
       const bodyType = (v.bodyType || "").toLowerCase();
-      const plates = (v.checklist?.platesAndCard || "").toLowerCase();
+      const plates = `${(v as any).licensePlate || ""} ${v.checklist?.platesAndCard || ""}`.toLowerCase();
       const price = String(v.price || "");
       const ownership = (v.ownership || "").toLowerCase();
       const status = (v.status || "").toLowerCase();

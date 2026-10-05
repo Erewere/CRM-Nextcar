@@ -101,7 +101,7 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto }: { autoId: s
             {ev.fuentesCaidas.length > 0 && (
               <p className="text-xs opacity-90">
                 No respondió: {ev.fuentesCaidas.map((f) => NOMBRE_FUENTE[f] || f).join(', ')}.
-                {ev.fuentesCaidas.some((f) => f !== 'carfax') ? ' No es un resultado limpio: repite la consulta.' : ' (Esa fuente falla seguido; no detiene la operación.)'}
+                {ev.veredicto === 'incompleto' ? ' No es un resultado limpio: repite la consulta.' : ' (Es una fuente complementaria que falla seguido; no detiene la operación.)'}
               </p>
             )}
             {ficha && (

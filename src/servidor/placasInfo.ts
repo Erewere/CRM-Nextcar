@@ -53,6 +53,7 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
   async function guardarResultado(adminDb: any, ref: any, x: any, crudo: any) {
     const evaluacion: EvaluacionPlacas = evaluarPlacas(crudo);
     await ref.update({ estado: "lista", evaluacion, respuesta: JSON.stringify(crudo).slice(0, 200_000), listaEn: new Date().toISOString() });
+    await llenarDesdeRepuve(adminDb, x, evaluacion);
     if (evaluacion.veredicto === "incompleto") return evaluacion; // no se sabe: no marcar el auto
     const resultado = evaluacion.veredicto === "vigente" ? "con_reporte" : "sin_reporte";
     const nota = evaluacion.veredicto === "antecedente" ? `PlacasInfo: con antecedentes. ${evaluacion.historial.join(" · ")}`.slice(0, 200)
@@ -65,6 +66,28 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
       tx.update(vRef, { repuve: c, repuveHistorial: [c, ...(Array.isArray(v.repuveHistorial) ? v.repuveHistorial : [])].slice(0, 10) });
     });
     return evaluacion;
+  }
+
+  /**
+   * Placas y estado de emplacamiento desde la ficha del REPUVE, solo si en el
+   * auto están vacíos (nunca pisa lo capturado) y si la ficha es de ese VIN.
+   */
+  async function llenarDesdeRepuve(adminDb: any, x: any, ev: EvaluacionPlacas) {
+    const f = ev.ficha;
+    if (!f) return;
+    const vRef = adminDb.collection("vehicles").doc(x.vehicleId);
+    const v = (await vRef.get()).data();
+    if (!v || v.agencyId !== x.agencyId) return;
+    const vin = String(v.vin || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (f.vin && vin && f.vin.toUpperCase() !== vin) return;
+    const cambios: any = {};
+    const placa = String(f.placa || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!String(v.licensePlate || "").trim() && /^[A-Z0-9]{5,8}$/.test(placa) && /\d/.test(placa) && !/^(SINDATO|VACIO|XXXXX|SP)/.test(placa)) cambios.licensePlate = placa;
+    const entidad = String(f.entidad || "").trim();
+    if (!String(v.checklist?.platesState || "").trim() && entidad && !/sin|desconoc/i.test(entidad)) {
+      cambios["checklist.platesState"] = entidad.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_m, a, b) => a + b.toUpperCase()).replace(/\b(De|Del|La|Y)\b/g, (p) => p.toLowerCase());
+    }
+    if (Object.keys(cambios).length) await vRef.update(cambios);
   }
 
   /** Si sigue procesando, pregunta a PlacasInfo (sin costo: es la misma consulta). */
@@ -106,7 +129,16 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
       const docs = s.docs.filter((d: any) => d.data().agencyId === q.agencyId)
         .sort((a: any, b: any) => String(b.data().fecha).localeCompare(String(a.data().fecha))).slice(0, 10);
       const lista = [];
-      for (const d of docs) lista.push(publica(d.id, d.data().estado === "procesando" ? await revisar(q.adminDb, d) : d.data()));
+      for (const d of docs) {
+        let x = d.data();
+        if (x.estado === "procesando") x = await revisar(q.adminDb, d);
+        else if (x.estado === "lista" && x.respuesta && x.evaluacion?.veredicto === "incompleto") {
+          // Leídas con una regla anterior: se vuelven a leer sin gastar otra consulta.
+          const crudo = JSON.parse(x.respuesta);
+          if (evaluarPlacas(crudo).veredicto !== "incompleto") { await guardarResultado(q.adminDb, d.ref, x, crudo); x = (await d.ref.get()).data(); }
+        }
+        lista.push(publica(d.id, x));
+      }
       res.json({ consultas: lista });
     } catch (e) {
       console.error("placasinfo/lista:", e);
