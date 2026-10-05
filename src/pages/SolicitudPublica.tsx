@@ -53,7 +53,7 @@ export function SolicitudPublica() {
   const ir = (n: number) => { setMostrarFaltantes(false); setPaso(Math.max(0, Math.min(pasos.length - 1, n))); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const siguiente = () => { if (faltaEnPaso.length) { setMostrarFaltantes(true); return; } ir(paso + 1); };
 
-  const subir = async (tipo: string, archivos: FileList | null, banco?: string) => {
+  const subir = async (tipo: string, archivos: FileList | File[] | null, banco?: string) => {
     if (!archivos?.length) return;
     setSubiendo(tipo + (banco || ''));
     try {
@@ -154,7 +154,7 @@ export function SolicitudPublica() {
                           </div>
                           <label className="shrink-0 h-10 px-3 rounded-lg bg-blue-700 text-white text-sm font-bold flex items-center gap-1.5 cursor-pointer">
                             {subiendo === t.tipo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir
-                            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subir(t.tipo, e.target.files); e.target.value = ''; }} />
+                            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir(t.tipo, elegidos); }} />
                           </label>
                         </div>
                         {lista.length > 0 && (
@@ -186,7 +186,7 @@ export function SolicitudPublica() {
                           </button>
                           <label className={clsx('h-11 rounded-lg bg-blue-700 text-white text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer', !!subiendo && 'opacity-50')}>
                             {subiendo === 'firmada' + b.clave ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} 2 · Subir firmada
-                            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subir('firmada', e.target.files, b.clave); e.target.value = ''; }} />
+                            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir('firmada', elegidos, b.clave); }} />
                           </label>
                         </div>
                         {firmadas.length > 0 && <p className="text-xs text-emerald-800 font-semibold mt-2">✓ {firmadas.length} {firmadas.length === 1 ? 'archivo subido' : 'archivos subidos'}</p>}

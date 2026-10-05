@@ -38,7 +38,7 @@ export function DocumentosDelAuto({ vehicleId }: { vehicleId: string }) {
   };
   useEffect(() => { cargar(); }, [vehicleId]);
 
-  const subir = async (archivos: FileList | null) => {
+  const subir = async (archivos: FileList | File[] | null) => {
     if (!archivos?.length) return;
     setAviso('');
     const lista = Array.from(archivos);
@@ -90,12 +90,12 @@ export function DocumentosDelAuto({ vehicleId }: { vehicleId: string }) {
         </label>
         <label
           onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); subir(e.dataTransfer.files); }}
+          onDrop={(e) => { e.preventDefault(); subir(Array.from(e.dataTransfer.files)); }}
           className="flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 px-3 py-3 cursor-pointer hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 text-sm font-bold text-slate-800 dark:text-slate-200"
         >
           <Upload className="w-4 h-4 text-slate-500" />
           {subiendo || 'Arrastra o elige PDF, fotos, Word o Excel (hasta 20 MB)'}
-          <input type="file" multiple className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx,.txt" disabled={!!subiendo} onChange={(e) => { subir(e.target.files); e.target.value = ''; }} />
+          <input type="file" multiple className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx,.txt" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir(elegidos); }} />
         </label>
       </div>
 

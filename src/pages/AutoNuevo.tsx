@@ -84,7 +84,7 @@ export function AutoNuevo() {
   };
   const numero = (v: string) => (v === '' ? 0 : Number(String(v).replace(/[^\d.]/g, '')) || 0);
 
-  const subir = async (archivos: FileList | null) => {
+  const subir = async (archivos: FileList | File[] | null) => {
     if (!archivos?.length) return;
     setSubiendo(`Subiendo 0 de ${archivos.length}…`);
     try {
@@ -182,13 +182,13 @@ export function AutoNuevo() {
             <h2 className="text-sm font-extrabold">Fotos <span className="text-slate-500 font-semibold">{fotos.length}</span></h2>
             <label
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); subir(e.dataTransfer.files); }}
+              onDrop={(e) => { e.preventDefault(); subir(Array.from(e.dataTransfer.files)); }}
               className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 py-8 cursor-pointer hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 text-center"
             >
               <Upload className="w-7 h-7 text-slate-500" />
               <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{subiendo || 'Arrastra las fotos aquí o haz clic para elegirlas'}</span>
               <span className="text-xs text-slate-500">La primera será la portada. Se comprimen solas.{!esMaster && configLogoDe(agencyData).activo && agencyData?.logoUrl ? ' Llevarán el logo de la agencia.' : ''}</span>
-              <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subir(e.target.files); e.target.value = ''; }} />
+              <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir(elegidos); }} />
             </label>
             {fotos.length > 0 && (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">

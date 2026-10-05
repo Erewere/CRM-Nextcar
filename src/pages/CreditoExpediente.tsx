@@ -74,7 +74,7 @@ export function CreditoExpediente() {
   };
 
   // --- Documentos
-  const subir = async (tipo: string, archivos: FileList | null, banco?: string) => {
+  const subir = async (tipo: string, archivos: FileList | File[] | null, banco?: string) => {
     if (!archivos?.length) return;
     setTrabajando('sub' + tipo + (banco || ''));
     try { for (const a of Array.from(archivos)) await creditosApi.subir(id, a, tipo, a.name, banco); await recargar(); }
@@ -214,7 +214,7 @@ export function CreditoExpediente() {
                       <span className="text-sm font-bold flex-1">{lista.length ? '✓' : t.req ? '!' : '·'} {t.etiqueta}</span>
                       <label className="text-xs font-bold text-blue-700 dark:text-blue-300 cursor-pointer flex items-center gap-1">
                         {trabajando === 'sub' + t.tipo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Subir
-                        <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { subir(t.tipo, e.target.files); e.target.value = ''; }} />
+                        <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir(t.tipo, elegidos); }} />
                       </label>
                     </div>
                     {lista.map((d) => (
@@ -265,7 +265,7 @@ export function CreditoExpediente() {
                           <button type="button" onClick={() => descargar(b)} disabled={!!trabajando} className="h-9 rounded-lg bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1">{trabajando === 'pdf' + b.clave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Descargar llenada</button>
                           <label className="h-9 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
                             {trabajando === 'subfirmada' + b.clave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Subir firmada
-                            <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { subir('firmada', e.target.files, b.clave); e.target.value = ''; }} />
+                            <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir('firmada', elegidos, b.clave); }} />
                           </label>
                         </div>
                         {firmadas.map((d) => (

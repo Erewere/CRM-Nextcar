@@ -293,7 +293,7 @@ export function AutoPagina() {
     await guardar({ photoUrls: nuevas, photoUrl: nuevas[0] || '', fotosOriginales: [] }).catch((e) => alert(`No se pudo. ${e?.message || ''}`));
   };
 
-  const subirFotos = async (archivos: FileList | null) => {
+  const subirFotos = async (archivos: FileList | File[] | null) => {
     if (!archivos || !archivos.length || !auto) return;
     setSubiendo(`Subiendo 0 de ${archivos.length}…`);
     try {
@@ -706,7 +706,7 @@ export function AutoPagina() {
             {puedeFotos && (
               <label className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 cursor-pointer">
                 <Upload className="w-4 h-4" /> {subiendo || 'Subir fotos'}
-                <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subirFotos(e.target.files); e.target.value = ''; }} />
+                <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subirFotos(elegidos); }} />
               </label>
             )}
             {!vendido && <button type="button" onClick={() => setCotizando(null)} className="min-h-[38px] px-3 rounded-lg border border-blue-700 text-blue-800 dark:text-blue-300 bg-white dark:bg-slate-800 text-sm font-bold hover:bg-blue-50">Cotizar</button>}
@@ -823,13 +823,13 @@ export function AutoPagina() {
                 {puedeFotos && (
                   <label
                     onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => { e.preventDefault(); subirFotos(e.dataTransfer.files); }}
+                    onDrop={(e) => { e.preventDefault(); subirFotos(Array.from(e.dataTransfer.files)); }}
                     className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 py-5 cursor-pointer hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 text-center"
                   >
                     <Upload className="w-6 h-6 text-slate-500" />
                     <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{subiendo || 'Arrastra fotos aquí o haz clic para elegirlas'}</span>
                     <span className="text-xs text-slate-500">Se comprimen solas, igual que en la página Nextcar</span>
-                    <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { subirFotos(e.target.files); e.target.value = ''; }} />
+                    <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subirFotos(elegidos); }} />
                   </label>
                 )}
                 <Galeria fotos={fotos} titulo={titulo} puedeOrdenar={puedeFotos} onHacerPortada={hacerPortada} cuadricula onQuitar={puedeFotos ? quitarFoto : undefined} />
