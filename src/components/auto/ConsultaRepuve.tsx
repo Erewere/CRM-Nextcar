@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import clsx from 'clsx';
 import { AlertTriangle, CheckCircle2, ExternalLink, Info, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react';
 import type { Vehicle } from '../../types';
+import { ConsultaPlacasInfo } from './ConsultaPlacasInfo';
 import { revisarNiv, TEXTO_RESULTADO, URL_REPUVE, type ConsultaRepuve, type ResultadoRepuve } from '../../lib/niv';
 
 /**
@@ -89,6 +90,8 @@ export function ConsultaRepuveAuto({ auto, puedeRegistrar, usuario, onGuardar }:
       ) : (
         <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5"><ShieldQuestion className="w-4 h-4" /> Aún no se consulta.</p>
       )}
+
+      {auto.id && <ConsultaPlacasInfo autoId={auto.id} puedeConsultar={puedeRegistrar} auto={auto as any} />}
 
       {/* Revisión del NIV */}
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2.5 flex flex-col gap-1.5">
