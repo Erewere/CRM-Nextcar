@@ -207,7 +207,7 @@ export function AutoPagina() {
       setAgencia(s.data() || null);
       const e = s.data()?.pipelineStages;
       setEtapas(Array.isArray(e) && e.length ? e : [
-        { id: 'new', title: 'Nuevos' }, { id: 'contacted', title: 'Contactados' }, { id: 'negotiation', title: 'Negociación' }, { id: 'won', title: 'Ganados' }, { id: 'lost', title: 'Perdidos' },
+        { id: 'new', title: 'Nuevos' }, { id: 'contacted', title: 'Contactados' }, { id: 'negotiation', title: 'Negociación' }, { id: 'credito', title: 'Crédito' }, { id: 'won', title: 'Ganados' }, { id: 'lost', title: 'Perdidos' },
       ]);
     }).catch(() => {});
     getDocs(query(collection(db, 'users'), where('agencyId', '==', agencyId))).then((s) => setUsuarios(s.docs.map((d) => ({ ...d.data(), id: d.id })))).catch(() => {});

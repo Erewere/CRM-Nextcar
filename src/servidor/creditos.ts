@@ -253,7 +253,9 @@ export function registrarCreditos(app: any, deps: {
       const d = (await q.adminDb.collection("deals").doc(dealId).get()).data();
       if (!d || d.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese trato." });
       const ag = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
-      const etapa = (ag.pipelineStages || []).find((e: any) => e.id === d.status);
+      // Sin embudo propio, la agencia usa las etapas de fábrica (con «Crédito», id "credito").
+      const etapas = Array.isArray(ag.pipelineStages) && ag.pipelineStages.length ? ag.pipelineStages : [{ id: "credito", title: "Crédito" }];
+      const etapa = etapas.find((e: any) => e.id === d.status);
       if (!etapa || !esEtapaCredito(etapa.title)) return res.json({ creada: false, motivo: "no-es-credito" });
       const clientId = String(d.clientId || "");
       if (!idValido(clientId)) return res.json({ creada: false, motivo: "sin-cliente" });

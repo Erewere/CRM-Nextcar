@@ -52,6 +52,7 @@ const DEFAULT_COLUMNS: PipelineStage[] = [
   { id: "new", title: "Nuevos" },
   { id: "contacted", title: "Contactados" },
   { id: "negotiation", title: "Negociación" },
+  { id: "credito", title: "Crédito" },
   { id: "won", title: "Ganados" },
   { id: "lost", title: "Perdidos" },
 ];

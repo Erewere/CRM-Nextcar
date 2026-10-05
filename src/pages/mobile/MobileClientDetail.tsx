@@ -415,6 +415,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
               { id: "appointment", title: "Cita Agendada" },
               { id: "test_drive", title: "Test Drive" },
               { id: "negotiation", title: "Negociación" },
+              { id: "credito", title: "Crédito" },
               { id: "won", title: "Vendido" },
               { id: "lost", title: "Perdido" },
             ]);
