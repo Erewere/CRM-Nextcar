@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
@@ -11,6 +11,9 @@ import { hoyLocal } from '../lib/fechas';
 import { sanitizeFirestoreData } from '../lib/clientUtils';
 import { subirFotosDeAuto } from '../lib/fotosDeAuto';
 import { configLogoDe, prepararLogo } from '../lib/logoEnFoto';
+import { auth } from '../lib/firebase';
+import { getApiUrl } from '../lib/api';
+import { LlenarDesdeVin } from '../components/auto/LlenarDesdeVin';
 
 /**
  * Alta de un auto en pantalla completa. Pide lo indispensable para publicarlo
@@ -45,13 +48,16 @@ export function AutoNuevo() {
     agencyId: userData?.agencyId && userData.agencyId !== 'unassigned' ? userData.agencyId : '',
     make: '', model: '', year: String(new Date().getFullYear()), price: '', costo: '',
     km: '', color: '', transmission: 'Automática', bodyType: 'Sedán', ownership: 'propio',
-    receivedAt: hoyLocal(), vin: '', engineNumber: '', licensePlate: '', passengers: '5', liters: '', cylinders: '4', equipment: '',
+    receivedAt: hoyLocal(), vin: '', engineNumber: '', licensePlate: '', platesState: '', passengers: '5', liters: '', cylinders: '4', equipment: '',
     publicarEnWeb: params.get('web') === '1',
   });
   const [fotos, setFotos] = useState<string[]>([]);
   const [subiendo, setSubiendo] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  // Lo que la persona ya escribió no lo pisa la consulta del VIN.
+  const tocados = useRef(new Set<string>());
+  const [consultaVin, setConsultaVin] = useState('');
 
   useEffect(() => {
     if (!esMaster) return;
@@ -67,8 +73,15 @@ export function AutoNuevo() {
     );
   }
 
-  const poner = (campo: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const poner = (campo: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    tocados.current.add(campo);
     setF((prev: any) => ({ ...prev, [campo]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
+  };
+  const llenarDesdeVin = (datos: Record<string, string>) => {
+    const llenados = Object.keys(datos).filter((k) => !tocados.current.has(k) && datos[k]);
+    if (llenados.length) setF((prev: any) => ({ ...prev, ...Object.fromEntries(llenados.map((k) => [k, datos[k]])) }));
+    return llenados;
+  };
   const numero = (v: string) => (v === '' ? 0 : Number(String(v).replace(/[^\d.]/g, '')) || 0);
 
   const subir = async (archivos: FileList | null) => {
@@ -116,6 +129,7 @@ export function AutoNuevo() {
         vin: f.vin.trim().toUpperCase(),
         engineNumber: f.engineNumber.trim().toUpperCase(),
         licensePlate: f.licensePlate.trim().toUpperCase(),
+        ...(f.platesState.trim() ? { checklist: { platesState: f.platesState.trim() } } : {}),
         passengers: numero(f.passengers),
         liters: numero(f.liters),
         cylinders: numero(f.cylinders),
@@ -129,6 +143,13 @@ export function AutoNuevo() {
         updatedAt: ahora,
       }));
       if (puedeVerCostos && f.costo !== '') await guardarCosto(nuevoId, f.agencyId, numero(f.costo));
+      // La consulta del VIN queda en la ficha del auto (y su aviso de robo, si lo hay).
+      if (consultaVin) {
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(getApiUrl(`/api/placasinfo/consulta/${consultaVin}/ligar`), {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ vehicleId: nuevoId }),
+        }).catch(() => {});
+      }
       navigate(`/inventory/${nuevoId}`, { replace: true });
     } catch (e: any) {
       setError(`No se pudo guardar el auto. ${e?.message || ''}`);
@@ -196,8 +217,16 @@ export function AutoNuevo() {
                 </select>
               </Campo>
             )}
+            <LlenarDesdeVin
+              vin={f.vin}
+              onVin={(v) => { tocados.current.add('vin'); setF((prev: any) => ({ ...prev, vin: v.toUpperCase() })); }}
+              anio={tocados.current.has('year') || consultaVin ? Number(f.year) || undefined : undefined}
+              onDatos={llenarDesdeVin}
+              onConsulta={setConsultaVin}
+              campoClase={campoClase}
+            />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Campo etiqueta="Marca" obligatorio><input autoFocus value={f.make} onChange={poner('make')} placeholder="Nissan" className={campoClase} /></Campo>
+              <Campo etiqueta="Marca" obligatorio><input value={f.make} onChange={poner('make')} placeholder="Nissan" className={campoClase} /></Campo>
               <Campo etiqueta="Modelo y versión" obligatorio className="md:col-span-2"><input value={f.model} onChange={poner('model')} placeholder="Pathfinder Advance" className={campoClase} /></Campo>
               <Campo etiqueta="Año" obligatorio><input value={f.year} onChange={poner('year')} inputMode="numeric" className={campoClase} /></Campo>
               <Campo etiqueta="Precio de venta" obligatorio><input value={f.price} onChange={poner('price')} inputMode="decimal" placeholder="$0" className={campoClase} /></Campo>
@@ -219,9 +248,9 @@ export function AutoNuevo() {
               <Campo etiqueta="Motor (litros)"><input value={f.liters} onChange={poner('liters')} inputMode="decimal" className={campoClase} /></Campo>
               <Campo etiqueta="Cilindros"><input value={f.cylinders} onChange={poner('cylinders')} inputMode="numeric" className={campoClase} /></Campo>
               <Campo etiqueta="Pasajeros"><input value={f.passengers} onChange={poner('passengers')} inputMode="numeric" className={campoClase} /></Campo>
-              <Campo etiqueta="VIN" className="md:col-span-2"><input value={f.vin} onChange={poner('vin')} className={clsx(campoClase, 'uppercase')} /></Campo>
               <Campo etiqueta="Número de motor"><input value={f.engineNumber} onChange={poner('engineNumber')} className={clsx(campoClase, 'uppercase')} /></Campo>
               <Campo etiqueta="Placas"><input value={f.licensePlate} onChange={poner('licensePlate')} className={clsx(campoClase, 'uppercase')} /></Campo>
+              <Campo etiqueta="Estado de placas" className="md:col-span-2"><input value={f.platesState} onChange={poner('platesState')} placeholder="Guanajuato" className={campoClase} /></Campo>
               <Campo etiqueta="Equipamiento" className="col-span-2 md:col-span-4"><textarea value={f.equipment} onChange={poner('equipment')} rows={2} className={campoClase} /></Campo>
             </div>
             {userData?.role !== 'seller' && (

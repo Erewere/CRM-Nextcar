@@ -14,7 +14,7 @@ export interface EvaluacionPlacas {
   alertas: string[];        // reportes vigentes: detener la operación
   historial: string[];      // antecedentes: revisar documentación
   fuentesCaidas: string[];  // no se pudo preguntar: repetir la consulta
-  ficha?: { marca?: string; modelo?: string; anio?: string; vin?: string; placa?: string; entidad?: string; movimiento?: string };
+  ficha?: { marca?: string; modelo?: string; anio?: string; vin?: string; placa?: string; entidad?: string; movimiento?: string; linea?: string; tipo?: string; cilindrada?: string; cilindros?: string; complemento?: string };
 }
 
 export const TEXTO_VEREDICTO: Record<VeredictoPlacas, string> = {
@@ -121,6 +121,7 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
   const ficha = f ? {
     marca: t(f.MARCA), modelo: t(f.MODELO), anio: t(f.ANIO_MODELO), vin: t(f.VIN), placa: t(f.PLACA),
     entidad: t(f.ENTIDAD_EMPLACO), movimiento: t(f.MOVIMIENTO),
+    linea: t(f.LINEA), tipo: t(f.TIPO), cilindrada: t(f.CILINDRADA), cilindros: t(f.NUM_CILINDROS), complemento: t(f.COMPLEMENTO).slice(0, 200),
   } : undefined;
 
   const fuentesCaidas = [...caidas, ...(rapiCaido ? ['rapi'] : []), ...(carfaxSinDato ? ['carfax'] : [])];
@@ -135,4 +136,48 @@ export function respuestaLista(r: any) {
   if (!esObj(r)) return false;
   if (String(r.status || '').toLowerCase() === 'processing') return false;
   return ['repuve', 'pgj', 'ocra', 'aviso', 'carfax'].some((k) => k in r);
+}
+
+/** «NUEVO LEON» → «Nuevo Leon»; «SEAT» → «Seat». */
+export function tipoTitulo(s: string) {
+  return String(s || '').toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_m, a, b) => a + b.toUpperCase()).replace(/\b(De|Del|La|Y)\b/g, (p) => p.toLowerCase());
+}
+
+/** Placas que sirven (las fiscalías mandan centinelas cuando no la capturaron). */
+export function placaValida(p?: string) {
+  const placa = String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z0-9]{5,8}$/.test(placa) && /\d/.test(placa) && !/^(SINDATO|VACIO|XXXXX|SP)/.test(placa) ? placa : '';
+}
+
+const CARROCERIA: [RegExp, string][] = [
+  [/PICK ?UP/, 'Pickup'], [/MINIVAN/, 'Minivan'], [/\bVAN\b/, 'Van'], [/SUV|DEPORTIVO UTILITARIO/, 'SUV'],
+  [/HATCH/, 'Hatchback'], [/SEDAN/, 'Sedán'], [/COUPE/, 'Coupé'], [/CONVERTIBLE|CABRIO/, 'Convertible'],
+];
+
+/**
+ * Lo que la ficha del REPUVE permite llenar al dar de alta un auto. Solo lo
+ * que viene limpio: la «línea» y el «complemento» llegan con abreviaturas
+ * de captura, así que la versión la sigue escribiendo la agencia.
+ */
+export function datosParaAlta(f?: EvaluacionPlacas['ficha']) {
+  if (!f) return {};
+  const d: Record<string, string> = {};
+  const marca = String(f.marca || '').replace(/\(.*?\)/g, '').trim();
+  if (marca) d.make = tipoTitulo(marca);
+  if (f.modelo) d.model = tipoTitulo(f.modelo);
+  if (/^(19|20)\d\d$/.test(String(f.anio || ''))) d.year = String(f.anio);
+  const litros = String(f.cilindrada || '').match(/(\d+(?:\.\d+)?)/);
+  if (litros && Number(litros[1]) >= 0.6 && Number(litros[1]) <= 8.5) d.liters = String(Number(litros[1]));
+  const cil = String(f.cilindros || '').match(/(\d{1,2})/) || String(f.cilindrada || '').match(/[VLW](\d{1,2})\b/);
+  if (cil && Number(cil[1]) >= 2 && Number(cil[1]) <= 16) d.cylinders = String(Number(cil[1]));
+  const texto = `${f.linea || ''} ${f.complemento || ''}`.toUpperCase();
+  if (/\b(MANUAL|STD|ESTANDAR|EST\.)\b/.test(texto)) d.transmission = 'Manual';
+  else if (/\b(AUT|AUTOMATIC[OA]?|AUTOMATICO|DSG|CVT|TIPTRONIC|STRONIC)\b/.test(texto)) d.transmission = 'Automática';
+  const tipo = `${f.tipo || ''}`.toUpperCase();
+  const carroceria = CARROCERIA.find(([re]) => re.test(tipo));
+  if (carroceria) d.bodyType = carroceria[1];
+  const placa = placaValida(f.placa);
+  if (placa) d.licensePlate = placa;
+  if (f.entidad && !/sin|desconoc/i.test(f.entidad)) d.platesState = tipoTitulo(f.entidad);
+  return d;
 }

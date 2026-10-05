@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { evaluarPlacas, respuestaLista, type EvaluacionPlacas } from "../lib/placasInfo.ts";
+import { datosParaAlta, evaluarPlacas, placaValida, respuestaLista, tipoTitulo, type EvaluacionPlacas } from "../lib/placasInfo.ts";
 
 /**
  * Consulta de VIN o placas con PlacasInfo (REPUVE, Fiscalías, aseguradoras,
@@ -53,8 +53,16 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
   async function guardarResultado(adminDb: any, ref: any, x: any, crudo: any) {
     const evaluacion: EvaluacionPlacas = evaluarPlacas(crudo);
     await ref.update({ estado: "lista", evaluacion, respuesta: JSON.stringify(crudo).slice(0, 200_000), listaEn: new Date().toISOString() });
+    // El auto puede haberse ligado mientras se esperaba (alta desde el VIN).
+    const vehicleId = (await ref.get()).data()?.vehicleId;
+    if (vehicleId) await marcarAuto(adminDb, { ...x, vehicleId }, evaluacion);
+    return evaluacion;
+  }
+
+  /** Lleva el resultado a la ficha del auto: placas vacías y la consulta REPUVE (aviso rojo). */
+  async function marcarAuto(adminDb: any, x: any, evaluacion: EvaluacionPlacas) {
     await llenarDesdeRepuve(adminDb, x, evaluacion);
-    if (evaluacion.veredicto === "incompleto") return evaluacion; // no se sabe: no marcar el auto
+    if (evaluacion.veredicto === "incompleto") return; // no se sabe: no marcar el auto
     const resultado = evaluacion.veredicto === "vigente" ? "con_reporte" : "sin_reporte";
     const nota = evaluacion.veredicto === "antecedente" ? `PlacasInfo: con antecedentes. ${evaluacion.historial.join(" · ")}`.slice(0, 200)
       : evaluacion.veredicto === "vigente" ? `PlacasInfo: ${evaluacion.alertas.join(" · ")}`.slice(0, 200) : "PlacasInfo: sin reportes en ninguna fuente";
@@ -65,7 +73,6 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
       const c = { resultado, fecha: x.fecha, por: x.por, porNombre: x.porNombre, niv: x.consultado, nota, fuente: "placasinfo" };
       tx.update(vRef, { repuve: c, repuveHistorial: [c, ...(Array.isArray(v.repuveHistorial) ? v.repuveHistorial : [])].slice(0, 10) });
     });
-    return evaluacion;
   }
 
   /**
@@ -81,13 +88,37 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
     const vin = String(v.vin || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (f.vin && vin && f.vin.toUpperCase() !== vin) return;
     const cambios: any = {};
-    const placa = String(f.placa || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!String(v.licensePlate || "").trim() && /^[A-Z0-9]{5,8}$/.test(placa) && /\d/.test(placa) && !/^(SINDATO|VACIO|XXXXX|SP)/.test(placa)) cambios.licensePlate = placa;
+    const placa = placaValida(f.placa);
+    if (!String(v.licensePlate || "").trim() && placa) cambios.licensePlate = placa;
     const entidad = String(f.entidad || "").trim();
-    if (!String(v.checklist?.platesState || "").trim() && entidad && !/sin|desconoc/i.test(entidad)) {
-      cambios["checklist.platesState"] = entidad.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_m, a, b) => a + b.toUpperCase()).replace(/\b(De|Del|La|Y)\b/g, (p) => p.toLowerCase());
-    }
+    if (!String(v.checklist?.platesState || "").trim() && entidad && !/sin|desconoc/i.test(entidad)) cambios["checklist.platesState"] = tipoTitulo(entidad);
     if (Object.keys(cambios).length) await vRef.update(cambios);
+  }
+
+  /** Manda la consulta a PlacasInfo (esto es lo que cuesta un crédito). */
+  async function lanzar(q: any, consultado: string, vehicleId: string | null) {
+    const ref = q.adminDb.collection("consultasPlacas").doc();
+    const secreto = crypto.randomBytes(24).toString("base64url");
+    const base = { agencyId: q.agencyId, vehicleId, consultado, fecha: new Date().toISOString(), por: q.uid, porNombre: q.nombre, secretoHash: sha(secreto), estado: "procesando" };
+    await ref.set(base);
+    const r = await fetch(API, {
+      method: "POST",
+      headers: { Authorization: `Token ${token()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ placa_niv: consultado, callback: `${baseUrl()}/api/placasinfo/aviso/${ref.id}?s=${secreto}`, services: SERVICIOS }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.id) {
+      const error = r.status === 401 || r.status === 403 ? "PlacasInfo rechazó la llave. Revisa PLACASINFO_TOKEN."
+        : r.status === 402 || /cr[eé]dit/i.test(JSON.stringify(d)) ? "Ya no hay créditos en la cuenta de PlacasInfo."
+          : `PlacasInfo no aceptó la consulta (${r.status}).`;
+      console.error("placasinfo/consultar:", r.status, JSON.stringify(d).slice(0, 300));
+      await ref.update({ estado: "error", error });
+      return { status: 502, cuerpo: { error } };
+    }
+    const extra = { externoId: String(d.id), ...(Number.isFinite(Number(d.credits)) ? { creditos: Number(d.credits) } : {}) };
+    await ref.update(extra);
+    return { status: 200, cuerpo: { consulta: publica(ref.id, { ...base, ...extra }) } };
   }
 
   /** Si sigue procesando, pregunta a PlacasInfo (sin costo: es la misma consulta). */
@@ -175,32 +206,80 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
         }
       }
 
-      const ref = q.adminDb.collection("consultasPlacas").doc();
-      const secreto = crypto.randomBytes(24).toString("base64url");
-      const base = { agencyId: q.agencyId, vehicleId: id, consultado, fecha: new Date().toISOString(), por: q.uid, porNombre: q.nombre, secretoHash: sha(secreto), estado: "procesando" };
-      await ref.set(base);
-
-      const r = await fetch(API, {
-        method: "POST",
-        headers: { Authorization: `Token ${token()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ placa_niv: consultado, callback: `${baseUrl()}/api/placasinfo/aviso/${ref.id}?s=${secreto}`, services: SERVICIOS }),
-        signal: AbortSignal.timeout(20000),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d?.id) {
-        const error = r.status === 401 || r.status === 403 ? "PlacasInfo rechazó la llave. Revisa PLACASINFO_TOKEN."
-          : r.status === 402 || /cr[eé]dit/i.test(JSON.stringify(d)) ? "Ya no hay créditos en la cuenta de PlacasInfo."
-            : `PlacasInfo no aceptó la consulta (${r.status}).`;
-        console.error("placasinfo/consultar:", r.status, JSON.stringify(d).slice(0, 300));
-        await ref.update({ estado: "error", error });
-        return res.status(502).json({ error });
-      }
-      const extra = { externoId: String(d.id), ...(Number.isFinite(Number(d.credits)) ? { creditos: Number(d.credits) } : {}) };
-      await ref.update(extra);
-      res.json({ consulta: publica(ref.id, { ...base, ...extra }) });
+      const r = await lanzar(q, consultado, id);
+      res.status(r.status).json(r.cuerpo);
     } catch (e) {
       console.error("placasinfo/consultar:", e);
       res.status(500).json({ error: "No se pudo hacer la consulta. Intenta de nuevo." });
+    }
+  });
+
+  // ---------- Alta de un auto desde el VIN (el auto aún no existe) ----------
+  app.post("/api/placasinfo/vin", async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    if (!q.puede) return res.status(403).json({ error: "Solo un administrador o quien maneja el inventario puede consultar." });
+    if (!token()) return res.status(503).json({ error: "Falta poner la llave de PlacasInfo en el servidor." });
+    const vin = String(req.body?.vin || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (vin.length !== 17) return res.status(400).json({ error: "El VIN debe tener 17 caracteres." });
+    try {
+      // El mismo VIN en esta agencia: una en curso o una completa de 24 h se reusa sin cobrar.
+      const previas = await q.adminDb.collection("consultasPlacas").where("consultado", "==", vin).get();
+      const ahora = Date.now();
+      const reusable = previas.docs.map((d: any) => ({ d, x: d.data() }))
+        .filter(({ x }: any) => x.agencyId === q.agencyId)
+        .sort((a: any, b: any) => String(b.x.fecha).localeCompare(String(a.x.fecha)))
+        .find(({ x }: any) => {
+          const edad = ahora - Date.parse(x.fecha);
+          return (x.estado === "procesando" && edad < 10 * 60 * 1000)
+            || (!req.body?.forzar && x.estado === "lista" && x.evaluacion?.veredicto !== "incompleto" && edad < HORAS_REPETIR * 3600 * 1000);
+        });
+      if (reusable) return res.json({ consulta: publica(reusable.d.id, reusable.x), alta: datosParaAlta(reusable.x.evaluacion?.ficha), repetida: true });
+      const r = await lanzar(q, vin, null);
+      res.status(r.status).json(r.cuerpo);
+    } catch (e) {
+      console.error("placasinfo/vin:", e);
+      res.status(500).json({ error: "No se pudo hacer la consulta. Intenta de nuevo." });
+    }
+  });
+
+  app.get("/api/placasinfo/consulta/:cid", async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    const cid = String(req.params.cid || "");
+    if (!idValido(cid)) return res.status(400).json({ error: "Consulta no válida." });
+    try {
+      const d = await q.adminDb.collection("consultasPlacas").doc(cid).get();
+      if (!d.exists || d.data().agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos esa consulta." });
+      const x = d.data().estado === "procesando" ? await revisar(q.adminDb, d) : d.data();
+      res.json({ consulta: publica(cid, x), alta: datosParaAlta(x.evaluacion?.ficha) });
+    } catch (e) {
+      console.error("placasinfo/consulta:", e);
+      res.status(500).json({ error: "No se pudo leer la consulta." });
+    }
+  });
+
+  // Al guardar el auto nuevo: la consulta queda en su ficha (y su aviso, si lo hay).
+  app.post("/api/placasinfo/consulta/:cid/ligar", async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    const cid = String(req.params.cid || "");
+    const vehicleId = String(req.body?.vehicleId || "");
+    if (!idValido(cid) || !idValido(vehicleId)) return res.status(400).json({ error: "Datos no válidos." });
+    try {
+      const ref = q.adminDb.collection("consultasPlacas").doc(cid);
+      const x = (await ref.get()).data();
+      if (!x || x.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos esa consulta." });
+      const v = (await q.adminDb.collection("vehicles").doc(vehicleId).get()).data();
+      if (!v || v.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese auto." });
+      if (String(v.vin || "").toUpperCase().replace(/[^A-Z0-9]/g, "") !== x.consultado) return res.status(409).json({ error: "El VIN del auto no es el de la consulta." });
+      if (x.vehicleId && x.vehicleId !== vehicleId) return res.status(409).json({ error: "Esa consulta ya es de otro auto." });
+      if (!x.vehicleId) await ref.update({ vehicleId });
+      if (x.estado === "lista" && x.evaluacion) await marcarAuto(q.adminDb, { ...x, vehicleId }, x.evaluacion);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("placasinfo/ligar:", e);
+      res.status(500).json({ error: "No se pudo ligar la consulta." });
     }
   });
 
