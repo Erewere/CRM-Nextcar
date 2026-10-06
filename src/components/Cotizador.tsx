@@ -22,7 +22,7 @@ const PLAZOS = [12, 18, 24, 36, 48, 60, 72];
 
 interface ClienteCot { id?: string; name?: string; phone?: string }
 /** Un banco con convenio: sus botones llenan la tasa y la comisión de la cotización. */
-interface BancoCot { id: string; nombre: string; tasa: number; comision: number }
+interface BancoCot { id: string; nombre: string; tasa: number; comision: number; tasaTxt?: string; comisionTxt?: string }
 
 export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, clientes, agencia, asesor, userData, dealId, onCerrar }: {
   auto?: Vehicle | null;
@@ -300,8 +300,8 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
                         {bancos.map((b) => (
                           <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_70px_70px_32px] gap-1.5">
                             <input value={b.nombre} onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, nombre: e.target.value } : x))} onBlur={() => guardarBancos(bancos)} maxLength={30} className={campo} />
-                            <input value={b.tasa} inputMode="decimal" onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, tasa: num(e.target.value) } : x))} onBlur={() => { guardarBancos(bancos); if (bancoId === b.id) elegirBanco(b); }} className={campo} />
-                            <input value={b.comision} inputMode="decimal" onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, comision: num(e.target.value) } : x))} onBlur={() => { guardarBancos(bancos); if (bancoId === b.id) elegirBanco(b); }} className={campo} />
+                            <input value={b.tasaTxt ?? b.tasa} inputMode="decimal" onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, tasaTxt: e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'), tasa: num(e.target.value.replace(',', '.')) } : x))} onBlur={() => { guardarBancos(bancos); if (bancoId === b.id) elegirBanco(b); }} className={campo} />
+                            <input value={b.comisionTxt ?? b.comision} inputMode="decimal" onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, comisionTxt: e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'), comision: num(e.target.value.replace(',', '.')) } : x))} onBlur={() => { guardarBancos(bancos); if (bancoId === b.id) elegirBanco(b); }} className={campo} />
                             <button type="button" aria-label={`Quitar ${b.nombre}`} onClick={() => { const l = bancos.filter((x) => x.id !== b.id); setBancos(l); if (bancoId === b.id) setBancoId(''); guardarBancos(l); }} className="rounded-lg text-slate-500 hover:text-red-700 flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         ))}
