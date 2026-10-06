@@ -165,7 +165,7 @@ export function registrarCreditos(app: any, deps: {
   });
 
   /** Crea una solicitud con los datos del cliente. La usan «Nueva solicitud» y el embudo. */
-  async function crearSolicitud(q: { uid: string; rol: string; agencyId: string; adminDb: any }, p: { clientId: string; vehicleId?: string | null; bancos?: any[]; todosLosBancos?: boolean; operacion?: any; dealId?: string | null; origen?: string }) {
+  async function crearSolicitud(q: { uid: string; rol: string; agencyId: string; adminDb: any }, p: { clientId: string; vehicleId?: string | null; bancos?: any[]; todosLosBancos?: boolean; operacion?: any; dealId?: string | null; origen?: string; folio?: string }) {
     const c = (await q.adminDb.collection("clients").doc(String(p.clientId)).get()).data();
     if (!c || c.agencyId !== q.agencyId) return { status: 404, error: "No encontramos ese cliente en tu agencia." };
     if (!ROLES_TODO.has(q.rol) && c.sellerId !== q.uid) return { status: 403, error: "Solo puedes abrir solicitudes de tus clientes." };
@@ -215,7 +215,10 @@ export function registrarCreditos(app: any, deps: {
       operacion,
       datos,
       documentos: [],
-      historial: [historial(p.origen === "embudo" ? `${quien} pasó el trato a la etapa de crédito en el embudo: se abrió la solicitud.` : `Solicitud creada por ${quien}.`, q.uid)],
+      historial: [historial(
+        p.origen === "embudo" ? `${quien} pasó el trato a la etapa de crédito en el embudo: se abrió la solicitud.`
+          : p.origen === "pagina" ? `La persona llenó la «Solicitud de crédito» en la página web${p.folio ? ` (folio ${p.folio})` : ""}: se abrió la solicitud. Envíale su liga para que complete sus datos y documentos.`
+            : `Solicitud creada por ${quien}.`, p.origen === "pagina" ? "pagina" : q.uid)],
       ligaHash: null,
       ligaVence: null,
       creadoEl: ahora,
@@ -644,4 +647,46 @@ export function registrarCreditos(app: any, deps: {
     });
     res.json({ ok: true });
   });
+
+  /**
+   * Alguien llenó la «Solicitud de crédito» de la página web (llega como lead
+   * público). Se abre su solicitud en Créditos, con todos los bancos de la
+   * agencia, ligada al trato y sin duplicar si ya tiene una activa.
+   *
+   * No se trae nada sensible de la página (RFC, CURP, domicilios, referencias:
+   * se quedan en el expediente de la página, decisión de sep 2026). La liga
+   * del CRM le pide a la persona lo que falta, con sus documentos en
+   * almacenamiento privado.
+   */
+  async function abrirDesdeFormulario(adminDb: any, p: { agencyId: string; clientId: string; dealId?: string | null; folio?: string }) {
+    if (!idValido(p.agencyId) || !idValido(p.clientId)) return { creada: false, motivo: "datos" };
+    const previas = await col(adminDb).where("agencyId", "==", p.agencyId).where("clientId", "==", p.clientId).get();
+    const activa = previas.docs.find((x: any) => !["cerrada", "cancelada"].includes(x.data().etapa));
+    if (activa) {
+      if (!activa.data().dealId && p.dealId) await activa.ref.update({ dealId: p.dealId, actualizadoEl: new Date().toISOString() });
+      return { creada: false, motivo: "ya-existe", id: activa.id };
+    }
+    const c = (await adminDb.collection("clients").doc(p.clientId).get()).data();
+    if (!c || c.agencyId !== p.agencyId) return { creada: false, motivo: "sin-cliente" };
+    // Quien la atiende: el vendedor del contacto o, si nadie lo tiene, un administrador de la agencia.
+    let uid = String(c.sellerId || "");
+    if (!uid) {
+      const admins = await adminDb.collection("users").where("agencyId", "==", p.agencyId).where("role", "==", "admin").limit(1).get();
+      uid = admins.docs[0]?.id || "";
+    }
+    if (!uid) return { creada: false, motivo: "sin-responsable" };
+    let vehicleId: string | null = null; let valor = 0;
+    if (p.dealId) {
+      const d = (await adminDb.collection("deals").doc(p.dealId).get()).data();
+      if (d && d.agencyId === p.agencyId) { vehicleId = d.vehicleId || null; valor = Number(d.value) || 0; }
+    }
+    // «Admin» solo para pasar la revisión de permisos de crearSolicitud: la acción la dispara el formulario público, no una persona.
+    const r: any = await crearSolicitud({ uid, rol: "admin", agencyId: p.agencyId, adminDb }, {
+      clientId: p.clientId, vehicleId, todosLosBancos: true, operacion: valor ? { precio: valor } : {}, dealId: p.dealId || null, origen: "pagina", folio: p.folio,
+    });
+    if (r.error) return { creada: false, motivo: r.error };
+    return { creada: true, id: r.solicitud.id };
+  }
+
+  return { abrirDesdeFormulario };
 }

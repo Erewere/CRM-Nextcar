@@ -5,7 +5,7 @@ import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // garantia de que un dia dejaran de coincidir.
 import { checkIsWon, checkIsLost } from "./src/lib/clientUtils.ts";
 import { fuenteDesdeOrigen } from "./src/lib/fuentes.ts";
-import { procesarLeadPublico } from "./src/lib/leadPublico.ts";
+import { normalizarTipo, procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
@@ -2987,6 +2987,7 @@ async function startServer() {
   // integraciones. La logica vive en src/lib/leadPublico.ts (ver ahi el porque).
   // El cuerpo ya lo lee el express.json() general (tope de 100 KB); los textos
   // se recortan en leadPublico.ts.
+  let abrirSolicitudDeFormulario: ((db: any, p: any) => Promise<any>) | null = null;
   app.post("/api/public/v1/leads", async (req, res) => {
     try {
       const adminDb = getAdminDb();
@@ -2997,6 +2998,15 @@ async function startServer() {
         camposQueFaltan,
         serverTimestamp: () => FieldValue.serverTimestamp(),
       });
+      // «Solicitud de crédito» completa de la página: se abre en Créditos. Si
+      // falla, el lead ya quedó guardado y no se pierde.
+      if (r.status < 300 && r.body?.leadId && normalizarTipo(req.body?.tipo) === "SOLICITUD DE CRÉDITO" && abrirSolicitudDeFormulario) {
+        try {
+          const folio = /Folio:\s*([A-Za-z0-9-]{3,40})/.exec(String(req.body?.notes || ""))?.[1];
+          const s = await abrirSolicitudDeFormulario(adminDb, { agencyId: String(req.body?.agencyId || ""), clientId: r.body.leadId, dealId: r.body.dealId || null, folio });
+          if (s?.creada) console.log("Solicitud de crédito abierta desde la página:", s.id);
+        } catch (e) { console.error("No se pudo abrir la solicitud de crédito del formulario:", e); }
+      }
       res.status(r.status).json(r.body);
     } catch (e: any) {
       // Puerta publica: el detalle del error va al registro, no a quien llama.
@@ -4037,7 +4047,8 @@ ${extra}
   });
 
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
-  registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos });
+  const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos });
+  abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
   registrarPlacasInfo(app, { usuarioQuePide, getAdminDb });
   registrarVentas(app, { usuarioQuePide, getAdminDb });
 
