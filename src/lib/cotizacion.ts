@@ -18,6 +18,7 @@ export interface DatosCotizacion {
   tasa: number;               // % mensual (propio) o anual (bancario)
   comisionPct: number;        // comisión por apertura, % sobre el monto a financiar
   comisionFinanciada: boolean; // solo crédito de la casa: dentro del financiamiento
+  banco?: string;             // crédito bancario: el banco con convenio elegido (solo para mostrarlo)
   vigenciaDias: number;
   notas: string;
 }

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { collection, doc, setDoc } from 'firebase/firestore';
-import { FileText, MessageCircle, X } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { FileText, MessageCircle, Plus, Settings, Trash2, X } from 'lucide-react';
+import { db, storage } from '../lib/firebase';
 import { calcularCotizacion, folioCotizacion, LEYENDA_COTIZACION, type DatosCotizacion, type FormaCotizacion } from '../lib/cotizacion';
 import { generarCotizacionPdf } from '../lib/cotizacionPdf';
 import { descargarOCompartir, planDeCredito } from '../lib/fichaPdf';
@@ -20,8 +21,10 @@ const num = (v: string) => Number(String(v).replace(/[^\d.]/g, '')) || 0;
 const PLAZOS = [12, 18, 24, 36, 48, 60, 72];
 
 interface ClienteCot { id?: string; name?: string; phone?: string }
+/** Un banco con convenio: sus botones llenan la tasa y la comisión de la cotización. */
+interface BancoCot { id: string; nombre: string; tasa: number; comision: number }
 
-export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, clientes, agencia, asesor, userData, onCerrar }: {
+export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, clientes, agencia, asesor, userData, dealId, onCerrar }: {
   auto?: Vehicle | null;
   /** Para elegir el auto cuando se cotiza desde el cliente. */
   autos?: Vehicle[];
@@ -31,6 +34,8 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
   agencia: any;
   asesor: { name?: string; phone?: string; email?: string };
   userData: any;
+  /** El trato del cliente, si se cotiza desde su ficha: ahí queda el PDF. */
+  dealId?: string;
   onCerrar: () => void;
 }) {
   const [autoId, setAutoId] = useState(autoInicial?.id || autos?.[0]?.id || '');
@@ -56,6 +61,21 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
   const [notas, setNotas] = useState('');
   const [trabajando, setTrabajando] = useState('');
 
+  // Bancos con convenio de la agencia (los configura un administrador o gerente).
+  const agenciaId: string = agencia?.id || userData?.agencyId || '';
+  const puedeConfigurarBancos = ['admin', 'manager', 'master'].includes(String(userData?.role));
+  const [bancos, setBancos] = useState<BancoCot[]>(Array.isArray(agencia?.bancosCotizacion) ? agencia.bancosCotizacion : []);
+  const [bancoId, setBancoId] = useState('');
+  const [configurando, setConfigurando] = useState(false);
+  const elegirBanco = (b: BancoCot) => {
+    setBancoId(b.id); setTasaBanco(String(b.tasa)); setComisionPct(String(b.comision));
+  };
+  const guardarBancos = async (lista: BancoCot[]) => {
+    const limpia = lista.filter((b) => b.nombre.trim()).map((b) => ({ id: b.id, nombre: b.nombre.trim().slice(0, 30), tasa: Number(b.tasa) || 0, comision: Number(b.comision) || 0 }));
+    try { await updateDoc(doc(db, 'agencies', agenciaId), { bancosCotizacion: limpia }); } catch (e: any) { alert(`No se pudieron guardar los bancos. ${e?.message || ''}`); }
+  };
+  const bancoElegido = forma === 'credito_bancario' ? bancos.find((b) => b.id === bancoId) : undefined;
+
   // Al cambiar de auto, su precio y su enganche sugerido.
   const cambiarAuto = (id: string) => {
     setAutoId(id);
@@ -74,6 +94,7 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
     tasa: forma === 'credito' ? num(tasaPropio) : num(tasaBanco),
     comisionPct: num(comisionPct),
     comisionFinanciada: forma === 'credito' && comisionFinanciada,
+    ...(bancoElegido ? { banco: bancoElegido.nombre } : {}),
     vigenciaDias: vigencia,
     notas,
   };
@@ -97,7 +118,7 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
       if (r.comision) lineas.push(`Comisión por apertura (${datos.comisionPct}%): ${pesos(r.comision)} ${r.comisionFinanciada ? '(incluida en el financiamiento)' : '(de contado)'}`);
       lineas.push(`Pago inicial: ${pesos(r.pagoInicial)} · A financiar: ${pesos(r.financiar)}`);
       r.opciones.forEach((o) => lineas.push(`${o.meses} meses: ${pesos(o.mensualidad)} al mes`));
-      lineas.push(forma === 'credito' ? `Interés ${datos.tasa}% mensual` : `Tasa anual de referencia ${datos.tasa}% (estimado)`);
+      lineas.push(forma === 'credito' ? `Interés ${datos.tasa}% mensual` : `${datos.banco ? `${datos.banco} · ` : ''}Tasa anual de referencia ${datos.tasa}% (estimado)`);
     }
     lineas.push(`Vigente ${vigencia} días.`);
     if (forma !== 'contado') lineas.push(LEYENDA_COTIZACION);
@@ -121,6 +142,27 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
     await setDoc(doc(collection(db, 'notes')), JSON.parse(JSON.stringify(n))).catch((e) => console.error('Cotización en historial:', e));
   };
 
+  /**
+   * El PDF queda en los archivos del cliente y de su trato (el mismo lugar
+   * donde la ficha guarda lo que se sube a mano), para volver a abrirlo o
+   * mandarlo sin rehacerlo. Si falla, la cotización sale igual.
+   */
+  const guardarPdfEnTrato = async (blob: Blob, folio: string) => {
+    if (!cliente.id || !userData?.id) return;
+    try {
+      const nombre = `Cotización ${folio} ${auto?.make || ''} ${auto?.model || ''}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const destino = ref(storage, `users/${userData.id}/clients/${cliente.id}/${nombre}`);
+      await uploadBytes(destino, blob, { contentType: 'application/pdf' });
+      const url = await getDownloadURL(destino);
+      const f: Record<string, any> = {
+        agencyId: userData?.agencyId || auto?.agencyId || '', clientId: cliente.id, userId: userData.id,
+        filename: nombre, url, uploadedAt: new Date().toISOString(), tipo: 'cotizacion', folio,
+        ...(dealId ? { dealId } : {}),
+      };
+      await setDoc(doc(collection(db, 'files')), f);
+    } catch (e) { console.error('Cotización en el trato:', e); }
+  };
+
   const hacerPdf = async () => {
     if (!auto) return;
     setTrabajando('Preparando…');
@@ -128,6 +170,7 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
     try {
       const blob = await generarCotizacionPdf({ folio, auto, cliente, datos, agencia, asesor });
       await guardarEnHistorial(folio);
+      await guardarPdfEnTrato(blob, folio);
       await descargarOCompartir(blob, `Cotización ${folio} ${auto.make || ''} ${auto.model || ''}.pdf`.replace(/\s+/g, ' ').trim(), `Cotización ${folio}`);
       onCerrar();
     } catch (e: any) {
@@ -233,13 +276,48 @@ export function Cotizador({ auto: autoInicial, autos, cliente: clienteInicial, c
                     ))}
                   </div>
                 </div>
+                {forma === 'credito_bancario' && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Banco con convenio</span>
+                      {puedeConfigurarBancos && <button type="button" onClick={() => setConfigurando((x) => !x)} className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1"><Settings className="w-3 h-3" /> {configurando ? 'Listo' : 'Configurar bancos'}</button>}
+                    </div>
+                    {bancos.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {bancos.map((b) => (
+                          <button key={b.id} type="button" aria-pressed={bancoId === b.id} onClick={() => elegirBanco(b)}
+                            className={clsx('min-h-[38px] px-3 rounded-lg text-sm font-bold border', bancoId === b.id ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700')}>
+                            {b.nombre}<span className="ml-1.5 text-[11px] font-semibold opacity-80">{b.tasa}% · {b.comision}%</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600 dark:text-slate-400">{puedeConfigurarBancos ? 'Aún no hay bancos. Con «Configurar bancos» agrega los de tu convenio y sus botones llenan la tasa y la comisión solos.' : 'Tu administrador puede agregar aquí los bancos con convenio.'}</p>
+                    )}
+                    {configurando && (
+                      <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 flex flex-col gap-2 bg-slate-50 dark:bg-slate-900/40">
+                        <div className="grid grid-cols-[minmax(0,1fr)_70px_70px_32px] gap-1.5 text-[10px] font-bold uppercase text-slate-500"><span>Banco</span><span>Tasa anual %</span><span>Comisión %</span><span /></div>
+                        {bancos.map((b) => (
+                          <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_70px_70px_32px] gap-1.5">
+                            <input value={b.nombre} onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, nombre: e.target.value } : x))} onBlur={() => guardarBancos(bancos)} maxLength={30} className={campo} />
+                            <input value={b.tasa} inputMode="decimal" onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, tasa: num(e.target.value) } : x))} onBlur={() => { guardarBancos(bancos); if (bancoId === b.id) elegirBanco(b); }} className={campo} />
+                            <input value={b.comision} inputMode="decimal" onChange={(e) => setBancos((l) => l.map((x) => x.id === b.id ? { ...x, comision: num(e.target.value) } : x))} onBlur={() => { guardarBancos(bancos); if (bancoId === b.id) elegirBanco(b); }} className={campo} />
+                            <button type="button" aria-label={`Quitar ${b.nombre}`} onClick={() => { const l = bancos.filter((x) => x.id !== b.id); setBancos(l); if (bancoId === b.id) setBancoId(''); guardarBancos(l); }} className="rounded-lg text-slate-500 hover:text-red-700 flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        ))}
+                        {bancos.length < 8 && <button type="button" onClick={() => setBancos((l) => [...l, { id: Math.random().toString(36).slice(2, 10), nombre: '', tasa: 0, comision: 3 }])} className="self-start text-xs font-bold text-blue-700 hover:underline flex items-center gap-1"><Plus className="w-3 h-3" /> Agregar banco</button>}
+                        <p className="text-[11px] text-slate-500">Se guardan para toda la agencia. Pon la tasa anual de referencia y la comisión por apertura que maneja cada banco.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <label className={etiqueta}>
                   {forma === 'credito' ? 'Interés mensual (%) — el mismo que usas al cerrar la venta' : 'Tasa anual de referencia (%)'}
-                  <input value={forma === 'credito' ? tasaPropio : tasaBanco} onChange={(e) => (forma === 'credito' ? setTasaPropio : setTasaBanco)(e.target.value)} inputMode="decimal" className={clsx(campo, 'sm:max-w-[200px]')} />
+                  <input value={forma === 'credito' ? tasaPropio : tasaBanco} onChange={(e) => { if (forma === 'credito') setTasaPropio(e.target.value); else { setTasaBanco(e.target.value); setBancoId(''); } }} inputMode="decimal" className={clsx(campo, 'sm:max-w-[200px]')} />
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-[160px_minmax(0,1fr)] gap-3 items-end">
                   <label className={etiqueta}>Comisión por apertura (%)
-                    <input value={comisionPct} onChange={(e) => setComisionPct(e.target.value)} inputMode="decimal" className={campo} />
+                    <input value={comisionPct} onChange={(e) => { setComisionPct(e.target.value); setBancoId(''); }} inputMode="decimal" className={campo} />
                   </label>
                   {forma === 'credito' ? (
                     <div className="flex flex-col gap-1">

@@ -99,7 +99,7 @@ export async function generarCotizacionPdf({ folio, auto, cliente, datos, agenci
     y += 74 + 18;
   } else {
     const banco = datos.forma === 'credito_bancario';
-    texto(banco ? 'CRÉDITO BANCARIO (ESTIMADO)' : 'PLAN DE CRÉDITO', M, y, 9, 'bold', ACENTO, { charSpace: 1 });
+    texto(banco ? `CRÉDITO BANCARIO${datos.banco ? ` · ${String(datos.banco).toUpperCase()}` : ''} (ESTIMADO)` : 'PLAN DE CRÉDITO', M, y, 9, 'bold', ACENTO, { charSpace: 1 });
     texto(banco ? `Tasa anual de referencia ${datos.tasa}%` : `Interés ${datos.tasa}% mensual sobre el monto a financiar`, W - M, y, 8.5, 'normal', GRIS, { align: 'right' });
     y += 12;
     // Resumen: enganche, comisión por apertura, pago inicial y monto a financiar

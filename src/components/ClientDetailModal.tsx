@@ -4019,6 +4019,7 @@ export function ClientDetailModal({
           auto={cotizandoAuto}
           autos={inventoryVehicles.filter((v) => v.status !== 'sold' && Number(v.price) > 0)}
           cliente={{ id: (client.originalClientId || client.id) as string, name: formData.name, phone: formData.phone }}
+          dealId={client.originalClientId && client.originalClientId !== client.id ? (client.id as string) : undefined}
           agencia={agencyData}
           asesor={{ name: userData?.name, phone: (userData as any)?.phone, email: userData?.email }}
           userData={userData}
