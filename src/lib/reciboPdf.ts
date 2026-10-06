@@ -61,7 +61,8 @@ export async function generarReciboPdf(d: DatosRecibo): Promise<Blob> {
     if (contacto) pdf.text(pdf.splitTextToSize(contacto, 230).slice(0, 2), xTexto, y + 19);
 
     pdf.setTextColor(20); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16);
-    pdf.text('RECIBO DE PAGO', W - M, y + 8, { align: 'right' });
+    const devolucion = d.pago.concepto === 'devolucion';
+    pdf.text(devolucion ? 'DEVOLUCIÓN' : 'RECIBO DE PAGO', W - M, y + 8, { align: 'right' });
     pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
     pdf.text(`Folio ${d.folio}`, W - M, y + 21, { align: 'right' });
     pdf.text(fechaLarga(d.pago.fecha), W - M, y + 32, { align: 'right' });
@@ -84,12 +85,12 @@ export async function generarReciboPdf(d: DatosRecibo): Promise<Blob> {
       pdf.text(lineas.slice(0, 2), M + 92, yy);
       return yy + 14 * Math.min(2, lineas.length) + 4;
     };
-    y = etiquetaValor('Recibimos de', d.cliente, y);
+    y = etiquetaValor(devolucion ? 'Devolvemos a' : 'Recibimos de', d.cliente, y);
 
     // Monto grande
     pdf.setFillColor(244, 245, 245); pdf.roundedRect(M, y - 4, W - 2 * M, 40, 4, 4, 'F');
     pdf.setTextColor(110); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5);
-    pdf.text('La cantidad de', M + 10, y + 10);
+    pdf.text(devolucion ? 'Se devuelve la cantidad de' : 'La cantidad de', M + 10, y + 10);
     pdf.setTextColor(20); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(18);
     pdf.text(pesos(d.pago.monto), M + 10, y + 29);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
@@ -110,8 +111,9 @@ export async function generarReciboPdf(d: DatosRecibo): Promise<Blob> {
     pdf.setDrawColor(60); pdf.setLineWidth(0.7);
     pdf.line(W - M - 190, yPie + 22, W - M, yPie + 22);
     pdf.setFontSize(8); pdf.setTextColor(60);
-    pdf.text('Recibió', W - M - 95, yPie + 33, { align: 'center' });
-    if (d.pago.registradoPorNombre) pdf.text(d.pago.registradoPorNombre, W - M - 95, yPie + 43, { align: 'center' });
+    pdf.text(devolucion ? 'Recibí de conformidad (cliente)' : 'Recibió', W - M - 95, yPie + 33, { align: 'center' });
+    if (devolucion) pdf.text(d.cliente, W - M - 95, yPie + 43, { align: 'center', maxWidth: 190 });
+    else if (d.pago.registradoPorNombre) pdf.text(d.pago.registradoPorNombre, W - M - 95, yPie + 43, { align: 'center' });
   };
 
   mitad(0, 'ORIGINAL');
@@ -131,6 +133,7 @@ export async function generarReciboPdf(d: DatosRecibo): Promise<Blob> {
 /** El texto de «por concepto de», a partir de lo que el pago cubrió. */
 export function conceptoDelRecibo(p: PagoVenta, ap: { inicial: number; cubre: { n: number; completa: boolean }[]; plazo: number } | null) {
   if (p.concepto === 'liquidacion') return 'Liquidación del crédito';
+  if (p.concepto === 'devolucion') return 'Devolución de lo pagado de más';
   if (!ap) return NOMBRE_CONCEPTO[p.concepto] || 'Pago';
   const partes: string[] = [];
   if (ap.inicial > 0) partes.push(p.concepto === 'comision' ? 'Comisión por apertura' : 'Enganche');

@@ -18,9 +18,9 @@ import { aFormaVieja, deFormaVieja, estadoDeCuenta, fechaDelPago, fusionarPagosV
 
 const ROLES_NO_COBRAN = new Set(["seller", "taller"]);
 // «descuento» no se registra a mano: solo sale de una liquidación anticipada.
-const CONCEPTOS = new Set<ConceptoPago>(["enganche", "comision", "mensualidad", "abono", "liquidacion", "pago"]);
+const CONCEPTOS = new Set<ConceptoPago>(["enganche", "comision", "mensualidad", "abono", "liquidacion", "pago", "devolucion"]);
 const ROLES_DESCUENTAN = new Set(["admin", "manager", "master"]);
-const FORMAS = new Set(["efectivo", "transferencia", "tarjeta", "cheque", "otro"]);
+const FORMAS = new Set(["efectivo", "transferencia", "tarjeta", "cheque", "auto", "otro"]);
 const idValido = (s: string) => /^[A-Za-z0-9_-]{1,64}$/.test(s);
 const fechaValida = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T12:00:00`));
 const textoCorto = (s: any, n = 300) => String(s ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n);
@@ -247,6 +247,11 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
       if (!t) return res.status(404).json({ error: "No encontramos esa venta." });
       if (!t.datos.saleDetails) return res.status(409).json({ error: "Primero registra la venta (precio y forma de pago)." });
       await asegurarMigrado(q.adminDb, t.ref.id);
+      // Solo se devuelve lo que el cliente pagó de más.
+      if (concepto === "devolucion") {
+        const ec = estadoDeCuenta(planDe(t.datos.saleDetails), await pagosDe(q.adminDb, t.ref.id));
+        if (monto > ec.aFavor + 0.5) return res.status(409).json({ error: `Solo se puede devolver lo que el cliente pagó de más (${ec.aFavor.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}).` });
+      }
       const ref = clave ? col(q.adminDb).doc(`p_${t.ref.id}_${clave}`) : col(q.adminDb).doc();
       const pago = {
         dealId: t.ref.id, agencyId: t.datos.agencyId, clientId: t.datos.clientId || null,

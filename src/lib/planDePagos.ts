@@ -19,8 +19,10 @@
  * cliente que liquida antes. Cubre mensualidades como un pago, pero no suma
  * en «pagado».
  */
-export type ConceptoPago = 'enganche' | 'comision' | 'mensualidad' | 'abono' | 'liquidacion' | 'pago' | 'descuento';
-export type FormaPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
+export type ConceptoPago = 'enganche' | 'comision' | 'mensualidad' | 'abono' | 'liquidacion' | 'pago' | 'descuento' | 'devolucion';
+// «devolucion» es dinero que la agencia le regresa al cliente (por ejemplo, el auto que
+// dejó a cuenta vale más que el que compra): resta de lo pagado.
+export type FormaPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'auto' | 'otro';
 
 export interface PagoVenta {
   id: string;
@@ -80,7 +82,8 @@ export interface EstadoDeCuenta {
   financiado: number;
   interes: number;
   totalAPagar: number;   // lo que el cliente paga en total (con intereses)
-  pagado: number;          // dinero recibido
+  pagado: number;          // dinero recibido, menos lo devuelto
+  aFavor: number;          // lo que el cliente pagó de más y falta devolverle
   descontado: number;      // intereses perdonados por liquidar antes
   saldo: number;
   liquidada: boolean;
@@ -93,10 +96,10 @@ export interface EstadoDeCuenta {
 }
 
 export const NOMBRE_CONCEPTO: Record<string, string> = {
-  enganche: 'Enganche', comision: 'Comisión por apertura', mensualidad: 'Mensualidad', abono: 'Abono', liquidacion: 'Liquidación', pago: 'Pago',
+  enganche: 'Enganche', devolucion: 'Devolución al cliente', comision: 'Comisión por apertura', mensualidad: 'Mensualidad', abono: 'Abono', liquidacion: 'Liquidación', pago: 'Pago',
 };
 export const NOMBRE_FORMA: Record<string, string> = {
-  efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', cheque: 'Cheque', otro: 'Otro',
+  efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', cheque: 'Cheque', auto: 'Auto a cuenta', otro: 'Otro',
 };
 export const NOMBRE_METODO: Record<string, string> = {
   contado: 'Contado', credito: 'Crédito de la casa', credito_bancario: 'Crédito bancario',
@@ -128,14 +131,16 @@ export function estadoDeCuenta(plan: PlanVenta | null | undefined, pagos: PagoVe
   const esCredito = p.method === 'credito';
   const precio = centavos(p.price);
   const activos = pagosActivos(pagos);
-  const pagado = centavos(activos.filter((x) => x.concepto !== 'descuento').reduce((s, x) => s + (Number(x.monto) || 0), 0));
+  const recibido = activos.filter((x) => x.concepto !== 'descuento' && x.concepto !== 'devolucion').reduce((s, x) => s + (Number(x.monto) || 0), 0);
+  const devuelto = activos.filter((x) => x.concepto === 'devolucion').reduce((s, x) => s + (Number(x.monto) || 0), 0);
+  const pagado = centavos(recibido - devuelto);
   const descontado = centavos(activos.filter((x) => x.concepto === 'descuento').reduce((s, x) => s + (Number(x.monto) || 0), 0));
 
   if (!esCredito) {
     const saldo = Math.max(0, centavos(precio - pagado - descontado));
     return {
       esCredito, precio, enganche: 0, enganchePagado: 0, comision: 0, comisionFinanciada: false, pagoInicial: 0, pagoInicialPagado: 0, financiado: 0, interes: 0, totalAPagar: precio,
-      pagado, descontado, saldo, liquidada: precio > 0 && saldo <= 0.5, mensualidad: 0, mensualidades: [], pagadas: 0, atrasadas: 0,
+      pagado, aFavor: Math.max(0, centavos(pagado + descontado - precio)), descontado, saldo, liquidada: precio > 0 && saldo <= 0.5, mensualidad: 0, mensualidades: [], pagadas: 0, atrasadas: 0,
       montoAtrasado: 0, proxima: null,
     };
   }
@@ -176,7 +181,7 @@ export function estadoDeCuenta(plan: PlanVenta | null | undefined, pagos: PagoVe
   const saldo = Math.max(0, centavos(totalAPagar - pagado - descontado));
   const atrasadasL = mensualidades.filter((m) => m.estado === 'atrasada');
   return {
-    esCredito, precio, enganche, enganchePagado, comision, comisionFinanciada, pagoInicial, pagoInicialPagado, financiado, interes, totalAPagar, pagado, descontado, saldo,
+    esCredito, precio, enganche, enganchePagado, comision, comisionFinanciada, pagoInicial, pagoInicialPagado, financiado, interes, totalAPagar, pagado, aFavor: Math.max(0, centavos(pagado + descontado - totalAPagar)), descontado, saldo,
     liquidada: totalAPagar > 0 && saldo <= 0.5,
     mensualidad, mensualidades,
     pagadas: mensualidades.filter((m) => m.estado === 'pagada').length,
@@ -206,7 +211,7 @@ export function cobroSugerido(ec: EstadoDeCuenta): { concepto: ConceptoPago; mon
 export function deFormaVieja(p: any, esCredito: boolean): PagoVenta {
   const nota = String(p?.notes || '');
   const guardado = String(p?.concepto || '');
-  const concepto: ConceptoPago = ['enganche', 'comision', 'mensualidad', 'abono', 'liquidacion', 'pago', 'descuento'].includes(guardado) ? guardado as ConceptoPago
+  const concepto: ConceptoPago = ['enganche', 'comision', 'mensualidad', 'abono', 'liquidacion', 'pago', 'descuento', 'devolucion'].includes(guardado) ? guardado as ConceptoPago
     : !esCredito ? 'pago'
     : (p?.installmentNumber === 0 || /enganche/i.test(nota)) ? 'enganche'
       : (Number(p?.installmentNumber) > 0 || /mensualidad/i.test(nota)) ? 'mensualidad' : 'abono';
@@ -226,7 +231,7 @@ export function deFormaVieja(p: any, esCredito: boolean): PagoVenta {
 export function aFormaVieja(p: PagoVenta) {
   return {
     id: p.id,
-    amount: p.monto,
+    amount: p.concepto === 'devolucion' ? -p.monto : p.monto,
     date: p.fecha,
     method: p.forma,
     notes: p.nota || NOMBRE_CONCEPTO[p.concepto] || '',

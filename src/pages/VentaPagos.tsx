@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import clsx from 'clsx';
 import { doc, updateDoc } from 'firebase/firestore';
-import { AlertTriangle, ArrowLeft, Ban, BadgeCheck, CalendarClock, CheckCircle2, Loader2, Pencil, Plus, Receipt, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Ban, Undo2, BadgeCheck, CalendarClock, CheckCircle2, Loader2, Pencil, Plus, Receipt, Sparkles, X } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ventasApi } from '../lib/ventasApi';
 import { sanitizeFirestoreData } from '../lib/clientUtils';
@@ -56,7 +56,7 @@ export function VentaPagos() {
   const navigate = useNavigate();
   const [datos, setDatos] = useState<any>(null);
   const [error, setError] = useState('');
-  const [pagando, setPagando] = useState(false);
+  const [pagando, setPagando] = useState<false | 'pago' | 'devolucion'>(false);
   const [liquidando, setLiquidando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [verTodas, setVerTodas] = useState(false);
@@ -123,13 +123,21 @@ export function VentaPagos() {
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setEditando(true)} className="h-11 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5"><Pencil className="w-4 h-4" /> Editar venta</button>
               {ec.esCredito && !ec.liquidada && <button onClick={() => setLiquidando(true)} className="h-11 px-3 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> Liquidar</button>}
-              {!ec.liquidada && <button onClick={() => setPagando(true)} className="h-11 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center gap-1.5"><Plus className="w-4 h-4" /> Registrar pago</button>}
+              {ec.aFavor > 0.5 && <button onClick={() => setPagando('devolucion')} className="h-11 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold flex items-center gap-1.5"><Undo2 className="w-4 h-4" /> Devolver {pesos(ec.aFavor)}</button>}
+              {!ec.liquidada && <button onClick={() => setPagando('pago')} className="h-11 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center gap-1.5"><Plus className="w-4 h-4" /> Registrar pago</button>}
             </div>
           )}
         </header>
 
         {!v.tienePlan && (
           <p className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-900 dark:text-amber-200">Esta venta aún no tiene precio ni forma de pago. Regístrala desde el trato con «Trato ganado».</p>
+        )}
+
+        {ec.aFavor > 0.5 && (
+          <p className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-900 dark:text-amber-200 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>El cliente pagó <b>{pesos(ec.aFavor)} de más</b> (por ejemplo, el auto que dejó a cuenta vale más que el que compra). Cuando se lo regreses, registra la <b>devolución</b>: queda con fecha, forma y recibo.</span>
+          </p>
         )}
 
         {/* Números grandes */}
@@ -203,7 +211,7 @@ export function VentaPagos() {
                     <li key={p.id} className={clsx('py-2.5 flex items-start justify-between gap-3', p.anulado && 'opacity-60')}>
                       <div className="min-w-0">
                         <p className={clsx('text-sm font-bold text-slate-900 dark:text-white', p.anulado && 'line-through')}>
-                          {p.concepto === 'descuento' ? <span className="text-emerald-700 dark:text-emerald-400">Descuento de intereses</span> : NOMBRE_CONCEPTO[p.concepto] || 'Pago'}
+                          {p.concepto === 'descuento' ? <span className="text-emerald-700 dark:text-emerald-400">Descuento de intereses</span> : p.concepto === 'devolucion' ? <span className="text-amber-700 dark:text-amber-400">Devolución al cliente</span> : NOMBRE_CONCEPTO[p.concepto] || 'Pago'}
                           <span className="font-normal text-slate-500"> · {fechaCorta(p.fecha)}{p.concepto !== 'descuento' ? ` · ${NOMBRE_FORMA[p.forma] || p.forma}` : ''}</span>
                         </p>
                         {p.nota && <p className="text-xs text-slate-600 dark:text-slate-400">{p.nota}</p>}
@@ -213,7 +221,7 @@ export function VentaPagos() {
                         </p>
                       </div>
                       <div className="shrink-0 text-right flex flex-col items-end gap-1">
-                        <span className={clsx('text-sm font-extrabold', p.concepto === 'descuento' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-900 dark:text-white', p.anulado && 'line-through')}>{pesos(p.monto)}</span>
+                        <span className={clsx('text-sm font-extrabold', p.concepto === 'descuento' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-900 dark:text-white', p.anulado && 'line-through')}>{p.concepto === 'devolucion' ? '−' : ''}{pesos(p.monto)}</span>
                         {!p.anulado && p.concepto !== 'descuento' && (
                           <button onClick={() => recibo(datos, p.id)} className="text-[11px] font-bold text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"><Receipt className="w-3 h-3" /> Recibo</button>
                         )}
@@ -230,7 +238,7 @@ export function VentaPagos() {
         </div>
       </div>
 
-      {pagando && <RegistrarPago dealId={dealId} ec={ec} onCerrar={() => setPagando(false)} onListo={async (id) => {
+      {pagando && <RegistrarPago modo={pagando} dealId={dealId} ec={ec} onCerrar={() => setPagando(false)} onListo={async (id) => {
         setPagando(false);
         const d = await cargar();
         if (d && id && window.confirm('Pago registrado. ¿Hacer el recibo?')) await recibo(d, id);
@@ -291,8 +299,9 @@ function Ventana({ titulo, onCerrar, children }: { titulo: string; onCerrar: () 
   );
 }
 
-function RegistrarPago({ dealId, ec, onCerrar, onListo }: { dealId: string; ec: EstadoDeCuenta; onCerrar: () => void; onListo: (id?: string) => void }) {
-  const sug = useMemo(() => cobroSugerido(ec), [ec]);
+function RegistrarPago({ modo, dealId, ec, onCerrar, onListo }: { modo: 'pago' | 'devolucion'; dealId: string; ec: EstadoDeCuenta; onCerrar: () => void; onListo: (id?: string) => void }) {
+  const devolviendo = modo === 'devolucion';
+  const sug = useMemo(() => devolviendo ? { concepto: 'devolucion' as const, monto: ec.aFavor, etiqueta: 'Lo que el cliente pagó de más' } : cobroSugerido(ec), [ec, devolviendo]);
   const [concepto, setConcepto] = useState<string>(sug.concepto);
   const [monto, setMonto] = useState(sug.monto ? String(Math.round(sug.monto * 100) / 100) : '');
   const [fecha, setFecha] = useState(hoyLocal());
@@ -302,21 +311,22 @@ function RegistrarPago({ dealId, ec, onCerrar, onListo }: { dealId: string; ec: 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const montoN = Number(String(monto).replace(/[^\d.]/g, '')) || 0;
-  const conceptos = ec.esCredito ? ['enganche', 'mensualidad', 'abono', ...(ec.comision > 0 && !ec.comisionFinanciada ? ['comision'] : [])] : ['pago'];
+  const conceptos = devolviendo ? ['devolucion'] : ec.esCredito ? ['enganche', 'mensualidad', 'abono', ...(ec.comision > 0 && !ec.comisionFinanciada ? ['comision'] : [])] : ['pago'];
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!(montoN > 0)) return setError('Pon el monto.');
-    if (montoN > ec.saldo + 0.5 && !window.confirm(`El pago (${pesos(montoN)}) es mayor que el saldo (${pesos(ec.saldo)}). ¿Registrarlo así?`)) return;
+    if (!devolviendo && montoN > ec.saldo + 0.5 && !window.confirm(`El pago (${pesos(montoN)}) es mayor que el saldo (${pesos(ec.saldo)}). ¿Registrarlo así?`)) return;
     setGuardando(true); setError('');
     try { const r = await ventasApi.pagar(dealId, { monto: montoN, fecha, forma, concepto, nota, clave }); onListo(r.id); }
     catch (e: any) { setError(e.message); setGuardando(false); }
   };
 
   return (
-    <Ventana titulo="Registrar pago" onCerrar={onCerrar}>
+    <Ventana titulo={devolviendo ? 'Devolución al cliente' : 'Registrar pago'} onCerrar={onCerrar}>
       <form onSubmit={guardar} className="p-4 flex flex-col gap-3">
         {sug.etiqueta && <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 text-xs px-3 py-2">Sugerido: <b>{sug.etiqueta}</b> por {pesos(sug.monto)}</p>}
+        {devolviendo && <p className="text-xs text-slate-600 dark:text-slate-400">Registra el dinero que la agencia le <b>regresa</b> al cliente. Solo se puede devolver lo que pagó de más.</p>}
         {conceptos.length > 1 && (
           <div className="grid grid-cols-2 gap-1.5">
             {conceptos.map((c) => (
@@ -324,18 +334,18 @@ function RegistrarPago({ dealId, ec, onCerrar, onListo }: { dealId: string; ec: 
             ))}
           </div>
         )}
-        <label className="flex flex-col gap-1"><span className="text-xs font-bold">Monto recibido</span><input autoFocus value={monto} onChange={(e) => setMonto(e.target.value)} inputMode="decimal" className={clsx(campo, 'text-lg font-bold')} /></label>
+        <label className="flex flex-col gap-1"><span className="text-xs font-bold">{devolviendo ? 'Monto que se devuelve' : 'Monto recibido'}</span><input autoFocus value={monto} onChange={(e) => setMonto(e.target.value)} inputMode="decimal" className={clsx(campo, 'text-lg font-bold')} /></label>
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1"><span className="text-xs font-bold">Fecha</span><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={campo} /></label>
           <label className="flex flex-col gap-1"><span className="text-xs font-bold">Forma</span>
-            <select value={forma} onChange={(e) => setForma(e.target.value)} className={campo}>{Object.entries(NOMBRE_FORMA).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+            <select value={forma} onChange={(e) => setForma(e.target.value)} className={campo}>{Object.entries(NOMBRE_FORMA).filter(([k]) => !devolviendo || k !== 'auto').map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
           </label>
         </div>
         <label className="flex flex-col gap-1"><span className="text-xs font-bold">Nota (opcional)</span><input value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300} placeholder="Ej. folio de la transferencia" className={campo} /></label>
         {ec.esCredito && concepto !== 'enganche' && concepto !== 'comision' && <p className="text-[11px] text-slate-500">Se aplica a las mensualidades en orden, empezando por la más antigua sin cubrir.</p>}
         {error && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{error}</p>}
         <button type="submit" disabled={guardando} className="h-12 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
-          {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />} Registrar {montoN ? pesos(montoN) : 'pago'}
+          {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />} {devolviendo ? 'Registrar devolución' : 'Registrar'} {montoN ? pesos(montoN) : ''}
         </button>
       </form>
     </Ventana>
