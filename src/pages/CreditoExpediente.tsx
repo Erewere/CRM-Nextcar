@@ -151,7 +151,14 @@ export function CreditoExpediente() {
             </p>
           </div>
           {s.clientId && <button type="button" onClick={() => navigate('/persons', { state: { clientId: s.clientId } })} className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold">Ver cliente</button>}
-          {s.etapa !== 'cancelada' && <button type="button" onClick={() => confirm('¿Cancelar esta solicitud? Se puede reabrir después.') && cambiar({ etapa: 'cancelada' })} className="h-9 px-3 rounded-lg border border-red-200 text-red-700 text-sm font-bold">Cancelar</button>}
+          {s.etapa !== 'cancelada' && <button type="button" onClick={() => {
+              // Si el cliente ya abrió su liga o llenó algo, cancelar le tira su trabajo y la solicitud deja de verse en el tablero.
+              const empezo = !!s.ligaAbiertaEl || !!s.clienteTerminoEl || (s.documentos || []).length > 0;
+              const aviso = empezo
+                ? `⚠️ ${s.clienteNombre} YA EMPEZÓ su solicitud (${s.clienteTerminoEl ? 'la terminó y la mandó' : (s.documentos || []).length ? 'ya subió documentos' : 'abrió su liga'}).\n\nSi la cancelas, la solicitud desaparece del tablero (solo se ve con «Ver canceladas»).\n\n¿Seguro que quieres cancelarla?`
+                : '¿Cancelar esta solicitud? Se puede reabrir después.';
+              if (confirm(aviso)) cambiar({ etapa: 'cancelada' });
+            }} className="h-9 px-3 rounded-lg border border-red-200 text-red-700 text-sm font-bold">Cancelar</button>}
         </div>
         <div className="flex gap-0.5 overflow-x-auto">
           {ETAPAS_CREDITO.map((e, i) => (
