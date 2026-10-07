@@ -19,7 +19,10 @@ export const PRECIO_POR_USUARIO =
  * prorrogas de prueba no surtian efecto.
  */
 
-const DURACION_PRUEBA_DIAS = 30;
+/** Agencias nuevas: 15 días. Las que ya existían conservan su fecha (trialEndsAt). */
+export const DURACION_PRUEBA_DIAS = 15;
+/** Solo para agencias antiguas que no traen trialEndsAt. */
+const PRUEBA_ANTIGUA_DIAS = 30;
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
 /** Acepta Timestamp de Firestore, {seconds}, Date o cadena ISO. */
@@ -47,7 +50,7 @@ export function getTrialEnd(agencyData: any): Date | null {
   if (explicito) return explicito;
 
   const creada = toDate(agencyData.createdAt);
-  if (creada) return new Date(creada.getTime() + DURACION_PRUEBA_DIAS * MS_POR_DIA);
+  if (creada) return new Date(creada.getTime() + PRUEBA_ANTIGUA_DIAS * MS_POR_DIA);
 
   return null;
 }

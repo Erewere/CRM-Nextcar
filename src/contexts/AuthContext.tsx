@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { DURACION_PRUEBA_DIAS } from "../lib/subscription";
 import { getApiUrl } from '../lib/api';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, addDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
@@ -206,13 +207,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 userRole = 'seller';
                 userAgencyId = inviteAgencyId;
               } else {
-                // Auto create agency with 30 days trial
+                // Auto create agency with a 15-day trial
                 try {
                   const newAgency = {
                     name: "Agencia de " + (user.displayName || user.email?.split('@')[0] || "Prueba"),
                     subscriptionStatus: "trialing",
                     hasFreeAccess: false,
-                    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    trialEndsAt: new Date(Date.now() + DURACION_PRUEBA_DIAS * 24 * 60 * 60 * 1000).toISOString(),
                     createdAt: serverTimestamp(),
                     creatorId: user.uid
                   };

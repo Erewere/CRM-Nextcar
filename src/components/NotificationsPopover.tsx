@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { getTrialDaysLeft, getTrialEnd, hasActiveAccess } from "../lib/subscription";
 import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -656,39 +657,37 @@ export function NotificationsPopover() {
     });
   }
 
-  // 6. Billing Notification
-  const today = startOfDay(new Date());
-  if (userData && (userData.role === "master" || userData.role === "admin")) {
-    const createdAt = userData.createdAt instanceof Date ? userData.createdAt : ((userData.createdAt as any)?.toDate ? (userData.createdAt as any).toDate() : new Date(userData.createdAt || Date.now()));
-    const trialEnd = addDays(createdAt, 30);
-    const billingWarningDate = addDays(today, 5);
-
-    if (isBefore(trialEnd, billingWarningDate) && isAfter(trialEnd, today)) {
-       const notifId = `billing-warning`;
-       if (!dismissedIds.has(notifId)) {
-         notifications.push({
+  // 6. Cobro: sale de la agencia (estado y fecha de fin de prueba), no de la
+  // fecha de alta del usuario; una agencia que paga o tiene cortesía no ve nada.
+  if (userData && userData.role === "admin" && agencyData && !agencyData.hasFreeAccess && agencyData.subscriptionStatus !== "active") {
+    const quedan = getTrialDaysLeft(agencyData);
+    const fin = getTrialEnd(agencyData);
+    if (quedan !== null && quedan > 0 && quedan <= 7) {
+      const notifId = `billing-warning`;
+      if (!dismissedIds.has(notifId)) {
+        notifications.push({
           id: notifId,
           type: "billing",
           title: "Suscripción por Vencer",
-          message: "Tu prueba gratis está por terminar. Haz tu pago pronto.",
-          date: trialEnd.toISOString(),
+          message: `Tu prueba gratis termina en ${quedan} ${quedan === 1 ? "día" : "días"}. Activa tu suscripción para no perder el acceso.`,
+          date: (fin || new Date()).toISOString(),
           icon: <CreditCard className="w-5 h-5 text-blue-500 shrink-0" />,
           onClick: () => navigate("/billing"),
         });
-       }
-    } else if (isBefore(trialEnd, today)) {
-       const notifId = `billing-expired`;
-       if (!dismissedIds.has(notifId)) {
-         notifications.push({
+      }
+    } else if (!hasActiveAccess(agencyData)) {
+      const notifId = `billing-expired`;
+      if (!dismissedIds.has(notifId)) {
+        notifications.push({
           id: notifId,
           type: "billing",
           title: "Suscripción Vencida",
           message: "Realiza tu pago para seguir disfrutando de todas las funciones.",
-          date: trialEnd.toISOString(),
+          date: (fin || new Date()).toISOString(),
           icon: <CreditCard className="w-5 h-5 text-red-500 shrink-0" />,
           onClick: () => navigate("/billing"),
         });
-       }
+      }
     }
   }
 
