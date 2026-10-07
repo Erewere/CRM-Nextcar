@@ -229,7 +229,8 @@ export function Persons() {
   // nombre de quien lo daba de alta y sin campo de visibilidad.
   const [nuevaEtapa, setNuevaEtapa] = useState("");
   const [nuevoPropietario, setNuevoPropietario] = useState("");
-  const [nuevaVisibilidad, setNuevaVisibilidad] = useState<"all" | "private">("all");
+  // Por omisión el contacto es de quien lo crea; compartirlo con el equipo es una decisión.
+  const [nuevaVisibilidad, setNuevaVisibilidad] = useState<"all" | "private">("private");
   // ¿Como llego? Obligatorio al dar de alta a mano (decision de Luis, sep 2026).
   const [nuevaFuente, setNuevaFuente] = useState("");
 
@@ -561,7 +562,7 @@ export function Persons() {
       setSelectedTags([]);
       setNuevaEtapa("");
       setNuevoPropietario("");
-      setNuevaVisibilidad("all");
+      setNuevaVisibilidad("private");
       setNuevaFuente("");
       if (avisoDeTrato) alert(avisoDeTrato);
     } catch (e) {
@@ -1814,8 +1815,8 @@ export function Persons() {
                   }
                   className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none"
                 >
-                  <option value="all">Todo el equipo</option>
                   <option value="private">Solo su propietario</option>
+                  <option value="all">Todo el equipo</option>
                 </select>
               </div>
             </div>
