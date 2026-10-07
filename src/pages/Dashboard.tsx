@@ -78,6 +78,7 @@ import { getClientMatches } from '../services/matchingEngine';
 import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 import { TableroAgencia } from "../components/tablero/TableroAgencia";
 import { LeadInteligente } from "../components/tablero/LeadInteligente";
+import { SaludoDelDia } from "../components/SaludoDelDia";
 import { priorizarProspectos } from "../lib/prospectosInteligentes";
 import { TableroMovil } from "../components/tablero/TableroMovil";
 
@@ -135,14 +136,21 @@ export function Dashboard() {
   const [filterSeller, setFilterSeller] = useState<string>(() => {
     return localStorage.getItem("dashboard_filterSeller") || "all";
   });
-  const [filterStartDate, setFilterStartDate] = useState<string>(() => localStorage.getItem("dashboard_filterStartDate") || "");
-  const [filterEndDate, setFilterEndDate] = useState<string>(() => localStorage.getItem("dashboard_filterEndDate") || "");
+  // El periodo solo cambia las cifras de ventas cerradas e ingresos. Antes se
+  // quedaba guardado en «Hoy» y mucha gente veía ceros; ahora arranca en «Este mes».
+  const periodoInicial = () => {
+    const hoy = new Date();
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return { start: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), end: iso(hoy) };
+  };
+  const [filterStartDate, setFilterStartDate] = useState<string>(() => localStorage.getItem("dashboard_v2_start") ?? periodoInicial().start);
+  const [filterEndDate, setFilterEndDate] = useState<string>(() => localStorage.getItem("dashboard_v2_end") ?? periodoInicial().end);
   const [filterCategory, setFilterCategory] = useState<string>(() => localStorage.getItem("dashboard_filterCategory") || "all");
 
   // For interactive stage selection
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
-  const [activeDateFilter, setActiveDateFilter] = useState<string>(() => localStorage.getItem("dashboard_activeDateFilter") || "");
+  const [activeDateFilter, setActiveDateFilter] = useState<string>(() => localStorage.getItem("dashboard_v2_periodo") ?? "month");
   
   const [filterTags, setFilterTags] = useState<string[]>(() => {
     const saved = localStorage.getItem("dashboard_filterTags");
@@ -151,10 +159,10 @@ export function Dashboard() {
 
   useEffect(() => {
     localStorage.setItem("dashboard_filterSeller", filterSeller);
-    localStorage.setItem("dashboard_filterStartDate", filterStartDate);
-    localStorage.setItem("dashboard_filterEndDate", filterEndDate);
+    localStorage.setItem("dashboard_v2_start", filterStartDate);
+    localStorage.setItem("dashboard_v2_end", filterEndDate);
     localStorage.setItem("dashboard_filterCategory", filterCategory);
-    localStorage.setItem("dashboard_activeDateFilter", activeDateFilter);
+    localStorage.setItem("dashboard_v2_periodo", activeDateFilter);
     localStorage.setItem("dashboard_filterTags", JSON.stringify(filterTags));
   }, [filterSeller, filterStartDate, filterEndDate, filterCategory, activeDateFilter, filterTags]);
 
@@ -903,264 +911,6 @@ export function Dashboard() {
       <div className="space-y-4 pb-8">
 
       {isMobile ? (
-        <div className="flex flex-col gap-3 mb-6 mt-4">
-          <div className="relative w-full">
-            <div className="relative flex items-center">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
-              <input
-                type="text"
-                value={globalSearchQuery}
-                onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                placeholder="Buscar vehículo, VIN, cliente, teléfono..."
-                className="w-full pl-9 pr-8 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 shadow-sm"
-              />
-              {globalSearchQuery && (
-                <button
-                  onClick={() => setGlobalSearchQuery("")}
-                  className="absolute right-2.5 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Mobile Search Results Dropdown */}
-            {globalSearchQuery.trim() !== "" && isSearchFocused && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsSearchFocused(false)}
-                />
-
-                <div className="absolute right-0 left-0 top-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden max-h-[420px] flex flex-col">
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Search className="w-3.5 h-3.5 text-blue-500" /> Búsqueda CRM
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {searchResults.vehicles.length + searchResults.clients.length} resultado(s)
-                    </span>
-                  </div>
-
-                  <div className="overflow-y-auto p-2 space-y-3 divide-y divide-slate-100 dark:divide-slate-700/50">
-                    {searchResults.vehicles.length === 0 && searchResults.clients.length === 0 ? (
-                      <div className="py-6 text-center px-4">
-                        <Search className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                        <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                          Sin resultados para "{globalSearchQuery}"
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {searchResults.vehicles.length > 0 && (
-                          <div className="pt-2 first:pt-0">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 px-1 mb-1">
-                              <Car className="w-3 h-3 text-blue-500" /> Vehículos ({searchResults.vehicles.length})
-                            </span>
-                            <div className="space-y-1">
-                              {searchResults.vehicles.map((v) => (
-                                <button
-                                  key={v.id}
-                                  onClick={() => {
-                                    setSelectedVehicle(v);
-                                    setIsSearchFocused(false);
-                                  }}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/70 transition-colors flex items-center justify-between"
-                                >
-                                  <div className="min-w-0 pr-2">
-                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
-                                      {v.year} {v.make} {v.model}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                                      {v.vin ? `VIN: ${v.vin}` : (v.color || 'Disponible')}
-                                    </p>
-                                  </div>
-                                  <span className="text-xs font-bold text-emerald-600 flex-shrink-0">
-                                    ${new Intl.NumberFormat('es-MX').format(v.price || 0)}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {searchResults.clients.length > 0 && (
-                          <div className="pt-2 first:pt-0">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 px-1 mb-1">
-                              <Users className="w-3 h-3 text-indigo-500" /> Clientes ({searchResults.clients.length})
-                            </span>
-                            <div className="space-y-1">
-                              {searchResults.clients.map((c) => (
-                                <button
-                                  key={c.id}
-                                  onClick={() => {
-                                    setSelectedClient(c);
-                                    setIsSearchFocused(false);
-                                  }}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/70 transition-colors flex items-center justify-between"
-                                >
-                                  <div className="min-w-0 pr-2">
-                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
-                                      {c.name || 'Sin Nombre'}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                      {c.phone ? c.phone : (c.vehicle || c.email || 'Cliente')}
-                                    </p>
-                                  </div>
-                                  <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="flex border-b border-gray-200 dark:border-slate-700">
-          <button
-            onClick={() => {
-              const today = new Date().toISOString().split("T")[0];
-              setFilterStartDate(today);
-              setFilterEndDate(today);
-              setActiveDateFilter("today");
-            }}
-            className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
-              activeDateFilter === "today"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-          >
-            Hoy
-          </button>
-          <button
-            onClick={() => {
-              const date = new Date();
-              date.setDate(date.getDate() - date.getDay() + 1); // Monday
-              const start = date.toISOString().split("T")[0];
-              const end = new Date().toISOString().split("T")[0];
-              setFilterStartDate(start);
-              setFilterEndDate(end);
-              setActiveDateFilter("week");
-            }}
-            className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
-              activeDateFilter === "week"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-          >
-            Esta Semana
-          </button>
-          <button
-            onClick={() => {
-              const date = new Date();
-              const start = new Date(date.getFullYear(), date.getMonth(), 1)
-                .toISOString()
-                .split("T")[0];
-              const end = new Date().toISOString().split("T")[0];
-              setFilterStartDate(start);
-              setFilterEndDate(end);
-              setActiveDateFilter("month");
-            }}
-            className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
-              activeDateFilter === "month"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-          >
-            Este Mes
-          </button>
-        </div>
-      </div>
-      ) : (
-        <div className={`${userData?.role === "admin" ? "hidden" : "flex"} flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded border border-gray-200 dark:border-slate-700 shadow-sm`}>
-          {userData?.role === "admin" ? <div /> : (
-          <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
-            <div className="flex items-center gap-2 pr-3 border-r border-gray-200 dark:border-slate-700 hidden sm:flex">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                Filtros
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                const today = new Date().toISOString().split("T")[0];
-                setFilterStartDate(today);
-                setFilterEndDate(today);
-                setActiveDateFilter("today");
-              }}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                activeDateFilter === "today"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
-                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
-              }`}
-            >
-              Hoy
-            </button>
-            <button
-              onClick={() => {
-                const date = new Date();
-                date.setDate(date.getDate() - date.getDay() + 1); // Monday
-                const start = date.toISOString().split("T")[0];
-                const end = new Date().toISOString().split("T")[0];
-                setFilterStartDate(start);
-                setFilterEndDate(end);
-                setActiveDateFilter("week");
-              }}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                activeDateFilter === "week"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
-                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
-              }`}
-            >
-              Esta Semana
-            </button>
-            <button
-              onClick={() => {
-                const date = new Date();
-                const start = new Date(date.getFullYear(), date.getMonth(), 1)
-                  .toISOString()
-                  .split("T")[0];
-                const end = new Date().toISOString().split("T")[0];
-                setFilterStartDate(start);
-                setFilterEndDate(end);
-                setActiveDateFilter("month");
-              }}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                activeDateFilter === "month"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/20"
-                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
-              }`}
-            >
-              Este Mes
-            </button>
-            <button
-              onClick={() => {
-                setFilterStartDate("");
-                setFilterEndDate("");
-                setActiveDateFilter("all");
-              }}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                activeDateFilter === "all"
-                  ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-sm"
-                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300"
-              }`}
-            >
-              Todos
-            </button>
-          </div>
-          )}
-
-          {buscadorEscritorio}
-        </div>
-      )}
-
-      {isMobile ? (
         <>
           {/* Mobile Action Center */}
           <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
@@ -1276,6 +1026,7 @@ export function Dashboard() {
               usuarios={users}
               etapas={pipelineStages}
               buscador={buscadorEscritorio}
+              usuario={userData?.name || userData?.email || ""}
               inteligencia={<LeadInteligente prospectos={prospectosInteligentes} onAbrir={setSelectedClient} />}
               onAbrirVehiculo={(id) => {
                 const v = vehicles.find((x) => x.id === id);
@@ -1378,27 +1129,42 @@ export function Dashboard() {
             /* 2. ADVISOR / SELLER DESKTOP VIEW                                          */
             /* ========================================================================= */
             <div className="space-y-6">
-              {/* Advisor Banner */}
-              <div className="bg-slate-900 text-white rounded p-6 border border-slate-800 shadow-xl relative overflow-hidden">
-                <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 bg-gradient-to-l from-indigo-500 to-transparent pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-widest text-emerald-400 bg-emerald-950 border border-emerald-900/50 px-3 py-1 rounded-full">
-                      Panel Personal de Ventas
-                    </span>
-                    <h1 className="text-2xl font-black tracking-tight text-white mt-3">
-                      Hola, {userData?.name || "Asesor"}
-                    </h1>
-                    <p className="text-slate-400 text-xs mt-1">
-                      Enfócate en tus prospectos prioritarios (Mayor Lead Score) y completa tus seguimientos diarios.
-                    </p>
-                  </div>
-                  <div className="bg-slate-800 border border-slate-700/50 rounded px-4 py-3 flex items-center gap-3">
-                    <Award className="w-5 h-5 text-emerald-400" />
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Tu Meta Mensual</p>
-                      <p className="text-sm font-extrabold text-slate-200">En progreso</p>
-                    </div>
+              {/* Encabezado del vendedor: saludo y lo que toca hoy */}
+              <div className="bg-slate-900 text-white rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-400">Panel personal de ventas</p>
+                  <h1 className="truncate"><SaludoDelDia nombre={userData?.name || "Asesor"} className="text-white" /></h1>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                  <Link to="/tasks" className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">{todayTasks.length} {todayTasks.length === 1 ? "tarea" : "tareas"} hoy</Link>
+                  {overdueTasks.length > 0 && <Link to="/tasks" className="px-3 py-1.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 transition-colors">{overdueTasks.length} atrasada{overdueTasks.length === 1 ? "" : "s"}</Link>}
+                  <span className="px-3 py-1.5 rounded-lg bg-white/10">{prospectosInteligentes.filter((x) => x.temperatura === "caliente" || x.temperatura === "se-enfria").length} por atender</span>
+                </div>
+              </div>
+
+              {/* Barra delgada: buscador y periodo de las cifras de venta */}
+              <div className="flex flex-col md:flex-row md:items-center gap-2.5">
+                <div className="flex-1 min-w-0 [&_input]:!h-10 [&_input]:!text-sm">{buscadorEscritorio}</div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden lg:inline">Mis ventas</span>
+                  <div className="flex gap-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-0.5 rounded-lg">
+                    {([["today", "Hoy"], ["week", "Semana"], ["month", "Mes"], ["all", "Todo"]] as const).map(([id, t]) => (
+                      <button
+                        key={id}
+                        onClick={() => {
+                          const hoy = new Date();
+                          const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                          if (id === "all") { setFilterStartDate(""); setFilterEndDate(""); }
+                          else if (id === "today") { setFilterStartDate(iso(hoy)); setFilterEndDate(iso(hoy)); }
+                          else if (id === "week") { const l = new Date(hoy); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); setFilterStartDate(iso(l)); setFilterEndDate(iso(hoy)); }
+                          else { setFilterStartDate(iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1))); setFilterEndDate(iso(hoy)); }
+                          setActiveDateFilter(id);
+                        }}
+                        className={`h-8 px-3 rounded-md text-xs font-bold transition-colors ${activeDateFilter === id ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"}`}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

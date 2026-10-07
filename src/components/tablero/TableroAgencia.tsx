@@ -10,6 +10,7 @@ import {
   calcularAnalitica, hallazgos as calcularHallazgos, RANGOS_DE_PRECIO, type Hallazgo,
 } from "../../lib/analiticaAgencia";
 import { descargarExcel, hojasDelReporte } from "../../lib/reporteExcel";
+import { SaludoDelDia } from "../SaludoDelDia";
 
 /**
  * El tablero del administrador: lo que vende, lo que tiene, de donde le llegan
@@ -109,7 +110,9 @@ export interface TableroAgenciaProps {
   onAbrirVehiculo?: (id: string) => void;
   /** Lo del dia a dia que se queda debajo del resumen (alertas, tareas). */
   pendientes?: ReactNode;
-  /** La barra de busqueda del CRM: va en el encabezado, a la altura del titulo. */
+  /** Nombre de quien entra, para el saludo del encabezado. */
+  usuario?: string;
+  /** La barra de busqueda del CRM: va en el renglón de menús. */
   buscador?: ReactNode;
   /** Lead Intelligence: a quien atender hoy (va justo debajo de las cifras). */
   inteligencia?: ReactNode;
@@ -141,22 +144,20 @@ export function TableroAgencia(p: TableroAgenciaProps) {
 
   return (
     <div className="space-y-4">
-      {/* Encabezado: título y periodo/reporte; abajo, un solo renglón de menús: secciones y buscador */}
+      {/* Encabezado compacto: saludo y periodo/reporte; abajo, un renglón de menús con el buscador */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-        <div className="p-4 md:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Tablero de la agencia</p>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 truncate">
-              {p.agencia || "Tu agencia"}
-            </h1>
+        <div className="px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2">
+          <div className="min-w-0 leading-tight">
+            <h1 className="truncate"><SaludoDelDia nombre={p.usuario} tam="text-lg" className="text-slate-900 dark:text-slate-100" /></h1>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 truncate">Tablero de la agencia · {p.agencia || "Tu agencia"}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
               {PERIODOS.map((x) => (
                 <button
                   key={x.id}
                   onClick={() => setPeriodo(x.id)}
-                  className={`h-8 px-3 rounded-md text-xs font-bold transition-colors ${
+                  className={`h-7 px-2.5 rounded-md text-xs font-bold transition-colors ${
                     periodo === x.id
                       ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
                       : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -168,21 +169,21 @@ export function TableroAgencia(p: TableroAgenciaProps) {
             </div>
             <button
               onClick={() => exportar(false)}
-              className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
+              className="h-8 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
               title="Descarga en Excel lo que ves en esta pestaña"
             >
-              <Download className="w-3.5 h-3.5" /> Exportar {PESTANAS.find((x) => x.id === pestana)!.nombre.toLowerCase()}
+              <Download className="w-3.5 h-3.5" /> Esta pestaña
             </button>
             <button
               onClick={() => exportar(true)}
-              className="h-9 px-3 rounded-lg bg-[#D6402A] hover:bg-[#A82A17] text-white text-xs font-bold flex items-center gap-1.5"
+              className="h-8 px-2.5 rounded-lg bg-[#D6402A] hover:bg-[#A82A17] text-white text-xs font-bold flex items-center gap-1.5"
               title="Un libro de Excel con todas las pestañas"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" /> Reporte completo
             </button>
           </div>
         </div>
-        <div className="border-t border-slate-100 dark:border-slate-700 px-3 md:px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+        <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div className="flex gap-1 overflow-x-auto" role="tablist">
             {PESTANAS.map((x) => (
               <button
@@ -190,7 +191,7 @@ export function TableroAgencia(p: TableroAgenciaProps) {
                 role="tab"
                 aria-selected={pestana === x.id}
                 onClick={() => setPestana(x.id)}
-                className={`h-9 px-4 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
+                className={`h-8 px-3.5 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
                   pestana === x.id
                     ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
@@ -200,7 +201,7 @@ export function TableroAgencia(p: TableroAgenciaProps) {
               </button>
             ))}
           </div>
-          {p.buscador && <div className="w-full md:w-[24rem] shrink-0 [&_input]:!h-9 [&_input]:!text-sm">{p.buscador}</div>}
+          {p.buscador && <div className="w-full md:w-[22rem] shrink-0 [&_input]:!h-8 [&_input]:!text-sm">{p.buscador}</div>}
         </div>
       </div>
 
