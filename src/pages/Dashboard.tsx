@@ -79,6 +79,7 @@ import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 import { TableroAgencia } from "../components/tablero/TableroAgencia";
 import { LeadInteligente } from "../components/tablero/LeadInteligente";
 import { SaludoDelDia } from "../components/SaludoDelDia";
+import { MiMeta } from "../components/metas/MiMeta";
 import { priorizarProspectos } from "../lib/prospectosInteligentes";
 import { TableroMovil } from "../components/tablero/TableroMovil";
 
@@ -1130,7 +1131,8 @@ export function Dashboard() {
             /* ========================================================================= */
             <div className="space-y-6">
               {/* Encabezado del vendedor: saludo y lo que toca hoy */}
-              <div className="bg-slate-900 text-white rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-slate-900 text-white rounded-xl px-5 py-4 flex flex-col gap-3">
+               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-400">Panel personal de ventas</p>
                   <h1 className="truncate"><SaludoDelDia nombre={userData?.name || "Asesor"} className="text-white" /></h1>
@@ -1140,6 +1142,8 @@ export function Dashboard() {
                   {overdueTasks.length > 0 && <Link to="/tasks" className="px-3 py-1.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 transition-colors">{overdueTasks.length} atrasada{overdueTasks.length === 1 ? "" : "s"}</Link>}
                   <span className="px-3 py-1.5 rounded-lg bg-white/10">{prospectosInteligentes.filter((x) => x.temperatura === "caliente" || x.temperatura === "se-enfria").length} por atender</span>
                 </div>
+               </div>
+               <div className="border-t border-white/10 pt-3"><MiMeta usuarioId={userData?.id} /></div>
               </div>
 
               {/* Barra delgada: buscador y periodo de las cifras de venta */}

@@ -11,6 +11,10 @@ import {
 } from "../../lib/analiticaAgencia";
 import { descargarExcel, hojasDelReporte } from "../../lib/reporteExcel";
 import { SaludoDelDia } from "../SaludoDelDia";
+import { MetasDelEquipo } from "../metas/MetasDelEquipo";
+import { MetaBarra } from "../metas/MetaBarra";
+import { useMetas } from "../../lib/metasApi";
+import { nombreDelMes } from "../../lib/metas";
 
 /**
  * El tablero del administrador: lo que vende, lo que tiene, de donde le llegan
@@ -211,7 +215,7 @@ export function TableroAgencia(p: TableroAgenciaProps) {
       {pestana === "ventas" && <Ventas a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
       {pestana === "inventario" && <Inventario a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
       {pestana === "clientes" && <Clientes a={a} />}
-      {pestana === "equipo" && <Equipo a={a} />}
+      {pestana === "equipo" && <div className="space-y-4"><MetasDelEquipo /><Equipo a={a} /></div>}
     </div>
   );
 }
@@ -366,6 +370,8 @@ function Resumen({ a, h, verCostos, irA, periodo, pendientes, inteligencia }: {
         <Kpi icono={Briefcase} titulo="Tratos abiertos" valor={r.tratosAbiertos} pie="hoy, en el embudo" onClick={() => irA("equipo")} />
       </div>
 
+      <MetaDelMes irA={irA} />
+
       {inteligencia}
 
       <Hallazgos h={h} />
@@ -391,6 +397,32 @@ function Resumen({ a, h, verCostos, irA, periodo, pendientes, inteligencia }: {
 
       {pendientes}
     </div>
+  );
+}
+
+/** La meta del mes en el Resumen: cómo va el equipo y quién va adelante. */
+function MetaDelMes({ irA }: { irA: (p: Pestana) => void }) {
+  const { datos, mes } = useMetas();
+  if (!datos) return null;
+  const meta = datos.equipo.meta.autos;
+  const lider = [...datos.asesores].sort((x, y) => y.ventas - x.ventas)[0];
+  return (
+    <button onClick={() => irA("equipo")} className="w-full text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 hover:border-slate-400 transition-colors">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-8">
+        <div className="shrink-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">Meta del equipo</p>
+          <p className="text-sm font-extrabold capitalize text-slate-900 dark:text-white">{nombreDelMes(mes)}</p>
+        </div>
+        {meta > 0 ? (
+          <>
+            <div className="flex-1 min-w-0"><MetaBarra ventas={datos.equipo.ventas} meta={meta} mes={mes} /></div>
+            {lider && lider.ventas > 0 && <p className="text-xs text-slate-500 shrink-0">Va al frente: <b className="text-slate-800 dark:text-slate-200">{lider.nombre.split(" ")[0]}</b> con {lider.ventas}</p>}
+          </>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-300 flex-1">Todavía no hay meta este mes. <span className="font-bold text-[#A82A17] dark:text-[#F2705B]">Fíjala en la pestaña Equipo →</span></p>
+        )}
+      </div>
+    </button>
   );
 }
 
