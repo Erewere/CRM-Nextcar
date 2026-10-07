@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>Nextcar CRM en una página</title>
+<meta name="description" content="Qué hace Nextcar CRM, de un vistazo: del primer mensaje del cliente al último pago.">
+<meta property="og:title" content="Nextcar CRM en una página">
+<meta property="og:description" content="Del primer mensaje del cliente al último pago, todo en un solo sistema para agencias de seminuevos.">
+<style>
+  :root{
+    --tinta:#0d1117; --papel:#ffffff; --hueso:#f6f7f9; --texto:#15181d; --suave:#5b6470;
+    --linea:#e5e8ec; --rojo:#d32027; --rojoVivo:#f0353d; --verde:#1f9d57; --azul:#1d3a6b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --papel:#12161c; --hueso:#0d1117; --texto:#e8eaed; --suave:#98a2ae; --linea:#252b34; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--hueso);color:var(--texto);
+       font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .marco{max-width:1020px;margin:0 auto;padding:0 20px}
+  section{padding:56px 0}
+  .rotulo{font-size:12px;font-weight:750;letter-spacing:2px;text-transform:uppercase;color:var(--rojo);margin:0 0 8px}
+  h2{font-size:clamp(24px,3.6vw,33px);letter-spacing:-.9px;line-height:1.15;margin:0 0 10px;font-weight:800}
+  .entrada{color:var(--suave);max-width:640px;margin:0 0 26px;font-size:17px}
+
+  /* portada */
+  .portada{background:var(--tinta);color:#fff;padding:54px 0 64px;position:relative;overflow:hidden}
+  .portada::before{content:"";position:absolute;width:520px;height:520px;border-radius:50%;background:#8f1116;
+                   filter:blur(100px);opacity:.45;top:-220px;left:-140px}
+  .portada::after{content:"";position:absolute;width:440px;height:440px;border-radius:50%;background:var(--azul);
+                  filter:blur(100px);opacity:.5;bottom:-220px;right:-120px}
+  .portada .marco{position:relative;z-index:1}
+  .marca{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:800;letter-spacing:-.6px}
+  .marca b{color:var(--rojoVivo);font-weight:800}
+  .marca small{display:block;font-size:9.5px;letter-spacing:2.4px;color:#9aa5b4;font-weight:600}
+  .portada h1{font-size:clamp(34px,6vw,58px);line-height:1.05;letter-spacing:-1.8px;margin:38px 0 14px;font-weight:800;max-width:780px}
+  .portada h1 em{font-style:normal;color:var(--rojoVivo)}
+  .portada p{color:#c3ccd8;font-size:18px;max-width:620px;margin:0}
+  .para{display:inline-block;margin-top:26px;font-size:12.5px;font-weight:650;letter-spacing:.3px;color:#ffd9da;
+        background:rgba(211,32,39,.16);border:1px solid rgba(240,53,61,.35);padding:6px 14px;border-radius:999px}
+
+  /* cifras */
+  .cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:-34px;position:relative;z-index:2}
+  .cifra{background:var(--papel);border:1px solid var(--linea);border-radius:16px;padding:20px;text-align:center;
+         box-shadow:0 16px 36px -26px rgba(13,17,23,.6)}
+  .cifra strong{display:block;font-size:34px;letter-spacing:-1.5px;line-height:1.1;color:var(--rojo)}
+  .cifra span{font-size:13.5px;color:var(--suave)}
+
+  /* recorrido */
+  .recorrido{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;counter-reset:paso}
+  .paso{position:relative;padding:18px 14px 18px 0;counter-increment:paso}
+  .paso .num{width:34px;height:34px;border-radius:50%;background:var(--rojo);color:#fff;font-weight:800;
+             display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:10px;position:relative;z-index:1}
+  .paso::before{content:"";position:absolute;top:34px;left:34px;right:0;height:2px;background:var(--linea)}
+  .paso:last-child::before{display:none}
+  .paso h3{margin:0 0 4px;font-size:16px}
+  .paso p{margin:0;font-size:13.5px;color:var(--suave);line-height:1.5}
+  @media (max-width:640px){
+    .recorrido{grid-template-columns:1fr}
+    .paso{padding:0 0 22px 50px}
+    .paso .num{position:absolute;left:0;top:0;margin:0}
+    .paso::before{top:34px;bottom:0;left:16px;right:auto;width:2px;height:auto}
+  }
+
+  /* módulos */
+  .modulos{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .modulo{background:var(--papel);border:1px solid var(--linea);border-radius:16px;padding:22px}
+  .modulo .cab{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+  .modulo .ico{width:40px;height:40px;border-radius:11px;background:rgba(211,32,39,.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+  .modulo h3{margin:0;font-size:17.5px;letter-spacing:-.3px}
+  .modulo ul{margin:0;padding:0;list-style:none}
+  .modulo li{position:relative;padding-left:20px;margin:6px 0;font-size:14.5px;color:var(--suave)}
+  .modulo li::before{content:"✓";position:absolute;left:0;color:var(--verde);font-weight:800}
+
+  /* contraste */
+  .oscuro{background:var(--tinta);color:#fff}
+  .oscuro h2{color:#fff}
+  .oscuro .entrada{color:#c3ccd8}
+  .versus{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:700px){.versus{grid-template-columns:1fr}}
+  .lado{border-radius:14px;padding:22px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
+  .lado.bueno{border-color:rgba(240,53,61,.45);background:rgba(211,32,39,.09)}
+  .lado h4{margin:0 0 10px;font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:#9aa5b4}
+  .lado.bueno h4{color:#ffb9bc}
+  .lado ul{margin:0;padding-left:19px;color:#cfd7e2;font-size:15px}
+  .lado li{margin:7px 0}
+
+  /* roles */
+  .roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .rol{background:var(--papel);border:1px solid var(--linea);border-radius:16px;padding:20px;border-top:4px solid var(--rojo)}
+  .rol:nth-child(2){border-top-color:var(--azul)} .rol:nth-child(3){border-top-color:var(--verde)} .rol:nth-child(4){border-top-color:#8a5a00}
+  .rol h3{margin:0 0 4px;font-size:16.5px}
+  .rol p{margin:0;font-size:14px;color:var(--suave)}
+
+  /* canales */
+  .canales{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px}
+  .canal{font-size:14px;font-weight:650;padding:9px 16px;border-radius:999px;background:var(--papel);border:1px solid var(--linea)}
+
+  /* precio */
+  .precio{background:linear-gradient(150deg,#1a212c,#0d1117);color:#fff;border-radius:22px;padding:40px 28px;text-align:center}
+  .precio .grande{font-size:clamp(50px,9vw,72px);font-weight:800;letter-spacing:-3px;line-height:1;
+                  background:linear-gradient(100deg,#fff,#ffc9cb);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .precio .nota{color:#aab5c3;margin-top:8px}
+  .pastillas{margin-top:20px;display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+  .pastillas span{font-size:13px;color:#cfd7e2;border:1px solid rgba(255,255,255,.2);padding:6px 14px;border-radius:999px}
+
+  /* contacto */
+  .contacto{text-align:center}
+  .boton{display:inline-block;text-decoration:none;font-weight:700;font-size:15px;padding:13px 24px;border-radius:12px;
+         background:var(--rojo);color:#fff;margin:6px}
+  .boton.sec{background:transparent;color:var(--texto);border:1px solid var(--linea)}
+  footer{padding:26px 0 44px;text-align:center;color:var(--suave);font-size:13.5px}
+  footer a{color:var(--suave)}
+
+  @media print{
+    body{background:#fff}
+    section{padding:28px 0;break-inside:avoid}
+    .portada,.oscuro,.precio{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .boton{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="portada">
+  <div class="marco">
+    <div class="marca">
+      <svg viewBox="0 0 48 30" fill="none" xmlns="http://www.w3.org/2000/svg" style="height:28px;width:auto" aria-hidden="true"><path d="M3 27a21 21 0 1 1 42 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/><path d="M9.7 18.75 13.2 20.75M24 10.5V14.5M38.3 18.75 34.8 20.75" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round"/><polygon points="25.23,27.86 22.77,26.14 32.6,14.7" fill="#D6402A"/><circle cx="24" cy="27" r="3.2" fill="#FFFFFF"/></svg>
+      <span>NEXT<b>CAR</b><small>CRM PARA SEMINUEVOS</small></span>
+    </div>
+    <h1>Del primer mensaje del cliente <em>al último pago</em>, en un solo sistema.</h1>
+    <p>Nextcar CRM junta inventario, prospectos, tratos, créditos y cobranza para agencias de autos seminuevos. Esto es lo que hace, de un vistazo.</p>
+    <span class="para">Preparado para los socios de Anka</span>
+  </div>
+</header>
+
+<div class="marco">
+  <div class="cifras">
+    <div class="cifra"><strong>1</strong><span>solo lugar para autos, clientes, ventas y cobros</span></div>
+    <div class="cifra"><strong>3</strong><span>canales de entrada: WhatsApp, Messenger y tu página web</span></div>
+    <div class="cifra"><strong>$199</strong><span>MXN por usuario al mes</span></div>
+    <div class="cifra"><strong>15</strong><span>días de prueba gratis</span></div>
+  </div>
+</div>
+
+<section>
+  <div class="marco">
+    <p class="rotulo">El recorrido de una venta</p>
+    <h2>Cada paso queda amarrado al anterior</h2>
+    <p class="entrada">Nada se captura dos veces. El cliente que escribe por WhatsApp termina como una venta cobrada, con todo su historial.</p>
+    <div class="recorrido">
+      <div class="paso"><div class="num">1</div><h3>Llega el prospecto</h3><p>Por WhatsApp, Messenger o el formulario de tu página. Entra solo al embudo.</p></div>
+      <div class="paso"><div class="num">2</div><h3>Se le atiende</h3><p>Se asigna a un vendedor, se le contesta desde el CRM y se agenda el seguimiento.</p></div>
+      <div class="paso"><div class="num">3</div><h3>Se cotiza</h3><p>Cotización en PDF con enganche, mensualidad y comisión por apertura.</p></div>
+      <div class="paso"><div class="num">4</div><h3>Se tramita el crédito</h3><p>Solicitud del banco prellenada; el cliente la completa y firma desde su celular.</p></div>
+      <div class="paso"><div class="num">5</div><h3>Se cierra la venta</h3><p>El auto queda vendido y se generan contrato, carta responsiva y carta factura.</p></div>
+      <div class="paso"><div class="num">6</div><h3>Se cobra</h3><p>Enganche y mensualidades con recordatorios; sabes quién te debe y cuánto.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="marco">
+    <p class="rotulo">Qué incluye</p>
+    <h2>Doce piezas que trabajan juntas</h2>
+    <p class="entrada">Todo lo que una agencia de seminuevos hace en el día, en una sola pantalla y también desde el celular.</p>
+    <div class="modulos">
+
+      <div class="modulo"><div class="cab"><div class="ico">🚗</div><h3>Inventario</h3></div><ul>
+        <li>Fotos, precio, gastos y documentos por unidad</li>
+        <li>Página propia de cada auto</li>
+        <li>Días en lote, interesados y precio de mercado</li>
+        <li>Utilidad real: compra + gastos contra venta</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">👥</div><h3>Clientes</h3></div><ul>
+        <li>Directorio único, sin contactos repetidos</li>
+        <li>Historial completo de cada persona</li>
+        <li>Lo que busca el cliente y autos que coinciden</li>
+        <li>Importa tus contactos de Google</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">📊</div><h3>Embudo de ventas</h3></div><ul>
+        <li>Etapas configurables por agencia</li>
+        <li>Se mueve con el dedo en el celular</li>
+        <li>Detecta dónde se atoran los tratos</li>
+        <li>Al llegar a Crédito abre la solicitud</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">💬</div><h3>Chats</h3></div><ul>
+        <li>WhatsApp y Messenger dentro del CRM</li>
+        <li>Asignación automática a vendedores</li>
+        <li>Aviso y sonido a clientes sin responder</li>
+        <li>Envía fichas de autos con un toque</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">🏦</div><h3>Créditos</h3></div><ul>
+        <li>BBVA y Hey Banco se llenan solos</li>
+        <li>Liga para que el cliente complete y firme</li>
+        <li>Tablero y expediente por solicitud</li>
+        <li>Formatos de banco configurables</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">💵</div><h3>Ventas y pagos</h3></div><ul>
+        <li>Cada pago es un registro propio, sin duplicados</li>
+        <li>Comisión, liquidación anticipada y devoluciones</li>
+        <li>Recibos y quién te debe, en un vistazo</li>
+        <li>Varias compras del mismo cliente, sin mezclarse</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">🧾</div><h3>Documentos</h3></div><ul>
+        <li>Cotización, contrato y carta responsiva</li>
+        <li>Carta factura lista para firmar</li>
+        <li>Con tu logo y papel membretado</li>
+        <li>PDF guardado en el expediente del cliente</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">📣</div><h3>Promoción</h3></div><ul>
+        <li>Ficha en PDF y hoja para el parabrisas con QR</li>
+        <li>Lista de precios para compartir o imprimir</li>
+        <li>Imágenes listas para redes con tu WhatsApp</li>
+        <li>Publicación en el catálogo de tu página</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">🎯</div><h3>Metas y tablero</h3></div><ul>
+        <li>Metas por asesor y del equipo, con ritmo</li>
+        <li>Qué buscan tus clientes y no tienes</li>
+        <li>Lead Intelligence: a quién atender primero</li>
+        <li>Tablero distinto para dueño y vendedor</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">🔔</div><h3>Tareas y avisos</h3></div><ul>
+        <li>Agenda por día y reprogramación en bloque</li>
+        <li>Campanita con pendientes por urgencia</li>
+        <li>Sincroniza con Google Calendar</li>
+        <li>Recordatorios que llegan a su hora</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">🤖</div><h3>Asistente de IA</h3></div><ul>
+        <li>«¿Qué pendientes tengo hoy?» «¿Quién me debe?»</li>
+        <li>Da de alta prospectos y agenda llamadas</li>
+        <li>Clave personal por usuario</li>
+        <li>Respeta los permisos de cada puesto</li></ul></div>
+
+      <div class="modulo"><div class="cab"><div class="ico">🏢</div><h3>Multiagencia</h3></div><ul>
+        <li>Cada agencia aislada de las demás</li>
+        <li>Panel del dueño con ventas y crecimiento</li>
+        <li>Alta de usuarios con correo de bienvenida</li>
+        <li>Pensado para operar varias sucursales</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="oscuro">
+  <div class="marco">
+    <p class="rotulo" style="color:#ff8b90">Por qué es distinto</p>
+    <h2>No es un CRM genérico con la palabra «auto» pegada</h2>
+    <p class="entrada">Un seminuevo es único: tiene costo de compra, gastos de preparación, un dueño anterior y un solo comprador posible.</p>
+    <div class="versus">
+      <div class="lado"><h4>Un CRM cualquiera</h4><ul>
+        <li>Trata el auto como un producto con existencias</li>
+        <li>No sabe cuánto te costó ni cuánto llevas gastado</li>
+        <li>Todos ven todo, incluido lo que pagaste</li>
+        <li>La venta y el pago viven aparte del auto</li></ul></div>
+      <div class="lado bueno"><h4>Nextcar CRM</h4><ul>
+        <li>Cada unidad es única, con su expediente</li>
+        <li>Costo, gastos y utilidad real por unidad</li>
+        <li>El precio de compra se oculta a quien no debe verlo</li>
+        <li>Trato, auto, venta y pagos amarrados entre sí</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="marco">
+    <p class="rotulo">Control</p>
+    <h2>Cada quien ve lo que le toca</h2>
+    <p class="entrada">Los permisos por puesto protegen la información sensible sin estorbar el trabajo diario.</p>
+    <div class="roles">
+      <div class="rol"><h3>Dueño</h3><p>Ve toda la agencia: ventas, utilidad, cobranza, metas y equipo.</p></div>
+      <div class="rol"><h3>Gerente</h3><p>Supervisa tratos, créditos y archivos de los autos.</p></div>
+      <div class="rol"><h3>Vendedor</h3><p>Trabaja sus propios clientes y tratos, con su propio tablero.</p></div>
+      <div class="rol"><h3>Taller</h3><p>Prepara los autos sin conocer el precio de compra.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="marco">
+    <p class="rotulo">Entradas y conexiones</p>
+    <h2>Se conecta con lo que ya usas</h2>
+    <div class="canales">
+      <span class="canal">WhatsApp</span><span class="canal">Messenger</span><span class="canal">Formularios de tu página</span>
+      <span class="canal">Google Calendar</span><span class="canal">Contactos de Google</span><span class="canal">Mercado Libre (precio de mercado)</span>
+      <span class="canal">Bancos: BBVA · Hey Banco</span><span class="canal">Asistente de IA</span>
+    </div>
+    <p class="entrada" style="margin-top:14px;font-size:14.5px">Las conexiones con Google son voluntarias. Nextcar no accede al correo electrónico de nadie.</p>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="marco">
+    <div class="precio">
+      <div class="grande">$199</div>
+      <div class="nota">MXN por usuario, al mes</div>
+      <div class="pastillas">
+        <span>15 días de prueba gratis</span><span>Sin contratos forzosos</span><span>Sin costo de instalación</span><span>Cancelas cuando quieras</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="contacto" style="padding-top:0">
+  <div class="marco">
+    <h2>¿Lo vemos con los autos de tu lote?</h2>
+    <p class="entrada" style="margin-left:auto;margin-right:auto">En una llamada corta ves el sistema funcionando con tu inventario, no con datos de ejemplo.</p>
+    <a class="boton" href="https://wa.me/524612399969">Escribir por WhatsApp</a>
+    <a class="boton sec" href="https://crm.erewere.com/inicio.html">Ver el sitio</a>
+  </div>
+</section>
+
+<footer>
+  <div class="marco">Nextcar CRM · 461 239 9969 · <a href="mailto:contacto@erewere.com">contacto@erewere.com</a></div>
+</footer>
+
+</body>
+</html>

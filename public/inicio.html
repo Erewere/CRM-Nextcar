@@ -150,6 +150,14 @@
   .pastilla{font-size:12.5px;color:#cfd7e2;border:1px solid rgba(255,255,255,.17);
             padding:6px 13px;border-radius:999px}
 
+
+  /* ---------- novedades ---------- */
+  .lineaTiempo{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+  .mes{background:var(--papel);border:1px solid var(--linea);border-radius:15px;padding:22px}
+  .mes h4{margin:0 0 10px;font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:var(--rojo)}
+  .mes ul{margin:0;padding-left:18px;color:var(--suave);font-size:14.5px}
+  .mes li{margin:7px 0}
+
   ul.limpia{margin:14px 0;padding-left:20px;color:var(--suave)}
   ul.limpia li{margin:8px 0}
   ul.limpia strong{color:var(--texto)}
@@ -229,17 +237,29 @@
 
     <div class="rejilla">
       <div class="caja revela"><div class="icono">🚗</div><h3>Inventario con fotos</h3>
-        <p>Cada auto con sus fotografías, su precio, sus gastos y sus documentos. De un vistazo sabes qué está disponible y qué ya se vendió.</p></div>
+        <p>Cada auto con sus fotos, precio, gastos y documentos, y su propia página. Tarjetas con días en lote, interesados y precio de mercado de Mercado Libre. Las fotos del iPhone se suben sin problema.</p></div>
       <div class="caja revela"><div class="icono">👥</div><h3>Clientes y prospectos</h3>
-        <p>Un directorio único, sin contactos repetidos, con el historial completo de cada persona: qué preguntó, qué se le ofreció y en qué quedó.</p></div>
+        <p>Un directorio único, sin repetidos. Ficha a pantalla completa con resumen, próximo paso, lo que busca el cliente y los autos que le podrían servir.</p></div>
       <div class="caja revela"><div class="icono">📊</div><h3>Embudo de ventas</h3>
-        <p>Arrastra cada trato por sus etapas y ve dónde se están atorando las oportunidades antes de que se enfríen.</p></div>
-      <div class="caja revela"><div class="icono">💵</div><h3>Ventas y cobranza</h3>
-        <p>La venta nace del trato y queda amarrada al auto. Cada pago queda asentado, y sabes en todo momento quién te debe y cuánto.</p></div>
-      <div class="caja revela"><div class="icono">🔔</div><h3>Actividades y recordatorios</h3>
-        <p>Llamadas, citas y entregas agendadas. Se acabaron los seguimientos que se pierden porque nadie los anotó.</p></div>
+        <p>Mueve cada trato por sus etapas, con el dedo en el celular o arrastrando en la computadora. Al llegar a Crédito se abre sola la solicitud.</p></div>
+      <div class="caja revela"><div class="icono">💬</div><h3>WhatsApp y Messenger</h3>
+        <p>Contesta a tus clientes desde el CRM. Cada mensaje entra al embudo, se asigna a un vendedor y avisa si alguien lleva rato sin respuesta.</p></div>
+      <div class="caja revela"><div class="icono">💵</div><h3>Ventas y pagos</h3>
+        <p>Cada pago es un registro propio, atado a su auto. Enganche, mensualidades, comisión por apertura, liquidación anticipada, devoluciones y recibos.</p></div>
+      <div class="caja revela"><div class="icono">🏦</div><h3>Solicitudes de crédito</h3>
+        <p>Llena solo las solicitudes de BBVA y Hey Banco con los datos del cliente. Le mandas una liga para que complete y firme desde su teléfono.</p></div>
+      <div class="caja revela"><div class="icono">🧾</div><h3>Cotizaciones y documentos</h3>
+        <p>Cotización en PDF con enganche, mensualidad y comisión. Contrato de compraventa, carta responsiva y carta factura ya prellenados, con tu logo.</p></div>
+      <div class="caja revela"><div class="icono">📣</div><h3>Para vender el auto</h3>
+        <p>Ficha en PDF, hoja para el parabrisas con QR, lista de precios e imágenes listas para redes con foto, precio y tu WhatsApp.</p></div>
+      <div class="caja revela"><div class="icono">🌐</div><h3>Publica en tu página</h3>
+        <p>Marca un auto y aparece en tu catálogo web, con apartados y vendidos. Los formularios de tu página llegan directo al CRM como prospectos.</p></div>
+      <div class="caja revela"><div class="icono">🎯</div><h3>Metas y tablero</h3>
+        <p>Metas por asesor y del equipo con avance y ritmo. Un tablero que te dice qué buscan tus clientes y no tienes, y a quién atender primero.</p></div>
+      <div class="caja revela"><div class="icono">🔔</div><h3>Tareas y recordatorios</h3>
+        <p>Agenda por día, filtros, búsqueda y reprogramación en bloque. Una campanita que ordena los pendientes por urgencia: pagos y créditos primero.</p></div>
       <div class="caja revela"><div class="icono">🔒</div><h3>Permisos por puesto</h3>
-        <p>Cada quien ve lo que le toca. El taller trabaja los autos sin conocer el precio de compra; cada vendedor ve sus propios tratos.</p></div>
+        <p>Cada quien ve lo que le toca. El taller no conoce el precio de compra; cada vendedor ve sus propios tratos y sus propios clientes.</p></div>
     </div>
   </div>
 </section>
@@ -272,6 +292,40 @@
   </div>
 </section>
 
+<section>
+  <div class="marco">
+    <p class="rotulo revela">Novedades</p>
+    <h2 class="revela">Un sistema que mejora cada semana</h2>
+    <p class="entrada revela">Estas son algunas de las mejoras que hemos sumado en los últimos meses, casi todas a petición de agencias que lo usan.</p>
+    <div class="lineaTiempo">
+      <div class="mes revela"><h4>Octubre 2026</h4><ul>
+        <li>Prueba gratis de 15 días para agencias nuevas</li>
+        <li>Metas de ventas por asesor y del equipo</li>
+        <li>Tablero nuevo con Lead Intelligence: prioriza por interés real y por silencio</li>
+        <li>Agenda de tareas por día con reprogramación en bloque</li>
+        <li>Solicitudes de crédito BBVA y Hey Banco que se llenan solas</li>
+        <li>Pagos rediseñados: comisión, liquidación anticipada y recibos</li>
+        <li>Cotización en PDF, hoja de parabrisas y contratos prellenados</li>
+      </ul></div>
+      <div class="mes revela"><h4>Septiembre 2026</h4><ul>
+        <li>Publicar autos en tu página web desde el CRM</li>
+        <li>Mensajes de WhatsApp y Messenger dentro del CRM</li>
+        <li>Aviso y sonido para clientes sin responder</li>
+        <li>Panel del dueño: dinero, crecimiento y quién usa el sistema</li>
+        <li>Lo que busca el cliente, a la vista, con coincidencias de autos</li>
+        <li>Correos de bienvenida y resumen semanal con tu marca</li>
+      </ul></div>
+      <div class="mes revela"><h4>Agosto 2026</h4><ul>
+        <li>Asistente de IA con clave personal y los permisos de cada puesto</li>
+        <li>Sincronización con Google Calendar en ambos sentidos</li>
+        <li>Una venta cerrada deja el auto vendido, sin pasos extra</li>
+        <li>Una sola campanita para todos los avisos</li>
+        <li>Seguridad reforzada: cada agencia aislada de las demás</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
 <section class="claro">
   <div class="marco">
     <p class="rotulo revela">Se conecta con lo que ya usas</p>
@@ -287,9 +341,9 @@
 
 <section>
   <div class="marco">
-    <p class="rotulo revela">Lo que viene</p>
+    <p class="rotulo revela">Ya disponible</p>
     <h2 class="revela">Pregúntale a tu asistente de IA</h2>
-    <p class="entrada revela">Cada usuario genera una clave personal y consulta el CRM desde su propio asistente: «¿qué pendientes tengo hoy?», «¿quién me debe?», «¿qué autos hay de menos de 200 mil?». El asistente respeta exactamente los mismos permisos que la persona tiene dentro del sistema — un vendedor no alcanza nada que no pudiera ver en pantalla.</p>
+    <p class="entrada revela">Cada usuario genera una clave personal y consulta el CRM desde su propio asistente: «¿qué pendientes tengo hoy?», «¿quién me debe?», «¿qué autos hay de menos de 200 mil?». También puede dar de alta un prospecto, agendar una llamada o dejar una nota. El asistente respeta exactamente los mismos permisos que la persona tiene dentro del sistema — un vendedor no alcanza nada que no pudiera ver en pantalla.</p>
   </div>
 </section>
 
@@ -299,6 +353,7 @@
       <div class="cifra">$199</div>
       <div class="nota">MXN por usuario, al mes</div>
       <div class="sinLetras">
+        <span class="pastilla">15 días de prueba gratis</span>
         <span class="pastilla">Sin contratos forzosos</span>
         <span class="pastilla">Sin costo de instalación</span>
         <span class="pastilla">Cancelas cuando quieras</span>
