@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Vehicle, Client } from "../types";
-import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, Check, Phone, Building2, MessageCircle } from "lucide-react";
+import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, ChevronDown, Check, Phone, Building2, MessageCircle, FileWarning, ShieldCheck, Clock, Landmark } from "lucide-react";
 import { useNavigate } from "react-router";
 import clsx from "clsx";
 import { isBefore, addDays, startOfDay, isAfter } from "date-fns";
@@ -14,6 +14,7 @@ import { VehicleDetailModal } from "./VehicleDetailModal";
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { useAvisosDescartados, descartarAviso, idDeMatch } from "../lib/avisosDescartados";
 import { deFormaVieja, estadoDeCuenta } from '../lib/planDePagos';
+import { creditosApi } from "../lib/creditosApi";
 
 const parseDate = (val: any): Date | null => {
   if (!val) return null;
@@ -51,6 +52,56 @@ const isClosedStatus = (status: string | undefined, pipelineStages: any[] = []) 
   return false;
 };
 
+type Nivel = "ahora" | "hoy" | "seguimiento";
+
+/** A qué grupo y qué tan urgente es cada tipo de aviso. */
+const CLASE: Record<string, { grupo: string; nivel: Nivel }> = {
+  "chat-pendiente": { grupo: "chats", nivel: "ahora" },
+  "task-now": { grupo: "citas", nivel: "ahora" },
+  "task-overdue": { grupo: "tareas-vencidas", nivel: "ahora" },
+  "payment-overdue": { grupo: "pagos-vencidos", nivel: "ahora" },
+  "payment-missing": { grupo: "pagos-vencidos", nivel: "ahora" },
+  "admin-approval": { grupo: "aprobaciones", nivel: "ahora" },
+  billing: { grupo: "suscripcion", nivel: "ahora" },
+  "credito-ahora": { grupo: "creditos", nivel: "ahora" },
+  "credito-hoy": { grupo: "creditos-hoy", nivel: "hoy" },
+  "credito-seguimiento": { grupo: "creditos-seguimiento", nivel: "seguimiento" },
+  "task-soon": { grupo: "tareas-pronto", nivel: "hoy" },
+  "payment-soon": { grupo: "pagos-pronto", nivel: "hoy" },
+  "payment-upcoming": { grupo: "pagos-pronto", nivel: "hoy" },
+  "deal-stale": { grupo: "estancados", nivel: "seguimiento" },
+  "vehicle-checklist": { grupo: "docs", nivel: "seguimiento" },
+  "match-network": { grupo: "red", nivel: "seguimiento" },
+  "config-pendiente": { grupo: "config", nivel: "seguimiento" },
+};
+
+const GRUPOS: Record<string, { titulo: (n: number) => string; Icono: any; color: string; ruta?: string; verTodas?: string; recientesPrimero?: boolean }> = {
+  chats: { titulo: (n) => (n === 1 ? "Cliente esperando respuesta" : "Clientes esperando respuesta"), Icono: MessageCircle, color: "text-green-600", ruta: "/chats", verTodas: "Ir a Chats" },
+  citas: { titulo: (n) => (n === 1 ? "Cita en este momento" : "Citas en este momento"), Icono: Calendar, color: "text-emerald-600", ruta: "/tasks", verTodas: "Ver agenda" },
+  "tareas-vencidas": { titulo: (n) => `${n === 1 ? "Tarea vencida" : "Tareas vencidas"}`, Icono: Clock, color: "text-red-600", ruta: "/tasks", verTodas: "Ver todas en Tareas", recientesPrimero: true },
+  "pagos-vencidos": { titulo: (n) => (n === 1 ? "Cliente con pagos atrasados" : "Clientes con pagos atrasados"), Icono: CreditCard, color: "text-red-600", ruta: "/payments", verTodas: "Ver Pagos", recientesPrimero: true },
+  creditos: { titulo: (n) => (n === 1 ? "Solicitud de crédito por atender" : "Solicitudes de crédito por atender"), Icono: Landmark, color: "text-blue-600", ruta: "/creditos", verTodas: "Ir a Créditos" },
+  "creditos-hoy": { titulo: (n) => (n === 1 ? "Crédito para dar seguimiento" : "Créditos para dar seguimiento"), Icono: Landmark, color: "text-blue-600", ruta: "/creditos", verTodas: "Ir a Créditos" },
+  "creditos-seguimiento": { titulo: (n) => (n === 1 ? "Crédito a medias" : "Créditos a medias"), Icono: Landmark, color: "text-slate-500", ruta: "/creditos", verTodas: "Ir a Créditos" },
+  aprobaciones: { titulo: (n) => (n === 1 ? "Aprobación pendiente" : "Aprobaciones pendientes"), Icono: ShieldCheck, color: "text-amber-600", ruta: "/inventory", verTodas: "Ir a Inventario" },
+  suscripcion: { titulo: () => "Suscripción", Icono: CreditCard, color: "text-blue-600", ruta: "/billing", verTodas: "Ver suscripción" },
+  "tareas-pronto": { titulo: (n) => (n === 1 ? "Tarea por vencer (48 h)" : "Tareas por vencer (48 h)"), Icono: Calendar, color: "text-amber-600", ruta: "/tasks", verTodas: "Ver Tareas" },
+  "pagos-pronto": { titulo: (n) => (n === 1 ? "Mensualidad por vencer" : "Mensualidades por vencer"), Icono: CreditCard, color: "text-amber-600", ruta: "/payments", verTodas: "Ver Pagos" },
+  estancados: { titulo: (n) => (n === 1 ? "Trato sin movimiento" : "Tratos sin movimiento"), Icono: Flame, color: "text-orange-600", ruta: "/kanban", verTodas: "Ver el embudo" },
+  docs: { titulo: (n) => (n === 1 ? "Auto con documentos faltantes" : "Autos con documentos faltantes"), Icono: FileWarning, color: "text-amber-600", ruta: "/inventory", verTodas: "Ir a Inventario" },
+  red: { titulo: (n) => (n === 1 ? "Coincidencia en la red" : "Coincidencias en la red"), Icono: Sparkles, color: "text-amber-600" },
+  config: { titulo: () => "Por configurar", Icono: Building2, color: "text-blue-600" },
+};
+
+/** Qué va primero dentro de cada nivel: el dinero y los créditos antes que lo demás. */
+const ORDEN_GRUPOS = ["pagos-vencidos", "creditos", "aprobaciones", "chats", "citas", "tareas-vencidas", "suscripcion", "pagos-pronto", "creditos-hoy", "tareas-pronto", "creditos-seguimiento", "estancados", "docs", "red", "config"];
+
+const NIVELES: { id: Nivel; titulo: string; punto: string }[] = [
+  { id: "ahora", titulo: "Atiende ahora", punto: "bg-red-500" },
+  { id: "hoy", titulo: "Hoy y mañana", punto: "bg-amber-500" },
+  { id: "seguimiento", titulo: "Seguimiento", punto: "bg-slate-400" },
+];
+
 export function NotificationsPopover() {
   const { userData, agencyData } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -81,6 +132,31 @@ export function NotificationsPopover() {
 
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedClientContext, setSelectedClientContext] = useState<Client | null>(null);
+  // Un «pop» cuando llega algo urgente nuevo mientras el CRM está abierto.
+  const [popNuevo, setPopNuevo] = useState(false);
+  const urgentesAntes = useRef<number | null>(null);
+  // Solicitudes de crédito (viven en el servidor): se revisan al abrir y cada 3 minutos.
+  const [creditos, setCreditos] = useState<any[]>([]);
+  useEffect(() => {
+    if (!userData || !["admin", "manager", "seller"].includes(String(userData.role))) return;
+    let vivo = true;
+    const leer = () => creditosApi.lista().then((l) => { if (vivo) setCreditos(l || []); }).catch(() => {});
+    leer();
+    const t = setInterval(leer, 3 * 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [userData?.id, userData?.role]);
+  // Cómo se ve el panel: qué pestaña y qué grupos están abiertos.
+  const [pestana, setPestana] = useState<"todo" | "ahora" | "hoy" | "seguimiento">("todo");
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
+  const [verMas, setVerMas] = useState<Record<string, boolean>>({});
+  // Nombres de los asesores (solo el administrador los necesita: ve las tareas de todos).
+  const [nombres, setNombres] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!userData?.agencyId || (userData.role !== "admin" && userData.role !== "master")) return;
+    getDocs(query(collection(db, "users"), where("agencyId", "==", userData.agencyId)))
+      .then((s) => setNombres(Object.fromEntries(s.docs.map((d) => [d.id, String(d.data().name || d.data().email || "").split(" ")[0]]))))
+      .catch(() => {});
+  }, [userData?.agencyId, userData?.role]);
 
   const { matches, ownAgencySharing } = useSharedInventoryMatches();
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -215,6 +291,7 @@ export function NotificationsPopover() {
     date: string;
     icon: React.ReactNode;
     clientId?: string;
+    asesorId?: string;
     onClick: () => void;
   }> = [];
 
@@ -244,6 +321,11 @@ export function NotificationsPopover() {
     }
     
     const diffInMinutes = (taskDateTime.getTime() - now.getTime()) / 60000;
+    // «Pago 3/24 - Crédito de…» las crea el sistema y el aviso por cliente de
+    // más abajo ya las cubre, con el monto real: dos avisos por lo mismo no.
+    if (task.type === 'payment' && /^Pago \d+\/\d+ /.test(String(task.title || '')) && clients.some((c) => c.id === task.clientId && (c as any).saleDetails?.method === 'credito')) return;
+    const quienEs = (clients.find((c) => c.id === task.clientId)?.name || "").trim();
+    const conDetalle = (texto: string) => `${texto}${quienEs ? ` · ${quienEs}` : ""}`;
     const isPaymentTask = task.type === 'payment' || 
       task.title?.toLowerCase().includes('pago') || 
       task.title?.toLowerCase().includes('mensualidad') || 
@@ -260,7 +342,8 @@ export function NotificationsPopover() {
         id: notifId,
         type: "task-now",
         title: diffInMinutes <= 0 ? "🔔 Es la hora" : "🔔 En menos de 30 minutos",
-        message: task.title,
+        message: conDetalle(task.title),
+        asesorId: task.sellerId,
         date: taskDateTime.toISOString(),
         icon: <Calendar className="w-5 h-5 text-emerald-500 shrink-0 animate-pulse" />,
         onClick: () => {
@@ -273,8 +356,9 @@ export function NotificationsPopover() {
       notifications.push({
         id: notifId,
         type: isPaymentTask ? "payment-overdue" : "task-overdue",
-        title: isPaymentTask ? "⚠️ Pago Mensual Faltante" : "Tarea Vencida",
-        message: isPaymentTask ? `¡Pago no registrado! ${task.title}` : task.title,
+        title: isPaymentTask ? "⚠️ Pago Mensual Faltante" : task.title || "Tarea vencida",
+        message: isPaymentTask ? `¡Pago no registrado! ${task.title}` : `${quienEs ? `${quienEs} · ` : ""}venció ${Math.max(0, Math.floor(-diffInMinutes / 1440)) === 0 ? "hoy" : `hace ${Math.floor(-diffInMinutes / 1440)} día${Math.floor(-diffInMinutes / 1440) === 1 ? "" : "s"}`}`,
+        asesorId: task.sellerId,
         date: taskDateTime.toISOString(),
         icon: isPaymentTask ? <CreditCard className="w-5 h-5 text-red-500 shrink-0 animate-pulse" /> : <Calendar className="w-5 h-5 text-red-500 shrink-0" />,
         onClick: () => {
@@ -292,7 +376,8 @@ export function NotificationsPopover() {
         id: notifId,
         type: isPaymentTask ? "payment-soon" : "task-soon",
         title: isPaymentTask ? `⏰ Próximo Pago (${daysText})` : "Tarea por Vencer",
-        message: task.title,
+        message: conDetalle(task.title),
+        asesorId: task.sellerId,
         date: taskDateTime.toISOString(),
         icon: <CreditCard className="w-5 h-5 text-amber-500 shrink-0" />,
         onClick: () => {
@@ -314,36 +399,75 @@ export function NotificationsPopover() {
     const ec = estadoDeCuenta(sDetails as any, (sDetails.payments || []).map((p: any) => ({ ...deFormaVieja(p, true), id: String(p.id) })), todayStr);
     const ventaId = (client as any).ventaDealId;
     const abrir = () => { if (ventaId) navigate(`/venta/${ventaId}`); else navigate("/persons", { state: { clientId: client.id } }); };
-    for (const m of ec.mensualidades) {
-      if (m.estado === 'pagada') continue;
-      const notifId = `notif-credit-sched-${client.id}-m${m.n}`;
-      if (dismissedIds.has(notifId)) continue;
-      const falta = m.monto - m.cubierto;
-      const diffDays = Math.round((Date.parse(`${m.fecha}T12:00:00`) - Date.parse(`${todayStr}T12:00:00`)) / 86400000);
-      if (m.estado === 'atrasada') {
+    const pesosMx = (n: number) => `$${Math.round(n).toLocaleString('es-MX')}`;
+    const atrasadas = ec.mensualidades.filter((m) => m.estado === 'atrasada');
+    if (atrasadas.length) {
+      // Un solo aviso por cliente: «3 mensualidades atrasadas», no tres avisos.
+      const notifId = `pago-atraso-${client.id}-${atrasadas.length}`;
+      if (!dismissedIds.has(notifId)) {
+        const debe = atrasadas.reduce((t, m) => t + (m.monto - m.cubierto), 0);
+        const viejo = atrasadas[0];
         notifications.push({
           id: notifId,
           type: "payment-missing",
-          title: `⚠️ Mensualidad #${m.n} atrasada (${client.name})`,
-          message: `Faltan $${falta.toLocaleString('es-MX', { maximumFractionDigits: 2 })}; venció el ${m.fecha}.`,
-          date: new Date(`${m.fecha}T12:00:00`).toISOString(),
-          icon: <CreditCard className="w-5 h-5 text-red-500 shrink-0 animate-bounce" />,
+          title: `${client.name}: ${atrasadas.length === 1 ? `mensualidad #${viejo.n} atrasada` : `${atrasadas.length} mensualidades atrasadas`}`,
+          message: `Debe ${pesosMx(debe)}. La más vieja venció el ${viejo.fecha} (${viejo.diasAtraso} día${viejo.diasAtraso === 1 ? '' : 's'}).`,
+          date: new Date(`${viejo.fecha}T12:00:00`).toISOString(),
+          icon: <CreditCard className="w-5 h-5 text-red-500 shrink-0" />,
           clientId: client.id,
-          onClick: abrir,
-        });
-      } else if (diffDays >= 0 && diffDays <= 2) {
-        const tag = diffDays === 0 ? "Vence HOY" : diffDays === 1 ? "Vence MAÑANA" : "Vence en 2 días";
-        notifications.push({
-          id: notifId,
-          type: "payment-upcoming",
-          title: `⏰ Próxima Mensualidad #${m.n} (${tag})`,
-          message: `${client.name}: $${falta.toLocaleString('es-MX', { maximumFractionDigits: 2 })} vence el ${m.fecha}.`,
-          date: new Date(`${m.fecha}T12:00:00`).toISOString(),
-          icon: <CreditCard className="w-5 h-5 text-amber-500 shrink-0" />,
-          clientId: client.id,
+          asesorId: client.sellerId,
           onClick: abrir,
         });
       }
+    }
+    const proxima = ec.mensualidades.find((m) => m.estado !== 'pagada' && m.estado !== 'atrasada');
+    if (proxima) {
+      const diffDays = Math.round((Date.parse(`${proxima.fecha}T12:00:00`) - Date.parse(`${todayStr}T12:00:00`)) / 86400000);
+      const notifId = `pago-proximo-${client.id}-m${proxima.n}`;
+      if (diffDays >= 0 && diffDays <= 2 && !dismissedIds.has(notifId)) {
+        notifications.push({
+          id: notifId,
+          type: "payment-upcoming",
+          title: `${client.name}: mensualidad #${proxima.n} ${diffDays === 0 ? 'vence HOY' : diffDays === 1 ? 'vence mañana' : 'vence en 2 días'}`,
+          message: `${pesosMx(proxima.monto - proxima.cubierto)} · ${proxima.fecha}.`,
+          date: new Date(`${proxima.fecha}T12:00:00`).toISOString(),
+          icon: <CreditCard className="w-5 h-5 text-amber-500 shrink-0" />,
+          clientId: client.id,
+          asesorId: client.sellerId,
+          onClick: abrir,
+        });
+      }
+    }
+  });
+
+  // 1.3. Solicitudes de crédito: lo que el cliente hizo y lo que respondió el banco.
+  creditos.forEach((c: any) => {
+    if (["cerrada", "cancelada"].includes(c.etapa)) return;
+    const quien = c.clienteNombre || "Cliente";
+    const abrir = () => navigate(`/creditos/${c.id}`);
+    const base = { icon: <Landmark className="w-5 h-5 text-blue-600 shrink-0" />, asesorId: c.vendedorId, clientId: c.clientId, onClick: abrir };
+    const bancos: any[] = c.bancos || [];
+    const aprobo = bancos.filter((b) => b.estado === "aprobado");
+    const condiciones = bancos.filter((b) => b.estado === "condiciones");
+    const dias = (iso?: string) => (iso ? Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 86400000)) : 0);
+    const poner = (idTipo: string, type: string, title: string, message: string, date?: string) => {
+      const id = `credito-${c.id}-${idTipo}`;
+      if (!dismissedIds.has(id)) notifications.push({ id, type, title, message, date: date || c.actualizadoEl || new Date().toISOString(), ...base });
+    };
+    if (aprobo.length) {
+      poner("aprobado", "credito-ahora", `${aprobo.map((b) => b.nombre).join(" y ")} aprobó el crédito de ${quien}`, "Avísale al cliente y coordina la compra.");
+    } else if (condiciones.length) {
+      poner("condiciones", "credito-ahora", `${condiciones[0].nombre} respondió con condiciones: ${quien}`, "Revisa las condiciones y habla con el cliente.");
+    } else if (c.clienteTerminoEl && ["recibida", "datos"].includes(c.etapa)) {
+      poner("termino", "credito-ahora", `${quien} terminó su solicitud de crédito`, "Revísala y envíala a los bancos.", c.clienteTerminoEl);
+    } else if (c.origen === "pagina" && c.etapa === "recibida" && !c.ligaVence) {
+      poner("nueva-pagina", "credito-ahora", `Nueva solicitud de crédito desde la página: ${quien}`, "Mándale su liga para que la llene.", c.creadoEl);
+    } else if (bancos.length && bancos.every((b) => b.estado === "rechazado")) {
+      poner("rechazado", "credito-hoy", `Los bancos rechazaron el crédito de ${quien}`, "Habla con el cliente: ¿otra opción o crédito de la casa?");
+    } else if (c.ligaVence && !c.ligaAbiertaEl && dias(c.creadoEl) >= 2) {
+      poner("sin-abrir", "credito-hoy", `${quien} no ha abierto su liga de crédito`, `Se la mandaste hace ${dias(c.creadoEl)} días: recuérdale por WhatsApp.`, c.creadoEl);
+    } else if (c.ligaAbiertaEl && !c.clienteTerminoEl && ["recibida", "datos"].includes(c.etapa) && dias(c.actualizadoEl) >= 3) {
+      poner("a-medias", "credito-seguimiento", `${quien} dejó a medias su solicitud`, `Lleva ${dias(c.actualizadoEl)} días sin avanzar. Anímalo a terminarla.`);
     }
   });
 
@@ -352,6 +476,12 @@ export function NotificationsPopover() {
     if (isSellerNotif && client.sellerId && client.sellerId !== userData?.id) return;
     if (client.isDeleted || (client as any).dismissedStale || (client as any).isArchived || (client as any).isClosed) return;
     if (isClosedStatus(client.status, pipelineStages) || isClosedStatus((client as any).stageId, pipelineStages)) return;
+
+    // Solo tratos de verdad: un contacto importado de Google o Excel, o uno sin
+    // etapa del embudo de la agencia, no es un trato y no se «estanca». Antes
+    // un administrador de Mmotors recibía 571 avisos de estos.
+    if (["google_contacts", "excel_import"].includes(String((client as any).origin || ""))) return;
+    if (!client.status || (pipelineStages.length > 0 && !pipelineStages.some((st) => st.id === client.status))) return;
 
     const notifId = `deal-stale-${client.id}`;
     if (dismissedIds.has(notifId) || dismissedIds.has(`deal-${client.id}`)) return;
@@ -374,6 +504,7 @@ export function NotificationsPopover() {
         date: lastUpdate.toISOString(),
         icon: <Flame className="w-5 h-5 text-orange-500 shrink-0" />,
         clientId: client.id,
+        asesorId: client.sellerId,
         onClick: () => {
           navigate("/persons", { state: { clientId: client.id } });
         },
@@ -561,8 +692,7 @@ export function NotificationsPopover() {
     }
   }
 
-  // Sort by urgency / date
-  notifications.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // El orden ahora lo da el grupo: lo urgente arriba, lo demás agrupado y con menos ruido.
 
   // Clientes esperando respuesta: siempre arriba de todo, porque un lead sin
   // contestar es lo mas caro que hay. No se descarta: se va sola cuando
@@ -587,6 +717,50 @@ export function NotificationsPopover() {
     });
   }
 
+  // ---- Grupos: lo urgente primero, agrupado por tipo y con quién es cada uno
+  const clasificar = (n: { type: string; id: string }) => {
+    const c = CLASE[n.type] || { grupo: "red", nivel: "seguimiento" as Nivel };
+    // Faltan días para que venza la suscripción: avisa, pero no es urgente todavía.
+    if (n.type === "billing" && n.id === "billing-warning") return { grupo: "suscripcion", nivel: "hoy" as Nivel };
+    return c;
+  };
+  const esAdmin = userData?.role === "admin" || userData?.role === "master";
+  const diasDesde = (iso: string) => Math.max(0, Math.floor((ahora.getTime() - new Date(iso).getTime()) / 86400000));
+  const porNivel: Record<Nivel, { grupo: string; items: typeof notifications; detalle: string }[]> = { ahora: [], hoy: [], seguimiento: [] };
+  const mapaGrupos = new Map<string, { nivel: Nivel; items: typeof notifications }>();
+  for (const n of notifications) {
+    const c = clasificar(n);
+    const g = mapaGrupos.get(c.grupo) || { nivel: c.nivel, items: [] as typeof notifications };
+    g.items.push(n);
+    mapaGrupos.set(c.grupo, g);
+  }
+  for (const [grupo, g] of mapaGrupos) {
+    const recientes = GRUPOS[grupo]?.recientesPrimero;
+    g.items.sort((x, y) => (recientes ? new Date(y.date).getTime() - new Date(x.date).getTime() : new Date(x.date).getTime() - new Date(y.date).getTime()));
+    // Qué decir debajo del título: quién y qué tan viejo.
+    const partes: string[] = [];
+    if (esAdmin && ["tareas-vencidas", "tareas-pronto", "pagos-vencidos", "pagos-pronto", "estancados"].includes(grupo)) {
+      const cuenta: Record<string, number> = {};
+      g.items.forEach((x) => { const k = nombres[x.asesorId || ""] || (x.asesorId ? "Otro asesor" : "Sin asesor"); cuenta[k] = (cuenta[k] || 0) + 1; });
+      const lista = Object.entries(cuenta).sort((a, b) => b[1] - a[1]);
+      if (lista.length > 1) partes.push(lista.slice(0, 4).map(([k, v]) => `${k} ${v}`).join(" · "));
+    }
+    if (recientes && g.items.length > 3) partes.push(`la más vieja lleva ${diasDesde(g.items[g.items.length - 1].date)} días`);
+    porNivel[g.nivel].push({ grupo, items: g.items, detalle: partes.join(" — ") });
+  }
+  (Object.keys(porNivel) as Nivel[]).forEach((k) => porNivel[k].sort((a, b) => ORDEN_GRUPOS.indexOf(a.grupo) - ORDEN_GRUPOS.indexOf(b.grupo)));
+  const conteo = { ahora: porNivel.ahora.reduce((s, g) => s + g.items.length, 0), hoy: porNivel.hoy.reduce((s, g) => s + g.items.length, 0), seguimiento: porNivel.seguimiento.reduce((s, g) => s + g.items.length, 0) };
+
+  useEffect(() => {
+    if (urgentesAntes.current !== null && conteo.ahora > urgentesAntes.current) {
+      setPopNuevo(true);
+      const t = setTimeout(() => setPopNuevo(false), 1200);
+      urgentesAntes.current = conteo.ahora;
+      return () => clearTimeout(t);
+    }
+    urgentesAntes.current = conteo.ahora;
+  }, [conteo.ahora]);
+
   /**
    * Avisos en el escritorio.
    *
@@ -602,7 +776,7 @@ export function NotificationsPopover() {
    * entera en vez de crecer para siempre.
    */
   const urgentes = notifications.filter(
-    (n) => n.type === "task-now" || n.type === "task-overdue" || n.type === "payment-overdue"
+    (n) => n.type === "task-now" || n.type === "task-overdue" || n.type === "payment-overdue" || n.type === "payment-missing" || n.type === "credito-ahora"
   );
   const firmaUrgentes = urgentes.map((n) => n.id).join(",");
 
@@ -657,99 +831,96 @@ export function NotificationsPopover() {
           className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 relative"
           aria-label="Notificaciones"
         >
-          <Bell className="w-[22px] h-[22px]" />
-          {notifications.length > 0 && (
-            <span className="absolute top-1.5 right-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
-              {notifications.length > 9 ? "9+" : notifications.length}
+          <Bell className={clsx("w-[22px] h-[22px]", conteo.ahora > 0 && !isOpen && "campana-viva text-red-500")} />
+          {(conteo.ahora > 0 || conteo.hoy > 0) && (
+            <span className={clsx("absolute top-1 right-0.5 flex h-[18px] min-w-[18px] px-1 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900", conteo.ahora > 0 ? "bg-red-500 insignia-viva" : "bg-amber-500", popNuevo && "insignia-nueva")}>
+              {(conteo.ahora > 0 ? conteo.ahora : conteo.hoy) > 99 ? "99+" : conteo.ahora > 0 ? conteo.ahora : conteo.hoy}
             </span>
           )}
         </button>
 
         {isOpen && (
           <>
-            <div 
-              className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40 sm:hidden" 
-              onClick={() => setIsOpen(false)} 
-            />
-            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right transition-all">
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
-                <div className="flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-amber-500" />
-                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">Notificaciones Centro</h3>
+            <div className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40 sm:hidden" onClick={() => setIsOpen(false)} />
+            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right flex flex-col max-h-[80vh]">
+              <div className="px-4 pt-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base">Pendientes</h3>
+                  <button onClick={() => setIsOpen(false)} aria-label="Cerrar" className="sm:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 py-1 px-2.5 rounded-full">
-                    {notifications.length} pendientes
-                  </span>
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="sm:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {notifications.length === 0 ? "Todo al día." : [conteo.ahora && `${conteo.ahora} por atender ahora`, conteo.hoy && `${conteo.hoy} para hoy y mañana`, conteo.seguimiento && `${conteo.seguimiento} de seguimiento`].filter(Boolean).join(" · ")}
+                </p>
+                {notifications.length > 0 && (
+                  <div className="flex gap-1 mt-2.5 -mb-px">
+                    {([["todo", "Todo", notifications.length], ["ahora", "Ahora", conteo.ahora], ["hoy", "Hoy", conteo.hoy], ["seguimiento", "Seguimiento", conteo.seguimiento]] as const).map(([id, t, n]) => (
+                      <button key={id} onClick={() => setPestana(id)} className={clsx("h-8 px-3 rounded-t-lg text-xs font-bold border-b-2 transition-colors", pestana === id ? "border-slate-900 dark:border-white text-slate-900 dark:text-white" : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>
+                        {t} <span className={clsx("ml-0.5 text-[11px]", id === "ahora" && n > 0 ? "text-red-600 dark:text-red-400" : "text-slate-400")}>{n}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-            <div className="max-h-[420px] overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-                  <Bell className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                  <p className="text-sm font-medium">No tienes notificaciones pendientes</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                  {notifications.map((notif) => (
-                    <div
-                      key={`notif-${notif.id}`}
-                      className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group relative"
-                    >
-                      <button
-                        onClick={() => {
-                          setIsOpen(false);
-                          notif.onClick();
-                        }}
-                        className="flex-1 flex items-start gap-3 min-w-0 text-left"
-                      >
-                        <div className="mt-0.5 shrink-0 p-2 bg-slate-100 dark:bg-slate-700/60 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-600 transition-colors shadow-sm">
-                          {notif.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                              {notif.title}
-                            </h4>
-                            <ChevronRight className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
-                          </div>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug line-clamp-2">
-                            {notif.message}
-                          </p>
-                        </div>
-                      </button>
-
-                      {/* Los avisos de configuracion no se pueden descartar:
-                          ya se pospusieron una vez en la pantalla, y se van
-                          solos cuando el dato se llena. Poder callarlos aqui
-                          tambien los dejaria sin efecto. */}
-                      {notif.type !== "config-pendiente" && notif.type !== "chat-pendiente" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDismissNotif(notif);
-                          }}
-                          title="Descartar notificación"
-                          className="shrink-0 ml-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors opacity-80 sm:opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] font-medium"
-                        >
-                          <X className="w-4 h-4" />
-                          <span className="hidden sm:inline">Descartar</span>
-                        </button>
+              <div className="overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+                    <Check className="w-8 h-8 mx-auto mb-3 text-emerald-500" />
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">No tienes pendientes</p>
+                    <p className="text-xs mt-0.5">Cuando haya algo que atender, aparecerá aquí.</p>
+                  </div>
+                ) : (
+                  NIVELES.filter((nv) => (pestana === "todo" || pestana === nv.id) && porNivel[nv.id].length > 0).map((nv) => (
+                    <div key={nv.id}>
+                      {pestana === "todo" && (
+                        <p className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 flex items-center gap-1.5">
+                          <span className={clsx("w-2 h-2 rounded-full", nv.punto)} /> {nv.titulo}
+                        </p>
                       )}
+                      {porNivel[nv.id].map((g) => {
+                        const cfg = GRUPOS[g.grupo];
+                        const abierto = abiertos[g.grupo] ?? nv.id === "ahora";
+                        const todos = verMas[g.grupo];
+                        const visibles = abierto ? g.items.slice(0, todos ? 20 : 3) : [];
+                        return (
+                          <div key={g.grupo} className="border-t border-slate-100 dark:border-slate-700/60 first:border-t-0">
+                            <button onClick={() => setAbiertos({ ...abiertos, [g.grupo]: !abierto })} className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 text-left" aria-expanded={abierto}>
+                              <cfg.Icono className={clsx("w-4 h-4 shrink-0", cfg.color)} />
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-sm font-extrabold text-slate-900 dark:text-slate-100 truncate">{g.items.length} · {cfg.titulo(g.items.length)}</span>
+                                {g.detalle && <span className="block text-[11px] text-slate-500 dark:text-slate-400 truncate">{g.detalle}</span>}
+                              </span>
+                              {abierto ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                            </button>
+                            {visibles.map((notif) => (
+                              <div key={`notif-${notif.id}`} className="flex items-start gap-2 pl-10 pr-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/40 group">
+                                <button onClick={() => { setIsOpen(false); notif.onClick(); }} className="flex-1 min-w-0 text-left">
+                                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{notif.title}</p>
+                                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug line-clamp-2">{notif.message}</p>
+                                </button>
+                                {notif.type !== "config-pendiente" && notif.type !== "chat-pendiente" && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleDismissNotif(notif); }} title="Descartar" aria-label="Descartar" className="shrink-0 p-1 text-slate-300 hover:text-red-500 rounded sm:opacity-0 group-hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
+                                )}
+                              </div>
+                            ))}
+                            {abierto && (
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-10 pr-4 pb-2.5 text-[11px] font-bold">
+                                {g.items.length > 3 && !todos && <button onClick={() => setVerMas({ ...verMas, [g.grupo]: true })} className="text-blue-700 dark:text-blue-400 hover:underline">Ver {Math.min(g.items.length, 20) - 3} más</button>}
+                                {cfg.ruta && <button onClick={() => { setIsOpen(false); navigate(cfg.ruta!); }} className="text-blue-700 dark:text-blue-400 hover:underline">{cfg.verTodas || "Ver todo"} →</button>}
+                                {g.grupo !== "chats" && g.grupo !== "config" && g.items.length > 1 && (
+                                  <button onClick={() => { if (window.confirm(`¿Descartar los ${g.items.length} avisos de «${cfg.titulo(g.items.length)}»? Volverán a salir si aparece uno nuevo.`)) g.items.forEach((x) => descartarAviso(x.id)); }} className="text-slate-500 hover:text-red-600 ml-auto">Descartar todos</button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        </>
+          </>
         )}
       </div>
 
