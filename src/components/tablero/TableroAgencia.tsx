@@ -141,7 +141,7 @@ export function TableroAgencia(p: TableroAgenciaProps) {
 
   return (
     <div className="space-y-4">
-      {/* Encabezado: titulo y buscador a la misma altura; abajo, secciones, periodo y reporte */}
+      {/* Encabezado: título y periodo/reporte; abajo, un solo renglón de menús: secciones y buscador */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
         <div className="p-4 md:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="min-w-0">
@@ -149,26 +149,6 @@ export function TableroAgencia(p: TableroAgenciaProps) {
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 truncate">
               {p.agencia || "Tu agencia"}
             </h1>
-          </div>
-          {p.buscador && <div className="w-full lg:w-[26rem] shrink-0">{p.buscador}</div>}
-        </div>
-        <div className="border-t border-slate-100 dark:border-slate-700 px-3 md:px-4 py-2.5 flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
-          <div className="flex gap-1 overflow-x-auto" role="tablist">
-            {PESTANAS.map((x) => (
-              <button
-                key={x.id}
-                role="tab"
-                aria-selected={pestana === x.id}
-                onClick={() => setPestana(x.id)}
-                className={`h-9 px-4 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
-                  pestana === x.id
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                }`}
-              >
-                {x.nombre}
-              </button>
-            ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
@@ -201,6 +181,26 @@ export function TableroAgencia(p: TableroAgenciaProps) {
               <FileSpreadsheet className="w-3.5 h-3.5" /> Reporte completo
             </button>
           </div>
+        </div>
+        <div className="border-t border-slate-100 dark:border-slate-700 px-3 md:px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <div className="flex gap-1 overflow-x-auto" role="tablist">
+            {PESTANAS.map((x) => (
+              <button
+                key={x.id}
+                role="tab"
+                aria-selected={pestana === x.id}
+                onClick={() => setPestana(x.id)}
+                className={`h-9 px-4 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
+                  pestana === x.id
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                }`}
+              >
+                {x.nombre}
+              </button>
+            ))}
+          </div>
+          {p.buscador && <div className="w-full md:w-[24rem] shrink-0 [&_input]:!h-9 [&_input]:!text-sm">{p.buscador}</div>}
         </div>
       </div>
 

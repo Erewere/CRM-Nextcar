@@ -12,7 +12,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Client, Vehicle, Task, User } from "../types";
-import { AiAdvisorPanel } from "../components/AiAdvisorPanel";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { VehicleDetailModal } from "../components/VehicleDetailModal";
 import { AgencyRevenueModal } from "../components/AgencyRevenueModal";
@@ -73,7 +72,6 @@ import {
   isValid,
 } from "date-fns";
 
-import { LeadScoringEngine } from "../modules/lead-intelligence/services/scoringEngine";
 
 import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
@@ -458,20 +456,7 @@ export function Dashboard() {
     return filteredClients.filter((c) => isWon(c.status));
   }, [filteredClients, pipelineStages]);
 
-  const clientsWithScores = useMemo(() => {
-    return activeContacts.map(client => {
-      const cId = (client as any).originalClientId || client.id;
-      const clientTasks = tasks.filter(t => t.clientId === client.id || (cId && t.clientId === cId) || (t.dealId && t.dealId === client.id));
-      const clientNotes = notes.filter(n => n.clientId === client.id || (cId && n.clientId === cId) || (n.dealId && n.dealId === client.id));
-      const scoreInfo = LeadScoringEngine.calculateScore(client, clientTasks, pipelineStages, clientNotes);
-      return {
-        ...client,
-        leadScore: scoreInfo.score,
-        probabilityCategory: scoreInfo.probabilityCategory,
-        scoreDetails: scoreInfo
-      };
-    }).sort((a, b) => b.leadScore - a.leadScore);
-  }, [activeContacts, tasks, pipelineStages, notes]);
+
 
   // Lead Intelligence: a quién atender hoy (reglas explicables, calculadas aquí con los datos de la agencia).
   const prospectosInteligentes = useMemo(
@@ -481,6 +466,12 @@ export function Dashboard() {
     }),
     [displayClients, clients, tasks, notes, vehiculosCrudos, pipelineStages, users],
   );
+  // Lo que antes calculaba el «score» viejo, ahora con el mismo motor (para las vistas que lo usan).
+  const clientsWithScores = useMemo(() => prospectosInteligentes.map((x) => ({
+    ...x.cliente,
+    leadScore: x.puntos,
+    probabilityCategory: x.temperatura === "caliente" ? "Alta" : x.temperatura === "frio" ? "Baja" : "Media",
+  })) as any[], [prospectosInteligentes]);
 
   const sellerPerformance = useMemo(() => {
     if (userData?.role !== "admin") return [];
@@ -690,7 +681,8 @@ export function Dashboard() {
     return (
       <div className={isReadOnly ? "pointer-events-none opacity-80 select-none relative" : ""}>
         {isReadOnly && <div className="absolute inset-0 z-50 pointer-events-auto cursor-not-allowed bg-transparent" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} />}
-        <MobileHome 
+        <MobileHome
+          leadIntel={<LeadInteligente prospectos={prospectosInteligentes} onAbrir={setSelectedClient} />} 
           userName={userData?.name || userData?.email || "Asesor"}
           agencyId={userData?.agencyId || ""}
           agencyName={agencyName}
@@ -909,14 +901,6 @@ export function Dashboard() {
     <div className={isReadOnly ? "pointer-events-none opacity-80 select-none relative" : ""}>
       {isReadOnly && <div className="absolute inset-0 z-50 pointer-events-auto cursor-not-allowed bg-transparent" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} />}
       <div className="space-y-4 pb-8">
-        {/* AI Advisor Panel */}
-        <AiAdvisorPanel 
-          userName={userData?.name || userData?.email || "Asesor"}
-          agencyId={userData?.agencyId || ''}
-          activeContacts={activeContacts}
-          tasks={tasks}
-          pipelineStages={pipelineStages}
-        />
 
       {isMobile ? (
         <div className="flex flex-col gap-3 mb-6 mt-4">
@@ -1492,106 +1476,8 @@ export function Dashboard() {
                 {/* Left Column (8/12) */}
                 <div className="space-y-6">
                   
-                  {/* Mayor Lead Score Detailed Board */}
-                  <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-700/50 pb-4">
-                      <div>
-                        <span className="inline-flex items-center gap-1 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-full">
-                          <Flame className="w-3.5 h-3.5 text-indigo-500 animate-bounce" />
-                          ALTA PRIORIDAD (MAYOR LEAD SCORE)
-                        </span>
-                        <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mt-2">
-                          Mis Prospectos Calientes
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Enfoca tus llamadas en estos clientes. Su puntuación refleja un perfil completo, interés claro y un seguimiento activo.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      {clientsWithScores.slice(0, 6).map((client) => (
-                        <div 
-                          key={`seller-lead-${client.id}`}
-                          className="p-4 bg-[#f4f5f5] dark:bg-slate-900/50 hover:bg-[#f4f5f5] hover:dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full ${
-                                client.leadScore >= 75 ? "bg-emerald-500 animate-pulse" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                              }`} />
-                              <h4 className="text-base font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                                {client.name}
-                              </h4>
-                              {client.probabilityCategory === "Alta" && (
-                                <span className="text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-900/30">
-                                  Caliente
-                                </span>
-                              )}
-                            </div>
-                            
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mt-1.5 truncate">
-                              Busca: <span className="text-slate-800 dark:text-slate-200 font-extrabold">{getWantedTitle(client)}</span>
-                            </p>
-
-                            {/* Core Factors Visualizer */}
-                            <div className="flex flex-wrap gap-2 mt-3 text-[10px]">
-                              <span className={`px-2 py-0.5 rounded border ${
-                                client.scoreDetails?.factors.profileCompleteness && client.scoreDetails.factors.profileCompleteness >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
-                              }`}>
-                                Perfil Completo: {client.scoreDetails?.factors.profileCompleteness || 0}/25
-                              </span>
-                              <span className={`px-2 py-0.5 rounded border ${
-                                client.scoreDetails?.factors.budget && client.scoreDetails.factors.budget >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
-                              }`}>
-                                Presupuesto: {client.scoreDetails?.factors.budget || 0}/20
-                              </span>
-                              <span className={`px-2 py-0.5 rounded border ${
-                                client.scoreDetails?.factors.urgency && client.scoreDetails.factors.urgency >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
-                              }`}>
-                                Pipeline: {client.scoreDetails?.factors.urgency || 0}/25
-                              </span>
-                              <span className={`px-2 py-0.5 rounded border ${
-                                client.scoreDetails?.factors.activity && client.scoreDetails.factors.activity >= 15
-                                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700" 
-                                  : "bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 border-gray-200/50 dark:border-slate-700/50"
-                              }`}>
-                                Seguimiento: {client.scoreDetails?.factors.activity || 0}/30
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4 border-t md:border-t-0 border-gray-200 dark:border-slate-800 pt-3 md:pt-0">
-                            {/* Score Display */}
-                            <div className="text-center md:px-4">
-                              <span className="block text-2xl font-black text-slate-850 dark:text-slate-100">{client.leadScore}</span>
-                              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Puntos Score</span>
-                            </div>
-
-                            {/* Action Button */}
-                            <button
-                              onClick={() => setSelectedClient(client)}
-                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black rounded shadow-sm shadow-blue-500/15 flex items-center gap-1.5 transition-all"
-                            >
-                              Atender
-                              <ArrowUpRight className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {clientsWithScores.length === 0 && (
-                        <div className="py-12 text-center text-slate-400 italic text-sm">
-                          No tienes prospectos activos en este momento.
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* Lead Intelligence del vendedor: a quién atender hoy, por qué y qué decirle */}
+                  <LeadInteligente prospectos={prospectosInteligentes} onAbrir={(c) => setSelectedClient(c as Client)} />
 
                   </div>
                   {/* Right Column (4/12) */}

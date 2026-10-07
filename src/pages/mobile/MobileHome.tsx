@@ -11,7 +11,6 @@ import {
   ExternalLink, MessageSquare, BadgeCheck, AlertTriangle
 } from "lucide-react";
 import clsx from "clsx";
-import { AiAdvisorPanel } from "../../components/AiAdvisorPanel";
 import { getClientMatches } from "../../services/matchingEngine";
 import { useSharedInventoryMatches } from "../../hooks/useSharedInventoryMatches";
 import { VehicleDetailModal } from "../../components/VehicleDetailModal";
@@ -36,6 +35,8 @@ interface MobileHomeProps {
   onSelectVehicle?: (vehicle: Vehicle) => void;
   userRole?: string;
   clientsWithScores?: any[];
+  /** Lead Intelligence ya armado (a quién atender hoy). */
+  leadIntel?: React.ReactNode;
   sellerPerformance?: any[];
   conversionRate?: number;
   totalWonAmount?: number;
@@ -68,6 +69,7 @@ export function MobileHome({
   onSelectVehicle,
   userRole = "seller",
   clientsWithScores = [],
+  leadIntel,
   sellerPerformance = [],
   conversionRate = 0,
   totalWonAmount = 0,
@@ -235,54 +237,7 @@ export function MobileHome({
             
             {tablero}
 
-            {/* Admin Lead Intelligence (Scores Across Agency) */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-indigo-500 fill-indigo-500/10" />
-                <h2 className="text-base font-black text-slate-800 dark:text-white">Lead Intelligence General</h2>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm divide-y divide-slate-100 dark:divide-slate-750">
-                {clientsWithScores.slice(0, 5).map((client) => {
-                  const sellerObj = sellerPerformance.find(s => s.id === client.sellerId);
-                  return (
-                    <div 
-                      key={`admin-lead-${client.id}`}
-                      onClick={() => onSelectClient(client)}
-                      className="p-4 flex items-center justify-between active:bg-[#f4f5f5] dark:active:bg-slate-700/50 cursor-pointer"
-                    >
-                      <div className="min-w-0 flex-1 pr-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className={clsx("w-2 h-2 rounded-full shrink-0", 
-                            client.leadScore >= 75 ? "bg-emerald-500" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                          )} />
-                          <h4 className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{client.name}</h4>
-                        </div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1 truncate">
-                          {getWantedTitle(client)}
-                        </p>
-                        <p className="text-[9px] text-slate-400 mt-1">
-                          Asesor: <span className="font-bold text-slate-600 dark:text-slate-300">{sellerObj?.name || "Sin Asignar"}</span>
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className={clsx(
-                          "inline-block font-black text-xs px-2 py-0.5 rounded-full text-white",
-                          client.leadScore >= 75 ? "bg-emerald-500" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                        )}>
-                          Score: {client.leadScore}
-                        </span>
-                        <span className="block text-[8px] font-black uppercase text-slate-400 tracking-wider mt-1">
-                          Prob. {client.probabilityCategory}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-                {clientsWithScores.length === 0 && (
-                  <p className="text-xs text-slate-400 italic text-center py-6">No hay prospectos activos con Lead Score calculado.</p>
-                )}
-              </div>
-            </section>
+            {leadIntel}
 
             {/* Inventory Checklist Alerts for Mobile */}
             {missingChecklistVehicles.length > 0 && (
@@ -418,125 +373,7 @@ export function MobileHome({
               </div>
             </div>
 
-            {/* Lead Intelligence (Mis Prospectos Calientes - Accordion list with detailed score factor visualizer) */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-indigo-500 fill-indigo-500/10" />
-                <h2 className="text-base font-black text-slate-800 dark:text-white">Mis Prospectos Calientes</h2>
-              </div>
-              
-              <div className="space-y-3">
-                {clientsWithScores.slice(0, 5).map((client) => {
-                  const isSelected = selectedLeadId === client.id;
-                  return (
-                    <div 
-                      key={`seller-lead-${client.id}`} 
-                      className={clsx(
-                        "bg-white dark:bg-slate-800 rounded border transition-all duration-250 shadow-sm",
-                        isSelected 
-                          ? "border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/10" 
-                          : "border-gray-200 dark:border-slate-700 hover:border-slate-300"
-                      )}
-                    >
-                      {/* Main Summary Header of Card */}
-                      <div 
-                        onClick={() => setSelectedLeadId(isSelected ? null : client.id)}
-                        className="p-4 flex items-center justify-between cursor-pointer"
-                      >
-                        <div className="min-w-0 flex-1 pr-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className={clsx(
-                              "w-2 h-2 rounded-full shrink-0",
-                              client.leadScore >= 75 ? "bg-emerald-500 animate-pulse" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                            )} />
-                            <h4 className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{client.name}</h4>
-                          </div>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1 truncate">
-                            Busca: <span className="text-slate-800 dark:text-slate-200 font-extrabold">{getWantedTitle(client)}</span>
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="text-right">
-                            <span className={clsx(
-                              "inline-block font-black text-xs px-2.5 py-1 rounded-full text-white shadow-sm",
-                              client.leadScore >= 75 ? "bg-emerald-500" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                            )}>
-                              {client.leadScore} Pts
-                            </span>
-                          </div>
-                          <ChevronRight className={clsx(
-                            "w-4 h-4 text-slate-400 transition-transform",
-                            isSelected && "rotate-95 text-indigo-500"
-                          )} />
-                        </div>
-                      </div>
-
-                      {/* Expanded Factor Score Details */}
-                      {isSelected && (
-                        <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-slate-750 space-y-3 bg-[#f4f5f5]/50 dark:bg-slate-850/30 rounded-b-2xl animate-fadeIn">
-                          <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Factores del Lead Score:</div>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Perfil Completo</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.scoreDetails?.factors.profileCompleteness || 0}/25</span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-blue-500 h-full rounded-full" style={{ width: `${((client.scoreDetails?.factors.profileCompleteness || 0)/25)*100}%` }} />
-                              </div>
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Presupuesto</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.scoreDetails?.factors.budget || 0}/20</span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${((client.scoreDetails?.factors.budget || 0)/20)*100}%` }} />
-                              </div>
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Fase Pipeline</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.scoreDetails?.factors.urgency || 0}/25</span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-amber-500 h-full rounded-full" style={{ width: `${((client.scoreDetails?.factors.urgency || 0)/25)*100}%` }} />
-                              </div>
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Seguimiento</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.scoreDetails?.factors.activity || 0}/30</span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${((client.scoreDetails?.factors.activity || 0)/30)*100}%` }} />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2 pt-2.5 border-t border-gray-200 dark:border-slate-750">
-                            <button
-                              onClick={() => onSelectClient(client)}
-                              className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded shadow-sm flex items-center justify-center gap-1.5 transition-all"
-                            >
-                              Atender Lead
-                              <ArrowUpRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {clientsWithScores.length === 0 && (
-                  <p className="text-xs text-slate-400 italic text-center py-6">No tienes prospectos activos en este momento.</p>
-                )}
-              </div>
-            </section>
+            {leadIntel}
 
             {/* High-Affinity Inventory Matches */}
             <section className="space-y-3">
@@ -602,16 +439,6 @@ export function MobileHome({
               </div>
             </section>
 
-            {/* AI Advisor Panel (Specific context for active seller) */}
-            <div className="relative">
-              <AiAdvisorPanel 
-                userName={userName}
-                agencyId={agencyId}
-                activeContacts={activeContacts}
-                tasks={tasks}
-                pipelineStages={pipelineStages}
-              />
-            </div>
 
             {/* Today's Action Center */}
             <section className="space-y-4">
