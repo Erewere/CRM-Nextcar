@@ -10,6 +10,8 @@
  * recortan las hojas de estilo y no entienden flexbox.
  */
 
+import { DURACION_PRUEBA_DIAS } from "./subscription";
+
 // Colores del Manual de marca v1.0 (septiembre 2026, en Recursos de Marca).
 // La aguja roja es el unico punto de color: el rojo va en el boton de accion
 // y en texto de acento, nunca de relleno. Dos colores de fondo: negro y blanco.
@@ -244,8 +246,8 @@ export function correoInvitacionAgencia(d: {
     <p style="margin:0 0 22px;color:${CUERPO};font-size:15px;line-height:1.65;">
       Somos una agencia de seminuevos, como la suya. Nextcar CRM nació de
       nuestra propia operación y hoy lo usamos todos los días para vender
-      autos — ahora lo ponemos a disposición de otras agencias en Guanajuato
-      y Querétaro.
+      autos — ahora lo ponemos a disposición de otras agencias de seminuevos
+      en México.
     </p>
 
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BLANCO};border:1px solid ${LINEA};border-radius:8px;padding:16px 18px;margin:0 0 26px;">
@@ -268,21 +270,25 @@ export function correoInvitacionAgencia(d: {
       <li><strong>Reportes reales</strong> — qué campaña y qué vendedor están cerrando ventas de verdad.</li>
     </ul>
 
-    <p style="margin:0 0 6px;color:${CUERPO};font-size:14px;line-height:1.6;">
-      Nos encantaría mostrárselo en una llamada de 15 minutos, sin costo ni compromiso.
-    </p>
-    ${boton("Conocer Nextcar CRM", CONTACTO.crm)}
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BLANCO};border:1px solid ${LINEA};border-radius:8px;padding:16px 18px;margin:0 0 4px;">
+      <tr><td style="color:${NEGRO};font-size:15px;line-height:1.6;">
+        <span style="color:${ROJO_TEXTO};font-size:12px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;">Pruébelo sin pagar</span><br>
+        <strong>${DURACION_PRUEBA_DIAS} días gratis</strong>, con su propio equipo y sus propios autos.
+        Sin tarjeta: crea su cuenta y empieza a trabajar el mismo día.
+      </td></tr>
+    </table>
+    ${boton(`Empezar mis ${DURACION_PRUEBA_DIAS} días gratis`, CONTACTO.crm)}
     <p style="margin:-14px 0 0;color:${CUERPO};font-size:13px;line-height:1.5;">
-      ¿Prefiere WhatsApp? Escríbanos directo:
+      ¿Prefiere que se la dejemos lista o verlo en una llamada de 15 minutos? Escríbanos por WhatsApp:
       <a href="${esc(CONTACTO.whatsappEnlace)}" style="color:${ROJO_TEXTO};text-decoration:none;font-weight:600;">${esc(CONTACTO.whatsapp)}</a>
     </p>`;
 
   return {
-    subject: `${d.agencia}: el CRM que usamos en Nextcar, ahora para su agencia`,
+    subject: `${d.agencia}: pruebe ${DURACION_PRUEBA_DIAS} días gratis el CRM que usamos en Nextcar`,
     html: envoltura(
       `Conozca Nextcar CRM`,
       cuerpo,
-      `Le escribimos porque ${d.agencia} aparece en nuestro directorio de agencias de seminuevos en Guanajuato y Querétaro. Si prefiere no recibir más correos de este tipo, respóndanos y lo quitamos de la lista.`,
+      `Le escribimos porque ${d.agencia} aparece en nuestro directorio de agencias de seminuevos. Si prefiere no recibir más correos de este tipo, respóndanos y lo quitamos de la lista.`,
     ),
   };
 }
