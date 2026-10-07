@@ -411,7 +411,7 @@ function MetaDelMes({ irA }: { irA: (p: Pestana) => void }) {
       <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-8">
         <div className="shrink-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">Meta del equipo</p>
-          <p className="text-sm font-extrabold capitalize text-slate-900 dark:text-white">{nombreDelMes(mes)}</p>
+          <p className="text-sm font-extrabold text-slate-900 dark:text-white">{nombreDelMes(mes)}</p>
         </div>
         {meta > 0 ? (
           <>

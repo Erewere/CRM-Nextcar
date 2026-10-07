@@ -21,8 +21,8 @@ export function MetaBarra({ ventas, meta, mes, unidad = "autos", oscuro = false,
       </div>
       {!compacta && meta > 0 && (
         <p className={clsx("text-[11px] mt-1", oscuro ? "text-white/60" : "text-slate-500")}>
-          {a.estado === "cumplida" ? "¡Meta cumplida!" : a.diasRestantes === 0 ? `Faltaron ${a.falta}` : `Faltan ${a.falta} · quedan ${a.diasRestantes} día${a.diasRestantes === 1 ? "" : "s"}`}
-          {a.proyeccion != null && a.estado !== "cumplida" && a.diasRestantes > 0 ? ` · a este ritmo cierras en ${a.proyeccion}` : ""}
+          {a.estado === "cumplida" ? "¡Meta cumplida!" : a.diasRestantes === 0 ? `Faltaron ${f(a.falta)}` : `Faltan ${f(a.falta)} · quedan ${a.diasRestantes} día${a.diasRestantes === 1 ? "" : "s"}`}
+          {a.proyeccion != null && a.estado !== "cumplida" && a.diasRestantes > 0 ? ` · a este ritmo cierras en ${formato ? f(Math.round(a.proyeccion)) : a.proyeccion}` : ""}
         </p>
       )}
     </div>

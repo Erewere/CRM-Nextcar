@@ -82,7 +82,7 @@ export function MetasDelEquipo() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <button type="button" aria-label="Mes anterior" onClick={() => setMes(sumarMes(mes, -1))} className="h-9 w-9 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700"><ChevronLeft className="w-4 h-4" /></button>
-          <p className="text-base font-extrabold capitalize text-slate-900 dark:text-white w-44 text-center">{nombreDelMes(mes)}</p>
+          <p className="text-base font-extrabold text-slate-900 dark:text-white w-44 text-center">{nombreDelMes(mes)}</p>
           <button type="button" aria-label="Mes siguiente" onClick={() => setMes(sumarMes(mes, 1))} className="h-9 w-9 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700"><ChevronRight className="w-4 h-4" /></button>
           {mes !== mesActual() && <button type="button" onClick={() => setMes(mesActual())} className="text-xs font-bold text-blue-700 hover:underline ml-1">Ir al mes actual</button>}
         </div>
@@ -107,7 +107,7 @@ export function MetasDelEquipo() {
             <p className="text-sm text-white/70 mt-2">{puede ? "Escribe la meta de autos del equipo para ver cómo va." : "Aún no se fija la meta del equipo."}</p>
           )}
           {num(b.equipo.ingresos) > 0 && (
-            <div className="mt-3"><MetaBarra oscuro compacta unidad="" ventas={Math.round(datos.equipo.monto)} meta={num(b.equipo.ingresos)} mes={mes} /><p className="text-[11px] text-white/60 mt-1">Ingresos: {dinero(datos.equipo.monto)} de {dinero(num(b.equipo.ingresos))}</p></div>
+            <div className="mt-3"><MetaBarra oscuro compacta unidad="en ingresos" formato={dinero} ventas={Math.round(datos.equipo.monto)} meta={num(b.equipo.ingresos)} mes={mes} /></div>
           )}
         </div>
         {puede ? (
