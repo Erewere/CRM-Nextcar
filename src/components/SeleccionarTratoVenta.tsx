@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { completarValorDelTrato } from "../lib/valorDelTrato";
 import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -160,6 +161,7 @@ export function SeleccionarTratoVenta({
         value: 0,
         createdAt: new Date().toISOString(),
       });
+      await completarValorDelTrato(ref.id);
       onElegido(ref.id, `${titulo} · ${nombreCliente}`);
     } catch (e: any) {
       alert("No se pudo crear el trato: " + (e?.message || e));

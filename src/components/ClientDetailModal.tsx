@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
+import { completarValorDelTrato } from "../lib/valorDelTrato";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router";
 import imageCompression from "browser-image-compression";
@@ -801,6 +802,7 @@ export function ClientDetailModal({
 
         if (finalDealId) {
           await guardarTratoSiExiste(finalDealId, updates);
+          await completarValorDelTrato(finalDealId as string);
           avisarEtapaCredito(finalDealId as string, newStatus, pipelineStages);
         }
 

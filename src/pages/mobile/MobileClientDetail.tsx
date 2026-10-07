@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { completarValorDelTrato } from "../../lib/valorDelTrato";
 import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic, Calculator, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { Client, Vehicle } from '../../types';
 import { db } from '../../lib/firebase';
@@ -458,6 +459,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           updatedAt: new Date().toISOString()
         });
         
+        completarValorDelTrato(client.id!);
         avisarEtapaCredito(client.id!, newStatus, pipelineStages);
 
         // Also update the client
@@ -486,6 +488,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
             status: newStatus,
             updatedAt: new Date().toISOString()
           });
+          completarValorDelTrato(dealDoc.id);
           avisarEtapaCredito(dealDoc.id, newStatus, pipelineStages);
         }
       }

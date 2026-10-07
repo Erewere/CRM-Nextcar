@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { completarValorDelTrato } from "../lib/valorDelTrato";
 import { useAuth } from "../contexts/AuthContext";
 import { useReadOnly } from "../hooks/useReadOnly";
 import {
@@ -605,6 +606,7 @@ export function Kanban() {
         });
       }
       // Si la etapa es la de crédito, se abre la solicitud del cliente.
+      await completarValorDelTrato(idDelTrato);
       avisarEtapaCredito(idDelTrato, destinoId, columns.map((c: any) => ({ id: c.id, title: c.title })));
     } catch (e) {
       console.error("Status update error", e);
