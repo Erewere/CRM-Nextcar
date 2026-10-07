@@ -20,6 +20,7 @@ import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, even
 import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
+import { AgendaTareas } from "../components/tareas/AgendaTareas";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { NewActivityModal } from "../components/NewActivityModal";
 import {
@@ -47,6 +48,9 @@ import {
   Trash2,
   Clock,
   DollarSign,
+  Search,
+  Plus,
+  Table2,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -85,7 +89,14 @@ export function Tasks() {
   const [clients, setClients] = useState<Client[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "calendar">("list");
+  // «agenda» es la vista nueva (por día); «list» es la tabla de siempre.
+  const [view, setViewEstado] = useState<"agenda" | "list" | "calendar">(() => {
+    try { const v = localStorage.getItem("tareas_vista"); return v === "list" || v === "calendar" ? v : "agenda"; } catch { return "agenda"; }
+  });
+  const setView = (v: "agenda" | "list" | "calendar") => { setViewEstado(v); try { localStorage.setItem("tareas_vista", v); } catch { /* sin almacenamiento */ } };
+  const [busqueda, setBusqueda] = useState("");
+  const [filterAsesor, setFilterAsesor] = useState("all");
+  const [nombresAsesor, setNombresAsesor] = useState<Record<string, string>>({});
   const [calendarMode, setCalendarMode] = useState<
     "day" | "week" | "month" | "year"
   >("week");
@@ -283,6 +294,30 @@ export function Tasks() {
     fetchTasksAndClients();
   }, [userData, refreshKey]);
 
+  useEffect(() => {
+    if (!userData?.agencyId || userData.role === "seller" || userData.role === "master") return;
+    getDocs(query(collection(db, "users"), where("agencyId", "==", userData.agencyId)))
+      .then((s) => setNombresAsesor(Object.fromEntries(s.docs.map((d) => [d.id, String(d.data().name || d.data().email || "").split(" ")[0]]))))
+      .catch(() => {});
+  }, [userData?.agencyId, userData?.role]);
+
+  /** Mueve una o varias tareas a una fecha y lo refleja en pantalla de inmediato. */
+  const reprogramar = async (ids: string[], fecha: string) => {
+    if (!ids.length) return;
+    try {
+      for (let i = 0; i < ids.length; i += 400) {
+        const batch = writeBatch(db);
+        ids.slice(i, i + 400).forEach((id) => batch.update(doc(db, "tasks", id), { dueDate: fecha, updatedAt: new Date() }));
+        await batch.commit();
+      }
+      setTasks((prev) => prev.map((t) => (ids.includes(t.task.id) ? { ...t, task: { ...t.task, dueDate: fecha } } : t)));
+      setSelectedTaskIds((prev) => prev.filter((id) => !ids.includes(id)));
+    } catch (e) {
+      console.error("Error al reprogramar:", e);
+      alert("No se pudo mover la fecha. Revisa tu conexión e inténtalo de nuevo.");
+    }
+  };
+
   const toggleTask = async (taskId: string, current: boolean) => {
     // Una mensualidad no se palomea: se da por pagada cuando se registra el
     // pago. Antes se marcaba hecha sin que entrara dinero (César Augusto,
@@ -404,6 +439,9 @@ export function Tasks() {
         }
       }
       await batch.commit();
+      setTasks((prev) => prev.map((t) => (selectedTaskIds.includes(t.task.id) && t.task.dueDate
+        ? { ...t, task: { ...t.task, dueDate: format(addDays(new Date(t.task.dueDate + "T00:00:00"), daysToPostpone), "yyyy-MM-dd") } }
+        : t)));
       setSelectedTaskIds([]);
     } catch (error) {
       console.error("Error postponing tasks:", error);
@@ -1130,6 +1168,11 @@ export function Tasks() {
     }
 
     return true;
+  }).filter(({ task, client }) => {
+    if (filterAsesor !== "all" && task.sellerId !== filterAsesor) return false;
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return true;
+    return `${task.title || ""} ${client?.name || ""} ${client?.phone || ""} ${(client as any)?.vehicle || ""}`.toLowerCase().includes(q);
   });
 
   const sortedTasks = useMemo(() => {
@@ -1189,6 +1232,20 @@ export function Tasks() {
     return sortableTasks;
   }, [filteredTasks, sortConfig]);
 
+  // Las cifras de arriba (sobre todas las tareas del usuario, sin filtros).
+  const resumenTareas = (() => {
+    const hoyD = startOfDay(new Date());
+    let vencidas = 0, hoy = 0, semana = 0, hechasHoy = 0;
+    for (const { task } of tasks) {
+      if (!task.dueDate) continue;
+      const f = new Date(task.dueDate + "T00:00:00");
+      const dif = Math.round((f.getTime() - hoyD.getTime()) / 86400000);
+      if (task.completed) { if (dif === 0) hechasHoy++; continue; }
+      if (dif < 0) vencidas++; else { if (dif === 0) hoy++; if (dif <= 6) semana++; }
+    }
+    return { vencidas, hoy, semana, hechasHoy };
+  })();
+
   if (loading)
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1199,430 +1256,141 @@ export function Tasks() {
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] relative">
 
-      {/* Header and filters */}
-      <div className="p-2 md:p-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-
-        {/* Sync alert mock removed for now */}
-
-        {/* Controls bar */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center bg-white dark:bg-slate-800 border border-gray-300 rounded shadow-sm overflow-hidden h-8 shrink-0">
-              <button
-                onClick={() => setView("list")}
-                className={clsx(
-                  "px-3 h-full flex items-center justify-center",
-                  view === "list"
-                    ? "bg-gray-100 text-blue-600"
-                    : "text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-                )}
-              >
-                <ListIcon className="w-4 h-4" />
-              </button>
-              <div className="w-px h-full bg-gray-300" />
-              <button
-                onClick={() => setView("calendar")}
-                className={clsx(
-                  "px-3 h-full flex items-center justify-center",
-                  view === "calendar"
-                    ? "bg-gray-100 text-blue-600"
-                    : "text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-                )}
-              >
-                <CalendarIcon className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div
-              onClick={() => setShowNewTaskModal(true)}
-              className="hidden md:flex items-center p-0.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded text-sm font-semibold cursor-pointer hover:bg-green-700 shadow-sm shrink-0"
-            >
-              <div className="px-3 flex items-center gap-1 border-r border-green-500">
-                <span className="text-lg leading-none mb-0.5">+</span> Actividad
-              </div>
-              <div className="px-1.5">
-                <ChevronDown className="w-4 h-4" />
-              </div>
-            </div>
+      {/* Encabezado: título, vistas y acción principal; abajo las cifras y los filtros */}
+      <div className="p-3 md:p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Tareas y calendario</p>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white truncate">
+              {userData?.role === "seller" ? "Mi agenda" : "Agenda del equipo"}
+            </h1>
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="hidden md:inline text-xs font-semibold text-gray-500 dark:text-slate-400">
-              {tasks.length} actividades
-            </span>
-            {googleToken ? (
-              <button
-                onClick={handleSyncCalendar}
-                disabled={isSyncing}
-                className="text-[10px] font-bold text-green-600 border border-green-200 bg-green-50 hover:bg-green-100 px-2 py-0.5 rounded-full uppercase cursor-pointer transition-colors"
-              >
-                {isSyncing ? 'Sincronizando...' : 'Sincronización Activa (Actualizar)'}
+          <div className="flex flex-wrap items-center gap-2">
+            {googleToken && (
+              <button onClick={handleSyncCalendar} disabled={isSyncing} className="h-9 px-3 rounded-lg text-xs font-bold text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300">
+                {isSyncing ? "Sincronizando…" : "Google activo · actualizar"}
               </button>
-            ) : null}
+            )}
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg" role="tablist">
+              {([["agenda", "Agenda", ListIcon], ["calendar", "Calendario", CalendarIcon], ["list", "Tabla", Table2]] as const).map(([id, t, Icono]) => (
+                <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)}
+                  className={clsx("h-8 px-3 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors", view === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>
+                  <Icono className="w-3.5 h-3.5" /> {t}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowNewTaskModal(true)} className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center gap-1.5">
+              <Plus className="w-4 h-4" /> Nueva actividad
+            </button>
+          </div>
+        </div>
 
+        {/* Cifras: tocar una filtra la lista */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {([
+            ["vencidas", "Atrasadas", resumenTareas.vencidas, "text-red-700 dark:text-red-400", "border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20", () => { setFilterStatus("pending"); setFilterDate("overdue"); }, filterDate === "overdue"],
+            ["hoy", "Para hoy", resumenTareas.hoy, "text-emerald-700 dark:text-emerald-400", "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/20", () => { setFilterStatus("pending"); setFilterDate("today"); }, filterDate === "today"],
+            ["semana", "Esta semana", resumenTareas.semana, "text-slate-900 dark:text-white", "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800", () => { setFilterStatus("pending"); setFilterDate("week"); }, filterDate === "week"],
+            ["hechas", "Hechas hoy", resumenTareas.hechasHoy, "text-slate-900 dark:text-white", "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800", () => { setFilterStatus("completed"); setFilterDate("today"); }, filterStatus === "completed" && filterDate === "today"],
+          ] as const).map(([id, t, n, color, caja, alClic, activo]) => (
+            <button key={id} onClick={alClic} aria-pressed={activo} className={clsx("text-left rounded-xl border px-3.5 py-2.5 transition-shadow hover:shadow-md", caja, activo && "ring-2 ring-slate-900 dark:ring-white")}>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{t}</p>
+              <p className={clsx("text-2xl font-extrabold leading-tight", color)}>{n}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Búsqueda y filtros */}
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar tarea, cliente o teléfono…" className="w-full h-9 pl-9 pr-8 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+              {busqueda && <button onClick={() => setBusqueda("")} aria-label="Limpiar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>}
+            </div>
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
+              {([["pending", "Pendientes"], ["completed", "Hechas"], ["all", "Todas"]] as const).map(([id, t]) => (
+                <button key={id} onClick={() => setFilterStatus(id)} className={clsx("h-8 px-3 rounded-md text-xs font-bold transition-colors", filterStatus === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>{t}</button>
+              ))}
+            </div>
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
+              {([["all", "Cualquier día"], ["overdue", "Atrasadas"], ["today", "Hoy"], ["tomorrow", "Mañana"], ["week", "Semana"]] as const).map(([id, t]) => (
+                <button key={id} onClick={() => setFilterDate(filterDate === id ? "all" : id)} className={clsx("h-8 px-3 rounded-md text-xs font-bold transition-colors whitespace-nowrap", filterDate === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>{t}</button>
+              ))}
+            </div>
+            {userData?.role !== "seller" && Object.keys(nombresAsesor).length > 1 && (
+              <select value={filterAsesor} onChange={(e) => setFilterAsesor(e.target.value)} className="h-9 px-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                <option value="all">Todo el equipo</option>
+                {Object.entries(nombresAsesor).map(([id, n]) => <option key={id} value={id}>{n}</option>)}
+              </select>
+            )}
             {view === "list" && (
-              <div className="relative flex items-center gap-2 ml-auto sm:ml-0">
-                {selectedTaskIds.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowPostponeMenu(!showPostponeMenu)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded shadow-sm transition-colors"
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                        Posponer ({selectedTaskIds.length})
-                      </button>
-                      {showPostponeMenu && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 z-50 p-1">
-                          <button
-                            onClick={() => {
-                              handlePostponeSelectedTasks(1);
-                              setShowPostponeMenu(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                          >
-                            1 día (Mañana)
-                          </button>
-                          <button
-                            onClick={() => {
-                              handlePostponeSelectedTasks(2);
-                              setShowPostponeMenu(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                          >
-                            2 días
-                          </button>
-                          <button
-                            onClick={() => {
-                              handlePostponeSelectedTasks(7);
-                              setShowPostponeMenu(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                          >
-                            1 semana
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={handleDeleteSelectedTasks}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded shadow-sm transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Borrar ({selectedTaskIds.length})
-                    </button>
-                  </div>
-                )}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowColumnSettings(!showColumnSettings)}
-                    className="flex items-center justify-center p-1.5 border border-gray-300 rounded hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-gray-700 dark:text-slate-300"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                  {showColumnSettings && (
-                    <>
+              <div className="relative">
+                <button onClick={() => setShowColumnSettings(!showColumnSettings)} title="Columnas" aria-label="Columnas" className="h-9 w-9 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"><Settings className="w-4 h-4" /></button>
+                {showColumnSettings && (
+                  <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowColumnSettings(false)} />
-                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 z-50 p-3 text-sm">
-                    <div className="font-bold text-xs uppercase text-gray-500 dark:text-slate-400 mb-3">
-                      Columnas Visibles
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 p-3 text-sm">
+                      <div className="font-bold text-xs uppercase text-slate-500 mb-3">Columnas visibles</div>
+                      <div className="space-y-2">
+                        {Object.entries({ status: "Finalizada", title: "Asunto", deal: "Trato", dueDate: "Vencimiento", contact: "Persona de contacto", email: "Correo electrónico", phone: "Teléfono" }).map(([key, label]) => (
+                          <label key={key} className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={visibleColumns[key as keyof typeof visibleColumns]} onChange={(e) => setVisibleColumns((prev) => ({ ...prev, [key]: e.target.checked }))} className="rounded border-slate-300 text-blue-600" />
+                            <span className="text-slate-700 dark:text-slate-300">{label}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {Object.entries({
-                        status: "Finalizada",
-                        title: "Asunto",
-                        deal: "Trato",
-                        dueDate: "Vencimiento",
-                        contact: "Persona de contacto",
-                        email: "Correo electrónico",
-                        phone: "Teléfono",
-                      }).map(([key, label]) => (
-                        <label
-                          key={key}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={
-                              visibleColumns[key as keyof typeof visibleColumns]
-                            }
-                            onChange={(e) =>
-                              setVisibleColumns((prev) => ({
-                                ...prev,
-                                [key]: e.target.checked,
-                              }))
-                            }
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-gray-700 dark:text-slate-300 text-sm">
-                            {label}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
                   </>
                 )}
-                </div>
               </div>
             )}
-
-            <div className="relative">
-              <button
-                onClick={() => setShowFilterMenu(!showFilterMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-gray-700 dark:text-slate-300 ml-auto sm:ml-0"
-              >
-                <Filter className="w-3.5 h-3.5" /> Filtro
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([["all", "Todos", null], ["call", "Llamadas", Phone], ["appointment", "Citas", User], ["test_drive", "Pruebas de manejo", Car], ["signature", "Firmas", PenTool], ["payment", "Pagos", DollarSign], ["task", "Otras tareas", CalendarDays]] as const).map(([id, t, Icono]) => (
+              <button key={id} onClick={() => setFilterType(id)} className={clsx("h-8 px-3 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-colors", filterType === id ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700")}>
+                {Icono && <Icono className="w-3 h-3" />} {t}
               </button>
-              {showFilterMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 z-50 p-2 text-sm text-gray-700 dark:text-slate-300">
-                  <div className="font-bold text-xs uppercase text-gray-500 dark:text-slate-400 mb-2 px-2">
-                    Estado
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterStatus === "all" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterStatus("all")}
-                  >
-                    Todos los estados
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterStatus === "pending" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterStatus("pending")}
-                  >
-                    Pendientes
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterStatus === "completed" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterStatus("completed")}
-                  >
-                    Completadas
-                  </div>
-
-                  <div className="border-t border-gray-100 dark:border-slate-700 my-2"></div>
-
-                  <div className="font-bold text-xs uppercase text-gray-500 dark:text-slate-400 mb-2 px-2">
-                    Fecha
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterDate === "all" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterDate("all")}
-                  >
-                    Todas las fechas
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterDate === "overdue" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterDate("overdue")}
-                  >
-                    Vencidas
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterDate === "today" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterDate("today")}
-                  >
-                    Hoy
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterDate === "tomorrow" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterDate("tomorrow")}
-                  >
-                    Mañana
-                  </div>
-                  <div
-                    className={clsx(
-                      "px-2 py-1.5 rounded cursor-pointer hover:bg-blue-50",
-                      filterDate === "week" &&
-                        "bg-blue-50 text-blue-600 font-medium",
-                    )}
-                    onClick={() => setFilterDate("week")}
-                  >
-                    Esta semana
-                  </div>
-                </div>
-              )}
-            </div>
+            ))}
+            <span className="ml-auto text-xs font-semibold text-slate-500 hidden md:inline">{filteredTasks.length} de {tasks.length} actividades</span>
           </div>
         </div>
 
-        {/* Action types filters */}
-        <div className="hidden md:flex items-center gap-3 mt-4 overflow-x-auto pb-1 text-xs font-bold scrollbar-hide">
-          <span
-            className={clsx(
-              "shrink-0 cursor-pointer px-2 py-1 rounded",
-              filterType === "all"
-                ? "text-blue-600 bg-blue-50"
-                : "text-gray-700 dark:text-slate-300",
-            )}
-            onClick={() => setFilterType("all")}
-          >
-            Todos
-          </span>
-          <span
-            className={clsx(
-              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
-              filterType === "call"
-                ? "text-blue-600 bg-blue-100"
-                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-            )}
-            onClick={() => setFilterType("call")}
-          >
-            <Phone className="w-3 h-3" /> Llamada
-          </span>
-          <span
-            className={clsx(
-              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
-              filterType === "appointment"
-                ? "text-blue-600 bg-blue-100"
-                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-            )}
-            onClick={() => setFilterType("appointment")}
-          >
-            <User className="w-3 h-3" /> Cita
-          </span>
-          <span
-            className={clsx(
-              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
-              filterType === "test_drive"
-                ? "text-blue-600 bg-blue-100"
-                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-            )}
-            onClick={() => setFilterType("test_drive")}
-          >
-            <Car className="w-3 h-3" /> Prueba de manejo
-          </span>
-          <span
-            className={clsx(
-              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
-              filterType === "signature"
-                ? "text-blue-600 bg-blue-100"
-                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-            )}
-            onClick={() => setFilterType("signature")}
-          >
-            <PenTool className="w-3 h-3" /> Firma
-          </span>
-          <span
-            className={clsx(
-              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
-              filterType === "payment"
-                ? "text-emerald-600 bg-emerald-100"
-                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-            )}
-            onClick={() => setFilterType("payment")}
-          >
-            <DollarSign className="w-3 h-3" /> Pago
-          </span>
-          <span
-            className={clsx(
-              "shrink-0 px-2 py-1 flex items-center gap-1 cursor-pointer rounded",
-              filterType === "task"
-                ? "text-blue-600 bg-blue-100"
-                : "text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:bg-slate-900",
-            )}
-            onClick={() => setFilterType("task")}
-          >
-            <CalendarDays className="w-3 h-3" /> Tarea
-          </span>
-
-          <div className="md:ml-auto flex shrink-0 gap-3 text-xs text-gray-500 dark:text-slate-400 border-l border-gray-200 dark:border-slate-700 pl-3">
-            <span
-              className={clsx(
-                "cursor-pointer",
-                filterStatus === "all"
-                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
-                  : "hover:text-gray-800 dark:text-slate-200",
-              )}
-              onClick={() => setFilterStatus("all")}
-            >
-              Todas
-            </span>
-            <span
-              className={clsx(
-                "cursor-pointer",
-                filterStatus === "pending"
-                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
-                  : "hover:text-gray-800 dark:text-slate-200",
-              )}
-              onClick={() => setFilterStatus("pending")}
-            >
-              Pendientes
-            </span>
-            <span
-              className={clsx(
-                "cursor-pointer",
-                filterStatus === "completed"
-                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
-                  : "hover:text-gray-800 dark:text-slate-200",
-              )}
-              onClick={() => setFilterStatus("completed")}
-            >
-              Completadas
-            </span>
-            <span
-              className="mx-2 text-gray-300 dark:text-slate-600"
-            >
-              |
-            </span>
-            <span
-              className={clsx(
-                "cursor-pointer hidden sm:inline",
-                filterDate === "overdue"
-                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
-                  : "hover:text-gray-800 dark:text-slate-200",
-              )}
-              onClick={() =>
-                setFilterDate(filterDate === "overdue" ? "all" : "overdue")
-              }
-            >
-              Vencidas
-            </span>
-            <span
-              className={clsx(
-                "cursor-pointer hidden sm:inline",
-                filterDate === "today"
-                  ? "text-blue-600 border-b-2 border-blue-600 pb-0.5"
-                  : "hover:text-gray-800 dark:text-slate-200",
-              )}
-              onClick={() =>
-                setFilterDate(filterDate === "today" ? "all" : "today")
-              }
-            >
-              Hoy
-            </span>
+        {/* Lo seleccionado: acciones en bloque */}
+        {selectedTaskIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 px-3 py-2">
+            <span className="text-sm font-extrabold text-blue-900 dark:text-blue-200">{selectedTaskIds.length} seleccionada{selectedTaskIds.length === 1 ? "" : "s"}</span>
+            <span className="text-xs text-blue-800 dark:text-blue-300">Mover a:</span>
+            {([["Hoy", 0], ["Mañana", 1], ["En 2 días", 2], ["Próxima semana", 7]] as const).map(([t, d]) => (
+              <button key={t} onClick={() => reprogramar(selectedTaskIds, format(addDays(startOfDay(new Date()), d), "yyyy-MM-dd"))} className="h-8 px-3 rounded-lg bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900 text-xs font-bold text-blue-900 dark:text-blue-200 hover:bg-blue-100">{t}</button>
+            ))}
+            <button onClick={handleDeleteSelectedTasks} className="h-8 px-3 rounded-lg bg-white dark:bg-slate-800 border border-rose-200 text-xs font-bold text-rose-700 hover:bg-rose-50 flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Borrar</button>
+            <button onClick={() => setSelectedTaskIds([])} className="ml-auto text-xs font-bold text-blue-800 dark:text-blue-300 hover:underline">Quitar selección</button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Content Area */}
       <div className="flex-1 flex overflow-hidden bg-white dark:bg-slate-800">
         <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 flex flex-col">
+          {view === "agenda" && (
+            <div className="flex-1 bg-slate-50 dark:bg-slate-900">
+              <AgendaTareas
+                items={sortedTasks}
+                esAdmin={userData?.role !== "seller"}
+                nombres={nombresAsesor}
+                seleccionadas={selectedTaskIds}
+                onSeleccionar={toggleTaskSelection}
+                onAlternar={toggleTask}
+                onAbrir={(t) => setEditingTask(t)}
+                onAbrirCliente={(c) => setSelectedClient(c)}
+                onReprogramar={reprogramar}
+                onBorrar={(id) => setTaskToDelete(id)}
+                icono={getTaskIcon}
+                verCompletadas={filterStatus === "completed"}
+              />
+            </div>
+          )}
           {view === "list" && (
             <>
             <table className="hidden md:table w-full text-left border-collapse text-sm text-gray-800 dark:text-slate-200 table-fixed min-w-[800px]">
