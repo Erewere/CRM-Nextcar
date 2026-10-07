@@ -109,6 +109,10 @@ export interface TableroAgenciaProps {
   onAbrirVehiculo?: (id: string) => void;
   /** Lo del dia a dia que se queda debajo del resumen (alertas, tareas). */
   pendientes?: ReactNode;
+  /** La barra de busqueda del CRM: va en el encabezado, a la altura del titulo. */
+  buscador?: ReactNode;
+  /** Lead Intelligence: a quien atender hoy (va justo debajo de las cifras). */
+  inteligencia?: ReactNode;
 }
 
 export function TableroAgencia(p: TableroAgenciaProps) {
@@ -137,66 +141,71 @@ export function TableroAgencia(p: TableroAgenciaProps) {
 
   return (
     <div className="space-y-4">
-      {/* Encabezado: periodo y exportar */}
-      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Tablero de la agencia</p>
-          <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-            {p.agencia || "Tu agencia"}
-          </h1>
+      {/* Encabezado: titulo y buscador a la misma altura; abajo, secciones, periodo y reporte */}
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+        <div className="p-4 md:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Tablero de la agencia</p>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 truncate">
+              {p.agencia || "Tu agencia"}
+            </h1>
+          </div>
+          {p.buscador && <div className="w-full lg:w-[26rem] shrink-0">{p.buscador}</div>}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
-            {PERIODOS.map((x) => (
+        <div className="border-t border-slate-100 dark:border-slate-700 px-3 md:px-4 py-2.5 flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+          <div className="flex gap-1 overflow-x-auto" role="tablist">
+            {PESTANAS.map((x) => (
               <button
                 key={x.id}
-                onClick={() => setPeriodo(x.id)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
-                  periodo === x.id
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                role="tab"
+                aria-selected={pestana === x.id}
+                onClick={() => setPestana(x.id)}
+                className={`h-9 px-4 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
+                  pestana === x.id
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 }`}
               >
                 {x.nombre}
               </button>
             ))}
           </div>
-          <button
-            onClick={() => exportar(false)}
-            className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
-            title="Descarga en Excel lo que ves en esta pestaña"
-          >
-            <Download className="w-3.5 h-3.5" /> Exportar {PESTANAS.find((x) => x.id === pestana)!.nombre.toLowerCase()}
-          </button>
-          <button
-            onClick={() => exportar(true)}
-            className="text-xs font-semibold px-3 py-2 rounded-lg bg-[#D6402A] hover:bg-[#A82A17] text-white flex items-center gap-1.5"
-            title="Un libro de Excel con todas las pestañas"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" /> Reporte completo
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
+              {PERIODOS.map((x) => (
+                <button
+                  key={x.id}
+                  onClick={() => setPeriodo(x.id)}
+                  className={`h-8 px-3 rounded-md text-xs font-bold transition-colors ${
+                    periodo === x.id
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  {x.nombre}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => exportar(false)}
+              className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
+              title="Descarga en Excel lo que ves en esta pestaña"
+            >
+              <Download className="w-3.5 h-3.5" /> Exportar {PESTANAS.find((x) => x.id === pestana)!.nombre.toLowerCase()}
+            </button>
+            <button
+              onClick={() => exportar(true)}
+              className="h-9 px-3 rounded-lg bg-[#D6402A] hover:bg-[#A82A17] text-white text-xs font-bold flex items-center gap-1.5"
+              title="Un libro de Excel con todas las pestañas"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Reporte completo
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Pestañas */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
-        {PESTANAS.map((x) => (
-          <button
-            key={x.id}
-            onClick={() => setPestana(x.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors ${
-              pestana === x.id
-                ? "border-[#D6402A] text-slate-900 dark:text-white"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-            }`}
-          >
-            {x.nombre}
-          </button>
-        ))}
-      </div>
-
       {pestana === "resumen" && (
-        <Resumen a={a} h={h} verCostos={p.verCostos} irA={setPestana} periodo={nombrePeriodo} pendientes={p.pendientes} />
+        <Resumen a={a} h={h} verCostos={p.verCostos} irA={setPestana} periodo={nombrePeriodo} pendientes={p.pendientes} inteligencia={p.inteligencia} />
       )}
       {pestana === "ventas" && <Ventas a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
       {pestana === "inventario" && <Inventario a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
@@ -213,9 +222,9 @@ type A = ReturnType<typeof calcularAnalitica>;
 
 function Tarjeta({ titulo, children, accion }: { titulo: string; children: ReactNode; accion?: ReactNode }) {
   return (
-    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm p-4">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 md:p-5">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{titulo}</h3>
+        <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100">{titulo}</h3>
         {accion}
       </div>
       {children}
@@ -237,20 +246,24 @@ function Cambio({ ahora, antes }: { ahora: number; antes: number }) {
   );
 }
 
-function Kpi({ icono: Icono, titulo, valor, pie, onClick }: {
-  icono: typeof Car; titulo: string; valor: ReactNode; pie?: ReactNode; onClick?: () => void;
+function Kpi({ icono: Icono, titulo, valor, pie, onClick, destacado }: {
+  icono: typeof Car; titulo: string; valor: ReactNode; pie?: ReactNode; onClick?: () => void; destacado?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={!onClick}
-      className="text-left bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-sm p-4 enabled:hover:border-slate-400 dark:enabled:hover:border-slate-500 enabled:hover:shadow-md transition-all"
+      className={`text-left rounded-xl p-4 border transition-all ${
+        destacado
+          ? "bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-900"
+          : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 enabled:hover:border-slate-400 dark:enabled:hover:border-slate-500 enabled:hover:shadow-md"
+      }`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 flex items-center gap-1.5">
+      <p className={`text-[11px] font-bold uppercase tracking-[0.1em] flex items-center gap-1.5 ${destacado ? "opacity-75" : "text-slate-500"}`}>
         <Icono className="w-3.5 h-3.5" /> {titulo}
       </p>
-      <p className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mt-1">{valor}</p>
-      <div className="mt-1 min-h-[16px] text-[11px] text-slate-500">{pie}</div>
+      <p className={`text-2xl md:text-[28px] font-extrabold tracking-tight mt-1 ${destacado ? "" : "text-slate-900 dark:text-slate-100"}`}>{valor}</p>
+      <div className={`mt-1 min-h-[16px] text-[11px] ${destacado ? "opacity-80 [&_*]:!text-inherit" : "text-slate-500"}`}>{pie}</div>
     </button>
   );
 }
@@ -330,18 +343,16 @@ function Hallazgos({ h }: { h: Hallazgo[] }) {
   );
 }
 
-function Resumen({ a, h, verCostos, irA, periodo, pendientes }: {
-  a: A; h: Hallazgo[]; verCostos: boolean; irA: (p: Pestana) => void; periodo: string; pendientes?: ReactNode;
+function Resumen({ a, h, verCostos, irA, periodo, pendientes, inteligencia }: {
+  a: A; h: Hallazgo[]; verCostos: boolean; irA: (p: Pestana) => void; periodo: string; pendientes?: ReactNode; inteligencia?: ReactNode;
 }) {
   const r = a.resumen;
   const viejos = a.inventario.lista.filter((v) => v.dias != null && v.dias > 90).length;
   return (
     <div className="space-y-4">
-      <Hallazgos h={h} />
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi destacado icono={DollarSign} titulo="Ingresos por ventas" valor={dineroCorto(r.ingresos)} pie={<Cambio ahora={r.ingresos} antes={r.ingresosAntes} />} onClick={() => irA("ventas")} />
         <Kpi icono={Car} titulo="Autos vendidos" valor={r.ventas} pie={<Cambio ahora={r.ventas} antes={r.ventasAntes} />} onClick={() => irA("ventas")} />
-        <Kpi icono={DollarSign} titulo="Ingresos por ventas" valor={dineroCorto(r.ingresos)} pie={<Cambio ahora={r.ingresos} antes={r.ingresosAntes} />} onClick={() => irA("ventas")} />
         <Kpi icono={Receipt} titulo="Ticket promedio" valor={r.ventas ? dineroCorto(r.ticket) : "—"} pie={r.ventas ? <Cambio ahora={r.ticket} antes={r.ticketAntes} /> : null} onClick={() => irA("ventas")} />
         <Kpi icono={Users} titulo="Prospectos nuevos" valor={r.prospectos} pie={<Cambio ahora={r.prospectos} antes={r.prospectosAntes} />} onClick={() => irA("clientes")} />
         <Kpi icono={Clock} titulo="Días para vender" valor={r.diasParaVender ?? "—"} pie="la mitad se vende en menos" onClick={() => irA("ventas")} />
@@ -353,6 +364,10 @@ function Resumen({ a, h, verCostos, irA, periodo, pendientes }: {
         )}
         <Kpi icono={Briefcase} titulo="Tratos abiertos" valor={r.tratosAbiertos} pie="hoy, en el embudo" onClick={() => irA("equipo")} />
       </div>
+
+      {inteligencia}
+
+      <Hallazgos h={h} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Tarjeta titulo="Autos vendidos por mes (12 meses)">

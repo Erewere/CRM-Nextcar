@@ -79,6 +79,8 @@ import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 import { TableroAgencia } from "../components/tablero/TableroAgencia";
+import { LeadInteligente } from "../components/tablero/LeadInteligente";
+import { priorizarProspectos } from "../lib/prospectosInteligentes";
 import { TableroMovil } from "../components/tablero/TableroMovil";
 
 
@@ -471,6 +473,15 @@ export function Dashboard() {
     }).sort((a, b) => b.leadScore - a.leadScore);
   }, [activeContacts, tasks, pipelineStages, notes]);
 
+  // Lead Intelligence: a quién atender hoy (reglas explicables, calculadas aquí con los datos de la agencia).
+  const prospectosInteligentes = useMemo(
+    () => priorizarProspectos({
+      prospectos: displayClients, contactos: clients, tareas: tasks, notas: notes,
+      vehiculos: vehiculosCrudos, etapas: pipelineStages, usuarios: users,
+    }),
+    [displayClients, clients, tasks, notes, vehiculosCrudos, pipelineStages, users],
+  );
+
   const sellerPerformance = useMemo(() => {
     if (userData?.role !== "admin") return [];
     
@@ -737,6 +748,163 @@ export function Dashboard() {
     );
   }
 
+  const buscadorEscritorio = (
+            <div className="relative w-full">
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+                <input
+                  type="text"
+                  value={globalSearchQuery}
+                  onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  placeholder="Buscar vehículo, VIN, cliente, teléfono..."
+                  className="w-full h-11 pl-10 pr-9 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all"
+                />
+                {globalSearchQuery && (
+                  <button
+                    onClick={() => setGlobalSearchQuery("")}
+                    className="absolute right-2.5 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Search Results Dropdown */}
+              {globalSearchQuery.trim() !== "" && isSearchFocused && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsSearchFocused(false)}
+                  />
+
+                  <div className="absolute right-0 left-0 lg:left-auto lg:w-[480px] top-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden max-h-[500px] flex flex-col">
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Search className="w-3.5 h-3.5 text-blue-500" /> Búsqueda en el CRM
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                        {searchResults.vehicles.length + searchResults.clients.length} resultado(s)
+                      </span>
+                    </div>
+
+                    <div className="overflow-y-auto p-2 space-y-3 divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {searchResults.vehicles.length === 0 && searchResults.clients.length === 0 ? (
+                        <div className="py-8 text-center px-4">
+                          <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2 stroke-1" />
+                          <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                            Sin resultados para "<span className="font-semibold text-slate-800 dark:text-slate-200">{globalSearchQuery}</span>"
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            Prueba buscando por marca, modelo, VIN, nombre de cliente o número de teléfono.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {searchResults.vehicles.length > 0 && (
+                            <div className="pt-2 first:pt-0">
+                              <div className="px-2 py-1 flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                  <Car className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Vehículos / Inventario ({searchResults.vehicles.length})
+                                </span>
+                              </div>
+                              <div className="mt-1 space-y-1">
+                                {searchResults.vehicles.map((v) => (
+                                  <button
+                                    key={v.id}
+                                    onClick={() => {
+                                      setSelectedVehicle(v);
+                                      setIsSearchFocused(false);
+                                    }}
+                                    className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/70 transition-colors flex items-center justify-between group"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      {v.photoUrl ? (
+                                        <img src={v.photoUrl} alt="" className="w-10 h-10 object-cover rounded border border-slate-200 dark:border-slate-700 flex-shrink-0" />
+                                      ) : (
+                                        <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                          <Car className="w-5 h-5 text-slate-400" />
+                                        </div>
+                                      )}
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                                          {v.year} {v.make} {v.model}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                                          {v.vin && <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">VIN: {v.vin}</span>}
+                                          {v.color && <span>{v.color}</span>}
+                                          {v.status === 'sold' ? (
+                                            <span className="text-rose-600 font-semibold">Vendido</span>
+                                          ) : (
+                                            <span className="text-emerald-600 font-semibold">Disponible</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0 ml-2">
+                                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
+                                        ${new Intl.NumberFormat('es-MX').format(v.price || 0)}
+                                      </span>
+                                      <span className="text-[10px] text-blue-500 font-medium group-hover:underline flex items-center justify-end gap-0.5">
+                                        Ver vehículo <ChevronRight className="w-3 h-3" />
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {searchResults.clients.length > 0 && (
+                            <div className="pt-2 first:pt-0">
+                              <div className="px-2 py-1 flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                  <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> Clientes / Contactos ({searchResults.clients.length})
+                                </span>
+                              </div>
+                              <div className="mt-1 space-y-1">
+                                {searchResults.clients.map((c) => (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => {
+                                      setSelectedClient(c);
+                                      setIsSearchFocused(false);
+                                    }}
+                                    className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/70 transition-colors flex items-center justify-between group"
+                                  >
+                                    <div className="min-w-0 pr-2">
+                                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                        {c.name || 'Sin Nombre'}
+                                      </p>
+                                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                        {c.phone && <span className="flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{c.phone}</span>}
+                                        {c.vehicle && <span>Auto: {c.vehicle}</span>}
+                                        {c.status && (
+                                          <span className="bg-slate-100 dark:bg-slate-700 px-1 rounded font-medium text-slate-600 dark:text-slate-300">
+                                            {c.status}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <span className="text-[10px] text-indigo-500 font-medium group-hover:underline flex items-center justify-end gap-0.5">
+                                        Ver cliente <ChevronRight className="w-3 h-3" />
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+  );
+
   return (
     <div className={isReadOnly ? "pointer-events-none opacity-80 select-none relative" : ""}>
       {isReadOnly && <div className="absolute inset-0 z-50 pointer-events-auto cursor-not-allowed bg-transparent" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} />}
@@ -926,7 +1094,7 @@ export function Dashboard() {
         </div>
       </div>
       ) : (
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded border border-gray-200 dark:border-slate-700 shadow-sm">
+        <div className={`${userData?.role === "admin" ? "hidden" : "flex"} flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full bg-white dark:bg-slate-800 p-3 rounded border border-gray-200 dark:border-slate-700 shadow-sm`}>
           {userData?.role === "admin" ? <div /> : (
           <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
             <div className="flex items-center gap-2 pr-3 border-r border-gray-200 dark:border-slate-700 hidden sm:flex">
@@ -1004,161 +1172,7 @@ export function Dashboard() {
           </div>
           )}
 
-          {/* CRM Search Bar */}
-          <div className="relative w-full lg:w-96">
-            <div className="relative flex items-center">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
-              <input
-                type="text"
-                value={globalSearchQuery}
-                onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                placeholder="Buscar vehículo, VIN, cliente, teléfono..."
-                className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all shadow-inner"
-              />
-              {globalSearchQuery && (
-                <button
-                  onClick={() => setGlobalSearchQuery("")}
-                  className="absolute right-2.5 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Search Results Dropdown */}
-            {globalSearchQuery.trim() !== "" && isSearchFocused && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsSearchFocused(false)}
-                />
-
-                <div className="absolute right-0 left-0 lg:left-auto lg:w-[480px] top-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden max-h-[500px] flex flex-col">
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Search className="w-3.5 h-3.5 text-blue-500" /> Búsqueda en el CRM
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {searchResults.vehicles.length + searchResults.clients.length} resultado(s)
-                    </span>
-                  </div>
-
-                  <div className="overflow-y-auto p-2 space-y-3 divide-y divide-slate-100 dark:divide-slate-700/50">
-                    {searchResults.vehicles.length === 0 && searchResults.clients.length === 0 ? (
-                      <div className="py-8 text-center px-4">
-                        <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2 stroke-1" />
-                        <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                          Sin resultados para "<span className="font-semibold text-slate-800 dark:text-slate-200">{globalSearchQuery}</span>"
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Prueba buscando por marca, modelo, VIN, nombre de cliente o número de teléfono.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {searchResults.vehicles.length > 0 && (
-                          <div className="pt-2 first:pt-0">
-                            <div className="px-2 py-1 flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                <Car className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Vehículos / Inventario ({searchResults.vehicles.length})
-                              </span>
-                            </div>
-                            <div className="mt-1 space-y-1">
-                              {searchResults.vehicles.map((v) => (
-                                <button
-                                  key={v.id}
-                                  onClick={() => {
-                                    setSelectedVehicle(v);
-                                    setIsSearchFocused(false);
-                                  }}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/70 transition-colors flex items-center justify-between group"
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    {v.photoUrl ? (
-                                      <img src={v.photoUrl} alt="" className="w-10 h-10 object-cover rounded border border-slate-200 dark:border-slate-700 flex-shrink-0" />
-                                    ) : (
-                                      <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                                        <Car className="w-5 h-5 text-slate-400" />
-                                      </div>
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                                        {v.year} {v.make} {v.model}
-                                      </p>
-                                      <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                                        {v.vin && <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">VIN: {v.vin}</span>}
-                                        {v.color && <span>{v.color}</span>}
-                                        {v.status === 'sold' ? (
-                                          <span className="text-rose-600 font-semibold">Vendido</span>
-                                        ) : (
-                                          <span className="text-emerald-600 font-semibold">Disponible</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-right flex-shrink-0 ml-2">
-                                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
-                                      ${new Intl.NumberFormat('es-MX').format(v.price || 0)}
-                                    </span>
-                                    <span className="text-[10px] text-blue-500 font-medium group-hover:underline flex items-center justify-end gap-0.5">
-                                      Ver vehículo <ChevronRight className="w-3 h-3" />
-                                    </span>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {searchResults.clients.length > 0 && (
-                          <div className="pt-2 first:pt-0">
-                            <div className="px-2 py-1 flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> Clientes / Contactos ({searchResults.clients.length})
-                              </span>
-                            </div>
-                            <div className="mt-1 space-y-1">
-                              {searchResults.clients.map((c) => (
-                                <button
-                                  key={c.id}
-                                  onClick={() => {
-                                    setSelectedClient(c);
-                                    setIsSearchFocused(false);
-                                  }}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/70 transition-colors flex items-center justify-between group"
-                                >
-                                  <div className="min-w-0 pr-2">
-                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                      {c.name || 'Sin Nombre'}
-                                    </p>
-                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500 dark:text-slate-400">
-                                      {c.phone && <span className="flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{c.phone}</span>}
-                                      {c.vehicle && <span>Auto: {c.vehicle}</span>}
-                                      {c.status && (
-                                        <span className="bg-slate-100 dark:bg-slate-700 px-1 rounded font-medium text-slate-600 dark:text-slate-300">
-                                          {c.status}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <span className="text-[10px] text-indigo-500 font-medium group-hover:underline flex items-center justify-end gap-0.5">
-                                      Ver cliente <ChevronRight className="w-3 h-3" />
-                                    </span>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          {buscadorEscritorio}
         </div>
       )}
 
@@ -1277,6 +1291,8 @@ export function Dashboard() {
               tratos={deals}
               usuarios={users}
               etapas={pipelineStages}
+              buscador={buscadorEscritorio}
+              inteligencia={<LeadInteligente prospectos={prospectosInteligentes} onAbrir={setSelectedClient} />}
               onAbrirVehiculo={(id) => {
                 const v = vehicles.find((x) => x.id === id);
                 if (v) setSelectedVehicle(v);
@@ -1317,71 +1333,10 @@ export function Dashboard() {
                     </div>
                   </div>
                 )}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-                    {/* Mayor Lead Score Panel for Admin */}
-                    <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5 flex flex-col">
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/30">
-                            <Flame className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500/10" />
-                            Lead Intelligence
-                          </span>
-                        </div>
-                        <h3 className="text-base font-black text-slate-800 dark:text-slate-100 mt-2">
-                          Top Leads con Mayor Lead Score
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Oportunidades más calientes en la agencia ordenadas por probabilidad de éxito.
-                        </p>
-                      </div>
-  
-                      <div className="space-y-3 divide-y divide-slate-100 dark:divide-slate-700/50">
-                        {clientsWithScores.slice(0, 5).map((client, idx) => {
-                          const sellerObj = allSellersAndAdmins.find(u => u.id === client.sellerId);
-                          return (
-                            <div 
-                              key={`admin-lead-${client.id}`}
-                              onClick={() => setSelectedClient(client)}
-                              className="pt-3 first:pt-0 group cursor-pointer"
-                            >
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="min-w-0">
-                                  <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                                    {client.name}
-                                  </h4>
-                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mt-0.5 truncate">
-                                    {getWantedTitle(client)}
-                                  </p>
-                                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
-                                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                                    Asesor: <span className="font-semibold text-slate-600 dark:text-slate-300">{sellerObj?.name || "Sin asignar"}</span>
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <span className={`inline-block font-black text-xs px-2.5 py-1 rounded-full text-white shadow-sm ${
-                                    client.leadScore >= 75 ? "bg-emerald-500" : client.leadScore >= 45 ? "bg-amber-500" : "bg-slate-400"
-                                  }`}>
-                                    Score: {client.leadScore}
-                                  </span>
-                                  <span className="block text-[9px] font-black uppercase text-slate-400 tracking-wider mt-1.5">
-                                    Probabilidad {client.probabilityCategory}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {clientsWithScores.length === 0 && (
-                          <div className="py-8 text-center text-slate-400 italic text-xs">
-                            No hay prospectos activos con Lead Score calculado.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-  
+                  <div className="grid grid-cols-1 gap-4 items-start">
                     {/* Inactivity & Alertas for Admin */}
-                    <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-5">
-                      <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 mb-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 md:p-5">
+                      <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
                         <ShieldAlert className="w-4.5 h-4.5 text-red-500" />
                         Alertas de Inactividad de Agencia
                       </h3>
