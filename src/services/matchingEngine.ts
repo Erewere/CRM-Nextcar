@@ -173,7 +173,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
       // De igual nivel, o de mas nivel dentro de su presupuesto: se enseña,
       // con su resta por no ser la marca que pidio.
       score -= nivelPedido < nivelDelAuto ? 15 : 25;
-      razones.push({ t: `No es ${wv.make}`, ok: false });
+      razones.push({ t: `Otra marca (pidió ${wv.make})`, ok: false });
     }
     if (wv.model && !checkMatch(vehicle.model, wv.model)) { score -= 25; razones.push({ t: `No es el modelo que pidió`, ok: false }); }
     else if (wv.model) razones.push({ t: vehicle.model, ok: true });
