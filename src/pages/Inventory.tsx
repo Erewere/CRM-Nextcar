@@ -22,6 +22,7 @@ import { ListaPrecios } from "../components/inventario/ListaPrecios";
 import { LoQueBuscan } from "../components/inventario/LoQueBuscan";
 import { interesPorAuto, diasDesde } from "../lib/interesPorAuto";
 import type { PrecioMercado } from "../lib/precioMercado";
+import { getClientMatches } from "../services/matchingEngine";
 import { auth } from "../lib/firebase";
 
 export type MatchLevel = 'exact' | 'high' | 'medium' | 'low';
@@ -31,120 +32,18 @@ export interface VehicleMatch {
   level: MatchLevel;
 }
 
+/**
+ * Qué clientes buscan este auto. Usa el mismo motor que la ficha del cliente
+ * (services/matchingEngine): antes había un segundo cálculo, más blando, que
+ * sugería una SUV a quien buscaba una pickup solo porque coincidía la marca.
+ * Dos reglas distintas daban dos respuestas distintas para el mismo caso.
+ */
 export const getVehicleMatches = (vehicle: Vehicle, clients: Client[]): VehicleMatch[] => {
-  if (vehicle.status !== 'available' && vehicle.status !== undefined && vehicle.status !== '') return [];
-  if ((vehicle as any).pendingValidation) return [];
-  
   const matches: VehicleMatch[] = [];
-
-  clients.forEach(c => {
-    if (c.status === 'won' || c.status === 'lost') return;
-    if (!c.wantedVehicle) return;
-    const wv = c.wantedVehicle;
-    
-    // Si no hay ningún criterio, no hacemos match
-    if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && (!wv.bodyType || wv.bodyType === "Cualquiera")) {
-      return;
-    }
-
-    let isExact = true;
-    let isSimilar = true;
-    let hasSimilarBase = false;
-
-    let differences = 0;
-
-    const normalize = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-    const checkMatch = (v?: string, w?: string) => {
-        const nv = normalize(v);
-        const nw = normalize(w);
-        if (!nw) return true;
-        if (nv.includes(nw) || nw.includes(nv)) return true;
-        
-        // Aliases make
-        if ((nv === 'vw' || nv === 'volkswagen') && (nw === 'vw' || nw === 'volkswagen')) return true;
-        if ((nv === 'chevy' || nv === 'chevrolet') && (nw === 'chevy' || nw === 'chevrolet')) return true;
-        
-        return false;
-    };
-
-    // Make & Model
-    const makeMatches = wv.make ? checkMatch(vehicle.make, wv.make) : true;
-    const modelMatches = wv.model ? checkMatch(vehicle.model, wv.model) : true;
-
-
-    if (wv.make && !makeMatches) {
-        isExact = false;
-        differences += 2;
-    }
-    if (wv.model && !modelMatches) {
-        isExact = false;
-        differences += 1;
-    }
-
-    // Year
-    const yearMin = wv.yearMin || 0;
-    const yearMax = wv.yearMax || 9999;
-    if (vehicle.year < yearMin || vehicle.year > yearMax) {
-        isExact = false;
-        if (vehicle.year < yearMin - 2 || vehicle.year > yearMax + 2) {
-            isSimilar = false; // Not even similar
-        } else if (vehicle.year < yearMin - 1 || vehicle.year > yearMax + 1) {
-            differences += 2;
-        } else {
-            differences += 1;
-        }
-    }
-
-    // Price
-    const priceMax = wv.priceMax || Infinity;
-    if (vehicle.price > priceMax) {
-        isExact = false;
-        if (vehicle.price > priceMax * 1.15) {
-            isSimilar = false; // Excede más del 15% del presupuesto -> Descalificado
-        } else if (vehicle.price > priceMax * 1.08) {
-            differences += 2;
-        } else {
-            differences += 1;
-        }
-    }
-
-    // Body Type
-    if (wv.bodyType && wv.bodyType !== "Cualquiera") {
-        if (!vehicle.bodyType || vehicle.bodyType.toLowerCase() !== wv.bodyType.toLowerCase()) {
-            isExact = false;
-            differences += 1;
-        }
-    }
-    
-    // Passengers
-    if (wv.passengers) {
-        const vPassengers = vehicle.passengers;
-        if (vPassengers !== undefined && vPassengers !== null && String(vPassengers).trim() !== "") {
-            if (Number(vPassengers) !== Number(wv.passengers)) {
-                isExact = false;
-                differences += 1;
-            }
-        } else {
-            isExact = false;
-        }
-    }
-
-    if (wv.make && makeMatches) hasSimilarBase = true;
-    if (wv.model && modelMatches) hasSimilarBase = true;
-    if (wv.bodyType && wv.bodyType !== "Cualquiera" && (!vehicle.bodyType || vehicle.bodyType.toLowerCase() === wv.bodyType.toLowerCase())) hasSimilarBase = true;
-    if (!wv.make && !wv.bodyType) hasSimilarBase = true; // Si solo busca por precio/año, es base
-    
-    if (isExact) {
-      matches.push({ client: c, level: 'exact' });
-    } else if (isSimilar && hasSimilarBase) {
-      let level: MatchLevel = 'high';
-      if (differences >= 3) level = 'low';
-      else if (differences >= 2) level = 'medium';
-      
-      matches.push({ client: c, level });
-    }
+  clients.forEach((c) => {
+    const m = getClientMatches(c, [vehicle])[0];
+    if (m) matches.push({ client: c, level: m.level });
   });
-
   return matches;
 };
 
