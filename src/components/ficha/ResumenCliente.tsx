@@ -9,6 +9,8 @@ import { etiquetaDeFuente, fuenteDelContacto } from '../../lib/fuentes';
 import { diasDesde } from '../../lib/interesPorAuto';
 import type { PrecioMercado } from '../../lib/precioMercado';
 import { getVehicleMatches } from '../../pages/Inventory';
+import { getClientMatches } from '../../services/matchingEngine';
+import { useSharedInventoryMatches } from '../../hooks/useSharedInventoryMatches';
 import { GraficaMercado } from '../inventario/GraficaMercado';
 import type { Task, Vehicle } from '../../types';
 
@@ -147,6 +149,14 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
     return lista.slice(0, columna ? 8 : 6);
   }, [inventario, tratos, cliente, etapas, ganado, columna]);
 
+  // Autos de agencias aliadas que le sirven (solo si ambas comparten inventario
+  // y quien mira es administrador o gerente: la misma regla que la campanita).
+  const { otherVehicles, sharingAgencies } = useSharedInventoryMatches();
+  const deAliadas = useMemo(() => {
+    if (ganado || !otherVehicles.length) return [];
+    return getClientMatches({ ...cliente, status: 'open' } as any, otherVehicles).slice(0, 4);
+  }, [otherVehicles, cliente, ganado]);
+
   const telefono = String(cliente.phone || '').replace(/\D/g, '');
   const whatsapp = (v: Vehicle) => {
     if (!telefono) return null;
@@ -214,6 +224,32 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
             <h2 className="font-extrabold text-slate-900 dark:text-white">Le pueden servir</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">De tu inventario, según lo que busca</p>
             <ul className="flex flex-col gap-3">{sugeridos.map(fila)}</ul>
+          </section>
+        )}
+
+        {deAliadas.length > 0 && (
+          <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+            <h2 className="font-extrabold text-slate-900 dark:text-white">De otras agencias</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Inventario compartido que cumple lo que busca</p>
+            <ul className="flex flex-col gap-3">
+              {deAliadas.map((m) => {
+                const foto = m.vehicle.photoUrls?.[0] || m.vehicle.photoUrl;
+                return (
+                  <li key={`${m.vehicle.agencyId}_${m.vehicle.id}`} className="flex gap-3 items-center">
+                    <div className="w-20 h-14 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0">
+                      {foto ? <img src={foto} alt="" loading="lazy" className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><CarIcon className="w-6 h-6" /></span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{m.vehicle.year} {m.vehicle.make} {m.vehicle.model}</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400"><b className="text-slate-900 dark:text-white">{pesos(m.vehicle.price || 0)}</b> · {sharingAgencies[m.vehicle.agencyId] || 'Agencia aliada'}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {m.razones.filter((x) => !x.ok).slice(0, 2).map((x, i) => <span key={i} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-900">! {x.t}</span>)}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </section>
         )}
       </div>

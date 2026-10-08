@@ -2354,6 +2354,8 @@ async function startServer() {
           // Sin esto, el filtro de pasajeros no se puede aplicar a los autos
           // de otras agencias: quien busca siete plazas veria SUVs de cinco.
           passengers: data.passengers,
+          // Para que quien busca híbrido o eléctrico no reciba autos de gasolina.
+          fichaWeb: data.fichaWeb?.combustible ? { combustible: data.fichaWeb.combustible } : undefined,
           status: data.status,
           ...(data.description !== undefined ? { description: data.description } : {})
         };
