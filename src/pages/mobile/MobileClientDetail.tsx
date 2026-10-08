@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { quitarVentaDeTratoPerdido } from '../../lib/ventaDescartada';
 import { completarValorDelTrato } from "../../lib/valorDelTrato";
 import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic, Calculator, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { Client, Vehicle } from '../../types';
@@ -518,6 +519,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
           lostReason: fullReason,
           updatedAt: new Date().toISOString()
         });
+        await quitarVentaDeTratoPerdido(client.id!);
         
         const clientRef = doc(db, 'clients', actualClientId!);
         await updateDoc(clientRef, {
@@ -545,6 +547,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
             lostReason: fullReason,
             updatedAt: new Date().toISOString()
           });
+          await quitarVentaDeTratoPerdido(dealDoc.id);
         }
       }
       onUpdated();

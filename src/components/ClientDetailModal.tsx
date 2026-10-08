@@ -1186,8 +1186,9 @@ export function ClientDetailModal({
   };
 
   const [showWantedVehicleMenu, setShowWantedVehicleMenu] = useState(false);
+  const [avisoPreferencias, setAvisoPreferencias] = useState(false);
 
-  const handleSave = async (e?: React.FormEvent) => {
+  const handleSave = async (e?: React.FormEvent, opciones?: { cerrar?: boolean }) => {
     if (e) e.preventDefault();
     if (!userData || !formData.agencyId || formData.agencyId === "unassigned") {
       alert("Debes pertenecer a una agencia para guardar clientes.");
@@ -1228,7 +1229,12 @@ export function ClientDetailModal({
     if (finalFormData.dealValue !== undefined) {
       finalFormData.dealValue = finalFormData.dealValue ? Number(finalFormData.dealValue) : 0;
     }
-    if (!hasBuscaAutoTag) {
+    // Lo que busca se conserva si tiene algo capturado, aunque el contacto no
+    // lleve la etiqueta «Busca de auto». Antes se descartaba en silencio y
+    // «Guardar preferencias» cerraba la ventana sin haber guardado nada.
+    const wv0: any = finalFormData.wantedVehicle;
+    const tieneBusqueda = !!wv0 && Object.values(wv0).some((x) => x !== undefined && x !== null && String(x).trim() !== "" && x !== "Cualquiera");
+    if (!hasBuscaAutoTag && !tieneBusqueda) {
       finalFormData.wantedVehicle = null as any;
     }
 
@@ -1514,7 +1520,12 @@ export function ClientDetailModal({
 
       }
       onUpdated?.();
-      onClose();
+      if (opciones?.cerrar === false && !isNew) {
+        setAvisoPreferencias(true);
+        setTimeout(() => setAvisoPreferencias(false), 3500);
+      } else {
+        onClose();
+      }
     } catch (err) {
       console.error(err);
       alert("Error guardando cliente: " + err.message);
@@ -2215,6 +2226,41 @@ export function ClientDetailModal({
                     className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Combustible</label>
+                  <select
+                    value={formData.wantedVehicle?.combustible || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, combustible: e.target.value || undefined } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    <option value="">Cualquiera</option>
+                    <option value="Gasolina">Gasolina</option>
+                    <option value="Híbrido">Híbrido</option>
+                    <option value="Eléctrico">Eléctrico</option>
+                    <option value="Diésel">Diésel</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Color (preferencia)</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. blanco, gris"
+                    value={formData.wantedVehicle?.color || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, color: e.target.value } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Lo que dijo el cliente, con sus palabras</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Ej. Lo quiere para la familia, que sea económico, tiene un Versa para dar a cuenta…"
+                    value={formData.wantedVehicle?.notas || ""}
+                    onChange={(e) => setFormData(p => ({ ...p, wantedVehicle: { ...p.wantedVehicle, notas: e.target.value } }))}
+                    className="w-full text-sm border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">En marca y modelo puedes poner varias opciones separadas por coma («Toyota, Honda»): sirve cualquiera.</p>
+                </div>
               </div>
 
               <div className="mt-8 flex justify-end gap-3">
@@ -2229,7 +2275,7 @@ export function ClientDetailModal({
                   type="button"
                   onClick={(e) => {
                     setShowWantedVehicleMenu(false);
-                    handleSave(e);
+                    handleSave(e, { cerrar: false });
                   }}
                   className="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors"
                 >
@@ -2263,7 +2309,41 @@ export function ClientDetailModal({
                   )}
                 </div>
                 {frasesDeBusqueda(formData.wantedVehicle).length > 0 ? (
+                  <>
                   <ResumenBusquedaAuto buscado={formData.wantedVehicle} compacto className="!bg-transparent !border-0 !p-0" />
+                  {formData.wantedVehicle?.notas && <p className="mt-2 text-xs italic text-slate-600 dark:text-slate-300">«{formData.wantedVehicle.notas}»</p>}
+                  {avisoPreferencias && <p className="mt-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">Preferencias guardadas.</p>}
+                  {(() => {
+                    const cs = getClientMatches({ ...(formData as any), status: "open" } as Client, inventoryVehicles.filter((v) => v.status === "available" || !v.status)).slice(0, 4);
+                    return (
+                      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Autos que le sirven ({cs.length})</p>
+                        {cs.length === 0 ? (
+                          <p className="text-xs text-slate-500">Ninguno del inventario cumple lo que pide. Si el rango es muy estrecho, abre «Editar» y amplíalo.</p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {cs.map((m) => (
+                              <li key={m.vehicle.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{m.vehicle.year} {m.vehicle.make} {m.vehicle.model}</p>
+                                  <span className={clsx("text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0", m.level === "exact" || m.level === "high" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900")}>
+                                    {m.level === "exact" ? "Ideal" : m.level === "high" ? "Muy buena" : "Posible"}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">{m.vehicle.price ? "$" + Number(m.vehicle.price).toLocaleString("es-MX") : "Sin precio"}</p>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {m.razones.slice(0, 5).map((r, i) => (
+                                    <span key={i} className={clsx("text-[10px] font-semibold px-1.5 py-0.5 rounded", r.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900")}>{r.ok ? "✓" : "!"} {r.t}</span>
+                                  ))}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  </>
                 ) : (
                   <p className="text-sm text-slate-500 dark:text-slate-400">Aún no se captura qué auto busca. Con eso el CRM le encuentra coincidencias en tu inventario.</p>
                 )}

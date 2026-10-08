@@ -35,6 +35,8 @@ export function frasesDeBusqueda(buscado: Client['wantedVehicle']): string[] {
   else if (buscado.priceMin) f.push(`desde ${pesos(buscado.priceMin)}`);
 
   if (buscado.kmMax) f.push(`máx. ${buscado.kmMax.toLocaleString('es-MX')} km`);
+  if (buscado.combustible) f.push(buscado.combustible);
+  if (buscado.color) f.push(`color ${buscado.color}`);
 
   return f;
 }

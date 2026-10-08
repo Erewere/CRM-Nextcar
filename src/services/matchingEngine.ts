@@ -5,6 +5,8 @@ export interface ClientMatch {
   vehicle: Vehicle;
   level: MatchLevel;
   score: number;
+  /** Por qué se sugiere: lo que cumple (ok) y lo que hay que revisar (!ok). */
+  razones: { t: string; ok: boolean }[];
 }
 
 /**
@@ -64,12 +66,14 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
   if (!client.wantedVehicle) return matches;
 
   const wv = client.wantedVehicle;
-  if (!wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && !wv.priceMin && (!wv.bodyType || wv.bodyType === "Cualquiera") && !wv.passengers && !wv.transmission && !wv.kmMax) {
+  if (!wv.combustible && !wv.color && !wv.make && !wv.model && !wv.yearMin && !wv.yearMax && !wv.priceMax && !wv.priceMin && (!wv.bodyType || wv.bodyType === "Cualquiera") && !wv.passengers && !wv.transmission && !wv.kmMax) {
     return matches;
   }
 
   const normalize = (str?: string) => (str || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, '');
-  const checkMatch = (v?: string, w?: string) => {
+  /** «Toyota, Honda» o «Civic / Corolla» o «Mazda o Kia»: varias opciones, cualquiera sirve. */
+  const opciones = (w?: string) => String(w || "").split(/[,/;]|\s+o\s+|\s+y\s+/i).map((x) => x.trim()).filter(Boolean);
+  const checkUno = (v?: string, w?: string) => {
     const nv = normalize(v);
     const nw = normalize(w);
     if (!nw) return true;
@@ -77,6 +81,10 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     if ((nv === 'vw' || nv === 'volkswagen') && (nw === 'vw' || nw === 'volkswagen')) return true;
     if ((nv === 'chevy' || nv === 'chevrolet') && (nw === 'chevy' || nw === 'chevrolet')) return true;
     return false;
+  };
+  const checkMatch = (v?: string, w?: string) => {
+    const ops = opciones(w);
+    return ops.length === 0 ? true : ops.some((o) => checkUno(v, o));
   };
 
   /**
@@ -97,6 +105,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     if (vehicle.status && vehicle.status !== 'available') return;
     if ((vehicle as any).pendingValidation) return;
     let score = 100;
+    const razones: { t: string; ok: boolean }[] = [];
 
     // 1. Carroceria: es un requisito, no una preferencia.
     if (wv.bodyType && wv.bodyType !== "Cualquiera") {
@@ -104,9 +113,10 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
       const wBody = normalize(wv.bodyType);
       if (!vBody) {
         score -= 25; // el auto no lo tiene capturado; no se puede afirmar que sirva
+        razones.push({ t: `Falta capturar su carrocería`, ok: false });
       } else if (vBody !== wBody && !vBody.includes(wBody) && !wBody.includes(vBody)) {
         return;
-      }
+      } else razones.push({ t: wv.bodyType, ok: true });
     }
 
     // 2. Pasajeros. Quien pide siete no cabe en cinco; al reves si cabe.
@@ -118,10 +128,12 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
         // que equivocarse, asi que un auto sin capturar puntuaba mas alto que
         // uno que sabiamos que no servia.
         score -= 30;
+        razones.push({ t: `Falta capturar sus pasajeros`, ok: false });
       } else if (tiene < pide) {
         return;
-      } else if (tiene > pide) {
-        score -= Math.min(15, (tiene - pide) * 5);
+      } else {
+        if (tiene > pide) score -= Math.min(15, (tiene - pide) * 5);
+        razones.push({ t: `${tiene} pasajeros`, ok: true });
       }
     }
 
@@ -129,7 +141,8 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     if (wv.priceMax && vehicle.price > wv.priceMax) {
       if (vehicle.price > wv.priceMax * 1.15) return;
       score -= vehicle.price > wv.priceMax * 1.08 ? 25 : 10;
-    }
+      razones.push({ t: `Pasa su presupuesto por $${Math.round(vehicle.price - wv.priceMax).toLocaleString('es-MX')}`, ok: false });
+    } else if (wv.priceMax && vehicle.price > 0) razones.push({ t: 'Dentro de su presupuesto', ok: true });
     if (sueloDuro > 0 && vehicle.price > 0 && vehicle.price < sueloDuro) {
       return;
     }
@@ -137,6 +150,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
       // Entre el piso duro y el piso: cabe, pero es de otro segmento.
       const quePorcion = vehicle.price / suelo;
       score -= quePorcion < 0.85 ? 30 : 15;
+      razones.push({ t: 'Más barato de lo que suele buscar', ok: false });
     }
 
     // 4. Marca y modelo.
@@ -148,8 +162,10 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     //
     // El precio solo no distingue esto: un Mercedes usado puede costar lo
     // mismo que un Honda nuevo y no son la misma busqueda.
+    if (wv.make && checkMatch(vehicle.make, wv.make)) razones.push({ t: vehicle.make, ok: true });
     if (wv.make && !checkMatch(vehicle.make, wv.make)) {
-      const nivelPedido = nivelDeMarca(wv.make);
+      // Con varias marcas pedidas, manda la de menor nivel: aceptó esa.
+      const nivelPedido = Math.min(...opciones(wv.make).map(nivelDeMarca));
       const nivelDelAuto = nivelDeMarca(vehicle.make);
       if (nivelPedido > nivelDelAuto) {
         return; // pidio una marca de mas nivel; esta no lo sustituye
@@ -157,8 +173,10 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
       // De igual nivel, o de mas nivel dentro de su presupuesto: se enseña,
       // con su resta por no ser la marca que pidio.
       score -= nivelPedido < nivelDelAuto ? 15 : 25;
+      razones.push({ t: `No es ${wv.make}`, ok: false });
     }
-    if (wv.model && !checkMatch(vehicle.model, wv.model)) score -= 25;
+    if (wv.model && !checkMatch(vehicle.model, wv.model)) { score -= 25; razones.push({ t: `No es el modelo que pidió`, ok: false }); }
+    else if (wv.model) razones.push({ t: vehicle.model, ok: true });
 
     // 5. Transmision.
     //
@@ -170,9 +188,28 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
       const t = tipoDeTransmision(vehicle.transmission);
       if (!t) {
         score -= 20; // el auto no lo tiene capturado
+        razones.push({ t: 'Falta capturar su transmisión', ok: false });
       } else if (q && t !== q) {
         return;
-      }
+      } else razones.push({ t: wv.transmission, ok: true });
+    }
+
+    // 5b. Combustible: quien quiere híbrido o eléctrico no acepta gasolina.
+    if (wv.combustible && wv.combustible !== "Cualquiera") {
+      const pide = normalize(wv.combustible);
+      const tiene = normalize((vehicle as any).fichaWeb?.combustible);
+      if (!tiene) {
+        score -= 10;
+        razones.push({ t: 'Falta capturar su combustible', ok: false });
+      } else if (!tiene.includes(pide) && !pide.includes(tiene)) {
+        return;
+      } else razones.push({ t: wv.combustible, ok: true });
+    }
+
+    // 5c. Color: preferencia, nunca descarta.
+    if (wv.color) {
+      if (checkMatch(vehicle.color, wv.color)) razones.push({ t: `Color ${vehicle.color}`, ok: true });
+      else { score -= 8; razones.push({ t: `Es ${vehicle.color || 'de otro color'}`, ok: false }); }
     }
 
     // 6. Kilometraje maximo.
@@ -180,17 +217,20 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
       const km = Number(vehicle.km);
       if (!vehicle.km || Number.isNaN(km)) {
         score -= 10;
+        razones.push({ t: 'Falta capturar su kilometraje', ok: false });
       } else if (km > wv.kmMax * 1.15) {
         return;
       } else if (km > wv.kmMax) {
         score -= 15;
-      }
+        razones.push({ t: `${km.toLocaleString('es-MX')} km, un poco arriba de su tope`, ok: false });
+      } else razones.push({ t: `${km.toLocaleString('es-MX')} km`, ok: true });
     }
 
     // 7. Año.
     const yearMin = wv.yearMin || 0;
     const yearMax = wv.yearMax || 9999;
     if (vehicle.year < yearMin || vehicle.year > yearMax) {
+      razones.push({ t: `Año ${vehicle.year}, fuera de lo que pidió`, ok: false });
       if (vehicle.year < yearMin - 2 || vehicle.year > yearMax + 2) score -= 40;
       else if (vehicle.year < yearMin - 1 || vehicle.year > yearMax + 1) score -= 20;
       else score -= 8;
@@ -205,7 +245,7 @@ export const getClientMatches = (client: Client, vehicles: Vehicle[]): ClientMat
     else if (score >= 80) level = 'high';
     else if (score >= 65) level = 'medium';
 
-    matches.push({ vehicle, level, score });
+    matches.push({ vehicle, level, score, razones });
   });
 
   return matches.sort((a, b) => b.score - a.score);

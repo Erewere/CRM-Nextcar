@@ -209,6 +209,8 @@ export function useSharedInventoryMatches() {
             c.wantedVehicle.passengers ||
             c.wantedVehicle.transmission ||
             c.wantedVehicle.kmMax ||
+            c.wantedVehicle.combustible ||
+            c.wantedVehicle.color ||
             (c.wantedVehicle.bodyType && c.wantedVehicle.bodyType !== "Cualquiera"))
         ) {
           activeClients.push(c);

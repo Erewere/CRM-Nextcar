@@ -219,6 +219,12 @@ export interface Client {
     transmission?: string;
     /** Cuanto kilometraje acepta como maximo. */
     kmMax?: number;
+    /** Gasolina, Híbrido, Eléctrico, Diésel. Si es híbrido, un auto de gasolina no le sirve. */
+    combustible?: string;
+    /** Uno o varios colores («blanco, gris»). Es preferencia: resta, no descarta. */
+    color?: string;
+    /** Lo que dijo con sus palabras; no puntúa, pero el vendedor lo tiene a la vista. */
+    notas?: string;
   };
   createdAt: any;
   updatedAt: any;
