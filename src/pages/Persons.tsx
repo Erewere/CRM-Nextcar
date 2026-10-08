@@ -130,7 +130,7 @@ export function Persons() {
 
   const [columns, setColumns] = useState([
     { id: "name", label: "Nombre", visible: true, width: 200 },
-    { id: "organization", label: "Organización", visible: true, width: 150 },
+    { id: "organization", label: "Organización", visible: false, width: 150 },
     { id: "email", label: "Correo electrónico", visible: true, width: 200 },
     { id: "phone", label: "Teléfono", visible: true, width: 150 },
     { id: "vehicle", label: "Vehículo", visible: true, width: 150 },
@@ -1511,20 +1511,6 @@ export function Persons() {
                     <option key={f.id} value={f.id}>{f.etiqueta}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Organización
-                </label>
-                <div className="relative">
-                  <Building2 className="w-4 h-4 text-gray-500 dark:text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={organization}
-                    onChange={(e) => setOrganization(e.target.value)}
-                    className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 pl-9 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
               </div>
 
               <div>

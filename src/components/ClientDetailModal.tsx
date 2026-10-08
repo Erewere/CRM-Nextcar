@@ -2661,16 +2661,6 @@ export function ClientDetailModal({
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Building2 className="w-4 h-4 text-gray-400" />
-                    <input
-                      name="organization"
-                      placeholder="Organización / Empresa"
-                      value={formData.organization || ""}
-                      onChange={handleChange}
-                      className="w-full bg-transparent dark:text-slate-200 text-sm py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-600 focus:outline-none"
-                    />
-                  </div>
                   {!(isNew && selectedPersonId) && (
                     <div className="flex items-center gap-2 mt-2">
                       <Globe className="w-4 h-4 text-gray-400" />

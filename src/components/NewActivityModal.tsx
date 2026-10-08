@@ -596,16 +596,6 @@ export function NewActivityModal({
                     </select>
                   </div>
                 )}
-                <div className="relative">
-                  <Building2 className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={organization}
-                    onChange={(e) => setOrganization(e.target.value)}
-                    placeholder="Organización"
-                    className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-2 pl-9 pr-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
               </div>
             </div>
           </div>
