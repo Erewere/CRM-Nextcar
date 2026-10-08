@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
+import { quitarVentaDeTratoPerdido } from "../lib/ventaDescartada";
 import { completarValorDelTrato } from "../lib/valorDelTrato";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router";
@@ -853,6 +854,7 @@ export function ClientDetailModal({
 
         if (finalDealId) {
           await guardarTratoSiExiste(finalDealId, updates);
+          await quitarVentaDeTratoPerdido(finalDealId as string);
         }
 
         await setDoc(doc(db, "clients", finalClientId), {

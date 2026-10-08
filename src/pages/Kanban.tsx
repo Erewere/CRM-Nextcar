@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { quitarVentaDeTratoPerdido } from "../lib/ventaDescartada";
 import { completarValorDelTrato } from "../lib/valorDelTrato";
 import { useAuth } from "../contexts/AuthContext";
 import { useReadOnly } from "../hooks/useReadOnly";
@@ -809,6 +810,7 @@ export function Kanban() {
       const actualClientId = client.originalClientId || client.id;
       if (isExistingDeal) {
         await setDoc(doc(db, "deals", client.id), updates, { merge: true });
+        await quitarVentaDeTratoPerdido(client.id as string);
       } else {
         const dealRef = doc(collection(db, "deals"));
         await setDoc(dealRef, {
