@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useActualizarAlVolver } from '../hooks/useActualizarAlVolver';
 import { useNavigate, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -59,6 +60,8 @@ export function Creditos() {
 
   const cargar = () => creditosApi.lista().then(setLista).catch((e) => setError(e.message));
   useEffect(() => { cargar(); }, []);
+  // La liga que abre o termina el cliente se refleja sin refrescar a mano.
+  useActualizarAlVolver(() => { creditosApi.lista().then((l) => { setLista(l); setError(''); }).catch(() => {}); }, { minimoMs: 30_000, cadaMs: 150_000 });
 
   const filtradas = useMemo(() => (lista || []).filter((s) => (verCanceladas || s.etapa !== 'cancelada') && (!filtroBanco || s.bancos.some((b: any) => b.clave === filtroBanco))), [lista, filtroBanco, verCanceladas]);
   const bancosEnUso = useMemo(() => { const m = new Map<string, string>(); (lista || []).forEach((s) => s.bancos.forEach((b: any) => m.set(b.clave, b.nombre))); return [...m.entries()]; }, [lista]);

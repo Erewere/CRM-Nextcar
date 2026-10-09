@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useActualizarAlVolver } from '../hooks/useActualizarAlVolver';
 import { useLocation, useNavigate } from "react-router";
 import { AnimatePresence } from "motion/react";
 import { onSnapshot } from "firebase/firestore";
@@ -293,6 +294,25 @@ export function Tasks() {
     };
     fetchTasksAndClients();
   }, [userData, refreshKey]);
+
+  // Al volver a la pestaña se releen solo las tareas (no todos los contactos y
+  // tratos de la agencia, que son miles de lecturas). Máximo una vez cada 3 minutos.
+  useActualizarAlVolver(() => {
+    if (!userData || userData.role === "master") return;
+    const base = collection(db, "tasks");
+    const q = userData.role === "seller"
+      ? query(base, where("agencyId", "==", userData.agencyId), where("sellerId", "==", userData.id))
+      : query(base, where("agencyId", "==", userData.agencyId));
+    getDocs(q).then((snap) => {
+      const nuevas = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Task);
+      setTasks((prev) => {
+        const clientePor = new Map(prev.filter((x) => x.client).map((x) => [x.client!.id, x.client]));
+        return nuevas
+          .map((t) => ({ task: t, client: t.clientId ? (clientePor.get(t.clientId) as any) || null : null }))
+          .sort((a, b) => (a.task.dueDate ? new Date(a.task.dueDate).getTime() : 0) - (b.task.dueDate ? new Date(b.task.dueDate).getTime() : 0));
+      });
+    }).catch(() => {});
+  }, { minimoMs: 180_000 });
 
   useEffect(() => {
     if (!userData?.agencyId || userData.role === "seller" || userData.role === "master") return;
