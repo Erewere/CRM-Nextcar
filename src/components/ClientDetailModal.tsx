@@ -909,6 +909,12 @@ export function ClientDetailModal({
           }
         }
 
+        // Si la ficha no trae el auto pero el trato sí, es el del trato.
+        if (!vehiculoDeLaVenta && finalDealId) {
+          const dt: any = (await getDoc(doc(db, "deals", finalDealId))).data();
+          vehiculoDeLaVenta = dt?.vehicleId || null;
+        }
+
         // Un auto solo se vende una vez: si otro trato ya registra esta venta,
         // no se duplica.
         const conflicto = await ventaYaRegistrada(

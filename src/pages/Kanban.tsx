@@ -463,6 +463,10 @@ export function Kanban() {
         status: deal.status || "open",
         sellerId: deal.sellerId || person.sellerId,
         vehicle: deal.vehicle || person.vehicle,
+        // El auto es el del TRATO. Antes se heredaba el del contacto, y cuando
+        // este no traía auto, cerrar el trato no sacaba el auto del inventario
+        // (Enrique Macias, 9 oct 2026: BMW M5 seguía disponible).
+        vehicleId: deal.vehicleId || (deal.vehicle ? undefined : person.vehicleId),
       } as Client;
     }),
     // El embudo representa tratos, no contactos. Un contacto sin trato vive
