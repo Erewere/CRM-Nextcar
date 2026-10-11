@@ -185,6 +185,7 @@ export function Persons() {
   };
   const [showColSettings, setShowColSettings] = useState(false);
   const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const ignorarClicEncabezado = React.useRef(false);
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartWidth, setDragStartWidth] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(() => {
@@ -227,7 +228,13 @@ export function Persons() {
         ),
       );
     };
-    const handleMouseUp = () => setResizingCol(null);
+    const handleMouseUp = () => {
+      // Al soltar el borde, el navegador dispara un clic sobre el encabezado y
+      // eso ordenaba la tabla por esa columna. Se ignora el clic que sigue.
+      ignorarClicEncabezado.current = true;
+      setTimeout(() => { ignorarClicEncabezado.current = false; }, 350);
+      setResizingCol(null);
+    };
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
@@ -1347,7 +1354,7 @@ export function Persons() {
                       onDragOver={(e) => { if (colArrastrada) { e.preventDefault(); if (colDestino !== col.id) setColDestino(col.id); } }}
                       onDrop={(e) => { e.preventDefault(); if (colArrastrada) moverColumna(colArrastrada, col.id); setColArrastrada(null); setColDestino(null); }}
                       onDragEnd={() => { setColArrastrada(null); setColDestino(null); }}
-                      onClick={() => handleSort(col.id)}
+                      onClick={() => { if (ignorarClicEncabezado.current) return; handleSort(col.id); }}
                     >
                       <div className={clsx("px-3 py-2.5 truncate flex items-center text-[11px] font-bold uppercase tracking-wider", ["closedDeals", "openDeals"].includes(col.id) && "justify-center")}>
                         {col.label}
@@ -1358,6 +1365,7 @@ export function Persons() {
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
                         draggable={false}
+                        onClick={(e) => e.stopPropagation()}
                         onDragStart={(e) => e.preventDefault()}
                         onMouseDown={(e) => {
                           e.stopPropagation();
