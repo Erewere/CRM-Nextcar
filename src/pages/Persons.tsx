@@ -1465,368 +1465,197 @@ export function Persons() {
         </div>
       )}
 
-      {/* Add Modal */}
-      {showAddPerson && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <form
-            onSubmit={handleAddPerson}
-            className="bg-white dark:bg-slate-800 rounded shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]"
-          >
-            <div className="px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200">
-                Añadir persona
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowAddPerson(false)}
-                className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300"
-              >
+      {/* Añadir persona */}
+      {showAddPerson && (() => {
+        const campo = "w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 text-sm focus:ring-2 focus:ring-blue-500/40 outline-none";
+        const etiqueta = "block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5";
+        const etapasAbiertas = pipelineStages.filter((s) => !checkIsWon(s.id, pipelineStages) && !checkIsLost(s.id, pipelineStages));
+        return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+          <form onSubmit={handleAddPerson} className="bg-white dark:bg-slate-800 md:rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col h-[100dvh] md:h-auto md:max-h-[92vh]">
+            <div className="px-5 md:px-6 py-3.5 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Personas</p>
+                <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Nuevo contacto</h2>
+              </div>
+              <button type="button" onClick={() => setShowAddPerson(false)} aria-label="Cerrar" className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-2 flex flex-col gap-4 text-sm">
+
+            <div className="flex-1 overflow-y-auto px-5 md:px-6 py-5 flex flex-col gap-5">
+              {/* Quién es */}
               <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  ¿Cómo llegó? <span className="text-red-500">*</span>
-                </label>
-                <select
-                  required
-                  value={nuevaFuente}
-                  onChange={(e) => setNuevaFuente(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="">Elige una opción…</option>
-                  {FUENTES.map((f) => (
-                    <option key={f.id} value={f.id}>{f.etiqueta}</option>
-                  ))}
-                </select>
+                <label className={etiqueta}>Nombre <span className="text-red-500">*</span></label>
+                <input type="text" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellido" className={campo} />
               </div>
 
               <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Teléfono
-                </label>
+                <label className={etiqueta}>Teléfono</label>
                 {phones.map((p, idx) => {
-                  const matches = p.value.length >= 3 
-                    ? persons.filter(cl => cl.phone && cl.phone.toLowerCase().includes(p.value.toLowerCase()) && cl.phone !== p.value)
+                  const matches = p.value.length >= 3
+                    ? persons.filter((cl) => cl.phone && cl.phone.toLowerCase().includes(p.value.toLowerCase()) && cl.phone !== p.value).slice(0, 5)
                     : [];
-                  const existingMatch = persons.find(
-                    (client) =>
-                      client.phone &&
-                      p.value.length >= 3 &&
-                      client.phone === p.value,
-                  );
-                  
+                  const existingMatch = persons.find((client) => client.phone && p.value.length >= 3 && client.phone === p.value);
                   return (
                     <div key={`phone-${idx}`} className="mb-2 relative">
                       <div className="flex items-center gap-2">
                         <input
                           type="tel"
+                          inputMode="tel"
                           value={p.value}
-                          onChange={(e) => {
-                            const newP = [...phones];
-                            newP[idx].value = e.target.value;
-                            setPhones(newP);
-                          }}
-                          className="flex-1 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none"
+                          placeholder="10 dígitos"
+                          onChange={(e) => { const nuevo = [...phones]; nuevo[idx].value = e.target.value; setPhones(nuevo); }}
+                          className={clsx(campo, existingMatch && "border-amber-400")}
                         />
-                        <select
-                          value={p.type}
-                          onChange={(e) => {
-                            const newP = [...phones];
-                            newP[idx].type = e.target.value;
-                            setPhones(newP);
-                          }}
-                          className="w-28 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800"
-                        >
-                          <option>Trabajo</option>
-                          <option>Móvil</option>
-                          <option>Casa</option>
-                          <option>Otro</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPhones(phones.filter((_, i) => i !== idx))
-                          }
-                          className="text-gray-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {phones.length > 1 && (
+                          <button type="button" aria-label="Quitar teléfono" onClick={() => setPhones(phones.filter((_, i) => i !== idx))} className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 className="w-4 h-4" /></button>
+                        )}
                       </div>
-                      
-                      {matches.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm max-h-48 overflow-y-auto left-0">
-                          {matches.map(match => (
-                            <div 
-                              key={`match-${match.id}`}
-                              className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center"
-                              onClick={() => {
-                                const newP = [...phones];
-                                newP[idx].value = match.phone || '';
-                                setPhones(newP);
-                              }}
-                            >
-                              <span className="font-medium text-slate-800 dark:text-slate-200">{match.phone}</span>
-                              <span className="text-slate-500 dark:text-slate-400 text-xs truncate max-w-[150px]">{match.name}</span>
+                      {matches.length > 0 && !existingMatch && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto left-0">
+                          {matches.map((match) => (
+                            <div key={`match-${match.id}`} className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center gap-2"
+                              onClick={() => { const nuevo = [...phones]; nuevo[idx].value = match.phone || ""; setPhones(nuevo); }}>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{match.phone}</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-xs truncate max-w-[160px]">{match.name}</span>
                             </div>
                           ))}
                         </div>
                       )}
-
-                      {existingMatch && matches.length === 0 && (
-                        <p className="text-[11px] text-orange-600 font-medium mt-1">
-                          Este teléfono ya está ligado a:{" "}
-                          {existingMatch.name}
+                      {existingMatch && (
+                        <p className="mt-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+                          Ojo: este teléfono ya es de <b>{existingMatch.name}</b>. Busca ese contacto antes de crear otro igual.
                         </p>
                       )}
                     </div>
                   );
                 })}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPhones([...phones, { value: "", type: "Móvil" }])
-                  }
-                  className="text-blue-600 font-bold hover:underline"
-                >
-                  + Añade un número de teléfono
-                </button>
+                <button type="button" onClick={() => setPhones([...phones, { value: "", type: "Móvil" }])} className="text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline">+ Otro teléfono</button>
               </div>
 
               <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Correo electrónico
-                </label>
+                <label className={etiqueta}>Correo electrónico</label>
                 {emails.map((m, idx) => {
-                  const matches = m.value.length >= 3 
-                    ? persons.filter(cl => cl.email && cl.email.toLowerCase().includes(m.value.toLowerCase()) && cl.email !== m.value)
+                  const matches = m.value.length >= 3
+                    ? persons.filter((cl) => cl.email && cl.email.toLowerCase().includes(m.value.toLowerCase()) && cl.email !== m.value).slice(0, 5)
                     : [];
-                  const existingMatch = persons.find(
-                    (client) =>
-                      client.email &&
-                      m.value.length >= 3 &&
-                      client.email === m.value,
-                  );
-                  
+                  const existingMatch = persons.find((client) => client.email && m.value.length >= 3 && client.email === m.value);
                   return (
                     <div key={`email-${idx}`} className="mb-2 relative">
                       <div className="flex items-center gap-2">
                         <input
                           type="email"
                           value={m.value}
-                          onChange={(e) => {
-                            const newE = [...emails];
-                            newE[idx].value = e.target.value;
-                            setEmails(newE);
-                          }}
-                          className="flex-1 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none"
+                          placeholder="correo@ejemplo.com"
+                          onChange={(e) => { const nuevo = [...emails]; nuevo[idx].value = e.target.value; setEmails(nuevo); }}
+                          className={clsx(campo, existingMatch && "border-amber-400")}
                         />
-                        <select
-                          value={m.type}
-                          onChange={(e) => {
-                            const newE = [...emails];
-                            newE[idx].type = e.target.value;
-                            setEmails(newE);
-                          }}
-                          className="w-28 border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800"
-                        >
-                          <option>Trabajo</option>
-                          <option>Personal</option>
-                          <option>Otro</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEmails(emails.filter((_, i) => i !== idx))
-                          }
-                          className="text-gray-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {emails.length > 1 && (
+                          <button type="button" aria-label="Quitar correo" onClick={() => setEmails(emails.filter((_, i) => i !== idx))} className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 className="w-4 h-4" /></button>
+                        )}
                       </div>
-
-                      {matches.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-sm max-h-48 overflow-y-auto left-0">
-                          {matches.map(match => (
-                            <div 
-                              key={`match-${match.id}`}
-                              className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center"
-                              onClick={() => {
-                                const newE = [...emails];
-                                newE[idx].value = match.email || '';
-                                setEmails(newE);
-                              }}
-                            >
-                              <span className="font-medium text-slate-800 dark:text-slate-200">{match.email}</span>
-                              <span className="text-slate-500 dark:text-slate-400 text-xs truncate max-w-[150px]">{match.name}</span>
+                      {matches.length > 0 && !existingMatch && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto left-0">
+                          {matches.map((match) => (
+                            <div key={`match-${match.id}`} className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex justify-between items-center gap-2"
+                              onClick={() => { const nuevo = [...emails]; nuevo[idx].value = match.email || ""; setEmails(nuevo); }}>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{match.email}</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-xs truncate max-w-[140px]">{match.name}</span>
                             </div>
                           ))}
                         </div>
                       )}
-
-                      {existingMatch && matches.length === 0 && (
-                        <p className="text-[11px] text-orange-600 font-medium mt-1">
-                          Este correo ya está ligado a:{" "}
-                          {existingMatch.name}
+                      {existingMatch && (
+                        <p className="mt-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+                          Ojo: este correo ya es de <b>{existingMatch.name}</b>.
                         </p>
                       )}
                     </div>
                   );
                 })}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEmails([...emails, { value: "", type: "Trabajo" }])
-                  }
-                  className="text-blue-600 font-bold hover:underline"
-                >
-                  + Añade un correo electrónico
-                </button>
+                <button type="button" onClick={() => setEmails([...emails, { value: "", type: "Trabajo" }])} className="text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline">+ Otro correo</button>
               </div>
 
+              {/* Cómo llegó: obligatorio, a un toque */}
               <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Etiquetas
-                </label>
+                <label className={etiqueta}>¿Cómo llegó? <span className="text-red-500">*</span></label>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="¿Cómo llegó?">
+                  {FUENTES.map((f) => (
+                    <button type="button" key={f.id} role="radio" aria-checked={nuevaFuente === f.id} onClick={() => setNuevaFuente(f.id)}
+                      className={clsx("h-9 px-3 rounded-full border text-xs font-bold transition-colors", nuevaFuente === f.id ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700")}>
+                      {f.etiqueta}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Embudo */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3.5">
+                <label className={etiqueta}>¿Meterlo al embudo?</label>
+                <select value={nuevaEtapa} onChange={(e) => setNuevaEtapa(e.target.value)} className={campo}>
+                  <option value="">No, solo guardar el contacto</option>
+                  {etapasAbiertas.map((s) => <option key={s.id} value={s.id}>Sí, en «{s.title}»</option>)}
+                </select>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                  {nuevaEtapa ? "Se creará su trato y aparecerá en el embudo en esa etapa." : "Quedará en Personas, sin trato. Después puedes crearle uno."}
+                </p>
+              </div>
+
+              {/* Etiquetas */}
+              <div>
+                <label className={etiqueta}>Etiquetas <span className="normal-case font-medium text-slate-400">(opcional)</span></label>
                 <select
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val && val !== "add" && !selectedTags.includes(val)) {
-                      setSelectedTags((prev) => [...prev, val]);
-                    }
+                    if (val && val !== "add" && !selectedTags.includes(val)) setSelectedTags((prev) => [...prev, val]);
                     e.target.value = "add";
                   }}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-medium"
+                  className={clsx(campo, "text-slate-500")}
                 >
-                  <option value="add">Añadir etiquetas</option>
-                  {availableTags.map((tag, i) => (
-                    <option key={`opt-${tag}-${i}`} value={tag}>
-                      {tag} {selectedTags.includes(tag) ? "✓" : ""}
-                    </option>
-                  ))}
+                  <option value="add">Añadir etiqueta…</option>
+                  {availableTags.map((tag, i) => <option key={`opt-${tag}-${i}`} value={tag}>{tag} {selectedTags.includes(tag) ? "✓" : ""}</option>)}
                 </select>
                 {selectedTags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {selectedTags.map((st, idx) => (
-                      <span
-                        key={`${st}-${idx}`}
-                        className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/10 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                      >
+                      <span key={`${st}-${idx}`} className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/30 pl-2.5 pr-1.5 py-0.5 rounded-full text-[11px] font-bold">
                         {st}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedTags((prev) =>
-                              prev.filter((t) => t !== st),
-                            )
-                          }
-                          className="text-indigo-400 hover:text-red-500 font-bold ml-1 text-[11px]"
-                        >
-                          &times;
-                        </button>
+                        <button type="button" aria-label={`Quitar ${st}`} onClick={() => setSelectedTags((prev) => prev.filter((t) => t !== st))} className="text-indigo-400 hover:text-red-500 text-sm leading-none">&times;</button>
                       </span>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Etapa <span className="text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <select
-                  value={nuevaEtapa}
-                  onChange={(e) => setNuevaEtapa(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none"
-                >
-                  <option value="">Solo contacto, sin trato</option>
-                  {pipelineStages
-                    .filter(
-                      (s) =>
-                        !checkIsWon(s.id, pipelineStages) &&
-                        !checkIsLost(s.id, pipelineStages),
-                    )
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Si eliges una etapa, la persona entra al embudo con su trato.
-                  Déjalo vacío para guardarla solo como contacto.
-                </p>
-              </div>
-
-              {userData?.role === "admin" && (
+              {/* De quién y quién lo ve */}
+              <div className={clsx("grid gap-3", userData?.role === "admin" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
+                {userData?.role === "admin" && (
+                  <div>
+                    <label className={etiqueta}>Asesor a cargo</label>
+                    <select value={nuevoPropietario || userData?.id || ""} onChange={(e) => setNuevoPropietario(e.target.value)} className={campo}>
+                      {Object.entries(agencyUsers).map(([id, nombre]) => <option key={id} value={id}>{nombre}{id === userData?.id ? " (Tú)" : ""}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
-                  <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                    Propietario
-                  </label>
-                  <select
-                    value={nuevoPropietario || userData?.id || ""}
-                    onChange={(e) => setNuevoPropietario(e.target.value)}
-                    className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none"
-                  >
-                    {Object.entries(agencyUsers).map(([id, nombre]) => (
-                      <option key={id} value={id}>
-                        {nombre}
-                        {id === userData?.id ? " (Tú)" : ""}
-                      </option>
-                    ))}
+                  <label className={etiqueta}>Quién lo puede ver</label>
+                  <select value={nuevaVisibilidad} onChange={(e) => setNuevaVisibilidad(e.target.value as "all" | "private")} className={campo}>
+                    <option value="private">Solo su asesor</option>
+                    <option value="all">Todo el equipo</option>
                   </select>
                 </div>
-              )}
-
-              <div>
-                <label className="block text-gray-700 dark:text-slate-300 mb-1">
-                  Visible para
-                </label>
-                <select
-                  value={nuevaVisibilidad}
-                  onChange={(e) =>
-                    setNuevaVisibilidad(e.target.value as "all" | "private")
-                  }
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2 focus:ring-1 focus:ring-blue-500 outline-none"
-                >
-                  <option value="private">Solo su propietario</option>
-                  <option value="all">Todo el equipo</option>
-                </select>
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex justify-end items-center bg-gray-50 dark:bg-slate-900 mt-2">
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddPerson(false)}
-                  className="px-5 py-1.5 font-bold text-gray-700 dark:text-slate-300 border border-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:bg-slate-900 rounded"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-1.5 font-bold text-white bg-[#2E914F] hover:bg-[#257A41] rounded shadow-sm"
-                >
-                  Guardar
-                </button>
-              </div>
+            <div className="px-5 md:px-6 py-3.5 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2 bg-slate-50 dark:bg-slate-900">
+              <button type="button" onClick={() => setShowAddPerson(false)} className="h-10 px-4 font-bold text-sm text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">Cancelar</button>
+              <button type="submit" className="h-10 px-5 font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">Guardar contacto</button>
             </div>
           </form>
         </div>
-      )}
+        );
+      })()}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
