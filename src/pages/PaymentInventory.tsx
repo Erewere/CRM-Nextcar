@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { Client, Vehicle } from '../types';
 import { Search, User, Car } from 'lucide-react';
-import { checkIsWon } from '../lib/clientUtils';
+import { checkIsWon, checkIsLost } from '../lib/clientUtils';
 import clsx from 'clsx';
 import { ClientDetailModal } from '../components/ClientDetailModal';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
