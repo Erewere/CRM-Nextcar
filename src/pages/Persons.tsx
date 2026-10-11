@@ -1233,7 +1233,7 @@ export function Persons() {
           {/* Abecedario en su propia columna: no tapa las tarjetas. Al pasar el mouse las letras crecen como el Dock de Mac. */}
           {orden === "az" && tarjetas.length > 0 && renderBarra(letrasConContactos)}
           <div className="relative flex-1 min-w-0">
-          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto p-4 md:p-6 pl-2 md:pl-3">
+          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto pt-3 pb-4 pl-0 pr-0">
             {tarjetas.length === 0 && <p className="text-center text-slate-500 py-16">Ningún contacto coincide con lo que buscas.</p>}
             {secciones.map(({ letra, items }) => (
               <section key={letra || "todos"} id={letra ? `letra-${letra}` : undefined} className="mb-5 scroll-mt-2">
