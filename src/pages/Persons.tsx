@@ -37,6 +37,8 @@ import {
   Car,
 } from "lucide-react";
 import { ClientDetailModal } from "../components/ClientDetailModal";
+import { alClicWhatsApp, numeroParaWhatsApp } from "../lib/whatsappApp";
+import { MessageCircle } from "lucide-react";
 import clsx from "clsx";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -912,17 +914,75 @@ export function Persons() {
       nextTaskDate: formattedNextTaskDate,
     };
   };
+  // ---- Búsqueda, filtros, orden y abecedario de la vista de tarjetas ----
+  const hoyISO = format(new Date(), "yyyy-MM-dd");
+  const [filtroRapido, setFiltroRapido] = useState<"todos" | "abierto" | "tarea" | "busca">("todos");
+  const [filtroAsesor, setFiltroAsesor] = useState("todos");
+  const [orden, setOrden] = useState<"az" | "recientes" | "actividad">(() => {
+    try { const v = localStorage.getItem("personas_orden"); return v === "recientes" || v === "actividad" ? v : "az"; } catch { return "az"; }
+  });
+  useEffect(() => { try { localStorage.setItem("personas_orden", orden); } catch { /* sin almacenamiento */ } }, [orden]);
+  const contenedorTarjetas = React.useRef<HTMLDivElement>(null);
+
+  const sinAcentos = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const esBuscando = (p: Client) => {
+    const w: any = p.wantedVehicle;
+    const conDatos = !!w && Object.values(w).some((x) => x !== undefined && x !== null && String(x).trim() !== "" && x !== "Cualquiera");
+    return conDatos || (p.tags || []).some((t) => sinAcentos(t).includes("busca"));
+  };
+
+  // Tratos abiertos y la próxima tarea de cada persona, en un solo recorrido.
+  const indice = React.useMemo(() => {
+    const abiertos = new Map<string, number>();
+    deals.forEach((d: any) => {
+      if (d.isDeleted || !d.clientId) return;
+      if (!checkIsWon(d.status, pipelineStages) && !checkIsLost(d.status, pipelineStages)) abiertos.set(d.clientId, (abiertos.get(d.clientId) || 0) + 1);
+    });
+    const dealCliente = new Map<string, string>(deals.map((d: any) => [d.id, d.clientId]));
+    const prox = new Map<string, string>();
+    tasks.forEach((t: any) => {
+      if (t.completed || !t.dueDate) return;
+      const c = t.clientId || (t.dealId ? dealCliente.get(t.dealId) : undefined);
+      if (!c) return;
+      const previa = prox.get(c);
+      if (!previa || t.dueDate < previa) prox.set(c, t.dueDate);
+    });
+    return { abiertos, prox };
+  }, [deals, tasks, pipelineStages]);
+
+  const conteos = React.useMemo(() => ({
+    abierto: persons.filter((p) => indice.abiertos.has(p.id)).length,
+    tarea: persons.filter((p) => indice.prox.has(p.id)).length,
+    busca: persons.filter(esBuscando).length,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [persons, indice]);
+
+  // Cuántos autos del inventario le sirven a cada persona (mismo motor de siempre).
+  const coincidencias = React.useMemo(() => {
+    const m = new Map<string, number>();
+    const autos = userData?.role === "seller" ? vehicles.filter((v) => v.agencyId === userData?.agencyId) : vehicles;
+    persons.forEach((p) => { const n = getClientMatches(p, autos).length; if (n) m.set(p.id, n); });
+    return m;
+  }, [persons, vehicles, userData?.role, userData?.agencyId]);
+
   const filteredPersons = React.useMemo(() => {
-    let result = persons.filter(
-      (p) =>
-        String(p.name || "")
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        (p.organization &&
-          String(p.organization)
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase())),
-    );
+    const q = sinAcentos(searchTerm).trim();
+    const digitos = searchTerm.replace(/\D/g, "");
+    let result = persons.filter((p) => {
+      if (filtroRapido === "abierto" && !indice.abiertos.has(p.id)) return false;
+      if (filtroRapido === "tarea" && !indice.prox.has(p.id)) return false;
+      if (filtroRapido === "busca" && !esBuscando(p)) return false;
+      if (filtroAsesor !== "todos" && p.sellerId !== filtroAsesor) return false;
+      if (!q) return true;
+      return (
+        sinAcentos(p.name).includes(q) ||
+        sinAcentos(p.email).includes(q) ||
+        sinAcentos(p.organization).includes(q) ||
+        sinAcentos(p.vehicle).includes(q) ||
+        (p.tags || []).some((t) => sinAcentos(t).includes(q)) ||
+        (digitos.length >= 3 && String(p.phone || "").replace(/\D/g, "").includes(digitos))
+      );
+    });
 
     if (sortConfig) {
       result.sort((a, b) => {
@@ -953,7 +1013,38 @@ export function Persons() {
     }
 
     return result;
-  }, [persons, searchTerm, sortConfig, agencyUsers, deals, tasks]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persons, searchTerm, sortConfig, agencyUsers, deals, tasks, filtroRapido, filtroAsesor, indice]);
+
+  // Vista de tarjetas: su propio orden y, en A–Z, secciones por letra.
+  const LETRAS = React.useMemo(() => "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ#".split(""), []);
+  const letraDe = (p: Client) => {
+    const c = sinAcentos(p.name).trim().charAt(0).toUpperCase();
+    if (c === "N" && String(p.name || "").trim().toUpperCase().startsWith("Ñ")) return "Ñ";
+    return /[A-Z]/.test(c) ? c : "#";
+  };
+  const tarjetas = React.useMemo(() => {
+    const lista = [...filteredPersons];
+    const f = (v: any) => { const x = v?.toDate ? v.toDate().toISOString() : v?.seconds ? new Date(v.seconds * 1000).toISOString() : String(v || ""); return x; };
+    if (orden === "recientes") lista.sort((a, b) => f(b.createdAt).localeCompare(f(a.createdAt)));
+    else if (orden === "actividad") lista.sort((a, b) => f(b.updatedAt).localeCompare(f(a.updatedAt)));
+    else lista.sort((a, b) => sinAcentos(a.name).localeCompare(sinAcentos(b.name), "es"));
+    return lista;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredPersons, orden]);
+  const secciones = React.useMemo(() => {
+    if (orden !== "az") return [{ letra: "", items: tarjetas }];
+    const porLetra = new Map<string, Client[]>();
+    tarjetas.forEach((p) => { const l = letraDe(p); porLetra.set(l, [...(porLetra.get(l) || []), p]); });
+    return LETRAS.filter((l) => porLetra.has(l)).map((l) => ({ letra: l, items: porLetra.get(l)! }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tarjetas, orden]);
+  const letrasConContactos = React.useMemo(() => new Set(secciones.map((s) => s.letra)), [secciones]);
+  const irALetra = (l: string) => {
+    const el = contenedorTarjetas.current?.querySelector(`#letra-${CSS.escape(l)}`) as HTMLElement | null;
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
 
 
   if (isMobile) return <MobilePersons />;
@@ -965,165 +1056,161 @@ export function Persons() {
 
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5]">
-      {/* Header */}
-      <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* El buscador sube a la misma linea que el resto: en dos filas la
-              barra se comia una franja de pantalla que hace mas falta para
-              ver contactos. */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="flex bg-gray-100 p-1 rounded">
-              <button
-                onClick={() => setViewMode("list")}
-                className={clsx(
-                  "p-1.5 rounded transition-colors",
-                  viewMode === "list"
-                    ? "bg-white dark:bg-slate-800 shadow-sm text-blue-600"
-                    : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300",
-                )}
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={clsx(
-                  "p-1.5 rounded transition-colors",
-                  viewMode === "grid"
-                    ? "bg-white dark:bg-slate-800 shadow-sm text-blue-600"
-                    : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:text-slate-300",
-                )}
-              >
-                <Grid className="w-4 h-4" />
-              </button>
+      {/* Encabezado: buscar, filtrar, ordenar y las acciones */}
+      <div className="px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg shrink-0" role="tablist">
+              {([["grid", "Tarjetas", Grid], ["list", "Tabla", List]] as const).map(([id, t, Icono]) => (
+                <button key={id} role="tab" aria-selected={viewMode === id} onClick={() => setViewMode(id)} title={t}
+                  className={clsx("h-8 px-2.5 rounded-md text-xs font-bold flex items-center gap-1.5", viewMode === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800")}>
+                  <Icono className="w-3.5 h-3.5" /> <span className="hidden xl:inline">{t}</span>
+                </button>
+              ))}
             </div>
-            <div className="flex items-center gap-2 relative flex-1 min-w-0 md:max-w-xs">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 shrink-0" />
+            <div className="relative flex-1 min-w-0 md:max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, teléfono o correo..."
+                placeholder="Buscar por nombre, teléfono, correo o auto…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 py-1.5 pl-9 pr-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm hover:bg-gray-100 dark:hover:bg-slate-700"
+                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 pl-9 pr-8 text-sm focus:ring-2 focus:ring-blue-500/40 outline-none"
               />
+              {searchTerm && <button type="button" onClick={() => setSearchTerm("")} aria-label="Limpiar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {selectedClients.length > 0 && (
-              <button
-                onClick={handleDeleteSelected}
-                className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-rose-500 to-red-600 text-white rounded font-semibold hover:bg-red-700 shadow-sm text-xs md:text-sm"
-              >
-                <Trash2 className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">
-                  Eliminar seleccionados ({selectedClients.length})
-                </span>
-                <span className="sm:hidden">
-                  Eliminar ({selectedClients.length})
-                </span>
+              <button onClick={handleDeleteSelected} className="h-10 px-4 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm">
+                <Trash2 className="w-4 h-4 shrink-0" /> Eliminar ({selectedClients.length})
               </button>
             )}
-            {/* Deshacer Importación button removed */}
-            <label className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:bg-slate-900 shadow-sm text-xs md:text-sm cursor-pointer">
-              <FileSpreadsheet className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">Importar Excel</span>
+            <label className="hidden md:flex h-10 px-3 items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-bold hover:bg-slate-50 dark:hover:bg-slate-700 text-sm cursor-pointer">
+              <FileSpreadsheet className="w-4 h-4 shrink-0" /> Importar Excel
               <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
             </label>
-            <button
-              type="button"
-              onClick={handleImportGoogleContacts}
-              disabled={importandoDeGoogle}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-800 border border-gray-300 text-gray-700 dark:text-slate-300 rounded font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm text-xs md:text-sm disabled:opacity-50"
-            >
-              <Contact className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">
-                {importandoDeGoogle ? "Importando..." : "Importar de Google"}
-              </span>
+            <button type="button" onClick={handleImportGoogleContacts} disabled={importandoDeGoogle}
+              className="hidden md:flex h-10 px-3 items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-bold hover:bg-slate-50 dark:hover:bg-slate-700 text-sm disabled:opacity-50">
+              <Contact className="w-4 h-4 shrink-0" /> {importandoDeGoogle ? "Importando…" : "Importar de Google"}
             </button>
             {!isReadOnly && (
-              <>
-                <button
-                  onClick={() => setShowAddPerson(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded font-semibold hover:bg-green-700 shadow-sm text-xs md:text-sm"
-                >
-                  <Plus className="w-4 h-4 shrink-0" /> Nuevo Contacto
-                </button>
-              </>
+              <button onClick={() => setShowAddPerson(true)} className="h-10 px-4 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm">
+                <Plus className="w-4 h-4 shrink-0" /> Nuevo contacto
+              </button>
             )}
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {([
+            ["todos", "Todos", persons.length],
+            ["abierto", "Con trato abierto", conteos.abierto],
+            ["tarea", "Con tarea pendiente", conteos.tarea],
+            ["busca", "Buscan auto", conteos.busca],
+          ] as const).map(([id, t, n]) => (
+            <button key={id} type="button" onClick={() => setFiltroRapido(id)} aria-pressed={filtroRapido === id}
+              className={clsx("h-8 px-3 rounded-full border text-xs font-bold transition-colors", filtroRapido === id ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700")}>
+              {t} <span className="opacity-60 font-semibold">{n}</span>
+            </button>
+          ))}
+          {userData?.role !== "seller" && Object.keys(agencyUsers).length > 1 && (
+            <select value={filtroAsesor} onChange={(e) => setFiltroAsesor(e.target.value)} className="h-8 px-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+              <option value="todos">Todos los asesores</option>
+              {Object.entries(agencyUsers).map(([id, n]) => <option key={id} value={id}>{n}</option>)}
+            </select>
+          )}
+          {viewMode === "grid" && (
+            <select value={orden} onChange={(e) => setOrden(e.target.value as any)} className="h-8 px-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+              <option value="az">Orden: A–Z</option>
+              <option value="recientes">Orden: más recientes</option>
+              <option value="actividad">Orden: última actividad</option>
+            </select>
+          )}
+          <span className="ml-auto text-xs font-semibold text-slate-500">{filteredPersons.length === persons.length ? `${persons.length} contactos` : `${filteredPersons.length} de ${persons.length}`}</span>
         </div>
       </div>
 
       {viewMode === "grid" ? (
-        <div className="p-6 flex-1 overflow-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredPersons.map((person, idx) => {
-              const candidateVehicles = userData?.role === "seller" ? vehicles.filter(v => v.agencyId === userData?.agencyId) : vehicles;
-              const matches = getClientMatches(person, candidateVehicles);
-              return (
-              <div
-                key={`${person.id}-${idx}`}
-                className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-sm transition-shadow cursor-pointer"
-                onClick={() => setSelectedPerson(person)}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0">
-                    {String(person.name || "?")
-                      .charAt(0)
-                      .toUpperCase()}
+        <div className="relative flex-1 min-h-0">
+          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto p-4 md:p-6 pr-9">
+            {tarjetas.length === 0 && <p className="text-center text-slate-500 py-16">Ningún contacto coincide con lo que buscas.</p>}
+            {secciones.map(({ letra, items }) => (
+              <section key={letra || "todos"} id={letra ? `letra-${letra}` : undefined} className="mb-5 scroll-mt-2">
+                {letra && (
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <span className="h-8 w-8 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center text-sm font-extrabold">{letra}</span>
+                    <span className="text-xs font-semibold text-slate-500">{items.length} {items.length === 1 ? "contacto" : "contactos"}</span>
+                    <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                   </div>
-                  <div className="overflow-hidden">
-                    <h3
-                      className="font-bold text-gray-900 dark:text-slate-100 truncate"
-                      title={person.name}
-                    >
-                      {person.name || "Sin Nombre"}
-                    </h3>
-                    {person.tags && person.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1 mb-1.5">
-                        {person.tags.map((t, idx) => (
-                          <span
-                            key={`${t}-${idx}`}
-                            className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold border border-indigo-100 dark:border-indigo-800/10 uppercase tracking-wider"
-                          >
-                            {t}
-                          </span>
-                        ))}
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {items.map((person) => {
+                    const nAbiertos = indice.abiertos.get(person.id) || 0;
+                    const prox = indice.prox.get(person.id);
+                    const vencida = prox && prox < hoyISO;
+                    const nCoincide = coincidencias.get(person.id) || 0;
+                    const tel = person.phone ? String(person.phone).split(",")[0].trim() : "";
+                    const etiquetas = person.tags || [];
+                    return (
+                      <div key={person.id} className="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer flex flex-col gap-2" onClick={() => setSelectedPerson(person)}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-blue-700 dark:text-blue-300 font-extrabold text-base shrink-0">
+                            {String(person.name || "?").trim().charAt(0).toUpperCase() || "?"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-extrabold text-slate-900 dark:text-slate-100 truncate leading-tight" title={person.name}>{person.name || "Sin nombre"}</h3>
+                            {tel && <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 truncate">{tel}</p>}
+                            {person.email && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{String(person.email).split(",")[0]}</p>}
+                          </div>
+                          {tel && (
+                            <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <a href={`https://wa.me/${numeroParaWhatsApp(tel)}`} onClick={alClicWhatsApp} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp a ${person.name}`} title="WhatsApp"
+                                className="h-8 w-8 rounded-lg flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300"><MessageCircle className="w-4 h-4" /></a>
+                              <a href={`tel:${tel.replace(/[^\d+]/g, "")}`} aria-label={`Llamar a ${person.name}`} title="Llamar"
+                                className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200"><Phone className="w-4 h-4" /></a>
+                            </div>
+                          )}
+                        </div>
+                        {etiquetas.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {etiquetas.slice(0, 3).map((t, i) => <span key={`${t}-${i}`} className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold border border-indigo-100 dark:border-indigo-800/20 uppercase tracking-wider">{t}</span>)}
+                            {etiquetas.length > 3 && <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-500">+{etiquetas.length - 3}</span>}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400 min-w-0">
+                          <Car className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate font-bold text-[11px] uppercase tracking-wider">{getVehicleOfInterestText(person)}</span>
+                        </div>
+                        {(nAbiertos > 0 || prox || nCoincide > 0) && (
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {nAbiertos > 0 && <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-bold">{nAbiertos} {nAbiertos === 1 ? "trato abierto" : "tratos abiertos"}</span>}
+                            {prox && <span className={clsx("px-2 py-0.5 rounded-full text-[10px] font-bold", vencida ? "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300" : "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300")}>{vencida ? "Tarea atrasada" : prox === hoyISO ? "Tarea hoy" : `Tarea ${prox.slice(8, 10)}/${prox.slice(5, 7)}`}</span>}
+                            {nCoincide > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold">{nCoincide} {nCoincide === 1 ? "auto le sirve" : "autos le sirven"}</span>}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {person.organization && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
-                        <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate">{person.organization}</span>
-                      </div>
-                    )}
-                    {person.email && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
-                        <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate">{person.email}</span>
-                      </div>
-                    )}
-                    {person.phone && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
-                        <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate">{person.phone}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 mt-1.5">
-                      <Car className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span className="truncate font-semibold text-[11px] uppercase tracking-wider">{getVehicleOfInterestText(person)}</span>
-                    </div>
-                    {matches.length > 0 && (
-                      <div className="mt-2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold border border-green-200 dark:border-green-800/50 uppercase tracking-wider">
-                          {matches.length} {matches.length === 1 ? 'Posible Match' : 'Posibles Matches'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })}
                 </div>
-              </div>
-            );})}
+              </section>
+            ))}
           </div>
+
+          {/* Abecedario: un toque lleva a esa letra */}
+          {orden === "az" && tarjetas.length > 0 && (
+            <nav aria-label="Ir a la letra" className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center py-1 rounded-full bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur z-10 max-h-[96%]">
+              {LETRAS.map((l) => {
+                const hay = letrasConContactos.has(l);
+                return (
+                  <button key={l} type="button" disabled={!hay} onClick={() => irALetra(l)} aria-label={`Ir a la ${l}`}
+                    className={clsx("w-6 flex-1 min-h-[14px] max-h-[22px] text-[10px] font-extrabold leading-none rounded", hay ? "text-slate-700 dark:text-slate-200 hover:bg-blue-600 hover:text-white" : "text-slate-300 dark:text-slate-600 cursor-default")}>
+                    {l}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
