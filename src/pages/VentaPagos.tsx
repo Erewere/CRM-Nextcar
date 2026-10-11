@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import clsx from 'clsx';
-import { doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import { useCostosVehiculos } from '../hooks/useVehicleFinancials';
 import { AlertTriangle, ArrowLeft, Ban, Undo2, BadgeCheck, CalendarClock, CheckCircle2, Loader2, Pencil, Plus, Receipt, Sparkles, X } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ventasApi } from '../lib/ventasApi';
@@ -68,6 +70,27 @@ export function VentaPagos() {
     try { await hacerRecibo(d, id); } catch (e: any) { alert(`No se pudo hacer el recibo. ${e?.message || ''}`); }
   };
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Compra, gastos y utilidad: solo para quien tiene permiso de ver costos.
+  const { userData } = useAuth();
+  const { costoDe, puedeVerCostos } = useCostosVehiculos();
+  const autoId: string | undefined = datos?.venta?.auto?.id || undefined;
+  const [gastos, setGastos] = useState<{ total: number; n: number } | null>(null);
+  useEffect(() => {
+    if (!puedeVerCostos || !autoId) { setGastos(null); return; }
+    let vigente = true;
+    const base = collection(db, 'vehicleExpenses');
+    const q = userData?.role === 'master' || !userData?.agencyId
+      ? query(base, where('vehicleId', '==', autoId))
+      : query(base, where('agencyId', '==', userData.agencyId), where('vehicleId', '==', autoId));
+    getDocs(q).then((snap) => {
+      if (!vigente) return;
+      let total = 0;
+      snap.forEach((d) => { total += Number(d.data().amount) || 0; });
+      setGastos({ total, n: snap.size });
+    }).catch(() => { if (vigente) setGastos(null); });
+    return () => { vigente = false; };
+  }, [puedeVerCostos, autoId, userData?.agencyId, userData?.role]);
 
   if (error && !datos) {
     return (
@@ -171,6 +194,33 @@ export function VentaPagos() {
                     {v.auto.transmision && <Fila t="Transmisión" v={v.auto.transmision} />}
                     {v.auto.carroceria && <Fila t="Carrocería" v={v.auto.carroceria} />}
                     {v.auto.precioLista ? <Fila t="Precio de lista" v={pesos(v.auto.precioLista)} /> : null}
+                    {puedeVerCostos && (() => {
+                      const compra = costoDe(v.auto.id);
+                      const gasto = gastos?.total || 0;
+                      const costo = compra + gasto;
+                      const utilidad = ec.precio - costo;
+                      const margen = ec.precio > 0 ? (utilidad / ec.precio) * 100 : 0;
+                      return (
+                        <div className="mt-2 pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-1.5">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Rentabilidad</p>
+                          {compra > 0 ? (
+                            <>
+                              <Fila t="Se compró en" v={pesos(compra)} />
+                              <Fila t={`Gastos${gastos?.n ? ` (${gastos.n})` : ''}`} v={pesos(gasto)} />
+                              <Fila t="Costo total" v={pesos(costo)} />
+                              <Fila t="Se vendió en" v={pesos(ec.precio)} />
+                              <div className={clsx('mt-1 rounded-lg px-3 py-2 flex items-center justify-between', utilidad >= 0 ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-300')}>
+                                <span className="text-xs font-bold uppercase tracking-wide">Utilidad</span>
+                                <span className="font-extrabold">{pesos(utilidad)} <span className="text-xs font-bold opacity-75">({margen.toFixed(1)}%)</span></span>
+                              </div>
+                              {ec.esCredito && <p className="text-[11px] text-slate-500">Sin contar intereses ni comisión por apertura.</p>}
+                            </>
+                          ) : (
+                            <p className="text-xs text-slate-500">Este auto no tiene precio de compra capturado: agrégalo en su ficha para ver la utilidad.</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <button onClick={() => navigate(`/inventory/${v.auto.id}`)} className="mt-1 text-left text-xs font-bold text-blue-700 hover:underline">Ver la ficha completa →</button>
                   </>
                 )}
