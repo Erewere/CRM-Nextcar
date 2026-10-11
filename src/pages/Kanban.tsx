@@ -125,76 +125,123 @@ function ArchivedClientsModal({
   onClose,
   terminalColumns,
   filteredClients,
-  tasks,
+  users,
   onClientClick,
 }: {
   onClose: () => void;
   terminalColumns: PipelineStage[];
   filteredClients: Client[];
-  tasks: any[];
+  users: any[];
   onClientClick: (c: Client) => void;
 }) {
+  const [pestana, setPestana] = useState<string>(terminalColumns[0]?.id || "");
+  const [buscar, setBuscar] = useState("");
+  const [periodo, setPeriodo] = useState<"todo" | "mes" | "mespasado" | "anio">("todo");
+  const pesos = (n: number) => "$" + Math.round(Number(n) || 0).toLocaleString("es-MX");
+  const asesor = (id?: string) => { const u = users.find((x) => x.id === id); return u?.name || u?.email || "—"; };
+  const fechaDe = (c: any): string => {
+    const f = c.soldAt || c.lostAt || c.updatedAt;
+    if (!f) return "";
+    if (typeof f === "string") return f.slice(0, 10);
+    const ms = f.toMillis ? f.toMillis() : f.seconds ? f.seconds * 1000 : null;
+    return ms ? new Date(ms).toISOString().slice(0, 10) : "";
+  };
+  const hoy = new Date();
+  const mesActual = hoy.toISOString().slice(0, 7);
+  const mesPasado = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().slice(0, 7);
+  const enPeriodo = (f: string) => periodo === "todo" || (periodo === "mes" && f.startsWith(mesActual)) || (periodo === "mespasado" && f.startsWith(mesPasado)) || (periodo === "anio" && f.startsWith(String(hoy.getFullYear())));
+  const q = buscar.trim().toLowerCase();
+
+  const filas = (colId: string) => filteredClients
+    .filter((c) => c.status === colId)
+    .filter((c) => enPeriodo(fechaDe(c)))
+    .filter((c) => !q || [c.name, (c as any).dealTitle, c.vehicle, c.phone].some((x) => String(x || "").toLowerCase().includes(q)))
+    .sort((a, b) => fechaDe(b).localeCompare(fechaDe(a)));
+
+  const columna = terminalColumns.find((c) => c.id === pestana) || terminalColumns[0];
+  const lista = columna ? filas(columna.id) : [];
+  const esGanada = columna ? checkIsWon(columna.id, [columna]) : false;
+  const total = lista.reduce((t, c) => t + (Number((c as any).saleDetails?.price) || Number(c.dealValue) || 0), 0);
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-end">
-      <div className="w-[800px] max-w-full h-full bg-[#f4f5f5] dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white dark:bg-slate-800">
-          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-            <Archive className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-            Contactos Archivados
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-0 md:p-6" onClick={onClose}>
+      <div className="w-full max-w-6xl h-full md:h-[88vh] bg-white dark:bg-slate-800 md:rounded-2xl shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 md:px-6 py-3.5 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Embudo</p>
+            <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2"><Archive className="w-5 h-5 text-slate-500" /> Ganados, perdidos y rechazados</h2>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="flex-1 overflow-x-auto p-6 flex gap-6">
-          {terminalColumns.map((col) => {
-            const columnClients = filteredClients.filter(
-              (c) => c.status === col.id,
-
-            );
-            return (
-              <div
-                key={`col-${col.id}`}
-                className="flex-1 flex flex-col min-w-[320px] max-w-[400px]"
-              >
-                <h3 className="font-bold text-slate-700 dark:text-slate-300 flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded shadow-sm mb-4 border border-gray-200 dark:border-slate-700">
+        <div className="px-5 md:px-6 pt-3 pb-3 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg" role="tablist">
+              {terminalColumns.map((col) => (
+                <button key={col.id} role="tab" aria-selected={pestana === col.id} onClick={() => setPestana(col.id)}
+                  className={clsx("h-9 px-3.5 rounded-md text-sm font-bold flex items-center gap-2", pestana === col.id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800")}>
                   {col.title}
-                  <span className="bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 rounded-full text-xs text-slate-600 dark:text-slate-400 font-semibold">
-                    {columnClients.length}
-                  </span>
-                </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-3 pb-20">
-                  {columnClients.map((client, idx) => {
-                    const clientIdToUse = (client as any).originalClientId || client.id;
-                    return (
-                      <div
-                        key={`${client.id}-${idx}`}
-                        onClick={() => {
-                          onClientClick(client);
-                          onClose();
-                        }}
-                        className="cursor-pointer"
-                      >
-                        <ClientCard
-                          client={client}
-                          tasks={tasks.filter((t) => t.clientId === clientIdToUse || t.clientId === client.id || (t as any).dealId === client.id)}
-                        />
-                      </div>
-                    );
-                  })}
-                  {columnClients.length === 0 && (
-                    <div className="bg-white dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600 rounded p-8 text-center text-slate-400 text-sm">
-                      No hay contactos en esta etapa
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  <span className="text-xs font-bold px-1.5 rounded-full bg-slate-200/70 dark:bg-slate-600 text-slate-600 dark:text-slate-200">{filas(col.id).length}</span>
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar cliente, auto o teléfono…" className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-blue-500/40" />
+            </div>
+            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
+              {([["todo", "Todo"], ["mes", "Este mes"], ["mespasado", "Mes pasado"], ["anio", "Este año"]] as const).map(([id, t]) => (
+                <button key={id} onClick={() => setPeriodo(id)} aria-pressed={periodo === id} className={clsx("h-8 px-3 rounded-md text-xs font-bold", periodo === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500")}>{t}</button>
+              ))}
+            </div>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            <b className="text-slate-900 dark:text-white">{lista.length}</b> {lista.length === 1 ? "trato" : "tratos"}
+            {esGanada && lista.length > 0 && <> · vendido por <b className="text-emerald-700 dark:text-emerald-400">{pesos(total)}</b></>}
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {lista.length === 0 ? (
+            <p className="text-center text-slate-400 py-20 text-sm">No hay tratos en «{columna?.title}» con esos filtros.</p>
+          ) : (
+            <table className="w-full text-sm min-w-[760px]">
+              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[11px] uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="text-left font-bold px-5 py-2.5">Cliente</th>
+                  <th className="text-left font-bold px-3 py-2.5">Auto</th>
+                  <th className="text-right font-bold px-3 py-2.5">Valor</th>
+                  <th className="text-left font-bold px-3 py-2.5">Fecha</th>
+                  {!esGanada && <th className="text-left font-bold px-3 py-2.5">Motivo</th>}
+                  <th className="text-left font-bold px-3 py-2.5">Asesor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map((c, i) => {
+                  const f = fechaDe(c);
+                  const valor = Number((c as any).saleDetails?.price) || Number(c.dealValue) || 0;
+                  return (
+                    <tr key={`${c.id}-${i}`} onClick={() => { onClientClick(c); onClose(); }} className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50/60 dark:hover:bg-slate-700/40 cursor-pointer">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-extrabold text-sm flex items-center justify-center shrink-0">{String(c.name || "?").trim().charAt(0).toUpperCase()}</span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-slate-100 truncate">{c.name || "Sin nombre"}</p>
+                            {c.phone && <p className="text-xs text-slate-500 truncate">{String(c.phone).split(",")[0]}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-slate-700 dark:text-slate-200 max-w-[240px] truncate">{c.vehicle || "—"}</td>
+                      <td className={clsx("px-3 py-3 text-right font-bold tabular-nums", esGanada ? "text-emerald-700 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300")}>{valor ? pesos(valor) : "—"}</td>
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">{f ? new Date(f + "T00:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "—"}</td>
+                      {!esGanada && <td className="px-3 py-3 text-slate-600 dark:text-slate-300 max-w-[260px] truncate" title={(c as any).lostReason || ""}>{(c as any).lostReason || "—"}</td>}
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">{asesor(c.sellerId)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -1179,7 +1226,7 @@ export function Kanban() {
           onClose={() => setShowArchived(false)}
           terminalColumns={terminalColumns}
           filteredClients={filteredClients}
-          tasks={tasks}
+          users={users}
           onClientClick={setSelectedClient}
         />
       )}
