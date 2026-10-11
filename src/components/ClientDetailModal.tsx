@@ -3578,6 +3578,7 @@ export function ClientDetailModal({
                 etapas={pipelineStages}
                 usuarios={agencyUsers}
                 inventario={inventoryVehicles}
+                notas={notes}
                 onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
                 onCotizar={(v) => setCotizandoAuto(v)}
               />

@@ -200,10 +200,18 @@ export function priorizarProspectos(e: EntradaProspectos): ProspectoInteligente[
     const toques: number[] = [];
     for (const n of notas) { const t = ms(n.createdAt); if (t) toques.push(t); }
     for (const t of tareas) { if (t.completed) { const m = ms(t.completedAt) || ms(t.dueDate); if (m) toques.push(m); } }
+    // Lo último que escribió el cliente por WhatsApp o Messenger también cuenta como contacto.
+    const escribio = Math.max(ms(c.chatUltimoEntranteAt) || 0, ms(c.lastWhatsappInboundAt) || 0) || null;
+    if (escribio) toques.push(escribio);
     const act = ms(c.updatedAt); if (act) toques.push(act);
     const nac = ms(c.createdAt); if (nac) toques.push(nac);
     const ultimo = toques.length ? Math.max(...toques) : null;
     const dias = ultimo ? Math.max(0, Math.floor((ahora - ultimo) / DIA)) : null;
+    if (escribio) {
+      const dc = Math.max(0, Math.floor((ahora - escribio) / DIA));
+      if (dc <= 3) sube(10, dc === 0 ? "Te escribió hoy" : `Te escribió hace ${dc} día${dc === 1 ? "" : "s"}`);
+      else if (dc <= 14) sube(3, `Te escribió hace ${dc} días`);
+    }
     if (dias !== null) {
       if (dias >= 60) baja(40, `Llevas ${dias} días sin contacto`);
       else if (dias >= 30) baja(28, `Llevas ${dias} días sin contacto`);

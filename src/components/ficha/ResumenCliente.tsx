@@ -9,6 +9,7 @@ import { etiquetaDeFuente, fuenteDelContacto } from '../../lib/fuentes';
 import { diasDesde } from '../../lib/interesPorAuto';
 import type { PrecioMercado } from '../../lib/precioMercado';
 import { getVehicleMatches } from '../../pages/Inventory';
+import { priorizarProspectos } from '../../lib/prospectosInteligentes';
 import { getClientMatches } from '../../services/matchingEngine';
 import { useSharedInventoryMatches } from '../../hooks/useSharedInventoryMatches';
 import { GraficaMercado } from '../inventario/GraficaMercado';
@@ -27,6 +28,8 @@ interface Props {
   etapas: { id: string; title?: string }[];
   usuarios: any[];
   inventario: Vehicle[];
+  /** Notas del contacto: de ahí salen cotizaciones y la solicitud de crédito de la página. */
+  notas?: any[];
   onAbrirAuto?: (v: Vehicle) => void;
   /** Cotizar un auto a este cliente (sin auto: elegirlo del inventario). */
   onCotizar?: (v: Vehicle | null) => void;
@@ -74,7 +77,39 @@ function Recuadro({ titulo, children }: { titulo: string; children: React.ReactN
   );
 }
 
-export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, onAbrirAuto, onCotizar, soloAutos, columna }: Props) {
+/** El interés del cliente, con el porqué: se abre para ver qué lo sube y qué lo baja. */
+function TarjetaInteres({ interes, compacta }: { interes: { nivel: string; pct: number; color: string; clase: string; linea: string; motivos: { texto: string; tono: string }[] }; compacta?: boolean }) {
+  return (
+    <section className={clsx('bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 flex flex-col gap-2', compacta ? 'rounded-xl px-3.5 py-3' : 'rounded-2xl')}>
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative" style={{ background: `conic-gradient(${interes.color} 0 ${interes.pct}%, #e2e8f0 ${interes.pct}% 100%)` }} aria-hidden>
+          <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-[11px] font-extrabold text-slate-700 dark:text-slate-200">{interes.pct}</div>
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Interés</span>
+          <span className={clsx('text-sm font-extrabold', interes.clase)}>{interes.nivel}</span>
+        </div>
+      </div>
+      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-snug">{interes.linea}</p>
+      {interes.motivos.length > 0 && (
+        <details className="group text-xs">
+          <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300 select-none">¿Por qué?</summary>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {interes.motivos.map((m, i) => (
+              <li key={i} className="flex gap-1.5 items-start text-slate-600 dark:text-slate-300">
+                <span className={clsx('font-extrabold shrink-0', m.tono === 'bueno' ? 'text-emerald-600' : m.tono === 'malo' ? 'text-amber-600' : 'text-slate-400')}>{m.tono === 'bueno' ? '+' : m.tono === 'malo' ? '–' : '·'}</span>
+                <span>{m.texto}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[10px] text-slate-400">Se calcula con reglas (etapa, cotización, crédito, silencio, tareas y chat); no usa inteligencia artificial.</p>
+        </details>
+      )}
+    </section>
+  );
+}
+
+export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, notas, onAbrirAuto, onCotizar, soloAutos, columna }: Props) {
   const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
   useEffect(() => {
     let vigente = true;
@@ -111,14 +146,33 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
   // --- Vendedor
   const vendedor = usuarios.find((u) => u.id === cliente.sellerId);
 
-  // --- Interés: cuándo escribió el cliente por última vez.
+  // --- Interés: el mismo motor que el tablero (reglas explícitas, sin IA).
+  // Mira la etapa, las cotizaciones, la solicitud de crédito, lo que busca y si
+  // hay autos que encajan, el silencio, las tareas y lo que escribió por chat.
   const ultimoDelCliente = fechaIso(cliente.chatUltimoEntranteAt) || fechaIso(cliente.lastWhatsappInboundAt);
-  const dias = diasDesde(ultimoDelCliente);
-  const interes = dias === null
-    ? { nivel: 'Sin mensajes', pct: 0, color: '#94a3b8', clase: 'text-slate-600 dark:text-slate-400' }
-    : dias <= 3 ? { nivel: 'Alto', pct: 85, color: '#ea580c', clase: 'text-orange-700 dark:text-orange-400' }
-    : dias <= 14 ? { nivel: 'Medio', pct: 50, color: '#d97706', clase: 'text-amber-700 dark:text-amber-400' }
-    : { nivel: 'Bajo', pct: 20, color: '#64748b', clase: 'text-slate-700 dark:text-slate-300' };
+  const evaluacion = useMemo(() => {
+    if (ganado || perdido) return null;
+    try {
+      return priorizarProspectos({
+        prospectos: [cliente], contactos: [], tareas: tareas as any[], notas: (notas || []) as any[],
+        vehiculos: inventario as any[], etapas, usuarios,
+      })[0] || null;
+    } catch { return null; }
+  }, [cliente, tareas, notas, inventario, etapas, usuarios, ganado, perdido]);
+  const interes = ganado
+    ? { nivel: 'Ya compró', pct: 100, color: '#059669', clase: 'text-emerald-700 dark:text-emerald-400', linea: 'Venta cerrada', motivos: [] as { texto: string; tono: string }[] }
+    : perdido
+    ? { nivel: 'Sin trato abierto', pct: 0, color: '#94a3b8', clase: 'text-slate-600 dark:text-slate-400', linea: 'Solo contacto', motivos: [] as { texto: string; tono: string }[] }
+    : !evaluacion
+    ? { nivel: 'Sin datos', pct: 0, color: '#94a3b8', clase: 'text-slate-600 dark:text-slate-400', linea: ultimoDelCliente ? `Escribió ${cuando(ultimoDelCliente)}` : 'Aún no hay señales', motivos: [] as { texto: string; tono: string }[] }
+    : {
+        nivel: ({ caliente: 'Caliente', 'se-enfria': 'Se enfría', tibio: 'Tibio', frio: 'Frío' } as const)[evaluacion.temperatura],
+        pct: evaluacion.puntos,
+        color: ({ caliente: '#ea580c', 'se-enfria': '#dc2626', tibio: '#d97706', frio: '#64748b' } as const)[evaluacion.temperatura],
+        clase: ({ caliente: 'text-orange-700 dark:text-orange-400', 'se-enfria': 'text-red-700 dark:text-red-400', tibio: 'text-amber-700 dark:text-amber-400', frio: 'text-slate-700 dark:text-slate-300' } as const)[evaluacion.temperatura],
+        linea: evaluacion.accion,
+        motivos: evaluacion.motivos as { texto: string; tono: string }[],
+      };
 
   // --- Autos de interés: los de sus tratos y su ficha, y luego los que
   // coinciden con lo que busca.
@@ -199,16 +253,7 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
     };
     return (
       <div className="flex flex-col gap-4">
-        <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: `conic-gradient(${interes.color} 0 ${interes.pct}%, #e2e8f0 ${interes.pct}% 100%)` }} aria-hidden>
-            <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-800" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Interés</span>
-            <span className={clsx('text-sm font-extrabold', interes.clase)}>{interes.nivel}</span>
-            <span className="text-xs text-slate-600 dark:text-slate-400 truncate">{ultimoDelCliente ? `Escribió ${cuando(ultimoDelCliente)}` : 'Aún no escribe por WhatsApp'}</span>
-          </div>
-        </section>
+        <TarjetaInteres interes={interes} />
 
         <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between gap-2 mb-3">
@@ -294,22 +339,7 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
           )}
         </Recuadro>
 
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 flex items-center gap-3 col-span-2 lg:col-span-1">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-            style={{ background: `conic-gradient(${interes.color} 0 ${interes.pct}%, #e2e8f0 ${interes.pct}% 100%)` }}
-            aria-hidden
-          >
-            <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-800" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Interés</span>
-            <span className={clsx('text-sm font-extrabold', interes.clase)}>{interes.nivel}</span>
-            <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
-              {ultimoDelCliente ? `Escribió ${cuando(ultimoDelCliente)}` : 'Aún no escribe'}
-            </span>
-          </div>
-        </div>
+        <div className="col-span-2 lg:col-span-1"><TarjetaInteres interes={interes} compacta /></div>
       </div>
 
       {soloAutos && autos.length === 0 && (
