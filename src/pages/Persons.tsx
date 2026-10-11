@@ -52,6 +52,49 @@ import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 
 
+/**
+ * Abecedario lateral. Vive en su propio componente: el movimiento del mouse
+ * cambia su estado muchas veces por segundo y, estando dentro de la página,
+ * volvía a dibujar todos los contactos en cada movimiento.
+ */
+const BarraAbecedario = React.memo(function BarraAbecedario({ letras, disponibles, onIr }: { letras: string[]; disponibles: Set<string>; onIr: (l: string) => void }) {
+  const barra = React.useRef<HTMLElement>(null);
+  const [ratonY, setRatonY] = useState<number | null>(null);
+  const caja = ratonY !== null ? barra.current?.getBoundingClientRect() : null;
+  return (
+    <div className="w-11 shrink-0 flex items-center justify-center py-3">
+      <nav
+        aria-label="Ir a la letra"
+        ref={barra}
+        onMouseMove={(e) => setRatonY(e.clientY)}
+        onMouseLeave={() => setRatonY(null)}
+        className="flex flex-col items-stretch justify-between h-full max-h-[620px] w-8 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
+      >
+        {letras.map((l, i) => {
+          const hay = disponibles.has(l);
+          // Todas las letras ocupan el mismo alto: la posición del mouse dice cuál es la cercana.
+          const pos = ratonY !== null && caja && caja.height > 0 ? ((ratonY - caja.top) / caja.height) * letras.length - 0.5 : null;
+          const d = pos === null ? 99 : Math.abs(pos - i);
+          const escala = 1 + 0.9 * Math.exp(-(d * d) / (2 * 1.7 * 1.7));
+          return (
+            <button
+              key={l}
+              type="button"
+              disabled={!hay}
+              onClick={() => onIr(l)}
+              aria-label={`Ir a la ${l}`}
+              style={{ transform: `scale(${escala})`, transition: ratonY === null ? "transform 160ms ease-out" : "none" }}
+              className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none", hay ? "text-slate-700 dark:text-slate-200 hover:text-blue-700" : "text-slate-300 dark:text-slate-600 cursor-default")}
+            >
+              {l}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+});
+
 const COLUMNAS_PERSONAS = [
     { id: "name", label: "Nombre", visible: true, width: 250 },
     { id: "organization", label: "Organización", visible: false, width: 150 },
@@ -966,8 +1009,6 @@ export function Persons() {
   });
   useEffect(() => { try { localStorage.setItem("personas_orden", orden); } catch { /* sin almacenamiento */ } }, [orden]);
   const contenedorTarjetas = React.useRef<HTMLDivElement>(null);
-  const barraLetras = React.useRef<HTMLElement>(null);
-  const [ratonY, setRatonY] = useState<number | null>(null);
 
   const sinAcentos = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const esBuscando = (p: Client) => {
@@ -1034,7 +1075,11 @@ export function Persons() {
         let aVal: any = a[sortConfig.key as keyof Client] || '';
         let bVal: any = b[sortConfig.key as keyof Client] || '';
 
-        if (sortConfig.key === 'owner') {
+        if (sortConfig.key === 'name') {
+           // Igual que el abecedario: sin acentos ni espacios al inicio.
+           aVal = sinAcentos(a.name).trim();
+           bVal = sinAcentos(b.name).trim();
+        } else if (sortConfig.key === 'owner') {
            aVal = agencyUsers[a.sellerId] || '';
            bVal = agencyUsers[b.sellerId] || '';
         } else if (sortConfig.key === 'closedDeals') {
@@ -1093,9 +1138,20 @@ export function Persons() {
   const letrasConContactos = React.useMemo(() => new Set(secciones.map((s) => s.letra)), [secciones]);
   const contenedorTabla = React.useRef<HTMLDivElement>(null);
   const irALetra = (l: string) => {
-    const el = (contenedorTarjetas.current?.querySelector(`#letra-${CSS.escape(l)}`) ||
-      contenedorTabla.current?.querySelector(`#fila-${CSS.escape(l)}`)) as HTMLElement | null;
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // El salto lleva al PRIMER contacto de esa letra: para que lo sea, la lista
+    // tiene que ir de la A a la Z. Si estaba ordenada por otra cosa, se pone
+    // por nombre (es lo que se pide al tocar una letra).
+    let hayQueReordenar = false;
+    if (viewMode === "list" && !(!sortConfig || (sortConfig.key === "name" && sortConfig.direction === "asc"))) {
+      setSortConfig({ key: "name", direction: "asc" });
+      hayQueReordenar = true;
+    }
+    const saltar = () => {
+      const el = (contenedorTarjetas.current?.querySelector(`#letra-${CSS.escape(l)}`) ||
+        contenedorTabla.current?.querySelector(`#fila-${CSS.escape(l)}`)) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: "auto", block: "start" });
+    };
+    if (hayQueReordenar) setTimeout(saltar, 80); else saltar();
   };
   // En la tabla el abecedario solo sirve si va ordenada por nombre de la A a la Z.
   const tablaPorNombre = !sortConfig || (sortConfig.key === "name" && sortConfig.direction === "asc");
@@ -1106,42 +1162,6 @@ export function Persons() {
     return m;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filas]);
-
-  // Abecedario lateral (tarjetas y tabla): las letras crecen como el Dock de Mac.
-  const renderBarra = (disponibles: Set<string>) => (
-            <div className="w-11 shrink-0 flex items-center justify-center py-3">
-              <nav
-                aria-label="Ir a la letra"
-                ref={barraLetras}
-                onMouseMove={(e) => setRatonY(e.clientY)}
-                onMouseLeave={() => setRatonY(null)}
-                className="flex flex-col items-stretch justify-between h-full max-h-[620px] w-8 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
-              >
-                {LETRAS.map((l, i) => {
-                  const hay = disponibles.has(l);
-                  // Todas las letras ocupan el mismo alto: la posición del mouse dice cuál es la cercana.
-                  const caja = barraLetras.current?.getBoundingClientRect();
-                  const pos = ratonY !== null && caja && caja.height > 0 ? ((ratonY - caja.top) / caja.height) * LETRAS.length - 0.5 : null;
-                  const d = pos === null ? 99 : Math.abs(pos - i);
-                  const escala = 1 + 0.9 * Math.exp(-(d * d) / (2 * 1.7 * 1.7));
-                  return (
-                    <button
-                      key={l}
-                      type="button"
-                      disabled={!hay}
-                      onClick={() => irALetra(l)}
-                      aria-label={`Ir a la ${l}`}
-                      style={{ transform: `scale(${escala})`, transition: ratonY === null ? "transform 160ms ease-out" : "none" }}
-                      className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none", hay ? "text-slate-700 dark:text-slate-200 hover:text-blue-700" : "text-slate-300 dark:text-slate-600 cursor-default")}
-                    >
-                      {l}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-  );
-
 
 
   if (isMobile) return <MobilePersons />;
@@ -1231,7 +1251,7 @@ export function Persons() {
       {viewMode === "grid" ? (
         <div className="flex-1 min-h-0 flex">
           {/* Abecedario en su propia columna: no tapa las tarjetas. Al pasar el mouse las letras crecen como el Dock de Mac. */}
-          {orden === "az" && tarjetas.length > 0 && renderBarra(letrasConContactos)}
+          {orden === "az" && tarjetas.length > 0 && <BarraAbecedario letras={LETRAS} disponibles={letrasConContactos} onIr={irALetra} />}
           <div className="relative flex-1 min-w-0">
           <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto pt-3 pb-4 pl-0 pr-0">
             {tarjetas.length === 0 && <p className="text-center text-slate-500 py-16">Ningún contacto coincide con lo que buscas.</p>}
@@ -1301,7 +1321,7 @@ export function Persons() {
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex">
-        {filas.length > 0 && renderBarra(new Set(primeraFilaDeLetra.keys()))}
+        {filas.length > 0 && <BarraAbecedario letras={LETRAS} disponibles={new Set(primeraFilaDeLetra.keys())} onIr={irALetra} />}
         <div className="flex-1 min-w-0 pt-3 pb-4">
         <div ref={contenedorTabla} className="h-full overflow-auto rounded-l-xl border-y border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
           {/* El ancho de la tabla es la suma de sus columnas: al cambiar una, las demás no se mueven. */}
