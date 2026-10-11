@@ -1134,8 +1134,43 @@ export function Persons() {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="relative flex-1 min-h-0">
-          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto p-4 md:p-6 pl-12">
+        <div className="flex-1 min-h-0 flex">
+          {/* Abecedario en su propia columna: no tapa las tarjetas. Al pasar el mouse las letras crecen como el Dock de Mac. */}
+          {orden === "az" && tarjetas.length > 0 && (
+            <div className="w-14 shrink-0 flex items-center justify-center py-3">
+              <nav
+                aria-label="Ir a la letra"
+                ref={barraLetras}
+                onMouseMove={(e) => setRatonY(e.clientY)}
+                onMouseLeave={() => setRatonY(null)}
+                className="flex flex-col items-stretch justify-between h-full max-h-[620px] w-9 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
+              >
+                {LETRAS.map((l, i) => {
+                  const hay = letrasConContactos.has(l);
+                  // Todas las letras ocupan el mismo alto: la posición del mouse dice cuál es la cercana.
+                  const caja = barraLetras.current?.getBoundingClientRect();
+                  const pos = ratonY !== null && caja && caja.height > 0 ? ((ratonY - caja.top) / caja.height) * LETRAS.length - 0.5 : null;
+                  const d = pos === null ? 99 : Math.abs(pos - i);
+                  const escala = 1 + 0.9 * Math.exp(-(d * d) / (2 * 1.7 * 1.7));
+                  return (
+                    <button
+                      key={l}
+                      type="button"
+                      disabled={!hay}
+                      onClick={() => irALetra(l)}
+                      aria-label={`Ir a la ${l}`}
+                      style={{ transform: `scale(${escala})`, transition: ratonY === null ? "transform 160ms ease-out" : "none" }}
+                      className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none", hay ? "text-slate-700 dark:text-slate-200 hover:text-blue-700" : "text-slate-300 dark:text-slate-600 cursor-default")}
+                    >
+                      {l}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
+          <div className="relative flex-1 min-w-0">
+          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto p-4 md:p-6 pl-2 md:pl-3">
             {tarjetas.length === 0 && <p className="text-center text-slate-500 py-16">Ningún contacto coincide con lo que buscas.</p>}
             {secciones.map(({ letra, items }) => (
               <section key={letra || "todos"} id={letra ? `letra-${letra}` : undefined} className="mb-5 scroll-mt-2">
@@ -1199,42 +1234,7 @@ export function Persons() {
             ))}
           </div>
 
-          {/* Abecedario a la izquierda: al pasar el mouse las letras crecen como el Dock de Mac */}
-          {orden === "az" && tarjetas.length > 0 && (
-            <nav
-              aria-label="Ir a la letra"
-              ref={barraLetras}
-              onMouseMove={(e) => setRatonY(e.clientY)}
-              onMouseLeave={() => setRatonY(null)}
-              className="absolute left-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center py-1.5 rounded-full bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur z-20 max-h-[96%]"
-            >
-              {LETRAS.map((l, i) => {
-                const hay = letrasConContactos.has(l);
-                const centro = (() => {
-                  const el = barraLetras.current?.children[i] as HTMLElement | undefined;
-                  if (!el) return null;
-                  const r = el.getBoundingClientRect();
-                  return r.top + r.height / 2;
-                })();
-                // Cerca del mouse crece hasta 2.4 veces; la curva es suave, como el Dock.
-                const d = ratonY !== null && centro !== null ? Math.abs(ratonY - centro) : 999;
-                const escala = 1 + 1.4 * Math.exp(-(d * d) / (2 * 34 * 34));
-                return (
-                  <button
-                    key={l}
-                    type="button"
-                    disabled={!hay}
-                    onClick={() => irALetra(l)}
-                    aria-label={`Ir a la ${l}`}
-                    style={{ transform: `scale(${escala}) translateX(${(escala - 1) * 5}px)`, transformOrigin: "left center", transition: ratonY === null ? "transform 150ms ease-out" : "transform 60ms linear" }}
-                    className={clsx("w-6 flex-1 min-h-[14px] max-h-[22px] text-[10px] font-extrabold leading-none rounded", hay ? "text-slate-700 dark:text-slate-200 hover:text-blue-700" : "text-slate-300 dark:text-slate-600 cursor-default")}
-                  >
-                    {l}
-                  </button>
-                );
-              })}
-            </nav>
-          )}
+          </div>
         </div>
       ) : (
         <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
