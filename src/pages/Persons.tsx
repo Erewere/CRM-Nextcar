@@ -923,6 +923,8 @@ export function Persons() {
   });
   useEffect(() => { try { localStorage.setItem("personas_orden", orden); } catch { /* sin almacenamiento */ } }, [orden]);
   const contenedorTarjetas = React.useRef<HTMLDivElement>(null);
+  const barraLetras = React.useRef<HTMLElement>(null);
+  const [ratonY, setRatonY] = useState<number | null>(null);
 
   const sinAcentos = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const esBuscando = (p: Client) => {
@@ -1133,7 +1135,7 @@ export function Persons() {
 
       {viewMode === "grid" ? (
         <div className="relative flex-1 min-h-0">
-          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto p-4 md:p-6 pr-9">
+          <div ref={contenedorTarjetas} className="absolute inset-0 overflow-auto p-4 md:p-6 pl-12">
             {tarjetas.length === 0 && <p className="text-center text-slate-500 py-16">Ningún contacto coincide con lo que buscas.</p>}
             {secciones.map(({ letra, items }) => (
               <section key={letra || "todos"} id={letra ? `letra-${letra}` : undefined} className="mb-5 scroll-mt-2">
@@ -1197,14 +1199,36 @@ export function Persons() {
             ))}
           </div>
 
-          {/* Abecedario: un toque lleva a esa letra */}
+          {/* Abecedario a la izquierda: al pasar el mouse las letras crecen como el Dock de Mac */}
           {orden === "az" && tarjetas.length > 0 && (
-            <nav aria-label="Ir a la letra" className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center py-1 rounded-full bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur z-10 max-h-[96%]">
-              {LETRAS.map((l) => {
+            <nav
+              aria-label="Ir a la letra"
+              ref={barraLetras}
+              onMouseMove={(e) => setRatonY(e.clientY)}
+              onMouseLeave={() => setRatonY(null)}
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 flex flex-col items-center py-1.5 rounded-full bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur z-20 max-h-[96%]"
+            >
+              {LETRAS.map((l, i) => {
                 const hay = letrasConContactos.has(l);
+                const centro = (() => {
+                  const el = barraLetras.current?.children[i] as HTMLElement | undefined;
+                  if (!el) return null;
+                  const r = el.getBoundingClientRect();
+                  return r.top + r.height / 2;
+                })();
+                // Cerca del mouse crece hasta 2.4 veces; la curva es suave, como el Dock.
+                const d = ratonY !== null && centro !== null ? Math.abs(ratonY - centro) : 999;
+                const escala = 1 + 1.4 * Math.exp(-(d * d) / (2 * 34 * 34));
                 return (
-                  <button key={l} type="button" disabled={!hay} onClick={() => irALetra(l)} aria-label={`Ir a la ${l}`}
-                    className={clsx("w-6 flex-1 min-h-[14px] max-h-[22px] text-[10px] font-extrabold leading-none rounded", hay ? "text-slate-700 dark:text-slate-200 hover:bg-blue-600 hover:text-white" : "text-slate-300 dark:text-slate-600 cursor-default")}>
+                  <button
+                    key={l}
+                    type="button"
+                    disabled={!hay}
+                    onClick={() => irALetra(l)}
+                    aria-label={`Ir a la ${l}`}
+                    style={{ transform: `scale(${escala}) translateX(${(escala - 1) * 5}px)`, transformOrigin: "left center", transition: ratonY === null ? "transform 150ms ease-out" : "transform 60ms linear" }}
+                    className={clsx("w-6 flex-1 min-h-[14px] max-h-[22px] text-[10px] font-extrabold leading-none rounded", hay ? "text-slate-700 dark:text-slate-200 hover:text-blue-700" : "text-slate-300 dark:text-slate-600 cursor-default")}
+                  >
                     {l}
                   </button>
                 );
