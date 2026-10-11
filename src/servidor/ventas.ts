@@ -209,7 +209,7 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
           estado: d.status || "",
           vendidoEl: d.soldAt || "",
           cliente: cliente ? { id: d.clientId, nombre: cliente.name || "", telefono: cliente.phone || "" } : { id: d.clientId || null, nombre: d.title || "", telefono: "" },
-          auto: auto ? { id: auto.ref.id, nombre: `${auto.datos.year || ""} ${auto.datos.make || ""} ${auto.datos.model || ""}`.replace(/\s+/g, " ").trim(), vin: auto.datos.vin || "", foto: (auto.datos.photoUrls || [])[0] || auto.datos.photoUrl || "" } : (d.vehicle ? { id: null, nombre: String(d.vehicle) } : null),
+          auto: auto ? { id: auto.ref.id, nombre: `${auto.datos.year || ""} ${auto.datos.make || ""} ${auto.datos.model || ""}`.replace(/\s+/g, " ").trim(), vin: auto.datos.vin || "", foto: (auto.datos.photoUrls || [])[0] || auto.datos.photoUrl || "", color: auto.datos.color || "", km: Number(auto.datos.km) || null, transmision: auto.datos.transmission || "", placas: auto.datos.licensePlate || "", carroceria: auto.datos.bodyType || "", precioLista: Number(auto.datos.price) || null } : (d.vehicle ? { id: null, nombre: String(d.vehicle) } : null),
           agencia: { nombre: ag.name || "", logo: ag.logoUrl || "", direccion: ag.address || "", telefono: ag.phone || "" },
           plan,
           tienePlan: !!d.saleDetails,

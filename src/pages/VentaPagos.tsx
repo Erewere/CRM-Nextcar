@@ -155,6 +155,28 @@ export function VentaPagos() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4">
+          <div className="flex flex-col gap-4 min-w-0 h-fit">
+          {/* El auto vendido, de un vistazo */}
+          {v.auto && (
+            <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden text-sm">
+              {v.auto.foto && <img src={v.auto.foto} alt={v.auto.nombre} loading="lazy" className="w-full h-40 object-cover" />}
+              <div className="p-4 flex flex-col gap-2">
+                <h2 className="font-extrabold text-slate-900 dark:text-white leading-tight">{v.auto.nombre}</h2>
+                {v.auto.id && (
+                  <>
+                    {v.auto.vin && <Fila t="VIN" v={v.auto.vin} />}
+                    {v.auto.placas && <Fila t="Placas" v={v.auto.placas} />}
+                    {v.auto.color && <Fila t="Color" v={v.auto.color} />}
+                    {v.auto.km ? <Fila t="Kilometraje" v={`${Number(v.auto.km).toLocaleString('es-MX')} km`} /> : null}
+                    {v.auto.transmision && <Fila t="Transmisión" v={v.auto.transmision} />}
+                    {v.auto.carroceria && <Fila t="Carrocería" v={v.auto.carroceria} />}
+                    {v.auto.precioLista ? <Fila t="Precio de lista" v={pesos(v.auto.precioLista)} /> : null}
+                    <button onClick={() => navigate(`/inventory/${v.auto.id}`)} className="mt-1 text-left text-xs font-bold text-blue-700 hover:underline">Ver la ficha completa →</button>
+                  </>
+                )}
+              </div>
+            </section>
+          )}
           {/* Plan */}
           <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 h-fit flex flex-col gap-2 text-sm">
             <h2 className="font-extrabold text-slate-900 dark:text-white">El plan</h2>
@@ -175,8 +197,8 @@ export function VentaPagos() {
                 </div>
               </>
             )}
-            {v.auto?.id && <button onClick={() => navigate(`/inventory/${v.auto.id}`)} className="mt-2 text-left text-xs font-bold text-blue-700 hover:underline">Ver el auto →</button>}
           </section>
+          </div>
 
           <div className="flex flex-col gap-4 min-w-0">
             {/* Calendario */}
