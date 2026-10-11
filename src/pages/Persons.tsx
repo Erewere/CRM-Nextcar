@@ -52,6 +52,19 @@ import { getClientMatches, ClientMatch } from "../services/matchingEngine";
 
 
 
+const COLUMNAS_PERSONAS = [
+    { id: "name", label: "Nombre", visible: true, width: 250 },
+    { id: "organization", label: "Organización", visible: false, width: 150 },
+    { id: "email", label: "Correo", visible: true, width: 230 },
+    { id: "phone", label: "Teléfono", visible: true, width: 180 },
+    { id: "vehicle", label: "Auto de interés", visible: true, width: 240 },
+    { id: "status", label: "Etapa", visible: true, width: 150 },
+    { id: "closedDeals", label: "Cerrados", visible: true, width: 90 },
+    { id: "openDeals", label: "Abiertos", visible: true, width: 90 },
+    { id: "nextTaskDate", label: "Próxima tarea", visible: true, width: 140 },
+    { id: "owner", label: "Asesor", visible: true, width: 130 },
+  ];
+
 export function Persons() {
   const isMobile = useIsMobile();
   const { userData, googleToken, connectGoogleServices, refrescarTokenGoogle } = useAuth();
@@ -130,18 +143,46 @@ export function Persons() {
     }
   }, [userData?.agencyId]);
 
-  const [columns, setColumns] = useState([
-    { id: "name", label: "Nombre", visible: true, width: 250 },
-    { id: "organization", label: "Organización", visible: false, width: 150 },
-    { id: "email", label: "Correo", visible: true, width: 230 },
-    { id: "phone", label: "Teléfono", visible: true, width: 180 },
-    { id: "vehicle", label: "Auto de interés", visible: true, width: 240 },
-    { id: "status", label: "Etapa", visible: true, width: 150 },
-    { id: "closedDeals", label: "Cerrados", visible: true, width: 90 },
-    { id: "openDeals", label: "Abiertos", visible: true, width: 90 },
-    { id: "nextTaskDate", label: "Próxima tarea", visible: true, width: 140 },
-    { id: "owner", label: "Asesor", visible: true, width: 130 },
-  ]);
+  const [columns, setColumns] = useState(COLUMNAS_PERSONAS);
+  // Cada usuario deja las columnas como las quiere: orden, anchos y cuáles ver.
+  const claveColumnas = `personas_columnas_${userData?.id || "anon"}`;
+  const [columnasListas, setColumnasListas] = useState(false);
+  useEffect(() => {
+    if (!userData?.id) return;
+    try {
+      const guardado = JSON.parse(localStorage.getItem(claveColumnas) || "null");
+      if (Array.isArray(guardado)) {
+        const porId = new Map(COLUMNAS_PERSONAS.map((c) => [c.id, c]));
+        const vistas = new Set<string>();
+        const ordenadas = guardado
+          .filter((g: any) => porId.has(g?.id))
+          .map((g: any) => { vistas.add(g.id); return { ...porId.get(g.id)!, visible: !!g.visible, width: Math.max(50, Number(g.width) || porId.get(g.id)!.width) }; });
+        const nuevas = COLUMNAS_PERSONAS.filter((c) => !vistas.has(c.id));
+        setColumns([...ordenadas, ...nuevas]);
+      }
+    } catch { /* sin preferencia guardada */ }
+    setColumnasListas(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData?.id]);
+  useEffect(() => {
+    if (!columnasListas) return;
+    try { localStorage.setItem(claveColumnas, JSON.stringify(columns.map(({ id, visible, width }) => ({ id, visible, width })))); } catch { /* sin almacenamiento */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, columnasListas]);
+  const [colArrastrada, setColArrastrada] = useState<string | null>(null);
+  const [colDestino, setColDestino] = useState<string | null>(null);
+  const moverColumna = (desde: string, hacia: string) => {
+    if (desde === hacia) return;
+    setColumns((cols) => {
+      const i = cols.findIndex((c) => c.id === desde);
+      const j = cols.findIndex((c) => c.id === hacia);
+      if (i < 0 || j < 0) return cols;
+      const copia = [...cols];
+      const [x] = copia.splice(i, 1);
+      copia.splice(j, 0, x);
+      return copia;
+    });
+  };
   const [showColSettings, setShowColSettings] = useState(false);
   const [resizingCol, setResizingCol] = useState<string | null>(null);
   const [dragStartX, setDragStartX] = useState(0);
@@ -1240,7 +1281,13 @@ export function Persons() {
       ) : (
         <div className="flex-1 min-h-0 p-4 md:p-6 pt-3">
         <div className="h-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-          <table className="w-full min-w-[1000px] text-left text-sm border-collapse table-fixed select-none">
+          {/* El ancho de la tabla es la suma de sus columnas: al cambiar una, las demás no se mueven. */}
+          <table className="text-left text-sm border-collapse table-fixed select-none" style={{ width: 44 + columns.filter((c) => c.visible).reduce((t, c) => t + c.width, 0) + 44 }}>
+            <colgroup>
+              <col style={{ width: 44 }} />
+              {columns.filter((c) => c.visible).map((c) => <col key={c.id} style={{ width: c.width }} />)}
+              <col style={{ width: 44 }} />
+            </colgroup>
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 sticky top-0 z-10">
               <tr>
                 <th
@@ -1277,8 +1324,14 @@ export function Persons() {
                   .map((col) => (
                     <th
                       key={`col-${col.id}`}
-                      className="relative truncate group cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50"
+                      className={clsx("relative truncate group cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50", colDestino === col.id && colArrastrada && colArrastrada !== col.id && "shadow-[inset_3px_0_0_#2563eb]", colArrastrada === col.id && "opacity-40")}
                       style={{ width: col.width }}
+                      draggable
+                      title="Arrastra para mover la columna"
+                      onDragStart={(e) => { setColArrastrada(col.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", col.id); }}
+                      onDragOver={(e) => { if (colArrastrada) { e.preventDefault(); if (colDestino !== col.id) setColDestino(col.id); } }}
+                      onDrop={(e) => { e.preventDefault(); if (colArrastrada) moverColumna(colArrastrada, col.id); setColArrastrada(null); setColDestino(null); }}
+                      onDragEnd={() => { setColArrastrada(null); setColDestino(null); }}
                       onClick={() => handleSort(col.id)}
                     >
                       <div className={clsx("px-3 py-2.5 truncate flex items-center text-[11px] font-bold uppercase tracking-wider", ["closedDeals", "openDeals"].includes(col.id) && "justify-center")}>
@@ -1289,6 +1342,8 @@ export function Persons() {
                       </div>
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 z-20 transition-colors opacity-0 group-hover:opacity-100"
+                        draggable={false}
+                        onDragStart={(e) => e.preventDefault()}
                         onMouseDown={(e) => {
                           e.stopPropagation();
                           handleMouseDown(e, col.id, col.width);
@@ -1311,20 +1366,17 @@ export function Persons() {
                       <div className="text-xs font-bold text-gray-500 dark:text-slate-400 mb-2 uppercase px-2">
                         Columnas visibles
                       </div>
-                      {columns.map((col) => (
-                        <label
-                          key={`col-${col.id}`}
-                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:bg-slate-900 rounded cursor-pointer text-gray-700 dark:text-slate-300"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={col.visible}
-                            onChange={() => toggleColumn(col.id)}
-                            className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white dark:checked:bg-blue-500"
-                          />
-                          <span className="truncate">{col.label}</span>
-                        </label>
+                      {columns.map((col, i) => (
+                        <div key={`col-${col.id}`} className="flex items-center gap-1 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-300">
+                          <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                            <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded border-gray-300 dark:border-slate-600 dark:bg-slate-700 bg-white" />
+                            <span className="truncate">{col.label}</span>
+                          </label>
+                          <button type="button" aria-label={`Subir ${col.label}`} disabled={i === 0} onClick={() => moverColumna(col.id, columns[i - 1].id)} className="h-6 w-6 rounded text-slate-500 hover:bg-slate-200 disabled:opacity-25">↑</button>
+                          <button type="button" aria-label={`Bajar ${col.label}`} disabled={i === columns.length - 1} onClick={() => moverColumna(col.id, columns[i + 1].id)} className="h-6 w-6 rounded text-slate-500 hover:bg-slate-200 disabled:opacity-25">↓</button>
+                        </div>
                       ))}
+                      <button type="button" onClick={() => setColumns(COLUMNAS_PERSONAS)} className="mt-1 w-full text-xs font-bold text-blue-700 hover:underline py-1.5">Restablecer columnas</button>
                     </div>
                     </>
                   )}
