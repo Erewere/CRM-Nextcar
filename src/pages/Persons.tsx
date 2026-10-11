@@ -78,7 +78,7 @@ const BarraAbecedario = React.memo(function BarraAbecedario({ letras, disponible
           // Todas las letras ocupan el mismo alto: la posición del mouse dice cuál es la cercana.
           const pos = ratonY !== null && caja && caja.height > 0 ? ((ratonY - caja.top) / caja.height) * letras.length - 0.5 : null;
           const d = pos === null ? 99 : Math.abs(pos - i);
-          const escala = 1 + 1.7 * Math.exp(-(d * d) / (2 * 1.9 * 1.9));
+          const escala = 1 + 1.2 * Math.exp(-(d * d) / (2 * 1.8 * 1.8));
           return (
             <button
               key={l}
@@ -86,10 +86,15 @@ const BarraAbecedario = React.memo(function BarraAbecedario({ letras, disponible
               disabled={!hay}
               onClick={() => onIr(l)}
               aria-label={`Ir a la ${l}`}
-              style={{ transform: `scale(${escala})`, transition: ratonY === null ? "transform 160ms ease-out" : "none" }}
-              className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none rounded-md", i === cercana && hay ? "bg-blue-600 text-white" : hay ? "text-slate-700 dark:text-slate-200" : "text-slate-300 dark:text-slate-600 cursor-default")}
+              className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none", hay ? "text-slate-700 dark:text-slate-200" : "text-slate-300 dark:text-slate-600 cursor-default")}
             >
-              {l}
+              {/* Solo la letra crece: el botón conserva su tamaño, así el clic cae siempre en la letra que ves marcada. */}
+              <span
+                className={clsx("pointer-events-none block rounded px-[3px] py-px", i === cercana && hay && "bg-blue-600 text-white")}
+                style={{ transform: `scale(${escala})`, transition: ratonY === null ? "transform 160ms ease-out" : "none" }}
+              >
+                {l}
+              </span>
             </button>
           );
         })}
@@ -1159,8 +1164,8 @@ export function Persons() {
       const inicio = contenedor.scrollTop;
       const distancia = destino - inicio;
       if (Math.abs(distancia) < 2) return;
-      // Más lejos, más tiempo (entre 0.4 y 0.9 s), con arranque y frenado suaves.
-      const duracion = Math.min(900, Math.max(400, Math.abs(distancia) * 0.35));
+      // Más lejos, más tiempo (entre 0.75 y 1.6 s), con arranque y frenado suaves.
+      const duracion = Math.min(1600, Math.max(750, Math.abs(distancia) * 0.6));
       const t0 = performance.now();
       const suave = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
       const paso = (ahora: number) => {
