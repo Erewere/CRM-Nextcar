@@ -1109,13 +1109,13 @@ export function Persons() {
 
   // Abecedario lateral (tarjetas y tabla): las letras crecen como el Dock de Mac.
   const renderBarra = (disponibles: Set<string>) => (
-            <div className="w-14 shrink-0 flex items-center justify-center py-3">
+            <div className="w-11 shrink-0 flex items-center justify-center py-3">
               <nav
                 aria-label="Ir a la letra"
                 ref={barraLetras}
                 onMouseMove={(e) => setRatonY(e.clientY)}
                 onMouseLeave={() => setRatonY(null)}
-                className="flex flex-col items-stretch justify-between h-full max-h-[620px] w-9 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
+                className="flex flex-col items-stretch justify-between h-full max-h-[620px] w-8 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
               >
                 {LETRAS.map((l, i) => {
                   const hay = disponibles.has(l);
@@ -1302,8 +1302,8 @@ export function Persons() {
       ) : (
         <div className="flex-1 min-h-0 flex">
         {filas.length > 0 && renderBarra(new Set(primeraFilaDeLetra.keys()))}
-        <div className="flex-1 min-w-0 pt-3 pb-4 pl-2 md:pl-3 pr-4">
-        <div ref={contenedorTabla} className="h-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex-1 min-w-0 pt-3 pb-4">
+        <div ref={contenedorTabla} className="h-full overflow-auto rounded-l-xl border-y border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
           {/* El ancho de la tabla es la suma de sus columnas: al cambiar una, las demás no se mueven. */}
           <table className="text-left text-sm border-collapse table-fixed select-none" style={{ width: "100%", minWidth: 44 + columns.filter((c) => c.visible).reduce((t, c) => t + c.width, 0) + 44 }}>
             <colgroup>
