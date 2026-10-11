@@ -93,3 +93,10 @@ div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-
 @media (prefers-reduced-motion: reduce) {
   .campana-viva, .insignia-viva, .insignia-nueva { animation: none; }
 }
+
+/* Destello al llegar a una letra en Personas */
+@keyframes resalteLetra {
+  0% { background-color: rgba(37, 99, 235, 0.22); }
+  100% { background-color: transparent; }
+}
+.resalte-letra { animation: resalteLetra 1.3s ease-out; border-radius: 12px; }

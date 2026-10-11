@@ -61,21 +61,24 @@ const BarraAbecedario = React.memo(function BarraAbecedario({ letras, disponible
   const barra = React.useRef<HTMLElement>(null);
   const [ratonY, setRatonY] = useState<number | null>(null);
   const caja = ratonY !== null ? barra.current?.getBoundingClientRect() : null;
+  const activa = ratonY !== null;
+  // La letra sobre la que está el mouse (la más cercana), para resaltarla.
+  const cercana = activa && caja && caja.height > 0 ? Math.min(letras.length - 1, Math.max(0, Math.round(((ratonY! - caja.top) / caja.height) * letras.length - 0.5))) : -1;
   return (
-    <div className="w-11 shrink-0 flex items-center justify-center py-3">
+    <div className="w-11 shrink-0 flex items-center justify-center py-3 relative z-20">
       <nav
         aria-label="Ir a la letra"
         ref={barra}
         onMouseMove={(e) => setRatonY(e.clientY)}
         onMouseLeave={() => setRatonY(null)}
-        className="flex flex-col items-stretch justify-between h-full max-h-[620px] w-8 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
+        className={clsx("flex flex-col items-stretch justify-between h-full max-h-[620px] py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-[width,box-shadow] duration-200", activa ? "w-12 shadow-xl -mr-2" : "w-8 shadow-sm")}
       >
         {letras.map((l, i) => {
           const hay = disponibles.has(l);
           // Todas las letras ocupan el mismo alto: la posición del mouse dice cuál es la cercana.
           const pos = ratonY !== null && caja && caja.height > 0 ? ((ratonY - caja.top) / caja.height) * letras.length - 0.5 : null;
           const d = pos === null ? 99 : Math.abs(pos - i);
-          const escala = 1 + 0.9 * Math.exp(-(d * d) / (2 * 1.7 * 1.7));
+          const escala = 1 + 1.7 * Math.exp(-(d * d) / (2 * 1.9 * 1.9));
           return (
             <button
               key={l}
@@ -84,7 +87,7 @@ const BarraAbecedario = React.memo(function BarraAbecedario({ letras, disponible
               onClick={() => onIr(l)}
               aria-label={`Ir a la ${l}`}
               style={{ transform: `scale(${escala})`, transition: ratonY === null ? "transform 160ms ease-out" : "none" }}
-              className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none", hay ? "text-slate-700 dark:text-slate-200 hover:text-blue-700" : "text-slate-300 dark:text-slate-600 cursor-default")}
+              className={clsx("flex-1 min-h-0 flex items-center justify-center text-[12px] font-extrabold leading-none rounded-md", i === cercana && hay ? "bg-blue-600 text-white" : hay ? "text-slate-700 dark:text-slate-200" : "text-slate-300 dark:text-slate-600 cursor-default")}
             >
               {l}
             </button>
@@ -1147,9 +1150,31 @@ export function Persons() {
       hayQueReordenar = true;
     }
     const saltar = () => {
-      const el = (contenedorTarjetas.current?.querySelector(`#letra-${CSS.escape(l)}`) ||
-        contenedorTabla.current?.querySelector(`#fila-${CSS.escape(l)}`)) as HTMLElement | null;
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const contenedor = (viewMode === "list" ? contenedorTabla.current : contenedorTarjetas.current) as HTMLElement | null;
+      const el = (contenedor?.querySelector(`#letra-${CSS.escape(l)}`) || contenedor?.querySelector(`#fila-${CSS.escape(l)}`)) as HTMLElement | null;
+      if (!contenedor || !el) return;
+      // En la tabla el encabezado fijo tapa la primera fila: se deja su alto de margen.
+      const margen = viewMode === "list" ? 46 : 8;
+      const destino = Math.max(0, el.getBoundingClientRect().top - contenedor.getBoundingClientRect().top + contenedor.scrollTop - margen);
+      const inicio = contenedor.scrollTop;
+      const distancia = destino - inicio;
+      if (Math.abs(distancia) < 2) return;
+      // Más lejos, más tiempo (entre 0.4 y 0.9 s), con arranque y frenado suaves.
+      const duracion = Math.min(900, Math.max(400, Math.abs(distancia) * 0.35));
+      const t0 = performance.now();
+      const suave = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+      const paso = (ahora: number) => {
+        const t = Math.min(1, (ahora - t0) / duracion);
+        contenedor.scrollTop = inicio + distancia * suave(t);
+        if (t < 1) requestAnimationFrame(paso);
+        else {
+          el.classList.remove("resalte-letra");
+          void el.offsetWidth;
+          el.classList.add("resalte-letra");
+          setTimeout(() => el.classList.remove("resalte-letra"), 1400);
+        }
+      };
+      requestAnimationFrame(paso);
     };
     if (hayQueReordenar) setTimeout(saltar, 80); else saltar();
   };
