@@ -1101,10 +1101,11 @@ export function Persons() {
   const tablaPorNombre = !sortConfig || (sortConfig.key === "name" && sortConfig.direction === "asc");
   const primeraFilaDeLetra = React.useMemo(() => {
     const m = new Map<string, string>();
-    if (tablaPorNombre) filas.forEach((p) => { const l = letraDe(p); if (!m.has(l)) m.set(l, p.id); });
+    // La primera fila de cada letra en el orden actual: la barra sirve con cualquier orden.
+    filas.forEach((p) => { const l = letraDe(p); if (!m.has(l)) m.set(l, p.id); });
     return m;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, tablaPorNombre]);
+  }, [filas]);
 
   // Abecedario lateral (tarjetas y tabla): las letras crecen como el Dock de Mac.
   const renderBarra = (disponibles: Set<string>) => (
@@ -1300,15 +1301,16 @@ export function Persons() {
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex">
-        {tablaPorNombre && filas.length > 0 && renderBarra(new Set(primeraFilaDeLetra.keys()))}
-        <div className="flex-1 min-w-0 p-4 md:p-6 pt-3 pl-2 md:pl-3">
+        {filas.length > 0 && renderBarra(new Set(primeraFilaDeLetra.keys()))}
+        <div className="flex-1 min-w-0 pt-3 pb-4 pl-2 md:pl-3 pr-4">
         <div ref={contenedorTabla} className="h-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
           {/* El ancho de la tabla es la suma de sus columnas: al cambiar una, las demás no se mueven. */}
-          <table className="text-left text-sm border-collapse table-fixed select-none" style={{ width: 44 + columns.filter((c) => c.visible).reduce((t, c) => t + c.width, 0) + 44 }}>
+          <table className="text-left text-sm border-collapse table-fixed select-none" style={{ width: "100%", minWidth: 44 + columns.filter((c) => c.visible).reduce((t, c) => t + c.width, 0) + 44 }}>
             <colgroup>
               <col style={{ width: 44 }} />
               {columns.filter((c) => c.visible).map((c) => <col key={c.id} style={{ width: c.width }} />)}
-              <col style={{ width: 44 }} />
+              {/* Columna sobrante: absorbe el espacio libre para que la tabla llene el ancho sin estirar las demás. */}
+              <col />
             </colgroup>
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 sticky top-0 z-10">
               <tr>
@@ -1374,11 +1376,11 @@ export function Persons() {
                       />
                     </th>
                   ))}
-                <th className="w-10 relative" style={{ width: 44 }}>
+                <th className="relative">
                   <button
                     type="button"
                     onClick={() => setShowColSettings(!showColSettings)}
-                    className="w-full h-full flex items-center justify-center p-3 hover:bg-gray-100 dark:hover:bg-slate-700 outline-none"
+                    className="w-full h-full flex items-center justify-end pr-4 py-3 hover:bg-gray-100 dark:hover:bg-slate-700 outline-none"
                   >
                     <Settings className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-slate-400 transition-colors" />
                   </button>
