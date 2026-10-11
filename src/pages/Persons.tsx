@@ -1149,7 +1149,7 @@ export function Persons() {
     const saltar = () => {
       const el = (contenedorTarjetas.current?.querySelector(`#letra-${CSS.escape(l)}`) ||
         contenedorTabla.current?.querySelector(`#fila-${CSS.escape(l)}`)) as HTMLElement | null;
-      el?.scrollIntoView({ behavior: "auto", block: "start" });
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     if (hayQueReordenar) setTimeout(saltar, 80); else saltar();
   };
