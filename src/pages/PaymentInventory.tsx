@@ -306,7 +306,7 @@ export function PaymentInventory() {
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900">
       <div className="px-4 py-4 md:px-6 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Inventario de Pagos</h1>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Pagos</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Control detallado de ventas y pagos recibidos</p>
         </div>
         <div className="relative w-full md:w-64">

@@ -233,22 +233,28 @@ export function Layout() {
       roles: ["admin", "seller"],
     },
     {
-      name: "Inventario",
-      path: "/inventory",
-      icon: Car,
-      roles: ["admin", "seller", "taller"],
-    },
-    {
-      name: "Inv. de Pagos",
-      path: "/payments",
-      icon: DollarSign,
-      roles: ["admin"],
-    },
-    {
       name: "Embudo",
       path: "/kanban",
       icon: Trello,
       roles: ["admin", "seller"],
+    },
+    {
+      name: "Directorio",
+      path: "/persons",
+      icon: Users,
+      roles: ["admin", "seller"],
+    },
+    {
+      name: "Tareas",
+      path: "/tasks",
+      icon: CheckSquare,
+      roles: ["admin", "seller"],
+    },
+    {
+      name: "Inventario",
+      path: "/inventory",
+      icon: Car,
+      roles: ["admin", "seller", "taller"],
     },
     {
       name: "Créditos",
@@ -257,21 +263,21 @@ export function Layout() {
       roles: ["admin", "seller"],
     },
     {
-      name: "Tareas y Calendario",
-      path: "/tasks",
-      icon: CheckSquare,
-      roles: ["admin", "seller"],
+      name: "Pagos",
+      path: "/payments",
+      icon: DollarSign,
+      roles: ["admin"],
     },
     {
-      name: "Personas",
-      path: "/persons",
-      icon: Users,
-      roles: ["admin", "seller"],
-    },
-    {
-      name: "Agencias & Usuarios",
+      name: "Agencia y usuarios",
       path: "/users",
       icon: Building,
+      roles: ["master", "admin"],
+    },
+    {
+      name: "Integraciones",
+      path: "/integrations",
+      icon: Blocks,
       roles: ["master", "admin"],
     },
     {
@@ -283,13 +289,7 @@ export function Layout() {
       roles: ["admin"],
     },
     {
-      name: "Integraciones",
-      path: "/integrations",
-      icon: Blocks,
-      roles: ["master", "admin"],
-    },
-    {
-      name: "Chats",
+      name: "Chat",
       path: "/chats",
       icon: MessageSquare,
       // Los vendedores atienden sus propias conversaciones de WhatsApp, así que
@@ -308,7 +308,16 @@ export function Layout() {
 
   const hasSharedMatches = ownAgencySharing && sharedMatches.length > 0;
 
-  const processedNavItems = navItems.map(item => {
+  // Cada usuario acomoda su menú: el orden se guarda por usuario en este navegador.
+  const claveMenu = `menu_orden_${userData?.id || "anon"}`;
+  const [ordenMenu, setOrdenMenu] = useState<string[]>([]);
+  useEffect(() => {
+    try { const g = JSON.parse(localStorage.getItem(claveMenu) || "null"); setOrdenMenu(Array.isArray(g) ? g : []); } catch { setOrdenMenu([]); }
+  }, [claveMenu]);
+  const [menuArrastrado, setMenuArrastrado] = useState<string | null>(null);
+  const [menuDestino, setMenuDestino] = useState<string | null>(null);
+
+  const processedNavItemsBase = navItems.map(item => {
     let finalItem = { ...item };
     if (finalItem.name === "Inventario") {
       finalItem = {
@@ -323,6 +332,26 @@ export function Layout() {
     }
     return finalItem;
   });
+  const processedNavItems = ordenMenu.length
+    ? [...processedNavItemsBase].sort((x, y) => {
+        const i = ordenMenu.indexOf(x.path); const j = ordenMenu.indexOf(y.path);
+        return (i < 0 ? 999 + processedNavItemsBase.indexOf(x) : i) - (j < 0 ? 999 + processedNavItemsBase.indexOf(y) : j);
+      })
+    : processedNavItemsBase;
+  const moverMenu = (desde: string, hacia: string) => {
+    if (desde === hacia) return;
+    const rutas = processedNavItems.map((x) => x.path);
+    const i = rutas.indexOf(desde); const j = rutas.indexOf(hacia);
+    if (i < 0 || j < 0) return;
+    rutas.splice(i, 1);
+    rutas.splice(j, 0, desde);
+    setOrdenMenu(rutas);
+    try { localStorage.setItem(claveMenu, JSON.stringify(rutas)); } catch { /* sin almacenamiento */ }
+  };
+  const restablecerMenu = () => {
+    setOrdenMenu([]);
+    try { localStorage.removeItem(claveMenu); } catch { /* sin almacenamiento */ }
+  };
 
   return (
     <div className={clsx(
@@ -381,7 +410,12 @@ export function Layout() {
               key={item.path}
               to={item.path}
               end={item.path === "/"}
-              title={isSidebarCollapsed ? item.name : undefined}
+              title={isSidebarCollapsed ? item.name : "Arrastra para cambiar el orden"}
+              draggable
+              onDragStart={(e) => { setMenuArrastrado(item.path); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", item.path); }}
+              onDragOver={(e) => { if (menuArrastrado) { e.preventDefault(); if (menuDestino !== item.path) setMenuDestino(item.path); } }}
+              onDrop={(e) => { e.preventDefault(); if (menuArrastrado) moverMenu(menuArrastrado, item.path); setMenuArrastrado(null); setMenuDestino(null); }}
+              onDragEnd={() => { setMenuArrastrado(null); setMenuDestino(null); }}
               onClick={(e) => {
                 if ((item as any).disabled) {
                   e.preventDefault();
@@ -391,6 +425,8 @@ export function Layout() {
                 clsx(
                   "flex items-center gap-3 py-2 rounded text-sm transition-all duration-200",
                   isSidebarCollapsed ? "justify-center px-0" : "px-3",
+                  menuArrastrado === item.path && "opacity-40",
+                  menuDestino === item.path && menuArrastrado && menuArrastrado !== item.path && "shadow-[inset_0_2px_0_#2563eb]",
                   (item as any).disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
                   isActive
                     ? "bg-blue-50 text-blue-700 font-semibold shadow-sm border border-blue-100 dark:bg-gradient-to-r dark:from-blue-600/20 dark:to-indigo-600/10 dark:text-blue-400 dark:border-blue-500/10"
@@ -425,6 +461,9 @@ export function Layout() {
               )}
             </NavLink>
           ))}
+          {ordenMenu.length > 0 && !isSidebarCollapsed && (
+            <button type="button" onClick={restablecerMenu} className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-blue-700">Restablecer orden del menú</button>
+          )}
         </nav>
 
         <div className="mt-auto border-t border-gray-200 dark:border-slate-800 p-4">
@@ -735,10 +774,10 @@ export function Layout() {
             // la direccion a mano: la pantalla donde vive el trabajo diario de
             // un vendedor era inalcanzable desde su telefono.
             { name: "Embudo", path: "/kanban", icon: Trello },
-            { name: "Contactos", path: "/persons", icon: Users },
+            { name: "Directorio", path: "/persons", icon: Users },
             { name: "Inventario", path: "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0 && location.pathname !== "/inventory") ? sharedMatches.length : undefined },
-            { name: "Chats", path: "/chats", icon: MessageSquare, badge: globoChats > 0 ? globoChats : undefined },
-            { name: "Citas", path: "/tasks", icon: CheckSquare },
+            { name: "Chat", path: "/chats", icon: MessageSquare, badge: globoChats > 0 ? globoChats : undefined },
+            { name: "Tareas", path: "/tasks", icon: CheckSquare },
           ].filter(item => {
             // El vendedor no tenia Chats en el celular: venia de cuando esa
             // pantalla era solo el chat entre agencias. Hoy ahi contesta sus
