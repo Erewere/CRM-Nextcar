@@ -143,7 +143,13 @@ export function PaymentInventory() {
     // compro dos, con el viejo orden el trato de la primera tomaba el segundo auto.
     const vehicle = vehicles.find(v => v.id === deal.vehicleId) || (!deal.vehicleId ? vehicles.find(v => v.id === person.vehicleId) : undefined);
     
-    const isRecordedBuyer = !!vehicle && (
+    // El auto vendido solo pertenece al trato que lo vendió. Si el auto guarda
+    // a qué trato corresponde (soldDealId), los demás tratos del mismo cliente
+    // no lo reclaman: un trato perdido sin auto tomaba el del contacto y salía
+    // como otra venta del mismo auto (Enrique Macias, 11 oct 2026: tres filas).
+    const esDeOtroTrato = !!vehicle && !!(vehicle as any).soldDealId && (vehicle as any).soldDealId !== deal.id;
+    const tratoPerdidoSinVenta = checkIsLost(deal.status, pipelineStages) && !deal.saleDetails?.price;
+    const isRecordedBuyer = !!vehicle && !esDeOtroTrato && !tratoPerdidoSinVenta && (
       vehicle.buyerId === person.id ||
       vehicle.soldToClientId === deal.clientId ||
       vehicle.soldToClientId === person.id
@@ -163,7 +169,7 @@ export function PaymentInventory() {
       : undefined;
 
     const dealIsWon = isWon(deal.status) || Boolean(deal.saleDetails?.price) ||
-      (contactoEsDeEsteTrato && (isWon(person.status) || Boolean(person.saleDetails?.price))) ||
+      (contactoEsDeEsteTrato && !tratoPerdidoSinVenta && (isWon(person.status) || Boolean(person.saleDetails?.price))) ||
       (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
     const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, ventaDelPerfil, isRecordedBuyer ? vehicle?.saleDetails : undefined);
