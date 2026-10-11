@@ -131,21 +131,16 @@ export function Persons() {
   }, [userData?.agencyId]);
 
   const [columns, setColumns] = useState([
-    { id: "name", label: "Nombre", visible: true, width: 200 },
+    { id: "name", label: "Nombre", visible: true, width: 250 },
     { id: "organization", label: "Organización", visible: false, width: 150 },
-    { id: "email", label: "Correo electrónico", visible: true, width: 200 },
-    { id: "phone", label: "Teléfono", visible: true, width: 150 },
-    { id: "vehicle", label: "Vehículo", visible: true, width: 150 },
+    { id: "email", label: "Correo", visible: true, width: 230 },
+    { id: "phone", label: "Teléfono", visible: true, width: 180 },
+    { id: "vehicle", label: "Auto de interés", visible: true, width: 240 },
     { id: "status", label: "Etapa", visible: true, width: 150 },
-    { id: "closedDeals", label: "Tratos cerrados", visible: true, width: 120 },
-    { id: "openDeals", label: "Tratos abiertos", visible: true, width: 120 },
-    {
-      id: "nextTaskDate",
-      label: "Fecha de la próxima actividad",
-      visible: true,
-      width: 220,
-    },
-    { id: "owner", label: "Propietario", visible: true, width: 150 },
+    { id: "closedDeals", label: "Cerrados", visible: true, width: 90 },
+    { id: "openDeals", label: "Abiertos", visible: true, width: 90 },
+    { id: "nextTaskDate", label: "Próxima tarea", visible: true, width: 140 },
+    { id: "owner", label: "Asesor", visible: true, width: 130 },
   ]);
   const [showColSettings, setShowColSettings] = useState(false);
   const [resizingCol, setResizingCol] = useState<string | null>(null);
@@ -1041,6 +1036,12 @@ export function Persons() {
     return LETRAS.filter((l) => porLetra.has(l)).map((l) => ({ letra: l, items: porLetra.get(l)! }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tarjetas, orden]);
+  // Tabla: si no se eligió una columna para ordenar, va en orden alfabético.
+  const filas = React.useMemo(
+    () => (sortConfig ? filteredPersons : [...filteredPersons].sort((a, b) => sinAcentos(a.name).localeCompare(sinAcentos(b.name), "es"))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredPersons, sortConfig],
+  );
   const letrasConContactos = React.useMemo(() => new Set(secciones.map((s) => s.letra)), [secciones]);
   const irALetra = (l: string) => {
     const el = contenedorTarjetas.current?.querySelector(`#letra-${CSS.escape(l)}`) as HTMLElement | null;
@@ -1237,15 +1238,16 @@ export function Persons() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
-          <table className="w-full min-w-[800px] text-left text-sm border-collapse table-fixed select-none">
-            <thead className="bg-[#fcfdfd] dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 font-medium sticky top-0 z-10 shadow-sm">
+        <div className="flex-1 min-h-0 p-4 md:p-6 pt-3">
+        <div className="h-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <table className="w-full min-w-[1000px] text-left text-sm border-collapse table-fixed select-none">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 sticky top-0 z-10">
               <tr>
                 <th
-                  className="w-10 border-r border-gray-200 dark:border-slate-700"
-                  style={{ width: 40 }}
+                  className="w-10"
+                  style={{ width: 44 }}
                 >
-                  <div className="flex items-center justify-center py-3">
+                  <div className="flex items-center justify-center py-2.5">
                     <input
                       type="checkbox"
                       checked={
@@ -1275,14 +1277,14 @@ export function Persons() {
                   .map((col) => (
                     <th
                       key={`col-${col.id}`}
-                      className="relative border-r border-gray-200 dark:border-slate-700 truncate group cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50"
+                      className="relative truncate group cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50"
                       style={{ width: col.width }}
                       onClick={() => handleSort(col.id)}
                     >
-                      <div className="px-4 py-3 truncate flex items-center">
+                      <div className={clsx("px-3 py-2.5 truncate flex items-center text-[11px] font-bold uppercase tracking-wider", ["closedDeals", "openDeals"].includes(col.id) && "justify-center")}>
                         {col.label}
                         {sortConfig?.key === col.id && (
-                          <span className="ml-1 inline-block">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          <span className="ml-1 inline-block text-blue-600">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                         )}
                       </div>
                       <div
@@ -1294,7 +1296,7 @@ export function Persons() {
                       />
                     </th>
                   ))}
-                <th className="w-10 relative" style={{ width: 40 }}>
+                <th className="w-10 relative" style={{ width: 44 }}>
                   <button
                     type="button"
                     onClick={() => setShowColSettings(!showColSettings)}
@@ -1330,19 +1332,18 @@ export function Persons() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-800">
-              {filteredPersons.map((person, idx) => {
+              {filas.map((person, idx) => {
                 const stats = getPersonStats(person.id);
                 return (
                   <tr
                     key={`${person.id}-${idx}`}
-                    className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-900 group/row cursor-pointer"
+                    className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50/60 dark:hover:bg-slate-700/40 group/row cursor-pointer"
                     onClick={() => setSelectedPerson(person)}
                   >
                     <td
-                      className="border-r border-gray-100 dark:border-slate-700"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center justify-center py-2">
+                      <div className="flex items-center justify-center py-2.5">
                         <input
                           type="checkbox"
                           checked={selectedClients.includes(person.id)}
@@ -1365,40 +1366,45 @@ export function Persons() {
                         let val: React.ReactNode = "";
                         if (col.id === "name") {
                           val = (
-                            <div className="flex flex-col gap-0.5 min-w-0">
-                              <span className="text-blue-600 font-medium truncate w-full block">
-                                {person.name || "Sin Nombre"}
-                              </span>
-                              {person.tags && person.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-0.5">
-                                  {person.tags.map((t, idx) => (
-                                    <span
-                                      key={`${t}-${idx}`}
-                                      className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold border border-indigo-100 dark:border-indigo-800/10 uppercase"
-                                    >
-                                      {t}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-blue-700 dark:text-blue-300 font-extrabold text-sm shrink-0">
+                                {String(person.name || "?").trim().charAt(0).toUpperCase() || "?"}
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-slate-900 dark:text-slate-100 font-bold truncate leading-tight">{person.name || "Sin nombre"}</span>
+                                {person.tags && person.tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {person.tags.slice(0, 2).map((t, i) => (
+                                      <span key={`${t}-${i}`} className="px-1.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold uppercase">{t}</span>
+                                    ))}
+                                    {person.tags.length > 2 && <span className="text-[9px] font-bold text-slate-400">+{person.tags.length - 2}</span>}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         }
                         if (col.id === "organization")
                           val = person.organization;
-                        if (col.id === "email") val = person.email;
-                        if (col.id === "phone") val = person.phone;
+                        if (col.id === "email") val = <span className="text-slate-600 dark:text-slate-300">{String(person.email || "").split(",")[0]}</span>;
+                        if (col.id === "phone") {
+                          const tel = person.phone ? String(person.phone).split(",")[0].trim() : "";
+                          val = tel ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-slate-700 dark:text-slate-200">{tel}</span>
+                              <span className="hidden group-hover/row:flex gap-1 ml-auto shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <a href={`https://wa.me/${numeroParaWhatsApp(tel)}`} onClick={alClicWhatsApp} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" title="WhatsApp" className="h-6 w-6 rounded-md flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100"><MessageCircle className="w-3.5 h-3.5" /></a>
+                                <a href={`tel:${tel.replace(/[^\d+]/g, "")}`} aria-label="Llamar" title="Llamar" className="h-6 w-6 rounded-md flex items-center justify-center text-slate-600 bg-slate-100 hover:bg-slate-200"><Phone className="w-3.5 h-3.5" /></a>
+                              </span>
+                            </div>
+                          ) : <span className="text-slate-300">—</span>;
+                        }
                         if (col.id === "vehicle") {
-                          const candidateVehicles = userData?.role === "seller" ? vehicles.filter(v => v.agencyId === userData?.agencyId) : vehicles;
-                          const matches = getClientMatches(person, candidateVehicles);
+                          const nCoincide = coincidencias.get(person.id) || 0;
                           val = (
-                            <div className="flex flex-col gap-1 items-start justify-center min-h-[32px]">
-                              <span className="truncate">{getVehicleOfInterestText(person)}</span>
-                              {matches.length > 0 && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold border border-green-200 dark:border-green-800/50 uppercase tracking-wider">
-                                  {matches.length} {matches.length === 1 ? 'Match' : 'Matches'}
-                                </span>
-                              )}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="truncate font-semibold text-blue-700 dark:text-blue-400 text-[12px] uppercase tracking-wide">{getVehicleOfInterestText(person)}</span>
+                              {nCoincide > 0 && <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold">{nCoincide} {nCoincide === 1 ? "auto" : "autos"}</span>}
                             </div>
                           );
                         }
@@ -1412,23 +1418,20 @@ export function Persons() {
                           if (person.status === "lost") statusText = "Contacto"; // Previously Perdido
                           if (stage && stage.id === "lost") statusText = "Contacto";
                           
-                          val = (
-                            <span className="capitalize">
-                              {statusText}
-                            </span>
-                          );
+                          val = <span className="inline-block px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold capitalize truncate max-w-full">{statusText}</span>;
                         }
                         if (col.id === "closedDeals")
-                          val = (
-                            <div className="text-right">
-                              {stats.closedDeals}
-                            </div>
-                          );
+                          val = <div className="text-center">{stats.closedDeals > 0 ? <b className="text-emerald-700">{stats.closedDeals}</b> : <span className="text-slate-300">—</span>}</div>;
                         if (col.id === "openDeals")
-                          val = (
-                            <div className="text-right">{stats.openDeals}</div>
-                          );
-                        if (col.id === "nextTaskDate") val = stats.nextTaskDate;
+                          val = <div className="text-center">{stats.openDeals > 0 ? <b className="text-blue-700">{stats.openDeals}</b> : <span className="text-slate-300">—</span>}</div>;
+                        if (col.id === "nextTaskDate") {
+                          const prox = indice.prox.get(person.id);
+                          val = prox ? (
+                            <span className={clsx("px-2 py-0.5 rounded-full text-[11px] font-bold", prox < hoyISO ? "bg-red-50 text-red-800" : prox === hoyISO ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-700")}>
+                              {prox < hoyISO ? "Atrasada · " : ""}{prox === hoyISO ? "Hoy" : format(new Date(prox + "T00:00:00"), "d MMM", { locale: es })}
+                            </span>
+                          ) : <span className="text-slate-300">—</span>;
+                        }
                         if (col.id === "owner")
                           val =
                             agencyUsers[person.sellerId] ||
@@ -1437,20 +1440,18 @@ export function Persons() {
                         return (
                           <td
                             key={`col-${col.id}`}
-                            className="px-4 py-2 border-r border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 truncate"
+                            className="px-3 py-2 text-slate-600 dark:text-slate-400 truncate"
                             style={{ width: col.width, maxWidth: col.width }}
                           >
                             {val}
                           </td>
                         );
                       })}
-                    <td className="px-4 py-2 text-center text-gray-400 group-hover/row:text-gray-600 dark:text-slate-400">
-                      ...
-                    </td>
+                    <td />
                   </tr>
                 );
               })}
-              {filteredPersons.length === 0 && (
+              {filas.length === 0 && (
                 <tr>
                   <td
                     colSpan={columns.filter((c) => c.visible).length + 2}
@@ -1462,6 +1463,7 @@ export function Persons() {
               )}
             </tbody>
           </table>
+        </div>
         </div>
       )}
 
