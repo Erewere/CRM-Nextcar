@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { quitarVentaDeTratoPerdido } from "../lib/ventaDescartada";
 import { completarValorDelTrato } from "../lib/valorDelTrato";
 import { useAuth } from "../contexts/AuthContext";
@@ -275,6 +276,10 @@ export function Kanban() {
     return localStorage.getItem("kanban_filterSeller") || "all";
   });
   const [showArchived, setShowArchived] = useState(false);
+  // Llegar desde el Chat con un trato ya elegido: se abre su ficha.
+  const ubicacion = useLocation();
+  const navegar = useNavigate();
+  const tratoPedido = (ubicacion.state as any)?.abrirTrato as string | undefined;
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -551,6 +556,15 @@ export function Kanban() {
       localStorage.removeItem("kanban_filterSeller");
     }
   }, [filtroDeVendedor, selectedSellerId, users.length]);
+
+  React.useEffect(() => {
+    if (!tratoPedido) return;
+    const t = displayClients.find((c) => c.id === tratoPedido);
+    if (!t) return; // todavía no cargan los tratos
+    setSelectedClient(t);
+    navegar(ubicacion.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tratoPedido, deals, clients]);
 
   const filteredClients = deduplicatedClients.filter((c) => {
     if (filtroDeVendedor !== "all" && c.sellerId !== filtroDeVendedor) return false;

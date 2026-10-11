@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -214,6 +215,7 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
     return lista.slice(0, 40);
   }, [autos, buscaAuto]);
 
+  const navigate = useNavigate();
   const tratosAbiertos = tratos.filter(t => t.status !== 'won' && t.status !== 'lost');
   const referral = cliente?.messengerReferral;
   const faltaTelefono = canal === 'messenger' && !(cliente?.phone || '').trim();
@@ -402,9 +404,18 @@ export function ChatClientPanel({ clientId, canal, onCerrar }: Props) {
           <Briefcase className="w-3 h-3" /> Embudo
         </label>
         {tratosAbiertos.length > 0 ? (
-          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5" /> Ya está en el embudo ({tratosAbiertos.length} trato{tratosAbiertos.length > 1 ? 's' : ''} abierto{tratosAbiertos.length > 1 ? 's' : ''}).
-          </p>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5" /> Ya está en el embudo ({tratosAbiertos.length} trato{tratosAbiertos.length > 1 ? 's' : ''} abierto{tratosAbiertos.length > 1 ? 's' : ''}).
+            </p>
+            {tratosAbiertos.map((t) => (
+              <button key={t.id} type="button" onClick={() => navigate('/kanban', { state: { abrirTrato: t.id } })}
+                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-slate-800 px-3 py-2 transition-colors">
+                <span className="block text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{t.title || t.vehicle || 'Trato'}</span>
+                <span className="block text-[11px] font-bold text-blue-700 dark:text-blue-400">Abrir trato →</span>
+              </button>
+            ))}
+          </div>
         ) : (
           <>
             <button

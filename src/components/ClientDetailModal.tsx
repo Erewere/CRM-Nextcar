@@ -308,8 +308,20 @@ export function ClientDetailModal({
   // Menu de la izquierda (solo en computadora; en el telefono se ve todo en
   // una columna, como antes). Nada se desmonta al cambiar de seccion: solo se
   // esconde, asi el formulario y lo que se este escribiendo no se pierden.
-  type Seccion = "resumen" | "datos" | "autos" | "tratos" | "notas" | "archivos";
+  type Seccion = "resumen" | "datos" | "autos" | "tratos" | "notas" | "archivos" | "chat";
   const [seccion, setSeccion] = useState<Seccion>("resumen");
+  // La conversación de WhatsApp / Messenger del contacto (la comparten todos sus tratos).
+  const [mensajesChat, setMensajesChat] = useState<{ id: string; direction: string; text: string; createdAt: string; channel?: string; sentByName?: string }[]>([]);
+  const idContactoChat = (client.originalClientId || client.id) as string | undefined;
+  useEffect(() => {
+    if (isNew || !idContactoChat || !userData?.agencyId || userData.role === "master") { setMensajesChat([]); return; }
+    const unsub = onSnapshot(
+      query(collection(db, "whatsappMessages"), where("agencyId", "==", userData.agencyId), where("clientId", "==", idContactoChat)),
+      (snap) => setMensajesChat(snap.docs.map((d) => ({ ...(d.data() as any), id: d.id })).sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)))),
+      () => setMensajesChat([]),
+    );
+    return () => unsub();
+  }, [isNew, idContactoChat, userData?.agencyId, userData?.role]);
   const irASeccion = (s: Seccion) => {
     setSeccion(s);
   };
@@ -3217,6 +3229,7 @@ export function ClientDetailModal({
                       ["tratos", "Tratos", deals.length],
                       ["notas", "Notas", notes.length],
                       ["archivos", "Archivos", files.length],
+                      ["chat", "Chat", mensajesChat.length],
                     ] as [Seccion, string, number | null][]).map(([id, texto, cuenta]) => (
                       <button
                         key={id}
@@ -3372,7 +3385,37 @@ export function ClientDetailModal({
       </div>
     )}
 
-                    {seccion !== "tratos" && (
+                    {seccion === "chat" && (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Es la conversación del contacto: la ven todos sus tratos. Solo lectura.</p>
+                          {mensajesChat.length > 0 && idContactoChat && (
+                            <button type="button" onClick={() => { onClose(); navigate("/chats", { state: { abrirConversacion: idContactoChat } }); }} className="shrink-0 h-8 px-3 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-bold">Abrir en Chat para contestar</button>
+                          )}
+                        </div>
+                        {mensajesChat.length === 0 ? (
+                          <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">Este contacto no tiene conversaciones de WhatsApp o Messenger.</p>
+                        ) : (
+                          <div className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto rounded-xl bg-slate-50 dark:bg-slate-900/40 p-3">
+                            {mensajesChat.slice(-60).map((m) => {
+                              const mio = m.direction === "outbound";
+                              return (
+                                <div key={m.id} className={clsx("flex", mio ? "justify-end" : "justify-start")}>
+                                  <div className={clsx("max-w-[80%] rounded-2xl px-3 py-1.5 text-sm", mio ? "bg-emerald-600 text-white rounded-br-md" : "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-bl-md")}>
+                                    <p className="whitespace-pre-wrap break-words">{m.text || "(mensaje sin texto)"}</p>
+                                    <p className={clsx("text-[10px] mt-0.5", mio ? "text-emerald-100" : "text-slate-400")}>
+                                      {m.channel === "messenger" ? "Messenger · " : ""}{mio && m.sentByName ? `${m.sentByName} · ` : ""}{m.createdAt ? new Date(m.createdAt).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {seccion !== "tratos" && seccion !== "chat" && (
                       <div>
                         {seccion === "resumen" && <h3 className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Historial</h3>}
                         {seccion === "notas" && notes.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">Aún no hay notas.</p>}
