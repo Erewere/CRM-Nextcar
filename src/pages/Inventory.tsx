@@ -1145,6 +1145,7 @@ export function Inventory() {
                     interes={interes.get(vehicle.id)}
                     coincidencias={getVehicleMatches(vehicle, clients) as any}
                     nombreAgencia={agencyNames[vehicle.agencyId]}
+                    ciudadAgencia={todasAgencias.find((a) => a.id === vehicle.agencyId)?.ciudad}
                     esDeMiAgencia={mio}
                     puedeBorrar={(userData?.role === 'admin' || userData?.role === 'master') && mio}
                     puedeVender={mio && !isReadOnly && vehicle.status !== 'sold' && !(vehicle as any).pendingValidation}

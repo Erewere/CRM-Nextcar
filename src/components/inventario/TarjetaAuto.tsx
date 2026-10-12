@@ -18,6 +18,8 @@ interface Props {
   interes?: InteresDeAuto;
   coincidencias: Coincidencia[];
   nombreAgencia?: string;
+  /** Ciudad de la agencia dueña (autos compartidos). */
+  ciudadAgencia?: string;
   esDeMiAgencia: boolean;
   puedeBorrar: boolean;
   puedeVender: boolean;
@@ -38,7 +40,7 @@ const estiloDias = (d: number) =>
 const pesos = (n: number) => `$${Number(n || 0).toLocaleString('es-MX')}`;
 
 export function TarjetaAuto({
-  vehicle, dias, interes, coincidencias, nombreAgencia, esDeMiAgencia,
+  vehicle, dias, interes, coincidencias, nombreAgencia, ciudadAgencia, esDeMiAgencia,
   puedeBorrar, puedeVender, costos, mercado, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia,
 }: Props) {
   const foto = vehicle.photoUrls?.[0] || vehicle.photoUrl;
@@ -132,7 +134,7 @@ export function TarjetaAuto({
       <div className="p-4 flex flex-col gap-3 flex-1">
         {!esDeMiAgencia && (
           <div className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold rounded-md border border-indigo-100 dark:border-indigo-900/30 w-max">
-            Agencia: {nombreAgencia || 'Agencia Externa'}
+            Agencia: {nombreAgencia || 'Agencia Externa'}{ciudadAgencia ? ` · ${ciudadAgencia}` : ''}
           </div>
         )}
         <div>
