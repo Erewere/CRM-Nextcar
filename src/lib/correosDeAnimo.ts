@@ -43,7 +43,9 @@ const FUENTE = "'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Hel
 // Version principal del logo: sobre oscuro, en encabezado y pie. Fundido
 // sobre el negro de la marca, sin transparencia, para que ningun modo oscuro
 // de un cliente de correo lo haga desaparecer.
-const LOGO = `${CONTACTO.crm}/logo/lockup-correo-oscuro.jpg`;
+// Con el dominio solo: CONTACTO.crm termina en /inicio.html y el logo no vive bajo esa ruta
+// (la liga daba 422 y el correo salía sin logo).
+const LOGO = `${CONTACTO.crmDominio}/logo/lockup-correo-oscuro.jpg`;
 
 export interface DatosCorreo {
   tipo: TipoCorreo;
