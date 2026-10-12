@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { puedoVer, alcanceDe, useOtrasCiudades } from '../lib/compartir';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -167,7 +168,13 @@ export function Inventory() {
   }, [window.location.search, puedeVerCompartido]);
 
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
-  const [sharingAgencies, setSharingAgencies] = useState<string[]>([]);
+  const [ownAgencyDoc, setOwnAgencyDoc] = useState<any>(null);
+  const [todasAgencias, setTodasAgencias] = useState<any[]>([]);
+  const [otrasCiudades, setOtrasCiudades] = useOtrasCiudades();
+  const sharingAgencies = useMemo<string[]>(
+    () => todasAgencias.filter((a) => puedoVer(ownAgencyDoc, a, otrasCiudades)).map((a) => a.id),
+    [todasAgencias, ownAgencyDoc, otrasCiudades],
+  );
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>({});
 
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
@@ -459,22 +466,21 @@ export function Inventory() {
     const unsubscribeOwnAgency = onSnapshot(doc(db, 'agencies', userData.agencyId), (snap) => {
       if (snap.exists()) {
         setOwnAgencySharing(!!snap.data().shareInventory);
+        setOwnAgencyDoc({ id: snap.id, ...snap.data() });
       }
     });
 
     // Listen to other agencies that are sharing
     const unsubscribeAgencies = onSnapshot(collection(db, 'agencies'), (snapshot) => {
       const names: Record<string, string> = {};
-      const otherSharing: string[] = [];
+      const todas: any[] = [];
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         names[doc.id] = data.name || 'Agencia';
-        if (doc.id !== userData.agencyId && data.shareInventory === true) {
-          otherSharing.push(doc.id);
-        }
+        if (doc.id !== userData.agencyId) todas.push({ id: doc.id, ...data });
       });
       setAgencyNames(names);
-      setSharingAgencies(otherSharing);
+      setTodasAgencias(todas);
     });
 
     return () => {
@@ -982,6 +988,15 @@ export function Inventory() {
             </div>
           )}
 
+          {activeTab === 'shared' && puedeVerCompartido && ownAgencySharing && (
+            <label
+              className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0 select-none", alcanceDe(ownAgencyDoc) === 'todas' ? "cursor-pointer border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700" : "cursor-not-allowed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-gray-400")}
+              title={alcanceDe(ownAgencyDoc) === 'todas' ? 'Mostrar también las agencias de otras ciudades que aceptaron compartir con todas' : 'Tu agencia comparte solo con su ciudad. Cámbialo en Agencia y usuarios para ver otras ciudades.'}
+            >
+              <input type="checkbox" checked={otrasCiudades && alcanceDe(ownAgencyDoc) === 'todas'} disabled={alcanceDe(ownAgencyDoc) !== 'todas'} onChange={(e) => setOtrasCiudades(e.target.checked)} className="w-4 h-4 rounded border-gray-300" />
+              Incluir otras ciudades
+            </label>
+          )}
           {activeTab === 'my' && userData?.role !== 'master' && userData?.role !== 'taller' && (
             <button
               type="button"

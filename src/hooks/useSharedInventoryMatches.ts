@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { puedoVer, useOtrasCiudades } from "../lib/compartir";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -137,7 +138,15 @@ export function useInventarioCompartido(ids: string[], activo: boolean): Vehicle
 export function useSharedInventoryMatches() {
   const { userData } = useAuth();
   const [ownAgencySharing, setOwnAgencySharing] = useState(false);
-  const [sharingAgencies, setSharingAgencies] = useState<Record<string, string>>({});
+  const [ownAgencyDoc, setOwnAgencyDoc] = useState<any>(null);
+  const [todasAgencias, setTodasAgencias] = useState<any[]>([]);
+  const [otrasCiudades] = useOtrasCiudades();
+  // Las agencias que esta agencia puede ver (misma ciudad, o de otras si así lo eligió el usuario).
+  const sharingAgencies = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    todasAgencias.filter((a) => puedoVer(ownAgencyDoc, a, otrasCiudades)).forEach((a) => { m[a.id] = a.name || "Agencia Externa"; });
+    return m;
+  }, [todasAgencias, ownAgencyDoc, otrasCiudades]);
   const [clients, setClients] = useState<Client[]>([]);
   const [matches, setMatches] = useState<SharedMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +161,7 @@ export function useSharedInventoryMatches() {
     const unsubscribeOwn = onSnapshot(doc(db, "agencies", userData.agencyId), (snap) => {
       if (snap.exists()) {
         setOwnAgencySharing(!!snap.data().shareInventory);
+        setOwnAgencyDoc({ id: snap.id, ...snap.data() });
       }
     }, (err) => {
       console.error("Error loading own agency sharing:", err);
@@ -165,14 +175,9 @@ export function useSharedInventoryMatches() {
     if (!userData?.agencyId || userData.role === 'master' || userData.role === 'seller') return;
 
     const unsubscribeAgencies = onSnapshot(collection(db, "agencies"), (snap) => {
-      const agenciesMap: Record<string, string> = {};
-      snap.forEach((d) => {
-        const data = d.data();
-        if (d.id !== userData.agencyId && data.shareInventory === true) {
-          agenciesMap[d.id] = data.name || "Agencia Externa";
-        }
-      });
-      setSharingAgencies(agenciesMap);
+      const todas: any[] = [];
+      snap.forEach((d) => { if (d.id !== userData.agencyId) todas.push({ id: d.id, ...d.data() }); });
+      setTodasAgencias(todas);
     }, (err) => {
       console.error("Error loading other sharing agencies:", err);
     });

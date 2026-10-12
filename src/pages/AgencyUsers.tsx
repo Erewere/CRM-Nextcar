@@ -36,6 +36,8 @@ export function AgencyUsers() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [shareInventory, setShareInventory] = useState(false);
+  const [shareScope, setShareScope] = useState<'ciudad' | 'todas'>('todas');
+  const [ciudadAgencia, setCiudadAgencia] = useState('');
   const [waRoutingMode, setWaRoutingMode] = useState<'manual' | 'roundRobin'>('manual');
   const [waRoutingSellers, setWaRoutingSellers] = useState<string[]>([]);
   const [savingRouting, setSavingRouting] = useState(false);
@@ -145,6 +147,8 @@ export function AgencyUsers() {
             if (agencyData.shareInventory !== undefined) {
               setShareInventory(!!agencyData.shareInventory);
             }
+            setShareScope(agencyData.shareScope === 'ciudad' ? 'ciudad' : 'todas');
+            setCiudadAgencia(String(agencyData.ciudad || ''));
           }
           const clientsQ = query(collection(db, 'clients'), where('agencyId', '==', userData.agencyId));
           const tasksQ = query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId));
@@ -556,6 +560,22 @@ export function AgencyUsers() {
       alert('Error al guardar la asignación de conversaciones de WhatsApp.');
     } finally {
       setSavingRouting(false);
+    }
+  };
+
+  // No compartir / solo mi ciudad / todas las ciudades.
+  const cambiarCompartir = async (modo: 'no' | 'ciudad' | 'todas') => {
+    if (!userData?.agencyId) return;
+    setSavingSharing(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), modo === 'no' ? { shareInventory: false } : { shareInventory: true, shareScope: modo });
+      setShareInventory(modo !== 'no');
+      if (modo !== 'no') setShareScope(modo);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar la configuración de inventario compartido.');
+    } finally {
+      setSavingSharing(false);
     }
   };
 
@@ -1080,19 +1100,28 @@ export function AgencyUsers() {
               </p>
             </div>
             
-            <div className="flex items-center gap-3 shrink-0">
-              <button
-                onClick={handleToggleShareInventory}
-                disabled={savingSharing}
-                type="button"
-                className={`px-4 py-2 text-sm font-bold rounded transition-colors shadow-sm ${
-                  shareInventory
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                    : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 text-slate-700'
-                }`}
-              >
-                {shareInventory ? '✓ Compartiendo Activado' : 'Compartiendo Desactivado'}
-              </button>
+            <div className="flex flex-col gap-2 shrink-0 sm:w-72">
+              <div className="flex gap-0.5 bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg" role="radiogroup" aria-label="Con quién compartir el inventario">
+                {([['no', 'No compartir'], ['ciudad', ciudadAgencia ? `Solo ${ciudadAgencia}` : 'Solo mi ciudad'], ['todas', 'Todas las ciudades']] as const).map(([id, texto]) => {
+                  const activo = !shareInventory ? id === 'no' : id === shareScope;
+                  return (
+                    <button key={id} type="button" role="radio" aria-checked={activo} disabled={savingSharing} onClick={() => cambiarCompartir(id)}
+                      className={`flex-1 h-9 px-2 rounded-md text-xs font-bold leading-tight transition-colors ${activo ? (id === 'no' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'bg-emerald-600 text-white shadow-sm') : 'text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-700'}`}>
+                      {texto}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {!shareInventory
+                  ? 'Nadie ve tu inventario y tú tampoco ves el de otras agencias.'
+                  : shareScope === 'ciudad'
+                    ? `Solo las agencias${ciudadAgencia ? ` de ${ciudadAgencia}` : ' de tu ciudad'} que también compartan ven tus autos.`
+                    : 'Las agencias de cualquier ciudad que también acepten ver tus autos. Cada usuario decide si quiere ver las de otras ciudades.'}
+              </p>
+              {shareInventory && !ciudadAgencia && (
+                <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400">Tu agencia aún no tiene ciudad: elígela en «Datos de tu agencia» para que «Solo mi ciudad» funcione.</p>
+              )}
             </div>
           </div>
         </div>
