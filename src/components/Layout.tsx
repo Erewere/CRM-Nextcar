@@ -272,13 +272,14 @@ export function Layout() {
       name: "Agencia y usuarios",
       path: "/users",
       icon: Building,
-      roles: ["master", "admin"],
+      // El master administra agencias y usuarios desde Plataforma → Administrar.
+      roles: ["admin"],
     },
     {
       name: "Integraciones",
       path: "/integrations",
       icon: Blocks,
-      roles: ["master", "admin"],
+      roles: ["admin"],
     },
     {
       name: "Facturación",
@@ -294,7 +295,7 @@ export function Layout() {
       icon: MessageSquare,
       // Los vendedores atienden sus propias conversaciones de WhatsApp, así que
       // también necesitan esta pantalla; antes solo entraban admin y master.
-      roles: ["master", "admin", "seller"],
+      roles: ["admin", "seller"],
       badge: globoChats > 0 ? globoChats : undefined,
     },
   ].filter((item) => {

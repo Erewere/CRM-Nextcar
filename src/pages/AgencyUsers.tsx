@@ -1099,6 +1099,7 @@ export function AgencyUsers() {
       )}
 
       {/* Sección de Gestión de Etiquetas */}
+      {!isMaster && (
       <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 space-y-4">
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
@@ -1156,6 +1157,7 @@ export function AgencyUsers() {
           </p>
         )}
       </div>
+      )}
 
       <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
         <ul className="divide-y divide-slate-100">

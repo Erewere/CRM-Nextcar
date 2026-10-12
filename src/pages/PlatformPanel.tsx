@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { AgencyUsers } from './AgencyUsers';
 import {
   RefreshCw,
   AlertTriangle,
@@ -99,7 +102,7 @@ interface Usuario {
   recibeCorreos: boolean;
 }
 
-type Pestana = 'resumen' | 'agencias' | 'usuarios' | 'correos';
+type Pestana = 'resumen' | 'agencias' | 'usuarios' | 'administrar' | 'correos';
 
 const SEMAFORO: Record<Semaforo, { etiqueta: string; punto: string; chip: string }> = {
   activa: {
@@ -158,7 +161,7 @@ function fechaCorta(iso: string | null): string {
 function leerPestana(): Pestana {
   try {
     const v = localStorage.getItem('plataforma.pestana');
-    if (v === 'resumen' || v === 'agencias' || v === 'usuarios' || v === 'correos') return v;
+    if (v === 'resumen' || v === 'agencias' || v === 'usuarios' || v === 'administrar' || v === 'correos') return v;
   } catch {}
   return 'resumen';
 }
@@ -358,6 +361,7 @@ export function PlatformPanel() {
               ['resumen', 'Resumen', null],
               ['agencias', 'Agencias', agencias.length],
               ['usuarios', 'Usuarios', usuarios.length],
+              ['administrar', 'Administrar', null],
               ['correos', 'Correos', null],
             ] as [Pestana, string, number | null][]
           ).map(([id, etiqueta, n]) => (
@@ -402,6 +406,8 @@ export function PlatformPanel() {
             filtroActividad={filtroActividad}
             setFiltroActividad={setFiltroActividad}
             onVerUsuarios={irAUsuariosDe}
+            onCambio={() => cargar(true)}
+            onAdministrar={() => setPestana('administrar')}
           />
         )}
         {datos && pestana === 'usuarios' && (
@@ -412,6 +418,7 @@ export function PlatformPanel() {
             setFiltroAgencia={setFiltroAgencia}
           />
         )}
+        {pestana === 'administrar' && <AgencyUsers />}
         {datos && pestana === 'correos' && <VistaCorreos usuarios={usuarios} />}
       </div>
     </div>
@@ -687,13 +694,35 @@ function VistaAgencias({
   filtroActividad,
   setFiltroActividad,
   onVerUsuarios,
+  onCambio,
+  onAdministrar,
 }: {
   agencias: Agencia[];
   usuarios: Usuario[];
   filtroActividad: Semaforo | 'todas' | 'estancadas';
   setFiltroActividad: (v: Semaforo | 'todas' | 'estancadas') => void;
   onVerUsuarios: (id: string) => void;
+  onCambio: () => void;
+  onAdministrar: () => void;
 }) {
+  const [trabajando, setTrabajando] = useState<string | null>(null);
+  // Acciones de plataforma sobre una agencia: cortesía y prórroga de la prueba.
+  const darCortesia = async (a: Agencia, dar: boolean) => {
+    if (!window.confirm(dar ? `¿Dar cortesía a ${a.nombre}? Tendrá acceso sin pagar hasta que la quites.` : `¿Quitar la cortesía a ${a.nombre}? Pasará a su estado normal (prueba o pago).`)) return;
+    setTrabajando(a.id + 'c');
+    try { await updateDoc(doc(db, 'agencies', a.id), { hasFreeAccess: dar }); onCambio(); } catch (e: any) { alert('No se pudo cambiar: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
+  const prorrogar = async (a: Agencia, dias: number) => {
+    if (!window.confirm(`¿Darle ${dias} días más de prueba a ${a.nombre}?`)) return;
+    setTrabajando(a.id + 'p');
+    try {
+      const snap = await getDoc(doc(db, 'agencies', a.id));
+      const actual = snap.data()?.trialEndsAt ? new Date(snap.data()!.trialEndsAt as any).getTime() : 0;
+      const base = Math.max(Date.now(), Number.isNaN(actual) ? 0 : actual);
+      await updateDoc(doc(db, 'agencies', a.id), { trialEndsAt: new Date(base + dias * 86400000).toISOString(), subscriptionStatus: 'trialing' });
+      onCambio();
+    } catch (e: any) { alert('No se pudo prorrogar: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
   const [busca, setBusca] = useState('');
   const [estado, setEstado] = useState<string>('todos');
   const [orden, setOrden] = useState<Orden>('actividad');
@@ -861,6 +890,17 @@ function VistaAgencias({
                     >
                       Ver el detalle de su equipo <ArrowRight className="w-3.5 h-3.5" />
                     </button>
+                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Acciones</span>
+                      {a.estado === 'prueba' || a.estado === 'sin acceso' ? (
+                        <>
+                          <button disabled={!!trabajando} onClick={() => prorrogar(a, 7)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">+7 días de prueba</button>
+                          <button disabled={!!trabajando} onClick={() => prorrogar(a, 15)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">+15 días</button>
+                        </>
+                      ) : null}
+                      <button disabled={!!trabajando} onClick={() => darCortesia(a, a.estado !== 'cortesia')} className={`h-8 px-3 rounded-lg border text-xs font-bold disabled:opacity-50 ${a.estado === 'cortesia' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-sky-200 text-sky-800 hover:bg-sky-50'}`}>{a.estado === 'cortesia' ? 'Quitar cortesía' : 'Dar cortesía'}</button>
+                      <button onClick={onAdministrar} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold dark:bg-white dark:text-slate-900">Invitar usuarios y roles →</button>
+                    </div>
                   </div>
                 )}
               </div>
