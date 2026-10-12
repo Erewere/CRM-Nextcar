@@ -1,4 +1,5 @@
 import { calculateLeadScore } from "./src/services/leadScoringEngine.ts";
+import { puedoVer } from "./src/lib/reglaCompartir.ts";
 import { can as puedeRol, type Permiso } from "./src/lib/permissions.ts";
 // Un solo criterio de ganado/perdido para navegador y servidor: son funciones
 // puras, sin SDK, asi que valen igual de los dos lados. Duplicarlas aqui era
@@ -2314,57 +2315,81 @@ async function startServer() {
   const CACHE_INVENTARIO_MS = 60 * 1000;
   const cacheInventario = new Map<string, { momento: number; vehicles: any[] }>();
 
+  /** Los autos disponibles de una agencia, con solo los campos que se comparten. */
+  async function inventarioDeAgencia(adminDb: any, agencyId: string): Promise<any[]> {
+    const guardado = cacheInventario.get(agencyId);
+    if (guardado && Date.now() - guardado.momento < CACHE_INVENTARIO_MS) return guardado.vehicles;
+    const snapshot = await adminDb.collection("vehicles").where("agencyId", "==", agencyId).where("status", "==", "available").get();
+    const vehicles = snapshot.docs.map((doc: any) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        make: data.make,
+        model: data.model,
+        year: data.year,
+        color: data.color,
+        transmission: data.transmission,
+        bodyType: data.bodyType,
+        price: data.price,
+        photoUrl: data.photoUrl,
+        photoUrls: data.photoUrls,
+        km: data.km,
+        // Sin esto, el filtro de pasajeros no se puede aplicar a los autos
+        // de otras agencias: quien busca siete plazas veria SUVs de cinco.
+        passengers: data.passengers,
+        // Para que quien busca híbrido o eléctrico no reciba autos de gasolina.
+        fichaWeb: data.fichaWeb?.combustible ? { combustible: data.fichaWeb.combustible } : undefined,
+        status: data.status,
+        ...(data.description !== undefined ? { description: data.description } : {}),
+      };
+    });
+    cacheInventario.set(agencyId, { momento: Date.now(), vehicles });
+    return vehicles;
+  }
+
+  // API pública para asistentes virtuales: cada agencia consulta su propio
+  // inventario. NO es la vía del inventario compartido entre agencias: esa pasa
+  // por /api/inventario-compartido, que exige sesión y aplica la regla de
+  // ciudades. Esta se mantiene porque agencias ya la tienen en sus asistentes.
   app.get("/api/public/v1/inventory", async (req, res) => {
     try {
       const agencyId = req.query.agencyId as string;
       if (!agencyId) {
         return res.status(400).json({ error: "agencyId is required" });
       }
-
-      const guardado = cacheInventario.get(agencyId);
-      if (guardado && Date.now() - guardado.momento < CACHE_INVENTARIO_MS) {
-        return res.json({ vehicles: guardado.vehicles, cached: true });
-      }
-
       const adminDb = getAdminDb();
       if (!adminDb) {
         return res.status(500).json({ error: "Base de datos no disponible" });
       }
-
-      const q = adminDb
-        .collection("vehicles")
-        .where("agencyId", "==", agencyId)
-        .where("status", "==", "available");
-      const snapshot = await q.get();
-
-      const vehicles = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          make: data.make,
-          model: data.model,
-          year: data.year,
-          color: data.color,
-          transmission: data.transmission,
-          bodyType: data.bodyType,
-          price: data.price,
-          photoUrl: data.photoUrl,
-          photoUrls: data.photoUrls,
-          km: data.km,
-          // Sin esto, el filtro de pasajeros no se puede aplicar a los autos
-          // de otras agencias: quien busca siete plazas veria SUVs de cinco.
-          passengers: data.passengers,
-          // Para que quien busca híbrido o eléctrico no reciba autos de gasolina.
-          fichaWeb: data.fichaWeb?.combustible ? { combustible: data.fichaWeb.combustible } : undefined,
-          status: data.status,
-          ...(data.description !== undefined ? { description: data.description } : {})
-        };
-      });
-      cacheInventario.set(agencyId, { momento: Date.now(), vehicles });
-      res.json({ vehicles });
+      res.json({ vehicles: await inventarioDeAgencia(adminDb, agencyId) });
     } catch (e: any) {
       console.error("Error fetching public inventory:", e);
       res.status(500).json({ error: "Internal server error", details: e.message });
+    }
+  });
+
+  // Inventario compartido entre agencias, con la regla hecha cumplir AQUÍ: solo
+  // se entregan los autos de las agencias que quien pregunta puede ver (misma
+  // ciudad, o de otras ciudades si las dos agencias aceptaron y el usuario lo
+  // pidió). Antes la pantalla decidía qué pedir y el servidor entregaba lo que
+  // fuera.
+  app.get("/api/inventario-compartido", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!["admin", "manager"].includes(q.rol)) return res.status(403).json({ error: "Tu usuario no ve el inventario compartido." });
+    try {
+      const incluirOtrasCiudades = String(req.query?.otrasCiudades || "") === "1";
+      const todas = (await q.adminDb.collection("agencies").get()).docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      const yo = todas.find((a: any) => a.id === q.agencyId);
+      const visibles = todas.filter((a: any) => puedoVer(yo, a, incluirOtrasCiudades)).slice(0, 25);
+      const grupos = await Promise.all(visibles.map(async (a: any) => ({ a, v: await inventarioDeAgencia(q.adminDb, a.id) })));
+      res.json({
+        agencias: visibles.map((a: any) => ({ id: a.id, nombre: a.name || "Agencia", ciudad: a.ciudad || "" })),
+        vehicles: grupos.flatMap(({ a, v }) => v.map((x: any) => ({ ...x, agencyId: a.id }))),
+      });
+    } catch (e) {
+      console.error("inventario-compartido:", e);
+      res.status(500).json({ error: "No se pudo leer el inventario compartido." });
     }
   });
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { puedoVer, useOtrasCiudades } from "../lib/compartir";
+import { puedoVer, useOtrasCiudades, leerOtrasCiudades } from "../lib/compartir";
+import { auth } from "../lib/firebase";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -45,22 +46,23 @@ const compartido = {
 };
 
 async function pedirInventario(ids: string[]): Promise<Vehicle[]> {
-  const partes = await Promise.all(
-    ids.map(async (agencyId) => {
-      try {
-        const res = await fetch(
-          getApiUrl(`/api/public/v1/inventory?agencyId=${encodeURIComponent(agencyId)}`)
-        );
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.vehicles || []).map((v: any) => ({ ...v, agencyId }));
-      } catch (err) {
-        console.error(`Error loading shared inventory from agency ${agencyId}:`, err);
-        return [];
-      }
-    })
-  );
-  return partes.flat() as Vehicle[];
+  // Una sola consulta con sesión: el servidor decide qué agencias puede ver este
+  // usuario (misma ciudad, u otras si lo pidió) y solo entrega esos autos. Las
+  // ids de la pantalla sirven para reconocer que cambió la lista; no mandan.
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return [];
+    const res = await fetch(getApiUrl(`/api/inventario-compartido?otrasCiudades=${leerOtrasCiudades() ? 1 : 0}`), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const permitidas = new Set(ids);
+    return ((data.vehicles || []) as Vehicle[]).filter((v: any) => permitidas.has(v.agencyId));
+  } catch (err) {
+    console.error("Error loading shared inventory:", err);
+    return [];
+  }
 }
 
 function refrescarCompartido(clave: string, forzar: boolean): void {

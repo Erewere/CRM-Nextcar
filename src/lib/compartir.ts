@@ -18,24 +18,12 @@ import { useEffect, useState } from "react";
  * de existir las ciudades siguen igual. Las que activan el compartir ahora
  * arrancan en «solo mi ciudad».
  */
-export interface AgenciaCompartir {
-  id: string;
-  shareInventory?: boolean;
-  shareScope?: string;
-  ciudad?: string;
-}
+import { puedoVer, alcanceDe, type AgenciaCompartir } from "./reglaCompartir";
+export { puedoVer, alcanceDe };
+export type { AgenciaCompartir };
 
-export const alcanceDe = (a?: AgenciaCompartir | null): "ciudad" | "todas" => (a?.shareScope === "ciudad" ? "ciudad" : "todas");
-
-const sin = (s?: string) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
-const mismaCiudad = (a?: string, b?: string) => !sin(a) || !sin(b) || sin(a) === sin(b);
-
-export function puedoVer(yo: AgenciaCompartir | null | undefined, otra: AgenciaCompartir, incluirOtrasCiudades: boolean): boolean {
-  if (!yo || otra.id === yo.id) return false;
-  if (!yo.shareInventory || !otra.shareInventory) return false;
-  if (mismaCiudad(yo.ciudad, otra.ciudad)) return true;
-  return incluirOtrasCiudades && alcanceDe(yo) === "todas" && alcanceDe(otra) === "todas";
-}
+/** Lo que el usuario eligió en este navegador (para pedirle al servidor). */
+export const leerOtrasCiudades = () => { try { return localStorage.getItem("inventario_otras_ciudades") === "1"; } catch { return false; } };
 
 const CLAVE = "inventario_otras_ciudades";
 const EVENTO = "otras-ciudades-cambio";
