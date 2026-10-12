@@ -3402,7 +3402,7 @@ async function startServer() {
   }
 
   const enlaceDeBaja = (uid: string) =>
-    `${CONTACTO.crm}/api/correo/baja?u=${encodeURIComponent(uid)}&t=${firmaDeBaja(uid)}`;
+    `${CONTACTO.crmDominio}/api/correo/baja?u=${encodeURIComponent(uid)}&t=${firmaDeBaja(uid)}`;
 
   function paginaSimple(titulo: string, texto: string, enlace?: { url: string; etiqueta: string }, extra = ""): string {
     const e = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
