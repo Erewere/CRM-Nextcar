@@ -15,6 +15,7 @@ import { auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { AvisoPaginaWeb } from '../components/auto/AvisoPaginaWeb';
 import { LlenarDesdeVin } from '../components/auto/LlenarDesdeVin';
+import { ConsultarPrecio } from '../components/auto/ConsultarPrecio';
 
 /**
  * Alta de un auto en pantalla completa. Pide lo indispensable para publicarlo
@@ -235,6 +236,15 @@ export function AutoNuevo() {
               {puedeVerCostos && (
                 <Campo etiqueta={f.ownership === 'consignacion' ? 'Se le paga al dueño' : 'Costo de compra'}><input value={f.costo} onChange={poner('costo')} inputMode="decimal" placeholder="$0" className={campoClase} /></Campo>
               )}
+              <div className="col-span-2 md:col-span-4">
+                <ConsultarPrecio
+                  marca={f.make}
+                  modelo={f.model}
+                  anio={numero(f.year)}
+                  precio={numero(f.price)}
+                  onUsarVenta={(v) => { tocados.current.add('price'); setF((prev: any) => ({ ...prev, price: String(v) })); }}
+                />
+              </div>
               <Campo etiqueta="Kilometraje"><input value={f.km} onChange={poner('km')} inputMode="numeric" placeholder="0" className={campoClase} /></Campo>
               <Campo etiqueta="Color"><input value={f.color} onChange={poner('color')} className={campoClase} /></Campo>
               <Campo etiqueta="Transmisión">

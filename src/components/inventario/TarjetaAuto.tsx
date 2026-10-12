@@ -5,6 +5,7 @@ import { Vehicle } from '../../types';
 import { InteresDeAuto, haceCuanto } from '../../lib/interesPorAuto';
 import { PrecioMercado } from '../../lib/precioMercado';
 import { GraficaMercado } from './GraficaMercado';
+import { LineaGuia, type GuiaVista } from './LineaGuia';
 
 export interface Coincidencia {
   level: string;
@@ -26,6 +27,8 @@ interface Props {
   costos?: { costo: number; gastos: number } | null;
   /** undefined: aún no se sabe (no se muestra nada); null: sin anuncios. */
   mercado?: PrecioMercado | null;
+  /** Venta y compra de la guía de Autocosmos; sin dato = no se muestra nada. */
+  guia?: GuiaVista | null;
   onAbrir: () => void;
   onVender: () => void;
   onCompartir: () => void;
@@ -41,7 +44,7 @@ const pesos = (n: number) => `$${Number(n || 0).toLocaleString('es-MX')}`;
 
 export function TarjetaAuto({
   vehicle, dias, interes, coincidencias, nombreAgencia, ciudadAgencia, esDeMiAgencia,
-  puedeBorrar, puedeVender, costos, mercado, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia,
+  puedeBorrar, puedeVender, costos, mercado, guia, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia,
 }: Props) {
   const foto = vehicle.photoUrls?.[0] || vehicle.photoUrl;
   const pendiente = (vehicle as any).pendingValidation;
@@ -188,6 +191,10 @@ export function TarjetaAuto({
 
         {esDeMiAgencia && vehicle.status !== 'sold' && (
           <GraficaMercado precio={Number(vehicle.price) || 0} mercado={mercado} />
+        )}
+
+        {esDeMiAgencia && vehicle.status !== 'sold' && (
+          <LineaGuia guia={guia} precio={Number(vehicle.price) || 0} />
         )}
 
         <div className="flex gap-2 mt-auto pt-1">

@@ -80,6 +80,8 @@ export function Inventory() {
   const [ventaDesdeTarjeta, setVentaDesdeTarjeta] = useState(false);
   // Precio de mercado por auto (lo calcula el servidor cada semana).
   const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
+  // Venta y compra según la guía de Autocosmos (también las calcula el servidor).
+  const [guias, setGuias] = useState<Record<string, any>>({});
   useEffect(() => {
     if (!userData?.agencyId || userData.role === 'master') return;
     let vigente = true;
@@ -89,7 +91,7 @@ export function Inventory() {
         const r = await fetch(getApiUrl('/api/mercado/inventario'), { headers: { Authorization: `Bearer ${token}` } });
         if (!r.ok) return;
         const d = await r.json();
-        if (vigente) setMercado(d.porAuto || {});
+        if (vigente) { setMercado(d.porAuto || {}); setGuias(d.guiaPorAuto || {}); }
       } catch {
         // Sin dato de mercado las tarjetas simplemente no muestran la barra.
       }
@@ -1150,6 +1152,7 @@ export function Inventory() {
                     puedeBorrar={(userData?.role === 'admin' || userData?.role === 'master') && mio}
                     puedeVender={mio && !isReadOnly && vehicle.status !== 'sold' && !(vehicle as any).pendingValidation}
                     mercado={mercado && vehicle.id in mercado ? mercado[vehicle.id] : undefined}
+                    guia={guias[vehicle.id]}
                     costos={verCostos ? {
                       costo: Number(vehicle.purchasePrice) || 0,
                       gastos: expenses.filter(e => e.vehicleId === vehicle.id).reduce((sum, e) => sum + e.amount, 0),

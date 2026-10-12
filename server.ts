@@ -10,6 +10,7 @@ import { normalizarTipo, procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
+import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
 import { registrarVentas } from "./src/servidor/ventas.ts";
@@ -3875,33 +3876,60 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         adminDb.collection("mercadoAutos").get(),
       ]);
       const fechaDe = new Map<string, string>();
-      hechos.docs.forEach((d: any) => fechaDe.set(d.id, String(d.data()?.intentoEl || "")));
+      const guiaDe = new Map<string, string>();
+      hechos.docs.forEach((d: any) => {
+        fechaDe.set(d.id, String(d.data()?.intentoEl || ""));
+        guiaDe.set(d.id, String(d.data()?.guiaEl || ""));
+      });
+      // Un auto está pendiente si le toca Mercado Libre, la guía de Autocosmos, o las dos.
       const pendientes = autos.docs
         .filter((d: any) => {
           const v = d.data() || {};
           if (v.isDeleted || v.status === "sold" || !v.make || !v.model || !v.year) return false;
-          return (fechaDe.get(d.id) || "") < limite;
+          return (fechaDe.get(d.id) || "") < limite || (guiaDe.get(d.id) || "") < limite;
         })
         .slice(0, AUTOS_POR_VUELTA);
 
       for (const d of pendientes) {
         const v = d.data();
         const ahora = new Date().toISOString();
-        try {
-          const m = await consultarMercado(String(v.make), String(v.model), v.year);
-          await adminDb.collection("mercadoAutos").doc(d.id).set({
-            vehicleId: d.id,
-            agencyId: v.agencyId || null,
-            intentoEl: ahora,
-            mercado: m,
-          });
-        } catch (e: any) {
-          // Sin respuesta de la pagina: se reintenta en la siguiente semana,
-          // y la tarjeta conserva el ultimo dato bueno si lo habia.
-          await adminDb.collection("mercadoAutos").doc(d.id).set(
-            { vehicleId: d.id, agencyId: v.agencyId || null, intentoEl: ahora, error: String(e?.message || e).slice(0, 200) },
-            { merge: true },
-          );
+        // Mercado Libre: igual que siempre, solo cuando le toca. (merge: la guia
+        // vive en el mismo documento y no se debe borrar al refrescar el mercado.)
+        if ((fechaDe.get(d.id) || "") < limite) {
+          try {
+            const m = await consultarMercado(String(v.make), String(v.model), v.year);
+            await adminDb.collection("mercadoAutos").doc(d.id).set({
+              vehicleId: d.id,
+              agencyId: v.agencyId || null,
+              intentoEl: ahora,
+              mercado: m,
+            }, { merge: true });
+          } catch (e: any) {
+            // Sin respuesta de la pagina: se reintenta en la siguiente semana,
+            // y la tarjeta conserva el ultimo dato bueno si lo habia.
+            await adminDb.collection("mercadoAutos").doc(d.id).set(
+              { vehicleId: d.id, agencyId: v.agencyId || null, intentoEl: ahora, error: String(e?.message || e).slice(0, 200) },
+              { merge: true },
+            );
+          }
+        }
+        // Guia de Autocosmos (venta y compra). Sin guia o sin respuesta se
+        // reintenta en un dia, no en una semana (Autocosmos a veces se niega
+        // por unos minutos); los modelos de 2014 o menos no tienen guia: semana.
+        if ((guiaDe.get(d.id) || "") < limite) {
+          const reintento = Number(v.year) < ANIO_MINIMO_GUIA ? ahora : new Date(Date.now() - (DIAS_MERCADO - 1) * 86_400_000).toISOString();
+          try {
+            const g = await consultarGuia(String(v.make), String(v.model), v.year);
+            await adminDb.collection("mercadoAutos").doc(d.id).set(
+              { vehicleId: d.id, agencyId: v.agencyId || null, guia: g, guiaEl: g ? ahora : reintento },
+              { merge: true },
+            );
+          } catch (e: any) {
+            await adminDb.collection("mercadoAutos").doc(d.id).set(
+              { vehicleId: d.id, agencyId: v.agencyId || null, guiaEl: reintento },
+              { merge: true },
+            );
+          }
         }
         await new Promise((r) => setTimeout(r, 3000));
       }
@@ -4040,16 +4068,66 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     try {
       const snap = await quien.adminDb.collection("mercadoAutos").where("agencyId", "==", quien.agencyId).get();
       const porAuto: Record<string, any> = {};
+      const guiaPorAuto: Record<string, any> = {};
+      // El precio de compra de la guia es un dato de costos: solo para quien ve costos.
+      const veCostos = puedeRol(quien.rol, "vehiculos.costo");
       snap.docs.forEach((d: any) => {
         const x = d.data() || {};
         // null = se consulto y no hay anuncios; sin la clave = aun no se sabe.
         if (x.mercado) porAuto[d.id] = x.mercado;
         else if ("mercado" in x) porAuto[d.id] = null;
+        // Con confianza baja no se manda ni el numero.
+        if (x.guia && x.guia.confianza !== "baja") {
+          const { compra, ...resto } = x.guia;
+          guiaPorAuto[d.id] = veCostos ? x.guia : resto;
+        }
       });
-      res.json({ porAuto });
+      res.json({ porAuto, guiaPorAuto });
     } catch (e) {
       console.error("mercado/inventario:", e);
       res.status(500).json({ error: "No se pudo leer el precio de mercado." });
+    }
+  });
+
+  // ===== Consultar la guia al capturar un auto =====
+  //
+  // Para el formulario de «Nuevo auto»: marca, modelo y año -> venta y compra de
+  // la guia de Autocosmos, en vivo (tarda unos segundos). Cualquier usuario con
+  // sesion; el precio de compra solo se manda a quien ve costos. Con tope por
+  // usuario para que nadie use la pagina como buscador gratis.
+  const consultasGuia = new Map<string, number[]>();
+  const cacheGuia = new Map<string, { en: number; g: any }>();
+  app.get("/api/guia/consultar", async (req, res) => {
+    const token = await quienPide(req);
+    if (!token) return res.status(401).json({ error: "Inicia sesión para continuar." });
+    const marca = String(req.query.marca || "").trim().slice(0, 40);
+    const modelo = String(req.query.modelo || "").trim().slice(0, 80);
+    const anio = Number(req.query.anio) || 0;
+    if (!marca || !modelo || !anio) return res.status(400).json({ error: "Faltan marca, modelo o año." });
+    const hace1h = Date.now() - 3_600_000;
+    const mias = (consultasGuia.get(token.uid) || []).filter((t) => t > hace1h);
+    if (mias.length >= 30) return res.status(429).json({ error: "Muchas consultas seguidas. Intenta en unos minutos." });
+    mias.push(Date.now());
+    consultasGuia.set(token.uid, mias);
+    try {
+      const adminDb = getAdminDb();
+      const u = adminDb ? await adminDb.collection("users").doc(token.uid).get() : null;
+      const veCostos = puedeRol(String(u?.data()?.role || ""), "vehiculos.costo");
+      const llave = `${marca}|${modelo}|${anio}`.toLowerCase();
+      const guardada = cacheGuia.get(llave);
+      let g: any;
+      if (guardada && guardada.en > hace1h) g = guardada.g;
+      else {
+        g = await consultarGuia(marca, modelo, anio);
+        cacheGuia.set(llave, { en: Date.now(), g });
+      }
+      if (!g) return res.json({ guia: null, motivo: anio < ANIO_MINIMO_GUIA ? "Autocosmos no tiene guía de modelos 2014 o anteriores." : "Autocosmos no tiene este modelo y año." });
+      if (g.confianza === "baja") return res.json({ guia: { confianza: "baja", motivo: g.motivo } });
+      const { compra, ...resto } = g;
+      res.json({ guia: veCostos ? g : resto });
+    } catch (e) {
+      console.error("guia/consultar:", e);
+      res.status(502).json({ error: "No se pudo consultar la guía. Intenta de nuevo." });
     }
   });
 
