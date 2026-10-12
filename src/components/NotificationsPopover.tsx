@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { documentosQueFaltan } from "../lib/creditoDocs";
 import { getTrialDaysLeft, getTrialEnd, hasActiveAccess } from "../lib/subscription";
 import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
@@ -460,7 +461,15 @@ export function NotificationsPopover() {
     } else if (condiciones.length) {
       poner("condiciones", "credito-ahora", `${condiciones[0].nombre} respondió con condiciones: ${quien}`, "Revisa las condiciones y habla con el cliente.");
     } else if (c.clienteTerminoEl && ["recibida", "datos"].includes(c.etapa)) {
-      poner("termino", "credito-ahora", `${quien} terminó su solicitud de crédito`, "Revísala y envíala a los bancos.", c.clienteTerminoEl);
+      // Terminar los datos no es tener el expediente completo: sin los documentos
+      // no se puede mandar a los bancos, y decir «envíala» mandaba al asesor a
+      // abrir una solicitud que todavía no estaba lista.
+      const faltan = documentosQueFaltan(c.documentos || []);
+      if (faltan.length) {
+        poner("termino-docs", "credito-hoy", `${quien} terminó sus datos, pero faltan documentos`, `Falta: ${faltan.join(", ")}. Pídeselos antes de enviarla a los bancos.`, c.clienteTerminoEl);
+      } else {
+        poner("termino", "credito-ahora", `${quien} terminó su solicitud de crédito`, "Datos y documentos completos: revísala y envíala a los bancos.", c.clienteTerminoEl);
+      }
     } else if (c.origen === "pagina" && c.etapa === "recibida" && !c.ligaVence) {
       poner("nueva-pagina", "credito-ahora", `Nueva solicitud de crédito desde la página: ${quien}`, "Mándale su liga para que la llene.", c.creadoEl);
     } else if (bancos.length && bancos.every((b) => b.estado === "rechazado")) {

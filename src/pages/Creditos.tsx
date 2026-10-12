@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { DOCS_REQUERIDOS } from '../lib/creditoDocs';
 import { useActualizarAlVolver } from '../hooks/useActualizarAlVolver';
 import { useNavigate, useSearchParams } from 'react-router';
 import clsx from 'clsx';
@@ -34,7 +35,6 @@ export const ESTILO_BANCO: Record<string, string> = {
 export const TEXTO_ESTADO_BANCO: Record<string, string> = {
   pendiente: 'Pendiente', firmada: 'Firmada', enviada: 'Enviada', aprobado: 'Aprobado', condiciones: 'Con condiciones', rechazado: 'Rechazado',
 };
-const DOCS_REQUERIDOS = ['ine', 'domicilio', 'ingresos', 'constancia'];
 const dias = (iso?: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null);
 
 function avisoDe(s: any): { texto: string; tono: 'rojo' | 'ambar' } | null {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { documentosQueFaltan } from '../lib/creditoDocs';
 import { useNavigate, useParams } from 'react-router';
 import clsx from 'clsx';
 import { doc, getDoc } from 'firebase/firestore';
@@ -106,6 +107,8 @@ export function CreditoExpediente() {
     const firmadas = docs.filter((d) => d.tipo === 'firmada' && d.banco === b.clave);
     const deCliente = docs.filter((d) => ['ine', 'domicilio', 'ingresos', 'constancia', 'otro'].includes(d.tipo));
     if (!firmadas.length && !confirm('Aún no hay solicitud firmada de este banco. ¿Mandar el paquete sin ella?')) return;
+    const faltanDocs = documentosQueFaltan(docs.map((d) => d.tipo));
+    if (faltanDocs.length && !confirm(`Todavía faltan documentos del cliente: ${faltanDocs.join(', ')}. ¿Mandar el paquete incompleto?`)) return;
     setTrabajando('env' + b.clave);
     try {
       const archivos: File[] = [];
@@ -184,6 +187,12 @@ export function CreditoExpediente() {
                   : s.ligaVence ? 'Liga enviada; aún no la abre.' : 'Mándale la liga para que llene sus datos y suba sus documentos.'}
               </p>
               <p className="text-xs text-slate-600 dark:text-slate-400">Datos {avanceDatos(datos)}% · {s.ligaVence ? `liga válida hasta el ${fecha(s.ligaVence)}` : 'sin liga'}</p>
+              {(() => {
+                const faltan = documentosQueFaltan((s.documentos || []).map((d: any) => d.tipo));
+                return faltan.length
+                  ? <p className="text-xs font-bold text-amber-800 dark:text-amber-300 mt-0.5">Faltan documentos: {faltan.join(', ')}.</p>
+                  : <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">Documentos completos.</p>;
+              })()}
             </div>
             <SelectorWhatsApp />
             <button type="button" onClick={mandarLiga} disabled={!!trabajando} className="h-10 px-3 rounded-lg bg-[#1fa855] text-white text-sm font-bold flex items-center gap-1.5">
