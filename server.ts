@@ -3693,6 +3693,62 @@ ${extra}
   setTimeout(revisarEnvioAutomatico, 2 * 60 * 1000);
   setInterval(revisarEnvioAutomatico, 30 * 60 * 1000);
 
+  /**
+   * Accesos concedidos a mano (agencias que pagan la plataforma dentro de otro
+   * servicio, como la página web). Cuando faltan 3 días y cuando vence, se le
+   * avisa por correo a quien administra la plataforma para que renueve si ya le
+   * pagaron. Cada aviso se manda una sola vez por periodo: la bandera se guarda
+   * en la propia agencia y se reinicia al renovar.
+   */
+  async function revisarAccesosManuales() {
+    const adminDb = getAdminDb();
+    if (!adminDb) return;
+    try {
+      const snap = await adminDb.collection("agencies").where("accesoManual.hasta", ">", "").get();
+      if (snap.empty) return;
+      const masters = (await adminDb.collection("users").where("role", "==", "master").get()).docs
+        .map((d: any) => String(d.data().email || "")).filter(Boolean);
+      if (!masters.length) return;
+      const ahora = Date.now();
+      const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Mexico_City" });
+      for (const doc of snap.docs) {
+        const a: any = doc.data();
+        const m = a.accesoManual || {};
+        const fin = Date.parse(m.hasta);
+        if (Number.isNaN(fin) || a.hasFreeAccess || a.subscriptionStatus === "active") continue;
+        const nombre = String(a.name || "Una agencia");
+        const faltan = fin - ahora;
+        let tipo: "previo" | "vencido" | null = null;
+        if (faltan <= 0 && !m.avisoVencidoEnviado) tipo = "vencido";
+        else if (faltan > 0 && faltan <= 3 * 86_400_000 && !m.avisoPrevioEnviado) tipo = "previo";
+        if (!tipo) continue;
+        const asunto = tipo === "vencido"
+          ? `Venció el acceso de ${nombre}: renuévalo si ya te pagó`
+          : `El acceso de ${nombre} vence el ${fecha(m.hasta)}`;
+        const cuerpo = tipo === "vencido"
+          ? `El acceso de <b>${nombre}</b> terminó el ${fecha(m.hasta)} y ya no puede entrar al CRM.`
+          : `El acceso de <b>${nombre}</b> termina el <b>${fecha(m.hasta)}</b>.`;
+        const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1f2937;line-height:1.55">
+<h2 style="margin:0 0 12px">${asunto}</h2>
+<p>${cuerpo}</p>
+${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;")}</p>` : ""}
+<p><b>Si ya te pagó</b>, entra a Plataforma → Agencias, abre su tarjeta y toca «Renovar 30 días». Si no ha pagado, no hagas nada.</p>
+<p><a href="${CONTACTO.crmDominio}/platform" style="display:inline-block;background:#111827;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Abrir Plataforma</a></p>
+</div>`;
+        let alguno = false;
+        for (const para of masters) { if (await mandarCorreo(para, asunto, html)) alguno = true; }
+        if (alguno) {
+          await doc.ref.update(tipo === "vencido" ? { "accesoManual.avisoVencidoEnviado": true } : { "accesoManual.avisoPrevioEnviado": true });
+          console.log(`Aviso de acceso manual (${tipo}) para ${nombre}.`);
+        }
+      }
+    } catch (e) {
+      console.error("Revisión de accesos manuales:", e);
+    }
+  }
+  setTimeout(revisarAccesosManuales, 3 * 60 * 1000);
+  setInterval(revisarAccesosManuales, 3 * 60 * 60 * 1000);
+
   // ===== Chats: pendientes, archivar, borrar =====
   //
   // El estado de cada conversacion vive en el contacto, y solo lo escribe el

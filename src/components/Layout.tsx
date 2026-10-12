@@ -612,7 +612,7 @@ export function Layout() {
               {trialDaysLeft !== null && (
                 <div className="hidden sm:flex items-center gap-2 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800/50 px-2 py-0.5 shrink-0 transition-colors">
                   <span className="text-[10px] md:text-[11px] font-medium text-orange-700 dark:text-orange-300">
-                    Prueba: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
+                    {(agencyData as any)?.accesoManual ? 'Acceso' : 'Prueba'}: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
                   </span>
                 </div>
               )}

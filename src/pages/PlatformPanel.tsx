@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AgencyUsers } from './AgencyUsers';
 import {
@@ -64,6 +64,8 @@ interface Agencia {
   nombre: string;
   estado: string;
   diasDePruebaRestantes: number | null;
+  accesoManualHasta?: string | null;
+  accesoManualNota?: string;
   creadaEl: string | null;
   usuarios: number;
   usuariosFacturados: number | null;
@@ -712,6 +714,41 @@ function VistaAgencias({
     setTrabajando(a.id + 'c');
     try { await updateDoc(doc(db, 'agencies', a.id), { hasFreeAccess: dar }); onCambio(); } catch (e: any) { alert('No se pudo cambiar: ' + (e?.message || e)); } finally { setTrabajando(null); }
   };
+  // Acceso que se da a mano porque la agencia paga la plataforma dentro de otro servicio.
+  // Cuenta desde hoy o desde el fin del acceso actual, y deja un aviso por correo para renovar.
+  const darAcceso = async (a: Agencia, dias: number) => {
+    const esRenovacion = !!a.accesoManualHasta;
+    const nota = esRenovacion ? (a.accesoManualNota || '') : (window.prompt(`Nota para recordar por qué (opcional). Ej.: «Incluido en la mensualidad de su página web».`, a.accesoManualNota || '') ?? null);
+    if (nota === null) return;
+    if (!window.confirm(`¿${esRenovacion ? 'Renovar' : 'Dar'} ${dias} días de acceso a ${a.nombre}? Te mandaré un correo 3 días antes de que termine y cuando venza.`)) return;
+    setTrabajando(a.id + 'a');
+    try {
+      const ref = doc(db, 'agencies', a.id);
+      const d: any = (await getDoc(ref)).data() || {};
+      const fin = (x: any) => { const t = x ? new Date(x).getTime() : 0; return Number.isNaN(t) ? 0 : t; };
+      const base = Math.max(Date.now(), fin(d.accesoManual?.hasta), fin(d.trialEndsAt));
+      const hasta = new Date(base + dias * 86400000).toISOString();
+      await updateDoc(ref, {
+        trialEndsAt: hasta,
+        subscriptionStatus: 'trialing',
+        accesoManual: {
+          dias,
+          desde: d.accesoManual?.desde || new Date().toISOString(),
+          hasta,
+          nota: nota || '',
+          renovadoEl: new Date().toISOString(),
+          avisoPrevioEnviado: false,
+          avisoVencidoEnviado: false,
+        },
+      });
+      onCambio();
+    } catch (e: any) { alert('No se pudo dar el acceso: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
+  const quitarAcceso = async (a: Agencia) => {
+    if (!window.confirm(`¿Quitar el recordatorio de acceso manual de ${a.nombre}? Su fecha de fin no cambia.`)) return;
+    setTrabajando(a.id + 'q');
+    try { await updateDoc(doc(db, 'agencies', a.id), { accesoManual: deleteField() }); onCambio(); } catch (e: any) { alert('No se pudo quitar: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
   const prorrogar = async (a: Agencia, dias: number) => {
     if (!window.confirm(`¿Darle ${dias} días más de prueba a ${a.nombre}?`)) return;
     setTrabajando(a.id + 'p');
@@ -892,6 +929,17 @@ function VistaAgencias({
                     </button>
                     <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Acciones</span>
+                      {a.estado !== 'activa' && a.estado !== 'cortesia' && (
+                        <button disabled={!!trabajando} onClick={() => darAcceso(a, 30)} className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50">
+                          {a.accesoManualHasta ? 'Renovar 30 días' : 'Dar 30 días (pagado aparte)'}
+                        </button>
+                      )}
+                      {a.accesoManualHasta && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          Acceso manual hasta el {fechaCorta(a.accesoManualHasta)}{a.accesoManualNota ? ` · ${a.accesoManualNota}` : ''}
+                          <button onClick={() => quitarAcceso(a)} className="ml-2 underline hover:text-red-600">quitar recordatorio</button>
+                        </span>
+                      )}
                       {a.estado === 'prueba' || a.estado === 'sin acceso' ? (
                         <>
                           <button disabled={!!trabajando} onClick={() => prorrogar(a, 7)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">+7 días de prueba</button>

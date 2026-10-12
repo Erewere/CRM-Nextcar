@@ -308,6 +308,9 @@ export function calcularMetricas(e: EntradaMetricas) {
       nombre: a.name || "Agencia sin nombre",
       estado,
       diasDePruebaRestantes,
+      // Acceso que Luis concede a mano porque la agencia paga la plataforma dentro de otro servicio.
+      accesoManualHasta: aMs((a as any).accesoManual?.hasta) ? new Date(aMs((a as any).accesoManual?.hasta)!).toISOString() : null,
+      accesoManualNota: String((a as any).accesoManual?.nota || ""),
       creadaEl: creada ? new Date(creada).toISOString() : null,
       usuarios: nUsuarios,
       usuariosFacturados: pagados,

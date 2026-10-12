@@ -678,7 +678,9 @@ export function NotificationsPopover() {
           id: notifId,
           type: "billing",
           title: "Suscripción por Vencer",
-          message: `Tu prueba gratis termina en ${quedan} ${quedan === 1 ? "día" : "días"}. Activa tu suscripción para no perder el acceso.`,
+          message: (agencyData as any).accesoManual
+            ? `Tu acceso termina en ${quedan} ${quedan === 1 ? "día" : "días"}. Avísale a Nextcar para renovarlo y no perderlo.`
+            : `Tu prueba gratis termina en ${quedan} ${quedan === 1 ? "día" : "días"}. Activa tu suscripción para no perder el acceso.`,
           date: (fin || new Date()).toISOString(),
           icon: <CreditCard className="w-5 h-5 text-blue-500 shrink-0" />,
           onClick: () => navigate("/billing"),
