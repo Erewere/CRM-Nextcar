@@ -71,6 +71,12 @@ export function Layout() {
   const [menuPerfilAbierto, setMenuPerfilAbierto] = useState(false);
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
   const [mostrarDatosAgencia, setMostrarDatosAgencia] = useState(false);
+  // La campanita pide abrir los datos de la agencia (por ejemplo, para elegir la ciudad).
+  useEffect(() => {
+    const abrir = () => setMostrarDatosAgencia(true);
+    window.addEventListener("abrir-datos-agencia", abrir);
+    return () => window.removeEventListener("abrir-datos-agencia", abrir);
+  }, []);
 
   /**
    * Solo se pide a quien todavia no le ha puesto nombre a su agencia.

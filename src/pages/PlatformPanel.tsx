@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useCiudades, ciudadesApi } from '../lib/ciudades';
 import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AgencyUsers } from './AgencyUsers';
@@ -64,6 +65,7 @@ interface Agencia {
   nombre: string;
   estado: string;
   diasDePruebaRestantes: number | null;
+  ciudad?: string;
   accesoManualHasta?: string | null;
   accesoManualNota?: string;
   creadaEl: string | null;
@@ -708,6 +710,20 @@ function VistaAgencias({
   onAdministrar: () => void;
 }) {
   const [trabajando, setTrabajando] = useState<string | null>(null);
+  const { ciudades, ponerLista } = useCiudades();
+  const [nuevaCiudad, setNuevaCiudad] = useState('');
+  const agregarCiudad = async () => {
+    if (!nuevaCiudad.trim()) return;
+    try { ponerLista(await ciudadesApi.agregar(nuevaCiudad)); setNuevaCiudad(''); } catch (e: any) { alert(e.message); }
+  };
+  const quitarCiudad = async (c: string) => {
+    if (!window.confirm(`¿Quitar «${c}» de la lista de ciudades?`)) return;
+    try { ponerLista(await ciudadesApi.quitar(c)); } catch (e: any) { alert(e.message); }
+  };
+  const cambiarCiudad = async (a: Agencia, ciudad: string) => {
+    setTrabajando(a.id + 'ci');
+    try { await updateDoc(doc(db, 'agencies', a.id), { ciudad }); onCambio(); } catch (e: any) { alert('No se pudo cambiar la ciudad: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
   // Acciones de plataforma sobre una agencia: cortesía y prórroga de la prueba.
   const darCortesia = async (a: Agencia, dar: boolean) => {
     if (!window.confirm(dar ? `¿Dar cortesía a ${a.nombre}? Tendrá acceso sin pagar hasta que la quites.` : `¿Quitar la cortesía a ${a.nombre}? Pasará a su estado normal (prueba o pago).`)) return;
@@ -795,6 +811,26 @@ function VistaAgencias({
 
   return (
     <div>
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-3 mb-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Ciudades · con cuántas agencias</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {ciudades.map((c) => {
+            const n = agencias.filter((a) => a.ciudad === c).length;
+            return (
+              <span key={c} className="inline-flex items-center gap-1.5 h-8 pl-3 pr-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {c} <span className="text-xs font-bold text-slate-500">{n}</span>
+                <button type="button" onClick={() => quitarCiudad(c)} disabled={n > 0} title={n > 0 ? 'Tiene agencias: no se puede quitar' : 'Quitar ciudad'} aria-label={`Quitar ${c}`} className="h-5 w-5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400">×</button>
+              </span>
+            );
+          })}
+          <span className="text-xs text-slate-500 ml-1">Sin ciudad: {agencias.filter((a) => !a.ciudad).length}</span>
+        </div>
+        <div className="flex gap-2 mt-2.5">
+          <input value={nuevaCiudad} onChange={(e) => setNuevaCiudad(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && agregarCiudad()} placeholder="Agregar ciudad…" className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm w-56 outline-none focus:ring-2 focus:ring-indigo-500/40" />
+          <button type="button" onClick={agregarCiudad} disabled={!nuevaCiudad.trim()} className="h-9 px-3 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-sm font-bold disabled:opacity-40">Agregar</button>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <Buscador valor={busca} onChange={setBusca} placeholder="Buscar agencia…" />
         <select
@@ -860,7 +896,7 @@ function VistaAgencias({
                         <span className="font-semibold text-slate-900 dark:text-white truncate">{a.nombre}</span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-[18px]">
-                        Último dato {hace(a.diasSinActividad)} · desde {fechaCorta(a.creadaEl)}
+                        {a.ciudad ? `${a.ciudad} · ` : 'Sin ciudad · '}Último dato {hace(a.diasSinActividad)} · desde {fechaCorta(a.creadaEl)}
                       </p>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${ESTADO[a.estado]?.chip || ''}`}>
@@ -929,6 +965,11 @@ function VistaAgencias({
                     </button>
                     <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Acciones</span>
+                      <select value={a.ciudad || ''} disabled={!!trabajando} onChange={(e) => cambiarCiudad(a, e.target.value)} className="h-8 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-bold">
+                        <option value="">Sin ciudad</option>
+                        {ciudades.map((c) => <option key={c} value={c}>{c}</option>)}
+                        {a.ciudad && !ciudades.includes(a.ciudad) && <option value={a.ciudad}>{a.ciudad}</option>}
+                      </select>
                       {a.estado !== 'activa' && a.estado !== 'cortesia' && (
                         <button disabled={!!trabajando} onClick={() => darAcceso(a, 30)} className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50">
                           {a.accesoManualHasta ? 'Renovar 30 días' : 'Dar 30 días (pagado aparte)'}

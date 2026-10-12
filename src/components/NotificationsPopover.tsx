@@ -607,6 +607,19 @@ export function NotificationsPopover() {
     });
   }
 
+  // La ciudad de la agencia: sin ella no se puede decidir con quién comparte inventario.
+  if (userData?.role === "admin" && agencyData && agencyData.datosCompletadosAt && !(agencyData as any).ciudad && !dismissedIds.has("config-ciudad")) {
+    notifications.push({
+      id: "config-ciudad",
+      type: "config-pendiente",
+      title: "Elige la ciudad de tu agencia",
+      message: "La necesitamos para compartir inventario solo con las agencias de tu ciudad.",
+      date: new Date().toISOString(),
+      icon: <Building2 className="w-5 h-5 text-amber-500 shrink-0" />,
+      onClick: () => window.dispatchEvent(new Event("abrir-datos-agencia")),
+    });
+  }
+
   // 5. Pending Admin Approvals (Vehicles & Clients)
   if (userData?.role === "admin" || userData?.role === "master") {
     // A) Vehicle pending validations

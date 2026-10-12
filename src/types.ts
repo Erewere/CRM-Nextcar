@@ -119,6 +119,8 @@ export interface Agency {
   datosCompletadosAt?: string;
   phoneWhatsApp?: string;
   facebookPageId?: string;
+  /** Ciudad de la agencia (lista en plataforma/ciudades). Decide con quién se comparte inventario. */
+  ciudad?: string;
   pipelineStages?: PipelineStage[];
   businessHours?: { start: string; end: string };
   createdAt: string | Date;

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCiudades } from "../lib/ciudades";
 import { doc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import imageCompression from "browser-image-compression";
@@ -35,6 +36,8 @@ export function DatosDeAgenciaModal({
   const nombreAutomatico = /^Agencia de /i.test(agencia.name || "");
   const [nombre, setNombre] = useState(nombreAutomatico ? "" : agencia.name || "");
   const [direccion, setDireccion] = useState(agencia.address || "");
+  const [ciudad, setCiudad] = useState(agencia.ciudad || "");
+  const { ciudades } = useCiudades();
   const [telefono, setTelefono] = useState(agencia.phone || "");
   const [logo, setLogo] = useState(agencia.logoUrl || "");
   const [subiendo, setSubiendo] = useState(false);
@@ -79,11 +82,16 @@ export function DatosDeAgenciaModal({
       setError("Ponle nombre a tu agencia — es lo único que hace falta.");
       return;
     }
+    if (primeraVez && !ciudad) {
+      setError("Elige la ciudad de tu agencia: con ella sabemos con quién compartir inventario.");
+      return;
+    }
     setGuardando(true);
     setError("");
     try {
       await updateDoc(doc(db, "agencies", agencia.id), {
         name: nombre.trim(),
+        ...(ciudad ? { ciudad } : {}),
         address: direccion.trim(),
         phone: telefono.trim(),
         logoUrl: logo || "",
@@ -148,6 +156,24 @@ export function DatosDeAgenciaModal({
             />
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
               Así te verán tus vendedores y así saldrá en las fichas de tus autos.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">
+              Ciudad {primeraVez && <span className="text-red-500">*</span>}
+            </label>
+            <select
+              value={ciudad}
+              onChange={(e) => setCiudad(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-[15px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="">Elige tu ciudad…</option>
+              {ciudades.map((c) => <option key={c} value={c}>{c}</option>)}
+              {ciudad && !ciudades.includes(ciudad) && <option value={ciudad}>{ciudad}</option>}
+            </select>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+              ¿No está tu ciudad? Avísale a Nextcar y la agregamos.
             </p>
           </div>
 

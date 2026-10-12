@@ -3749,6 +3749,51 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   setTimeout(revisarAccesosManuales, 3 * 60 * 1000);
   setInterval(revisarAccesosManuales, 3 * 60 * 60 * 1000);
 
+  // ===== Ciudades de las agencias =====
+  //
+  // Para decidir qué inventario se comparte con quién. La lista la administra el
+  // master (plataforma/ciudades); cualquier usuario con sesión la puede leer para
+  // elegir la ciudad de su agencia.
+  const CIUDADES_BASE = ["Celaya", "Querétaro", "León", "CDMX", "Toluca", "Monterrey", "Puebla", "Veracruz"];
+  const sinAcentosC = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const leerCiudades = async (db: any): Promise<string[]> => {
+    const d = (await db.collection("plataforma").doc("ciudades").get()).data();
+    return Array.isArray(d?.lista) && d.lista.length ? d.lista.map(String) : CIUDADES_BASE;
+  };
+
+  app.get("/api/ciudades", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    try { res.json({ ciudades: await leerCiudades(q.adminDb) }); }
+    catch (e) { console.error("ciudades/leer:", e); res.status(500).json({ error: "No se pudieron leer las ciudades." }); }
+  });
+
+  app.post("/api/admin/ciudades", express.json(), async (req: any, res: any) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    try {
+      const db = quien.adminDb;
+      let lista = await leerCiudades(db);
+      const agregar = String(req.body?.agregar || "").replace(/\s+/g, " ").trim();
+      const quitar = String(req.body?.quitar || "").trim();
+      if (agregar) {
+        if (agregar.length < 2 || agregar.length > 40) return res.status(400).json({ error: "El nombre de la ciudad debe tener entre 2 y 40 letras." });
+        if (lista.some((c) => sinAcentosC(c) === sinAcentosC(agregar))) return res.status(409).json({ error: "Esa ciudad ya está en la lista." });
+        lista = [...lista, agregar];
+      }
+      if (quitar) {
+        const enUso = await db.collection("agencies").where("ciudad", "==", quitar).limit(1).get();
+        if (!enUso.empty) return res.status(409).json({ error: "Hay agencias en esa ciudad: cámbialas de ciudad antes de quitarla." });
+        lista = lista.filter((c) => c !== quitar);
+      }
+      await db.collection("plataforma").doc("ciudades").set({ lista, actualizadoEl: new Date().toISOString(), actualizadoPor: quien.uid }, { merge: true });
+      res.json({ ciudades: lista });
+    } catch (e) {
+      console.error("ciudades/guardar:", e);
+      res.status(500).json({ error: "No se pudo guardar la lista de ciudades." });
+    }
+  });
+
   // ===== Chats: pendientes, archivar, borrar =====
   //
   // El estado de cada conversacion vive en el contacto, y solo lo escribe el

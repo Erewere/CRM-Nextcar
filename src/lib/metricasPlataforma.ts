@@ -306,6 +306,7 @@ export function calcularMetricas(e: EntradaMetricas) {
     return {
       id: a.id,
       nombre: a.name || "Agencia sin nombre",
+      ciudad: String((a as any).ciudad || ""),
       estado,
       diasDePruebaRestantes,
       // Acceso que Luis concede a mano porque la agencia paga la plataforma dentro de otro servicio.
