@@ -18,6 +18,7 @@ import { getVehicleMatches } from './Inventory';
 import { CampoEditable } from '../components/auto/CampoEditable';
 import { Galeria } from '../components/auto/Galeria';
 import { GraficaMercado } from '../components/inventario/GraficaMercado';
+import { LineaGuia, type GuiaVista } from '../components/inventario/LineaGuia';
 import { SeccionGastos } from '../components/auto/SeccionGastos';
 import { SeccionVenta } from '../components/auto/SeccionVenta';
 import { DocumentosDelAuto, NotasDelAuto } from '../components/auto/DocumentosYNotas';
@@ -111,6 +112,7 @@ export function AutoPagina() {
   const [etapas, setEtapas] = useState<{ id: string; title?: string }[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [mercado, setMercado] = useState<PrecioMercado | null | undefined>(undefined);
+  const [guia, setGuia] = useState<GuiaVista | null>(null);
   const [seccion, setSeccion] = useState<Seccion>('resumen');
   const [params, setParams] = useSearchParams();
   const [abrirVenta, setAbrirVenta] = useState(false);
@@ -221,8 +223,10 @@ export function AutoPagina() {
         const token = await auth.currentUser?.getIdToken();
         const r = await fetch(getApiUrl('/api/mercado/inventario'), { headers: { Authorization: `Bearer ${token}` } });
         if (!r.ok) return;
-        const porAuto = (await r.json()).porAuto || {};
+        const datos = await r.json();
+        const porAuto = datos.porAuto || {};
         setMercado(id in porAuto ? porAuto[id] : undefined);
+        setGuia((datos.guiaPorAuto || {})[id] || null);
       } catch { /* sin barra de mercado */ }
     })();
   }, [agencyId, id, esMio]);
@@ -467,6 +471,7 @@ export function AutoPagina() {
       ) : (
         <GraficaMercado precio={Number(auto.price) || 0} mercado={mercado} />
       )}
+      <LineaGuia guia={guia} precio={Number(auto.price) || 0} />
     </Tarjeta>
   );
 
@@ -732,6 +737,9 @@ export function AutoPagina() {
                 claseValor="!text-white !text-2xl font-extrabold tracking-tight hover:!bg-white/10" />
             ) : <span className="text-2xl font-extrabold tracking-tight">{pesos(auto.price)}</span>}
             <span className="text-xs text-slate-300">{veredicto ? `${veredicto} · mercado ${pesos(mercado!.promedio)}` : 'Sin dato de mercado aún'}</span>
+            {guia && guia.confianza !== 'baja' && !!guia.venta && (
+              <span className="text-xs text-slate-300">Guía {guia.version ? '' : '(aprox.) '}{pesos(guia.venta)}{guia.compra ? ` · compra ${pesos(guia.compra)}` : ''}</span>
+            )}
           </div>
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 flex flex-col">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">En inventario</span>

@@ -17,7 +17,7 @@ export function LineaGuia({ guia, precio, mostrarPrecio = true }: { guia?: GuiaV
   if (guia.confianza === 'baja' || !guia.venta) {
     return (
       <div className="text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
-        Guía Autocosmos: poco confiable para este auto. {guia.motivo}
+        Guía: poco confiable para este auto. {guia.motivo}
       </div>
     );
   }
@@ -32,7 +32,7 @@ export function LineaGuia({ guia, precio, mostrarPrecio = true }: { guia?: GuiaV
       title={`${guia.motivo}${guia.version ? ` Versión de la guía: ${guia.version}.` : ''} La compra es el 87% de la venta (relación del Libro Azul).${fecha ? ` Consultado el ${fecha}.` : ''}`}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-700 dark:text-slate-300">Guía Autocosmos</span>
+        <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-700 dark:text-slate-300">Guía</span>
         <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded', guia.confianza === 'alta' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200')}>
           {guia.confianza === 'alta' ? 'Versión exacta' : esRango ? 'Rango' : 'Aproximada'}
         </span>
