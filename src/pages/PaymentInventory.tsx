@@ -141,7 +141,12 @@ export function PaymentInventory() {
     const person = (clients.find(c => c.id === deal.clientId) || {}) as Partial<Client>;
     // Primero el auto del trato. El del contacto es el de su ultima compra: si
     // compro dos, con el viejo orden el trato de la primera tomaba el segundo auto.
-    const vehicle = vehicles.find(v => v.id === deal.vehicleId) || (!deal.vehicleId ? vehicles.find(v => v.id === person.vehicleId) : undefined);
+    // Si el trato no guardó su auto pero el auto sí guarda a qué trato vendió
+    // (soldDealId), es ese: si no, la venta salía dos veces, una sin auto y otra
+    // como «venta de vehículo» suelta (LUHO Car, Camaro, 12 oct 2026).
+    const vehicle = vehicles.find(v => v.id === deal.vehicleId)
+      || vehicles.find(v => (v as any).soldDealId === deal.id)
+      || (!deal.vehicleId ? vehicles.find(v => v.id === person.vehicleId) : undefined);
     
     // El auto vendido solo pertenece al trato que lo vendió. Si el auto guarda
     // a qué trato corresponde (soldDealId), los demás tratos del mismo cliente
@@ -188,7 +193,7 @@ export function PaymentInventory() {
       soldAt,
       id: deal.id,
       originalClientId: deal.clientId,
-      vehicleId: deal.vehicleId || person.vehicleId || vehicle?.id,
+      vehicleId: deal.vehicleId || vehicle?.id || person.vehicleId,
       vehicle: deal.vehicle || person.vehicle || (vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : undefined)
     } as Client;
   });

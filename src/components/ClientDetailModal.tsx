@@ -969,6 +969,14 @@ export function ClientDetailModal({
         
         if (vehiculoDeLaVenta) {
           const currentVehicle = inventoryVehicles.find(v => v.id === vehiculoDeLaVenta);
+          // El trato que registra la venta guarda también el auto: sin esto la
+          // lista de pagos no podía unir la venta con su auto.
+          if (finalDealId) {
+            await guardarTratoSiExiste(finalDealId, {
+              vehicleId: vehiculoDeLaVenta,
+              vehicle: currentVehicle ? `${currentVehicle.year} ${currentVehicle.make} ${currentVehicle.model}`.trim() : (formData.vehicle || null),
+            });
+          }
           const originalPrice = currentVehicle?.price || client.dealValue || 0;
           const proposedPrice = saleDetails?.price ? Number(saleDetails.price) : originalPrice;
           const hasPriceChange = originalPrice > 0 && originalPrice !== proposedPrice;
