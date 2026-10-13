@@ -2550,6 +2550,9 @@ export function ClientDetailModal({
                               {(() => {
                                 const query = vehicleSearchQuery.toLowerCase().trim();
                                 const matches = inventoryVehicles.filter((v) => {
+                                  // Un auto vendido no se ofrece: solo si es el que ya tiene este
+                                  // cliente, o el que vendió este mismo trato.
+                                  if (v.status === "sold" && v.id !== formData.vehicleId && (v as any).soldDealId !== client.id) return false;
                                   if (!query) return true;
                                   const text = `${v.year} ${v.make} ${v.model} ${v.bodyType || ""} ${v.vin || ""} ${v.color || ""} ${v.equipment || ""} ${(v as any).version || ""} ${(v as any).licensePlate || ""} ${(v as any).stockNumber || ""} ${v.price || ""}`.toLowerCase();
                                   return query.split(" ").every((term) => text.includes(term));
