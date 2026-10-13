@@ -3107,6 +3107,9 @@ export function ClientDetailModal({
                           : "Sin fecha"}
                         {(proximoPaso.startTime || proximoPaso.dueTime) ? `, ${proximoPaso.startTime || proximoPaso.dueTime}${proximoPaso.endTime ? ` a ${proximoPaso.endTime}` : ""}` : ""}
                       </p>
+                      {(proximoPaso as any).notes && (
+                        <p className="mt-1.5 text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap rounded-lg bg-white/70 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-700 px-2.5 py-1.5">{(proximoPaso as any).notes}</p>
+                      )}
                     </div>
                     {!isAdminReadOnly && (
                       <div className="flex gap-2">
@@ -3333,9 +3336,12 @@ export function ClientDetailModal({
                                   aria-label={`Marcar como hecha: ${t.title}`}
                                   className="w-5 h-5 rounded-full border-2 border-slate-300 hover:border-emerald-500 shrink-0"
                                 />
-                                <button type="button" onClick={() => handleEditTaskClick(t)} className="text-sm font-medium text-slate-800 dark:text-slate-200 hover:text-blue-700 truncate text-left">
-                                  {t.title}
-                                </button>
+                                <div className="min-w-0">
+                                  <button type="button" onClick={() => handleEditTaskClick(t)} className="block max-w-full text-sm font-medium text-slate-800 dark:text-slate-200 hover:text-blue-700 truncate text-left">
+                                    {t.title}
+                                  </button>
+                                  {(t as any).notes && <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap line-clamp-3">{(t as any).notes}</p>}
+                                </div>
                               </div>
                               <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 shrink-0">
                                 <Clock className="w-3.5 h-3.5" />
@@ -3533,6 +3539,7 @@ export function ClientDetailModal({
                           >
                             {t.title}
                           </p>
+                          {(t as any).notes && <p className="mt-1 text-xs text-gray-600 dark:text-slate-400 whitespace-pre-wrap">{(t as any).notes}</p>}
                         </div>
                       </div>
                     ))}

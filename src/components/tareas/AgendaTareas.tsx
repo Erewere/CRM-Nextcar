@@ -156,6 +156,7 @@ export function AgendaTareas(p: Props) {
                           <span className={clsx("text-sm font-bold truncate", task.completed ? "line-through text-slate-400" : "text-slate-900 dark:text-slate-100")}>{task.title}</span>
                           {task.startTime && <span className="shrink-0 text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded px-1.5 py-0.5">{task.startTime}</span>}
                         </div>
+                        {(task as any).notes && <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2 whitespace-pre-wrap" title={(task as any).notes}>{(task as any).notes}</p>}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                           {client?.name && <span className="flex items-center gap-1 min-w-0"><User className="w-3 h-3 shrink-0" /><span className="truncate">{client.name}</span></span>}
                           {(client as any)?.vehicle && <span className="truncate">{(client as any).vehicle}</span>}
