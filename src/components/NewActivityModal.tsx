@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "motion/react";
+import { useNavigate } from "react-router";
 import {
   X,
   Phone,
@@ -205,6 +206,20 @@ export function NewActivityModal({
       : "") ||
     "";
   const [dealTitle, setDealTitle] = useState(initialDealTitle);
+  // El trato al que apunta lo escrito en «Trato», para poder abrir su página desde aquí.
+  const navegar = useNavigate();
+  const mismoTitulo = (d: any) => String(d.title || "").toLowerCase() === dealTitle.trim().toLowerCase();
+  // Si la tarea ya traía su trato y el título no cambió, ese mismo (puede haber títulos repetidos).
+  const tratoEscrito = dealTitle.trim()
+    ? deals.find((d) => d.id === initialData?.dealId && mismoTitulo(d)) || deals.find(mismoTitulo)
+    : undefined;
+  const abrirTrato = () => {
+    if (!tratoEscrito) return;
+    onClose();
+    // Un trato ganado ya no está en el embudo: su página es la de la venta.
+    if (tratoEscrito.status === "won") navegar(`/venta/${tratoEscrito.id}`);
+    else navegar("/kanban", { state: { abrirTrato: tratoEscrito.id } });
+  };
   const [organization, setOrganization] = useState(
     initialData?.organization || "",
   );
@@ -486,11 +501,20 @@ export function NewActivityModal({
                     onChange={(e) => handleDealChange(e.target.value)}
                     list="deal-options"
                     placeholder="Trato (opcional)"
-                    className={clsx(campo, "pl-9")}
+                    className={clsx(campo, "pl-9", tratoEscrito && "pr-28")}
                   />
                   <datalist id="deal-options">
                     {deals.map((d) => <option key={`deal-${d.id}`} value={d.title} />)}
                   </datalist>
+                  {tratoEscrito && (
+                    <button
+                      type="button"
+                      onClick={abrirTrato}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-md text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                    >
+                      Abrir trato →
+                    </button>
+                  )}
                 </div>
                 {!clientId && clientName && (
                   <div className="relative">
