@@ -109,6 +109,16 @@ export function VentaPagos() {
   const metodo = NOMBRE_METODO[v.plan?.method] || 'Sin registrar';
   const avance = ec.totalAPagar > 0 ? Math.min(100, ((ec.pagado + ec.descontado) / ec.totalAPagar) * 100) : 0;
 
+  const eliminarVenta = async () => {
+    const motivo = window.prompt(`Vas a ELIMINAR esta venta de ${v.cliente?.nombre || 'el cliente'}${v.auto?.nombre ? ` (${v.auto.nombre})` : ''}.\n\nSus pagos quedan anulados (tachados en el historial), el auto vuelve a estar disponible y el trato regresa al embudo.\n\n¿Por qué se elimina? (obligatorio)`);
+    if (!motivo?.trim()) return;
+    try {
+      await ventasApi.eliminar(dealId, motivo.trim());
+      alert('Venta eliminada. El trato volvió al embudo y el auto está disponible.');
+      navigate('/payments');
+    } catch (e: any) { alert(e.message); }
+  };
+
   const anular = async (p: PagoVenta) => {
     const motivo = window.prompt(`¿Por qué se anula el pago de ${pesos(p.monto)} del ${fechaCorta(p.fecha)}? (queda en el historial, tachado)`);
     if (!motivo?.trim()) return;
@@ -145,10 +155,14 @@ export function VentaPagos() {
           {puede && v.tienePlan && (
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setEditando(true)} className="h-11 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5"><Pencil className="w-4 h-4" /> Editar venta</button>
+              <button onClick={eliminarVenta} className="h-11 px-3 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5"><Ban className="w-4 h-4" /> Eliminar venta</button>
               {ec.esCredito && !ec.liquidada && <button onClick={() => setLiquidando(true)} className="h-11 px-3 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> Liquidar</button>}
               {ec.aFavor > 0.5 && <button onClick={() => setPagando('devolucion')} className="h-11 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold flex items-center gap-1.5"><Undo2 className="w-4 h-4" /> Devolver {pesos(ec.aFavor)}</button>}
               {!ec.liquidada && <button onClick={() => setPagando('pago')} className="h-11 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center gap-1.5"><Plus className="w-4 h-4" /> Registrar pago</button>}
             </div>
+          )}
+          {puede && !v.tienePlan && (
+            <button onClick={eliminarVenta} className="h-11 px-3 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5"><Ban className="w-4 h-4" /> Eliminar venta</button>
           )}
         </header>
 

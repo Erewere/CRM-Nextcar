@@ -1,3 +1,4 @@
+import { checkIsWon, checkIsLost } from "../lib/clientUtils.ts";
 import { aFormaVieja, deFormaVieja, estadoDeCuenta, fechaDelPago, fusionarPagosViejos, hoyISO, liquidacionAnticipada, type ConceptoPago, type PagoVenta, type PlanVenta } from "../lib/planDePagos.ts";
 
 /**
@@ -349,6 +350,76 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     } catch (e) {
       console.error("ventas/anular:", e);
       res.status(500).json({ error: "No se pudo anular el pago." });
+    }
+  });
+
+  // ---------- Eliminar una venta hecha por error ----------
+  //
+  // Los pagos no se borran: se anulan con motivo, como siempre. Lo demás se
+  // deshace en los tres lugares donde vive la venta: el trato vuelve a una etapa
+  // abierta, el contacto deja de figurar como comprador y el auto vuelve a estar
+  // disponible. Las tareas de cobro pendientes se quitan. Queda constancia en el
+  // propio trato (ventaEliminada).
+  app.post("/api/ventas/:dealId/eliminar", async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    if (!q.puedeCobrar) return res.status(403).json({ error: "Solo un administrador puede eliminar una venta." });
+    const motivo = textoCorto(req.body?.motivo, 200);
+    if (!motivo) return res.status(400).json({ error: "Escribe por qué se elimina la venta." });
+    try {
+      const db = q.adminDb;
+      const t = await tratoDe(q, String(req.params.dealId || ""));
+      if (!t) return res.status(404).json({ error: "No encontramos esa venta." });
+      const dealId = t.ref.id;
+      const d = t.datos;
+      await asegurarMigrado(db, dealId);
+      const ahora = new Date().toISOString();
+      const nombre = await nombreDe(db, q.uid);
+
+      // 1. Los pagos se anulan (no se borran).
+      const anulacion = { anulado: true, motivoAnulacion: `Venta eliminada: ${motivo}`, anuladoPor: q.uid, anuladoPorNombre: nombre, anuladoEn: ahora };
+      let anulados = 0;
+      for (const p of await pagosDe(db, dealId)) {
+        if (p.anulado) continue;
+        await col(db).doc(p.id).update(anulacion);
+        anulados++;
+      }
+
+      // 2. Las tareas de cobro pendientes ya no tienen sentido.
+      const tareas = await db.collection("tasks").where("dealId", "==", dealId).get();
+      for (const tk of tareas.docs) {
+        const x = tk.data();
+        if (!x.completed && x.type === "payment") await tk.ref.delete();
+      }
+
+      // 3. El auto vuelve a estar disponible (solo si esta venta es la suya).
+      const auto = await autoDe(db, dealId, d);
+      if (auto && auto.datos.status === "sold") {
+        await auto.ref.update({ status: "available", saleDetails: null, soldAt: null, buyerId: null, buyerName: null, soldToClientId: null, soldDealId: null, pendingValidation: null, updatedAt: ahora });
+      }
+
+      // 4. El trato vuelve a la primera etapa abierta del embudo.
+      const ag = (await db.collection("agencies").doc(d.agencyId).get()).data() || {};
+      const etapas: any[] = Array.isArray(ag.pipelineStages) ? ag.pipelineStages : [];
+      const abierta = etapas.find((e) => !checkIsWon(e.id, etapas) && !checkIsLost(e.id, etapas));
+      const nuevaEtapa = abierta?.id || "new";
+      await t.ref.update({
+        saleDetails: null, soldAt: null, cuenta: null, status: nuevaEtapa, updatedAt: ahora,
+        ventaEliminada: { el: ahora, por: q.uid, porNombre: nombre, motivo, precio: Number(d.saleDetails?.price) || Number(d.value) || 0, pagosAnulados: anulados },
+      });
+
+      // 5. El contacto deja de figurar como comprador de esta venta.
+      if (d.clientId && idValido(String(d.clientId))) {
+        const cRef = db.collection("clients").doc(String(d.clientId));
+        const c = (await cRef.get()).data();
+        if (c && (!c.ventaDealId || c.ventaDealId === dealId)) {
+          await cRef.update({ saleDetails: null, soldAt: null, ventaDealId: null, dealValue: null, status: nuevaEtapa, updatedAt: ahora });
+        }
+      }
+      res.json({ ok: true, pagosAnulados: anulados });
+    } catch (e) {
+      console.error("ventas/eliminar:", e);
+      res.status(500).json({ error: "No se pudo eliminar la venta." });
     }
   });
 
