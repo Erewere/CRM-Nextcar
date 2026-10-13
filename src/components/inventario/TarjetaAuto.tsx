@@ -34,6 +34,8 @@ interface Props {
   onCompartir: () => void;
   onBorrar: () => void;
   onCoincidencia: (clientId: string) => void;
+  /** Autos de otra agencia con coincidencia: marcarlos como vistos apaga el aviso. */
+  onVisto?: () => void;
 }
 
 /** Color de la etiqueta de días: verde hasta 30, amarillo hasta 90, rojo después. */
@@ -44,7 +46,7 @@ const pesos = (n: number) => `$${Number(n || 0).toLocaleString('es-MX')}`;
 
 export function TarjetaAuto({
   vehicle, dias, interes, coincidencias, nombreAgencia, ciudadAgencia, esDeMiAgencia,
-  puedeBorrar, puedeVender, costos, mercado, guia, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia,
+  puedeBorrar, puedeVender, costos, mercado, guia, onAbrir, onVender, onCompartir, onBorrar, onCoincidencia, onVisto,
 }: Props) {
   const foto = vehicle.photoUrls?.[0] || vehicle.photoUrl;
   const pendiente = (vehicle as any).pendingValidation;
@@ -92,6 +94,16 @@ export function TarjetaAuto({
               </button>
             );
           })}
+          {onVisto && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onVisto(); }}
+              className="bg-white/95 hover:bg-white text-slate-800 text-[10px] font-bold px-2 py-1 rounded-full shadow-sm w-max"
+              title="Ya lo vi: deja de avisarme de este auto"
+            >
+              ✓ Ya lo vi
+            </button>
+          )}
         </div>
 
         <div className="absolute top-2 right-2 flex gap-2 items-center">

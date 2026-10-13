@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { descartarAviso, idDeMatch } from '../lib/avisosDescartados';
 import { puedoVer, alcanceDe, useOtrasCiudades } from '../lib/compartir';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,6 +102,7 @@ export function Inventory() {
   const [isPendingMinimized, setIsPendingMinimized] = useState(false);
 
   const { matches } = useSharedInventoryMatches();
+  const [soloCoincidencias, setSoloCoincidencias] = useState(false);
   const hasSharedMatches = matches.length > 0;
 
   const handleDismissMatch = async (client: Client, vehicleId: string, vehiclePrice: number) => {
@@ -659,11 +661,39 @@ export function Inventory() {
     return Array.from(new Set(types));
   }, [vehicles, sharedVehicles, activeTab]);
 
+  // Autos de otras agencias que le sirven a alguno de mis clientes (y que no he marcado como vistos).
+  const matchesPorAuto = React.useMemo(() => {
+    const m = new Map<string, typeof matches>();
+    matches.forEach((x) => m.set(x.vehicle.id, [...(m.get(x.vehicle.id) || []), x]));
+    return m;
+  }, [matches]);
+  const marcarVisto = (vehicleId: string) => {
+    (matchesPorAuto.get(vehicleId) || []).forEach((m) => descartarAviso(idDeMatch(m.client.id as string, vehicleId)));
+  };
+
+  // Llegar desde la ficha de un cliente con un auto compartido elegido: se abre ese auto.
+  useEffect(() => {
+    const pedido = (location.state as any)?.abrirCompartido as { id: string } | undefined;
+    if (!pedido) return;
+    if (activeTab !== 'shared') { setActiveTab('shared'); return; }
+    const auto = sharedVehicles.find((v) => v.id === pedido.id);
+    if (auto) {
+      setVentaDesdeTarjeta(false);
+      setSelectedVehicle(auto);
+      navigate(window.location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, activeTab, sharedVehicles]);
+
   const filteredVehicles = React.useMemo(() => {
     const listToFilter = activeTab === 'shared' ? sharedVehicles : vehicles;
     let result = listToFilter.filter(v => 
       `${v.make} ${v.model} ${v.year} ${v.vin} ${v.bodyType} ${v.status} ${v.transmission} ${v.color} ${v.equipment || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    if (activeTab === 'shared' && soloCoincidencias) {
+      result = result.filter(v => matchesPorAuto.has(v.id));
+    }
 
     if (filterOwnership !== 'all') {
       result = result.filter(v => (v.ownership || 'propio') === filterOwnership);
@@ -991,6 +1021,29 @@ export function Inventory() {
           )}
 
           {activeTab === 'shared' && puedeVerCompartido && ownAgencySharing && (
+            <>
+              <button
+                type="button"
+                onClick={() => setSoloCoincidencias((v) => !v)}
+                aria-pressed={soloCoincidencias}
+                className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0", soloCoincidencias ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}
+                title="Mostrar solo los autos que le sirven a alguno de tus clientes"
+              >
+                Solo coincidencias <span className="opacity-70">{matchesPorAuto.size}</span>
+              </button>
+              {matchesPorAuto.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => matchesPorAuto.forEach((_, id) => marcarVisto(id))}
+                  className="h-9 px-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 shrink-0"
+                  title="Quita el aviso de todas las coincidencias actuales"
+                >
+                  Marcar todas como vistas
+                </button>
+              )}
+            </>
+          )}
+          {activeTab === 'shared' && puedeVerCompartido && ownAgencySharing && (
             <label
               className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0 select-none", alcanceDe(ownAgencyDoc) === 'todas' ? "cursor-pointer border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700" : "cursor-not-allowed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-gray-400")}
               title={alcanceDe(ownAgencyDoc) === 'todas' ? 'Mostrar también las agencias de otras ciudades que aceptaron compartir con todas' : 'Tu agencia comparte solo con su ciudad. Cámbialo en Agencia y usuarios para ver otras ciudades.'}
@@ -1162,6 +1215,7 @@ export function Inventory() {
                     onCompartir={() => setVehicleToShare(vehicle)}
                     onBorrar={() => setVehicleToDelete(vehicle.id)}
                     onCoincidencia={(clientId) => navigate('/persons', { state: { clientId } })}
+                    onVisto={!mio && matchesPorAuto.has(vehicle.id) ? () => marcarVisto(vehicle.id) : undefined}
                   />
                 );
               })}

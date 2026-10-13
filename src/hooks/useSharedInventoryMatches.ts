@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAvisosDescartados, idDeMatch } from "../lib/avisosDescartados";
 import { puedoVer, useOtrasCiudades, leerOtrasCiudades } from "../lib/compartir";
 import { auth } from "../lib/firebase";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
@@ -143,6 +144,7 @@ export function useSharedInventoryMatches() {
   const [ownAgencyDoc, setOwnAgencyDoc] = useState<any>(null);
   const [todasAgencias, setTodasAgencias] = useState<any[]>([]);
   const [otrasCiudades] = useOtrasCiudades();
+  const descartados = useAvisosDescartados();
   // Las agencias que esta agencia puede ver (misma ciudad, o de otras si así lo eligió el usuario).
   const sharingAgencies = useMemo<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -254,6 +256,8 @@ export function useSharedInventoryMatches() {
       clientMatches.forEach((m) => {
         const isDismissed = client.dismissedMatches?.includes(`${m.vehicle.id}_${m.vehicle.price || 0}`);
         if (isDismissed) return;
+        // «Ya lo vi»: la misma lista que usa el aviso flotante y la campanita.
+        if (descartados.has(idDeMatch(client.id as string, m.vehicle.id))) return;
         calculated.push({
           client,
           vehicle: m.vehicle,
@@ -268,7 +272,7 @@ export function useSharedInventoryMatches() {
     calculated.sort((a, b) => b.score - a.score);
     setMatches(calculated);
     setLoading(false);
-  }, [clients, otherVehicles, sharingAgencies, ownAgencySharing]);
+  }, [clients, otherVehicles, sharingAgencies, ownAgencySharing, descartados]);
 
   return {
     ownAgencySharing,

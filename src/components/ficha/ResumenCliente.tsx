@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { alClicWhatsApp } from '../../lib/whatsappApp';
 import clsx from 'clsx';
 import { Car as CarIcon, MessageCircle } from 'lucide-react';
@@ -205,6 +206,7 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
 
   // Autos de agencias aliadas que le sirven (solo si ambas comparten inventario
   // y quien mira es administrador o gerente: la misma regla que la campanita).
+  const navigate = useNavigate();
   const { otherVehicles, sharingAgencies } = useSharedInventoryMatches();
   const deAliadas = useMemo(() => {
     if (ganado || !otherVehicles.length) return [];
@@ -280,7 +282,8 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
               {deAliadas.map((m) => {
                 const foto = m.vehicle.photoUrls?.[0] || m.vehicle.photoUrl;
                 return (
-                  <li key={`${m.vehicle.agencyId}_${m.vehicle.id}`} className="flex gap-3 items-center">
+                  <li key={`${m.vehicle.agencyId}_${m.vehicle.id}`}>
+                  <button type="button" onClick={() => navigate('/inventory', { state: { abrirCompartido: { id: m.vehicle.id, agencyId: m.vehicle.agencyId } } })} className="w-full flex gap-3 items-center text-left rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/40 -mx-1 px-1 py-0.5" title="Ver este auto">
                     <div className="w-20 h-14 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0">
                       {foto ? <img src={foto} alt="" loading="lazy" className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><CarIcon className="w-6 h-6" /></span>}
                     </div>
@@ -291,6 +294,7 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
                         {m.razones.filter((x) => !x.ok).slice(0, 2).map((x, i) => <span key={i} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-900">! {x.t}</span>)}
                       </div>
                     </div>
+                  </button>
                   </li>
                 );
               })}
