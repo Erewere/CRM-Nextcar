@@ -1,4 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
+import { PenTool } from "lucide-react";
+import { TIPOS_ACTIVIDAD, tipoDeTarea } from "../lib/tiposDeActividad";
 import { quitarVentaDeTratoPerdido } from "../lib/ventaDescartada";
 import { completarValorDelTrato } from "../lib/valorDelTrato";
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -346,6 +348,8 @@ export function ClientDetailModal({
     !!(client.street || client.exteriorNumber || client.neighborhood || client.city || client.zipCode)
   );
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskType, setNewTaskType] = useState<"call" | "message" | "appointment" | "test_drive" | "signature" | "task">("task");
+  const [newTaskNotes, setNewTaskNotes] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
   const getDefaultTime = () => {
     const now = new Date();
@@ -1576,6 +1580,8 @@ export function ClientDetailModal({
       const taskRef = doc(db, "tasks", editingTaskId);
       const updates: Partial<Task> = {
         title: newTaskTitle,
+        type: newTaskType,
+        notes: newTaskNotes.trim(),
         dueDate: newTaskDate,
         updatedAt: new Date().toISOString(),
       };
@@ -1600,6 +1606,8 @@ export function ClientDetailModal({
         sellerId: userData?.id || "",
         clientId: actualClientId,
         title: newTaskTitle,
+        type: newTaskType,
+        ...(newTaskNotes.trim() ? { notes: newTaskNotes.trim() } : {}),
         dueDate: newTaskDate || "",
         completed: false,
         createdAt: new Date().toISOString(),
@@ -1616,6 +1624,8 @@ export function ClientDetailModal({
     }
 
     setNewTaskTitle("");
+    setNewTaskType("task");
+    setNewTaskNotes("");
     setNewTaskDate("");
     setNewTaskTime(getDefaultTime());
   };
@@ -1624,6 +1634,8 @@ export function ClientDetailModal({
     setActiveTab("activity");
     setEditingTaskId(task.id);
     setNewTaskTitle(task.title);
+    setNewTaskType(tipoDeTarea(task) === "payment" ? "task" : (tipoDeTarea(task) as any));
+    setNewTaskNotes((task as any).notes || "");
     setNewTaskDate(task.dueDate);
     
     // Convert h:mm a.m. back to HH:mm for the input
@@ -1651,6 +1663,8 @@ export function ClientDetailModal({
   const cancelEditTask = () => {
     setEditingTaskId(null);
     setNewTaskTitle("");
+    setNewTaskType("task");
+    setNewTaskNotes("");
     setNewTaskDate("");
     setNewTaskTime(getDefaultTime());
   };
@@ -3120,29 +3134,31 @@ export function ClientDetailModal({
                 )}
 
                 {/* Escribir: tarea, nota o archivo */}
-                <div ref={composerRef} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex gap-1 px-3 pt-3" role="tablist" aria-label="Qué quieres agregar">
-                    {([
-                      ["activity", "Tarea", Calendar],
-                      ["notes", "Nota", FileText],
-                      ["files", "Archivo", Upload],
-                    ] as const).map(([id, texto, Icono]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        role="tab"
-                        aria-selected={activeTab === id}
-                        onClick={() => setActiveTab(id)}
-                        className={clsx(
-                          "h-8 px-3 rounded-lg text-sm font-bold flex items-center gap-1.5",
-                          activeTab === id ? "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                        )}
-                      >
-                        <Icono className="w-4 h-4" /> {texto}
-                      </button>
-                    ))}
+                <div ref={composerRef} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="px-4 md:px-5 pt-4 flex items-center justify-between gap-3">
+                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg" role="tablist" aria-label="Qué quieres agregar">
+                      {([
+                        ["activity", editingTaskId ? "Editar actividad" : "Actividad", Calendar],
+                        ["notes", "Nota", FileText],
+                        ["files", "Archivo", Upload],
+                      ] as const).map(([id, texto, Icono]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="tab"
+                          aria-selected={activeTab === id}
+                          onClick={() => setActiveTab(id)}
+                          className={clsx(
+                            "h-8 px-3 rounded-md text-sm font-bold flex items-center gap-1.5 transition-colors",
+                            activeTab === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                          )}
+                        >
+                          <Icono className="w-4 h-4" /> {texto}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-3 md:p-4">
+                  <div className="p-4 md:p-5">
                     {isAdminReadOnly ? (
                       <div className="text-center py-6 text-slate-500 dark:text-slate-400">
                         <Lock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
@@ -3152,81 +3168,115 @@ export function ClientDetailModal({
                     ) : (
                       <>
                         {activeTab === "activity" && (
-                      <div>
-                        <input
-                          type="text"
-                          placeholder="Tomar nota o crear tarea..."
-                          value={newTaskTitle}
-                          onChange={(e) => setNewTaskTitle(e.target.value)}
-                          className="w-full text-sm border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 mb-3"
-                        />
-                        <div className="flex gap-2 items-center mb-3">
-                          <input
-                            type="date"
-                            value={newTaskDate}
-                            onChange={(e) => setNewTaskDate(e.target.value)}
-                            className="flex-1 text-sm border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <TimeSelect
-                            value={newTaskTime}
-                            onChange={(val) => setNewTaskTime(val)}
-                            placeholder="h:mm"
-                            minHour={businessHours.start}
-                            maxHour={businessHours.end}
-                          />
-                        </div>
-                        <div className="flex justify-end items-center gap-2">
-                          {editingTaskId && (
-                            <button
-                              onClick={cancelEditTask}
-                              className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-1.5 rounded transition-colors"
-                            >
-                              Cancelar
-                            </button>
-                          )}
-                          <button
-                            onClick={handleAddTask}
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
-                          >
-                            {editingTaskId ? "Guardar Cambios" : "Programar Tarea"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {activeTab === "notes" && (
-                      <div className="flex flex-col gap-3">
-                        <textarea
-                          placeholder="Toma una nota..."
-                          value={newNoteContent}
-                          onChange={(e) => setNewNoteContent(e.target.value)}
-                          className="w-full text-sm border border-gray-300 rounded p-2 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-h-[80px]"
-                        />
-                        <div className="flex justify-end">
-                          <button
-                            onClick={handleAddNote}
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium text-sm px-4 py-1.5 rounded transition-colors"
-                          >
-                            Guardar Nota
-                          </button>
-                        </div>
-                      </div>
-                    )}
-    {activeTab === "files" && (
-                      <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-                        <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                        <label className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
-                          Haz clic para subir un archivo
-                          <input
-                            type="file"
-                            className="hidden"
-                            onChange={handleFileUpload}
-                          />
-                        </label>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Imágenes o documentos PDF
-                        </p>
-                      </div>
-                    )}
+                          <div className="flex flex-col gap-4">
+                            <input
+                              type="text"
+                              placeholder="¿Qué hay que hacer?"
+                              value={newTaskTitle}
+                              onChange={(e) => setNewTaskTitle(e.target.value)}
+                              className="w-full text-lg font-bold text-slate-900 dark:text-white bg-transparent border-0 border-b-2 border-slate-200 dark:border-slate-600 focus:border-blue-600 px-0 py-1.5 outline-none"
+                            />
+                            <div className="flex flex-wrap gap-1.5">
+                              {TIPOS_ACTIVIDAD.map((t) => {
+                                const Icono = ({ call: Phone, message: MessageCircle, appointment: User, test_drive: Car, signature: PenTool, task: Clock } as const)[t.id];
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    aria-pressed={newTaskType === t.id}
+                                    onClick={() => {
+                                      setNewTaskType(t.id);
+                                      // Si el título está vacío o es el de otro tipo, se pone el de este.
+                                      if (!newTaskTitle.trim() || TIPOS_ACTIVIDAD.some((x) => x.etiqueta === newTaskTitle)) setNewTaskTitle(t.etiqueta);
+                                    }}
+                                    className={clsx(
+                                      "h-9 px-3 rounded-full border text-xs font-bold flex items-center gap-1.5 transition-colors",
+                                      newTaskType === t.id
+                                        ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white"
+                                        : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    )}
+                                  >
+                                    <Icono className="w-3.5 h-3.5" /> {t.etiqueta}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div>
+                              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Cuándo</span>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {([["Hoy", 0], ["Mañana", 1], ["En 2 días", 2], ["Próx. semana", 7]] as const).map(([t, d]) => {
+                                  const f = (() => { const x = new Date(`${hoyLocal()}T12:00:00`); x.setDate(x.getDate() + d); return x.toLocaleDateString("en-CA"); })();
+                                  return (
+                                    <button key={t} type="button" aria-pressed={newTaskDate === f} onClick={() => setNewTaskDate(f)}
+                                      className={clsx("h-8 px-3 rounded-full text-xs font-bold border transition-colors", newTaskDate === f ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700")}>
+                                      {t}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex gap-2 items-center">
+                                <input
+                                  type="date"
+                                  value={newTaskDate}
+                                  onChange={(e) => setNewTaskDate(e.target.value)}
+                                  className="flex-1 h-10 text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg px-3 focus:ring-2 focus:ring-blue-500/40 outline-none"
+                                />
+                                <TimeSelect
+                                  value={newTaskTime}
+                                  onChange={(val) => setNewTaskTime(val)}
+                                  placeholder="Hora"
+                                  minHour={businessHours.start}
+                                  maxHour={businessHours.end}
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Notas <span className="normal-case font-medium text-slate-400">(opcional)</span></span>
+                              <textarea
+                                value={newTaskNotes}
+                                onChange={(e) => setNewTaskNotes(e.target.value)}
+                                placeholder="Lo que hay que recordar o decirle…"
+                                className="w-full text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg p-3 min-h-[64px] focus:ring-2 focus:ring-blue-500/40 outline-none"
+                              />
+                            </div>
+
+                            <div className="flex justify-end items-center gap-2">
+                              {editingTaskId && (
+                                <button onClick={cancelEditTask} className="h-10 px-4 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                                  Cancelar
+                                </button>
+                              )}
+                              <button onClick={handleAddTask} className="h-10 px-5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">
+                                {editingTaskId ? "Guardar cambios" : "Programar actividad"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {activeTab === "notes" && (
+                          <div className="flex flex-col gap-3">
+                            <textarea
+                              placeholder="Escribe lo que pasó o lo que hay que saber de este cliente…"
+                              value={newNoteContent}
+                              onChange={(e) => setNewNoteContent(e.target.value)}
+                              className="w-full text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg p-3 min-h-[110px] focus:ring-2 focus:ring-blue-500/40 outline-none"
+                            />
+                            <div className="flex justify-end">
+                              <button onClick={handleAddNote} disabled={!newNoteContent.trim()} className="h-10 px-5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-40">
+                                Guardar nota
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {activeTab === "files" && (
+                          <label className="flex flex-col items-center justify-center gap-1 p-8 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900/40 hover:bg-slate-100 dark:hover:bg-slate-700/40 cursor-pointer transition-colors">
+                            <span className="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 flex items-center justify-center"><Upload className="w-5 h-5" /></span>
+                            <span className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">Toca para subir un archivo</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Fotos o documentos PDF</span>
+                            <input type="file" className="hidden" onChange={handleFileUpload} />
+                          </label>
+                        )}
                       </>
                     )}
                   </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { tipoDeTarea } from "../lib/tiposDeActividad";
 import { useActualizarAlVolver } from '../hooks/useActualizarAlVolver';
 import { useLocation, useNavigate } from "react-router";
 import { AnimatePresence } from "motion/react";
@@ -32,6 +33,7 @@ import {
   Calendar as CalendarIcon,
   List as ListIcon,
   Phone,
+  MessageCircle,
   Video,
   CalendarDays,
   Flag,
@@ -864,21 +866,15 @@ export function Tasks() {
   };
 
   const getTaskIcon = (task: Task) => {
-    if (task.type === "payment") return <DollarSign className="w-3.5 h-3.5" />;
-    const t = String(task.title || "").toLowerCase();
-    if (t.includes("llama")) return <Phone className="w-3.5 h-3.5" />;
-    if (
-      t.includes("cita") ||
-      t.includes("reunió") ||
-      t.includes("junta") ||
-      t.includes("meet")
-    )
-      return <User className="w-3.5 h-3.5" />;
-    if (t.includes("prueba") || t.includes("manejo") || t.includes("test"))
-      return <Car className="w-3.5 h-3.5" />;
-    if (t.includes("firma") || t.includes("contrato"))
-      return <PenTool className="w-3.5 h-3.5" />;
-    return <CalendarDays className="w-3.5 h-3.5" />;
+    switch (tipoDeTarea(task)) {
+      case "payment": return <DollarSign className="w-3.5 h-3.5" />;
+      case "call": return <Phone className="w-3.5 h-3.5" />;
+      case "message": return <MessageCircle className="w-3.5 h-3.5" />;
+      case "appointment": return <User className="w-3.5 h-3.5" />;
+      case "test_drive": return <Car className="w-3.5 h-3.5" />;
+      case "signature": return <PenTool className="w-3.5 h-3.5" />;
+      default: return <CalendarDays className="w-3.5 h-3.5" />;
+    }
   };
 
   const getTaskColorClass = (task: Task) => {
@@ -1124,38 +1120,7 @@ export function Tasks() {
     // 2. Type Filter
     if (filterType === "all") return true;
 
-    // Very basic filter logic based on title string matching (since Tasks don't have an explicit 'type' field yet)
-    const t = String(task.title || "").toLowerCase();
-    switch (filterType) {
-      case "payment":
-        return task.type === "payment";
-      case "call":
-        return t.includes("llama");
-      case "appointment":
-        return (
-          t.includes("cita") ||
-          t.includes("reunió") ||
-          t.includes("junta") ||
-          t.includes("meet")
-        );
-      case "test_drive":
-        return (
-          t.includes("prueba") || t.includes("manejo") || t.includes("test")
-        );
-      case "signature":
-        return t.includes("firma") || t.includes("contrato");
-      case "task":
-        return (
-          task.type !== "payment" &&
-          !t.includes("llama") &&
-          !t.includes("cita") &&
-          !t.includes("prueba") &&
-          !t.includes("firma") &&
-          !t.includes("reunió")
-        ); // Default task
-      default:
-        return true;
-    }
+    return tipoDeTarea(task) === filterType;
   });
 
   const filteredTasks = baseFilteredTasks.filter(({ task }) => {
@@ -1367,7 +1332,7 @@ export function Tasks() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            {([["all", "Todos", null], ["call", "Llamadas", Phone], ["appointment", "Citas", User], ["test_drive", "Pruebas de manejo", Car], ["signature", "Firmas", PenTool], ["payment", "Pagos", DollarSign], ["task", "Otras tareas", CalendarDays]] as const).map(([id, t, Icono]) => (
+            {([["all", "Todos", null], ["call", "Llamadas", Phone], ["message", "Mensajes", MessageCircle], ["appointment", "Citas", User], ["test_drive", "Pruebas de manejo", Car], ["signature", "Firmas", PenTool], ["payment", "Pagos", DollarSign], ["task", "Otras tareas", CalendarDays]] as const).map(([id, t, Icono]) => (
               <button key={id} onClick={() => setFilterType(id)} className={clsx("h-8 px-3 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-colors", filterType === id ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700")}>
                 {Icono && <Icono className="w-3 h-3" />} {t}
               </button>

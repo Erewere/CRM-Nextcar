@@ -22,6 +22,7 @@ import {
   Check,
   Car,
   PenTool,
+  MessageCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import { Client } from "../types";
@@ -361,6 +362,7 @@ export function NewActivityModal({
 
   const types = [
     { id: "call", icon: Phone, label: "Llamada" },
+    { id: "message", icon: MessageCircle, label: "Mensaje" },
     { id: "appointment", icon: User, label: "Cita" },
     { id: "test_drive", icon: Car, label: "Prueba de manejo" },
     { id: "signature", icon: PenTool, label: "Firma" },
@@ -641,6 +643,7 @@ export function NewActivityModal({
                   >
                     <div className="flex items-center gap-1 font-bold">
                       {type === "call" && <Phone className="w-3 h-3 shrink-0" />}
+                      {type === "message" && <MessageCircle className="w-3 h-3 shrink-0" />}
                       {type === "appointment" && <User className="w-3 h-3 shrink-0" />}
                       {type === "test_drive" && <Car className="w-3 h-3 shrink-0" />}
                       {type === "signature" && <PenTool className="w-3 h-3 shrink-0" />}
