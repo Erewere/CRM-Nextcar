@@ -61,7 +61,40 @@ type Actividad = {
   startTime?: string;
   endTime?: string;
   disponibilidad?: 'ocupado' | 'libre';
+  /** Con quién y de qué trato es: va en la descripción del evento, con la liga al CRM. */
+  contexto?: ContextoActividad;
 };
+
+export type ContextoActividad = {
+  cliente?: string;
+  telefono?: string;
+  trato?: string;
+  auto?: string;
+  etapa?: string;
+  /** Liga que abre el trato (o el contacto) directo en el CRM. */
+  url?: string;
+};
+
+/** La liga al CRM para abrir un trato (o, sin trato, el contacto). */
+export function ligaAlCRM(origen: string, ids: { dealId?: string | null; clientId?: string | null }): string {
+  if (ids.dealId) return `${origen}/kanban?trato=${encodeURIComponent(ids.dealId)}`;
+  if (ids.clientId) return `${origen}/persons?cliente=${encodeURIComponent(ids.clientId)}`;
+  return origen;
+}
+
+/** Notas + lo que hace falta para saber de qué es el evento sin abrir el CRM. */
+function descripcionDeEvento(a: Actividad): string {
+  const c = a.contexto;
+  const notas = (a.notes || '').trim();
+  if (!c) return notas;
+  const lineas = [
+    c.cliente && `Cliente: ${c.cliente}${c.telefono ? ` · ${c.telefono}` : ''}`,
+    c.trato && `Trato: ${c.trato}${c.etapa ? ` (${c.etapa})` : ''}`,
+    c.auto && `Auto: ${c.auto}`,
+    c.url && `Abrir en el CRM: ${c.url}`,
+  ].filter(Boolean) as string[];
+  return [notas, lineas.length ? `——————\n${lineas.join('\n')}` : ''].filter(Boolean).join('\n\n');
+}
 
 const zonaHoraria = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -96,14 +129,20 @@ function unaHoraDespues(hhmm: string): string {
  */
 export function eventoDeActividad(a: Actividad, zona?: string) {
   if (!a.dueDate) return null;
-  const base = {
-    summary: (a.title || '').trim() || 'Actividad',
-    description: a.notes || '',
+  // En el calendario se ve de un vistazo con quién es: «Llamar · José Jaime».
+  const titulo = (a.title || '').trim() || 'Actividad';
+  const cliente = a.contexto?.cliente?.trim();
+  const base: any = {
+    summary: cliente && !titulo.toLowerCase().includes(cliente.toLowerCase().split(' ')[0]) ? `${titulo} · ${cliente}` : titulo,
+    description: descripcionDeEvento(a),
     // Google llama 'transparent' a lo que no bloquea la agenda y 'opaque' a
     // lo que si. Sin esto, toda actividad ocupaba, y un recordatorio de
     // llamada tapaba la agenda igual que una entrega.
     transparency: a.disponibilidad === 'libre' ? 'transparent' : 'opaque',
   };
+
+  // Google muestra esta liga arriba del evento, como botón.
+  if (a.contexto?.url) base.source = { title: 'Abrir en Nextcar CRM', url: a.contexto.url };
 
   if (!a.startTime) {
     // En los eventos de dia completo Google trata el fin como exclusivo: si

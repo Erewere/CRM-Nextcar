@@ -279,7 +279,8 @@ export function Kanban() {
   // Llegar desde el Chat con un trato ya elegido: se abre su ficha.
   const ubicacion = useLocation();
   const navegar = useNavigate();
-  const tratoPedido = (ubicacion.state as any)?.abrirTrato as string | undefined;
+  // Desde el chat (estado) o desde la liga de Google Calendar (?trato=).
+  const tratoPedido = ((ubicacion.state as any)?.abrirTrato as string | undefined) || new URLSearchParams(ubicacion.search).get('trato') || undefined;
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);

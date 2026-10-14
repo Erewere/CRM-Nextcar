@@ -154,8 +154,9 @@ export function Persons() {
 
   // Check navigation state for selected person
   useEffect(() => {
-    if (location.state?.clientId && persons.length > 0) {
-      const client = persons.find((p) => p.id === location.state.clientId);
+    const pedido = location.state?.clientId || new URLSearchParams(location.search).get('cliente');
+    if (pedido && persons.length > 0) {
+      const client = persons.find((p) => p.id === pedido);
       if (client) {
         setSelectedPerson(client);
         setSearchTerm(client.name);
@@ -163,7 +164,7 @@ export function Persons() {
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
-  }, [location.state, persons, navigate, location.pathname]);
+  }, [location.state, location.search, persons, navigate, location.pathname]);
 
   const [pipelineStages, setPipelineStages] = useState<
     { id: string; title: string }[]

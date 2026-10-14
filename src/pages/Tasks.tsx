@@ -18,7 +18,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, eventoDeActividad, tareaDeActividad, actividadDesdeEvento, mandaGoogle, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
+import { permisoDeGoogleVencido, permisoNoAlcanza, esLaMismaCuentaDeGoogle, eventoDeActividad, tareaDeActividad, actividadDesdeEvento, mandaGoogle, ligaAlCRM, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
 import { Task, Client, Deal } from "../types";
 import { ClientDetailModal } from "../components/ClientDetailModal";
 import { MobileTasks } from "./mobile/MobileTasks";
@@ -2532,7 +2532,16 @@ export function Tasks() {
               let datosDeGoogle: any = {};
 
               if (taskData.syncToCalendar && token) {
-                const evento = eventoDeActividad(taskData);
+                const clienteDeLaActividad: any = clients.find((c) => c.id === finalClientId);
+                const tratoDeLaActividad: any = deals.find((d: any) => d.id === finalDealId);
+                const contexto = {
+                  cliente: clienteDeLaActividad?.name || taskData.clientName || undefined,
+                  telefono: clienteDeLaActividad?.phone ? String(clienteDeLaActividad.phone).split(",")[0].trim() : undefined,
+                  trato: taskData.dealTitle || tratoDeLaActividad?.title || undefined,
+                  auto: tratoDeLaActividad?.vehicle || clienteDeLaActividad?.vehicle || undefined,
+                  url: ligaAlCRM(window.location.origin, { dealId: finalDealId || null, clientId: finalClientId || null }),
+                };
+                const evento = eventoDeActividad({ ...taskData, contexto });
                 const tarea = tareaDeActividad(taskData);
 
                 if (!evento) {

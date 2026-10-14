@@ -30,7 +30,13 @@ export function Login() {
       aLaPagina = sessionStorage.getItem(CLAVE_IR_A_PAGINA) === "1";
       sessionStorage.removeItem(CLAVE_IR_A_PAGINA);
     } catch { /* sin almacenamiento */ }
-    return <Navigate to={aLaPagina ? "/conectar-pagina" : "/"} />;
+    let destino = "/";
+    try {
+      const guardado = sessionStorage.getItem("despues_de_entrar");
+      sessionStorage.removeItem("despues_de_entrar");
+      if (guardado && guardado.startsWith("/") && !guardado.startsWith("//")) destino = guardado;
+    } catch { /* sin almacenamiento */ }
+    return <Navigate to={aLaPagina ? "/conectar-pagina" : destino} />;
   }
 
   // Recuperar la cuenta sin depender de nadie. Antes no habia forma: a quien

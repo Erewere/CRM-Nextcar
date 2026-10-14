@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { mandarActividadAGoogle, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
+import { mandarActividadAGoogle, ligaAlCRM, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS, type ContextoActividad } from "../lib/google";
 import { PenTool } from "lucide-react";
 import { TIPOS_ACTIVIDAD, tipoDeTarea } from "../lib/tiposDeActividad";
 import { quitarVentaDeTratoPerdido } from "../lib/ventaDescartada";
@@ -1593,7 +1593,16 @@ export function ClientDetailModal({
     const aGoogle = async (taskId: string, datos: any, previo: { googleEventId?: string | null; googleTaskId?: string | null }) => {
       if (!tokenGoogle) return;
       try {
-        const r = await mandarActividadAGoogle({ title: datos.title, notes: datos.notes, dueDate: datos.dueDate, startTime: datos.startTime, endTime: datos.endTime, disponibilidad: "ocupado" }, tokenGoogle, previo);
+        const esTrato = Boolean(client.originalClientId && client.originalClientId !== client.id);
+        const contexto: ContextoActividad = {
+          cliente: formData.name || undefined,
+          telefono: formData.phone ? String(formData.phone).split(",")[0].trim() : undefined,
+          trato: esTrato ? (formData.dealTitle || undefined) : undefined,
+          auto: formData.vehicle && formData.vehicle !== "Otro pendiente" ? formData.vehicle : undefined,
+          etapa: esTrato ? pipelineStages.find((st) => st.id === formData.status)?.title : undefined,
+          url: ligaAlCRM(window.location.origin, { dealId: esTrato ? (client.id as string) : null, clientId: (client.originalClientId || client.id) as string }),
+        };
+        const r = await mandarActividadAGoogle({ title: datos.title, notes: datos.notes, dueDate: datos.dueDate, startTime: datos.startTime, endTime: datos.endTime, disponibilidad: "ocupado", contexto }, tokenGoogle, previo);
         const cambios: any = {};
         if (r.googleEventId) cambios.googleEventId = r.googleEventId;
         if (r.googleTaskId) cambios.googleTaskId = r.googleTaskId;

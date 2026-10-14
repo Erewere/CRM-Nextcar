@@ -64,6 +64,12 @@ const ProtectedRoute = ({ children, requireRole }: { children: React.ReactNode, 
   }
   if (!currentUser) {
     console.log("ProtectedRoute: no currentUser, redirecting to /login");
+    // Una liga a un trato (por ejemplo la de Google Calendar) debe sobrevivir al
+    // inicio de sesión: se recuerda a dónde iba para llevarlo ahí al entrar.
+    try {
+      const destino = window.location.pathname + window.location.search;
+      if (destino.startsWith("/") && !destino.startsWith("//") && destino !== "/" && !destino.startsWith("/login")) sessionStorage.setItem("despues_de_entrar", destino);
+    } catch { /* sin almacenamiento */ }
     return <Navigate to="/login" replace />;
   }
   if (!userData) {
