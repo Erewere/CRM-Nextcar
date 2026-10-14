@@ -2273,7 +2273,30 @@ async function startServer() {
     return false;
   };
 
+  // Freno para las puertas públicas. En memoria y por ventana fija: basta para
+  // frenar spam sin base de datos; se reinicia con el servidor, y está bien.
+  // OJO: con "trust proxy" la IP viene de X-Forwarded-For y quien llama puede
+  // inventarla, así que la puerta de leads también se frena por agencia, que
+  // no se puede falsear.
+  const contadoresFreno = new Map<string, { n: number; hasta: number }>();
+  setInterval(() => {
+    const ahora = Date.now();
+    for (const [k, v] of contadoresFreno) if (v.hasta <= ahora) contadoresFreno.delete(k);
+  }, 60 * 1000).unref();
+  /** true si aún cabe; false si ya se pasó del tope en esta ventana. */
+  const frenoPermite = (clave: string, max: number, ventanaMs = 60 * 1000): boolean => {
+    const ahora = Date.now();
+    const c = contadoresFreno.get(clave);
+    if (!c || c.hasta <= ahora) {
+      contadoresFreno.set(clave, { n: 1, hasta: ahora + ventanaMs });
+      return true;
+    }
+    c.n += 1;
+    return c.n <= max;
+  };
+
   app.get("/api/proxy-image", async (req, res) => {
+    if (!frenoPermite(`foto:${req.ip}`, 600)) return res.status(429).send("Demasiadas peticiones. Intenta en un minuto.");
     try {
       const url = req.query.url;
       if (!url || typeof url !== 'string' || !esFotoPermitida(url)) {
@@ -3027,6 +3050,19 @@ async function startServer() {
   // se recortan en leadPublico.ts.
   let abrirSolicitudDeFormulario: ((db: any, p: any) => Promise<any>) | null = null;
   app.post("/api/public/v1/leads", async (req, res) => {
+    // Los formularios de la página llegan desde el servidor de la página (una
+    // sola IP para todos sus visitantes), por eso los topes son holgados: un
+    // concesionario recibe decenas de leads al día, no cientos por minuto.
+    const agenciaDelLead = String(req.body?.agencyId || "").slice(0, 64);
+    if (!frenoPermite(`lead-ip:${req.ip}`, 60) || !frenoPermite(`lead-ag:${agenciaDelLead}`, 200)) {
+      return res.status(429).json({ error: "Demasiadas solicitudes. Intenta en un minuto." });
+    }
+    // Campo trampa: los formularios de la página llevan un campo oculto que una
+    // persona no ve ni llena. Si llega con texto es un robot: se responde «ok»
+    // para que no sepa que lo detectamos, y no se guarda nada.
+    if (typeof req.body?.sitio_web === "string" && req.body.sitio_web.trim() !== "") {
+      return res.status(200).json({ ok: true });
+    }
     try {
       const adminDb = getAdminDb();
       if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
