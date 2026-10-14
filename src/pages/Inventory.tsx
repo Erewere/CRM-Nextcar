@@ -1020,38 +1020,6 @@ export function Inventory() {
             </div>
           )}
 
-          {activeTab === 'shared' && puedeVerCompartido && ownAgencySharing && (
-            <>
-              <button
-                type="button"
-                onClick={() => setSoloCoincidencias((v) => !v)}
-                aria-pressed={soloCoincidencias}
-                className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0", soloCoincidencias ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}
-                title="Mostrar solo los autos que le sirven a alguno de tus clientes"
-              >
-                Solo coincidencias <span className="opacity-70">{matchesPorAuto.size}</span>
-              </button>
-              {matchesPorAuto.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => matchesPorAuto.forEach((_, id) => marcarVisto(id))}
-                  className="h-9 px-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 shrink-0"
-                  title="Quita el aviso de todas las coincidencias actuales"
-                >
-                  Marcar todas como vistas
-                </button>
-              )}
-            </>
-          )}
-          {activeTab === 'shared' && puedeVerCompartido && ownAgencySharing && (
-            <label
-              className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0 select-none", alcanceDe(ownAgencyDoc) === 'todas' ? "cursor-pointer border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700" : "cursor-not-allowed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-gray-400")}
-              title={alcanceDe(ownAgencyDoc) === 'todas' ? 'Mostrar también las agencias de otras ciudades que aceptaron compartir con todas' : 'Tu agencia comparte solo con su ciudad. Cámbialo en Agencia y usuarios para ver otras ciudades.'}
-            >
-              <input type="checkbox" checked={otrasCiudades && alcanceDe(ownAgencyDoc) === 'todas'} disabled={alcanceDe(ownAgencyDoc) !== 'todas'} onChange={(e) => setOtrasCiudades(e.target.checked)} className="w-4 h-4 rounded border-gray-300" />
-              Incluir otras ciudades
-            </label>
-          )}
           {activeTab === 'my' && userData?.role !== 'master' && userData?.role !== 'taller' && (
             <button
               type="button"
@@ -1093,7 +1061,7 @@ export function Inventory() {
             </button>
           </div>
 
-          {!isReadOnly && (userData?.role !== "seller" || userData?.canManageVehicles) && (
+          {activeTab === 'my' && !isReadOnly && (userData?.role !== "seller" || userData?.canManageVehicles) && (
             <>
               <label className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 text-sm shrink-0 cursor-pointer" title="Importar inventario desde Excel">
                 <Download className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Importar</span>
@@ -1110,7 +1078,45 @@ export function Inventory() {
             </>
           )}
         </div>
-        
+
+        {/* Lo propio de Compartido, en su propio renglón para que la barra de arriba no se amontone. */}
+        {activeTab === 'shared' && puedeVerCompartido && ownAgencySharing && (
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 flex flex-wrap items-center gap-2">
+          {(
+            <>
+              <button
+                type="button"
+                onClick={() => setSoloCoincidencias((v) => !v)}
+                aria-pressed={soloCoincidencias}
+                className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0", soloCoincidencias ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white" : "border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}
+                title="Mostrar solo los autos que le sirven a alguno de tus clientes"
+              >
+                Solo coincidencias <span className="opacity-70">{matchesPorAuto.size}</span>
+              </button>
+              {matchesPorAuto.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => matchesPorAuto.forEach((_, id) => marcarVisto(id))}
+                  className="h-9 px-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 shrink-0"
+                  title="Quita el aviso de todas las coincidencias actuales"
+                >
+                  Marcar todas como vistas
+                </button>
+              )}
+            </>
+          )}
+          {(
+            <label
+              className={clsx("flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold shrink-0 select-none", alcanceDe(ownAgencyDoc) === 'todas' ? "cursor-pointer border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700" : "cursor-not-allowed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-gray-400")}
+              title={alcanceDe(ownAgencyDoc) === 'todas' ? 'Mostrar también las agencias de otras ciudades que aceptaron compartir con todas' : 'Tu agencia comparte solo con su ciudad. Cámbialo en Agencia y usuarios para ver otras ciudades.'}
+            >
+              <input type="checkbox" checked={otrasCiudades && alcanceDe(ownAgencyDoc) === 'todas'} disabled={alcanceDe(ownAgencyDoc) !== 'todas'} onChange={(e) => setOtrasCiudades(e.target.checked)} className="w-4 h-4 rounded border-gray-300" />
+              Incluir otras ciudades
+            </label>
+          )}
+          </div>
+        )}
+
         {viewMode === 'grid' ? (
           <div className="flex-1 overflow-auto p-4 flex flex-col gap-4">
             {activeTab === 'my' && userData?.role !== 'master' && (
