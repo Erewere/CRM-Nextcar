@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
+import { mandarActividadAGoogle, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS } from "../lib/google";
 import { PenTool } from "lucide-react";
 import { TIPOS_ACTIVIDAD, tipoDeTarea } from "../lib/tiposDeActividad";
 import { quitarVentaDeTratoPerdido } from "../lib/ventaDescartada";
@@ -82,7 +83,11 @@ export function ClientDetailModal({
   onClose,
   onUpdated,
 }: Props) {
-  const { userData, agencyData } = useAuth();
+  const { userData, agencyData, googleToken, googleAccount, refrescarTokenGoogle, connectGoogleServices } = useAuth();
+  const googleConectado = Boolean(googleAccount || googleToken);
+  // Las actividades de la ficha también van a tu Google Calendar (si lo tienes conectado).
+  const [newTaskSync, setNewTaskSync] = useState(true);
+  const [avisoGoogle, setAvisoGoogle] = useState("");
   const navigate = useNavigate();
   // Cotizar: false = cerrado; null = elegir el auto; un auto = ese.
   const [cotizandoAuto, setCotizandoAuto] = useState<Vehicle | null | false>(false);
@@ -1576,6 +1581,38 @@ export function ClientDetailModal({
     // Use the raw HH:mm time
     let formattedTime = newTaskTime || "";
 
+    // El permiso de Google se pide aquí, con el clic del usuario y antes de
+    // cualquier espera: pasado un await el navegador bloquea la ventana.
+    let tokenGoogle: string | null = null;
+    if (newTaskSync) {
+      tokenGoogle = (await refrescarTokenGoogle()) ?? googleToken ?? null;
+      if (!tokenGoogle) {
+        try { tokenGoogle = await connectGoogleServices(); } catch (err: any) { alert(err?.message || "No se pudo conectar con Google. La actividad se guardará solo en el CRM."); }
+      }
+    }
+    const aGoogle = async (taskId: string, datos: any, previo: { googleEventId?: string | null; googleTaskId?: string | null }) => {
+      if (!tokenGoogle) return;
+      try {
+        const r = await mandarActividadAGoogle({ title: datos.title, notes: datos.notes, dueDate: datos.dueDate, startTime: datos.startTime, endTime: datos.endTime, disponibilidad: "ocupado" }, tokenGoogle, previo);
+        const cambios: any = {};
+        if (r.googleEventId) cambios.googleEventId = r.googleEventId;
+        if (r.googleTaskId) cambios.googleTaskId = r.googleTaskId;
+        if (Object.keys(cambios).length && googleAccount) cambios.googleAccount = googleAccount;
+        if (Object.keys(cambios).length) {
+          await updateDoc(doc(db, "tasks", taskId), cambios);
+          setTasks((prev) => prev.map((t) => (t.id === taskId ? ({ ...t, ...cambios } as Task) : t)));
+        }
+        if (r.resultado === "ok") { setAvisoGoogle("Agregada a tu Google Calendar."); setTimeout(() => setAvisoGoogle(""), 4000); }
+        else if (r.resultado === "vencido") alert("La actividad se guardó en el CRM, pero no se pudo agregar a Google.\n\n" + AVISO_RECONECTAR);
+        else if (r.resultado === "permisos") alert("La actividad se guardó en el CRM.\n\n" + AVISO_FALTAN_PERMISOS);
+        else if (r.resultado === "sin-fecha") alert("La actividad se guardó, pero no se pudo agregar al calendario porque le falta la fecha.");
+        else alert("La actividad se guardó en el CRM, pero Google no la aceptó. Revisa tu conexión en Integraciones.");
+      } catch (e) {
+        console.error("Error al mandar la actividad a Google", e);
+        alert("La actividad se guardó en el CRM, pero ocurrió un error al agregarla a tu Google Calendar.");
+      }
+    };
+
     if (editingTaskId) {
       const taskRef = doc(db, "tasks", editingTaskId);
       const updates: Partial<Task> = {
@@ -1594,6 +1631,8 @@ export function ClientDetailModal({
       
       await updateDoc(taskRef, updates as any);
       setTasks(prev => prev.map(t => t.id === editingTaskId ? { ...t, ...updates } : t));
+      const previa: any = tasks.find((t) => t.id === editingTaskId) || {};
+      await aGoogle(editingTaskId, { ...previa, ...updates }, { googleEventId: previa.googleEventId, googleTaskId: previa.googleTaskId });
       setEditingTaskId(null);
     } else {
       const actualClientId = client.originalClientId || client.id;
@@ -1621,6 +1660,7 @@ export function ClientDetailModal({
       Object.keys(t).forEach((k) => t[k] === undefined && delete t[k]);
       await setDoc(newRef, t);
       setTasks((prev) => [{ id: newRef.id, ...t } as Task, ...prev]);
+      await aGoogle(newRef.id, t, {});
     }
 
     setNewTaskTitle("");
@@ -3245,6 +3285,13 @@ export function ClientDetailModal({
                               />
                             </div>
 
+                            <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-slate-700 dark:text-slate-200 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 px-3 py-2">
+                              <input type="checkbox" checked={newTaskSync} onChange={(e) => setNewTaskSync(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
+                              <Calendar className="w-4 h-4 shrink-0" />
+                              <span>Poner en mi Google Calendar</span>
+                              {!googleConectado && <span className="ml-auto text-[11px] font-medium text-slate-500">Te pedirá conectar tu Google</span>}
+                            </label>
+                            {avisoGoogle && <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 -mt-2">{avisoGoogle}</p>}
                             <div className="flex justify-end items-center gap-2">
                               {editingTaskId && (
                                 <button onClick={cancelEditTask} className="h-10 px-4 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">

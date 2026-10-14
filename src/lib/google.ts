@@ -188,3 +188,37 @@ export function mandaGoogle(evento: any, actividad: { updatedAt?: any }): boolea
   if (!Number.isFinite(enElCrm)) return true;
   return enGoogle > enElCrm;
 }
+
+/**
+ * Manda una actividad al Calendario (y a Tareas) de Google desde cualquier
+ * pantalla. Si la actividad ya tiene evento se actualiza ese; si el usuario lo
+ * borró por su cuenta (404) se crea uno nuevo. Tareas solo se crea la primera
+ * vez, para no llenar la lista de copias cada vez que se edita.
+ */
+export async function mandarActividadAGoogle(
+  a: Actividad,
+  token: string,
+  previo: { googleEventId?: string | null; googleTaskId?: string | null } = {},
+): Promise<{ googleEventId?: string; googleTaskId?: string; resultado: 'ok' | 'sin-fecha' | 'vencido' | 'permisos' | 'rechazado' }> {
+  const evento = eventoDeActividad(a);
+  if (!evento) return { resultado: 'sin-fecha' };
+  const cabeceras = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const mandarEvento = async () => {
+    if (previo.googleEventId) {
+      const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${previo.googleEventId}`, { method: 'PATCH', headers: cabeceras, body: JSON.stringify(evento) });
+      if (r.status !== 404) return r;
+    }
+    return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', headers: cabeceras, body: JSON.stringify(evento) });
+  };
+  const tarea = !previo.googleTaskId ? tareaDeActividad(a) : null;
+  const [cal, tk] = await Promise.all([
+    mandarEvento(),
+    tarea ? fetch('https://tasks.googleapis.com/tasks/v1/lists/@default/tasks', { method: 'POST', headers: cabeceras, body: JSON.stringify(tarea) }) : Promise.resolve(null),
+  ]);
+  const salida: { googleEventId?: string; googleTaskId?: string; resultado: 'ok' | 'sin-fecha' | 'vencido' | 'permisos' | 'rechazado' } = { resultado: 'rechazado' };
+  if (cal.ok) { salida.googleEventId = (await cal.json()).id; salida.resultado = 'ok'; }
+  else if (permisoDeGoogleVencido(cal)) salida.resultado = 'vencido';
+  else if (permisoNoAlcanza(cal)) salida.resultado = 'permisos';
+  if (tk?.ok) salida.googleTaskId = (await tk.json()).id;
+  return salida;
+}
