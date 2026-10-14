@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import crypto from "crypto";
 import { avanceDatos, camposDelPdf, heredarMapa } from "../lib/creditoCampos.ts";
 
@@ -87,6 +88,8 @@ export function registrarCreditos(app: any, deps: {
   usuarioQuePide: (req: any, res: any) => Promise<null | { uid: string; rol: string; agencyId: string; adminDb: any }>;
   getAdminDb: () => any;
   bucket: () => any;
+  /** Manda un correo (Hostinger, con Resend de respaldo). */
+  mandarCorreo: (para: string, asunto: string, html: string) => Promise<boolean>;
 }) {
   const { express, usuarioQuePide, getAdminDb, bucket } = deps;
   const col = (db: any) => db.collection("solicitudesCredito");
@@ -524,6 +527,170 @@ export function registrarCreditos(app: any, deps: {
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.send(bytes);
     } catch (e) { console.error("creditos/ver:", e); res.status(500).json({ error: "No se pudo abrir el archivo." }); }
+  });
+
+  // ---------- Paquete para el ejecutivo del banco, con liga privada ----------
+  //
+  // La solicitud firmada del banco y los documentos del cliente, para quien no
+  // tiene cuenta en el CRM. Se comparte con una liga con token al azar (solo se
+  // guarda su huella), que vence en 7 días y la puede revocar la agencia. Se
+  // puede mandar por correo desde aquí o copiarla y pegarla por cualquier medio.
+  const colPaquetes = (db: any) => db.collection("paquetesCredito");
+  const DIAS_PAQUETE = 7;
+  const DOCS_DEL_CLIENTE = new Set(["ine", "domicilio", "ingresos", "constancia", "otro"]);
+  const ETIQUETA_DOC: Record<string, string> = { ine: "INE", domicilio: "Comprobante de domicilio", ingresos: "Comprobante de ingresos", constancia: "Constancia de situación fiscal", otro: "Documento" };
+  const escH = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const hostDe = (req: any) => {
+    const host = String(req.headers["x-forwarded-host"] || req.headers.host || "crm.erewere.com");
+    return `${host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https"}://${host}`;
+  };
+  const extDe = (d: any) => (String(d.nombre || "").match(/\.[a-z0-9]{2,5}$/i)?.[0]) || (d.mime === "application/pdf" ? ".pdf" : ".jpg");
+  const limpiarNombre = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "").trim();
+
+  /** Los archivos que lleva el paquete de un banco, con el nombre con que se descargan. */
+  function archivosDelPaquete(x: any, banco: string, nombreBanco: string) {
+    const docs: any[] = x.documentos || [];
+    const cliente = x.clienteNombre || "Cliente";
+    const firmadas = docs.filter((d) => d.tipo === "firmada" && d.banco === banco);
+    const delCliente = docs.filter((d) => DOCS_DEL_CLIENTE.has(d.tipo));
+    return [...firmadas, ...delCliente].map((d, i) => ({
+      d,
+      nombre: limpiarNombre(`${d.tipo === "firmada" ? `Solicitud firmada ${nombreBanco}` : (ETIQUETA_DOC[d.tipo] || "Documento")} - ${cliente}${i ? ` (${i + 1})` : ""}`) + extDe(d),
+    }));
+  }
+
+  app.post("/api/creditos/:id/paquete", express.json(), async (req: any, res: any) => {
+    const s = await solicitudDe(req, res);
+    if (!s) return;
+    const clave = String(req.body?.banco || "");
+    const banco = (s.x.bancos || []).find((b: any) => b.clave === clave);
+    if (!banco) return res.status(400).json({ error: "Ese banco no está en esta solicitud." });
+    if (!archivosDelPaquete(s.x, clave, banco.nombre).length) return res.status(400).json({ error: "Todavía no hay archivos que compartir: sube la solicitud firmada o los documentos del cliente." });
+    try {
+      const token = crypto.randomBytes(24).toString("base64url");
+      const hash = crypto.createHash("sha256").update(token).digest("hex");
+      const vence = new Date(Date.now() + DIAS_PAQUETE * 86400000).toISOString();
+      const quien = await nombreDe(s.adminDb, s.uid);
+      await colPaquetes(s.adminDb).doc(hash).set({ solicitudId: s.id, agencyId: s.x.agencyId, banco: clave, nombreBanco: banco.nombre, vence, creadoEl: new Date().toISOString(), creadoPor: s.uid, creadoPorNombre: quien, descargas: 0, revocado: false });
+      const url = `${hostDe(req)}/paquete/${token}`;
+      let correoEnviado: string | null = null;
+      if (req.body?.correo === true) {
+        const ag = (await s.adminDb.collection("agencies").doc(s.x.agencyId).get()).data() || {};
+        const ej = ag.ejecutivosCredito?.[clave] || {};
+        const para = String(ej.correo || "").trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(para)) return res.status(400).json({ error: "Este banco no tiene un correo de ejecutivo capturado (en «Formatos de bancos»)." });
+        const op = s.x.operacion || {};
+        const detalle = [s.x.auto, op.precio ? `$${Number(op.precio).toLocaleString("es-MX")}` : "", op.enganche ? `enganche $${Number(op.enganche).toLocaleString("es-MX")}` : "", op.plazo ? `${op.plazo} meses` : ""].filter(Boolean).join(" · ");
+        const saludo = ej.nombre ? `Hola ${escH(String(ej.nombre).split(" ")[0])},` : "Hola,";
+        const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:0 auto;color:#1f2937;line-height:1.55">
+<p>${saludo}</p>
+<p>Te comparto la solicitud de crédito de <b>${escH(s.x.clienteNombre || "nuestro cliente")}</b> de <b>${escH(ag.name || "la agencia")}</b>${detalle ? ` (${escH(detalle)})` : ""}.</p>
+<p>Ahí encuentras la solicitud firmada y sus documentos para descargarlos:</p>
+<p><a href="${escH(url)}" style="display:inline-block;background:#111827;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Descargar la solicitud y los documentos</a></p>
+<p style="color:#6b7280;font-size:13px">La liga es privada y vence el ${new Date(vence).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}. Contiene datos personales del cliente: no la reenvíes.</p>
+<p>Atentamente,<br>${escH(quien)}${ag.name ? `<br>${escH(ag.name)}` : ""}</p></div>`;
+        const ok = await deps.mandarCorreo(para, `Solicitud de crédito - ${s.x.clienteNombre || "Cliente"} (${banco.nombre})`, html);
+        if (!ok) return res.status(502).json({ error: "No se pudo mandar el correo. La liga sí se creó: cópiala y mándala por otro medio.", url, vence });
+        correoEnviado = para;
+      }
+      await s.ref.update({
+        actualizadoEl: new Date().toISOString(),
+        historial: [historial(correoEnviado ? `${quien} mandó por correo a ${correoEnviado} la liga del paquete de ${banco.nombre}.` : `${quien} generó la liga privada del paquete de ${banco.nombre} (vence en ${DIAS_PAQUETE} días).`, s.uid), ...(s.x.historial || [])].slice(0, 200),
+      });
+      res.json({ url, vence, correoEnviado });
+    } catch (e) { console.error("creditos/paquete:", e); res.status(500).json({ error: "No se pudo crear la liga del paquete." }); }
+  });
+
+  app.delete("/api/creditos/:id/paquete", async (req: any, res: any) => {
+    const s = await solicitudDe(req, res);
+    if (!s) return;
+    const clave = String(req.query?.banco || "");
+    const snap = await colPaquetes(s.adminDb).where("solicitudId", "==", s.id).get();
+    for (const d of snap.docs) if (!clave || d.data().banco === clave) await d.ref.update({ revocado: true, revocadoEl: new Date().toISOString() });
+    res.json({ ok: true });
+  });
+
+  /** El paquete que corresponde a un token (público: solo ese banco de esa solicitud). */
+  async function paqueteDeToken(req: any, res: any, comoPagina = false) {
+    const falla = (codigo: number, texto: string) => { if (comoPagina) res.status(codigo).type("html").send(paginaPaquete("Liga no disponible", `<p>${escH(texto)}</p>`)); else res.status(codigo).json({ error: texto }); return null; };
+    if (!limite(req, res, 120)) return null;
+    const token = String(req.params.token || "");
+    if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return falla(404, "Esta liga no es válida.");
+    const db = getAdminDb();
+    if (!db) return falla(500, "Servicio no disponible.");
+    const ref = colPaquetes(db).doc(crypto.createHash("sha256").update(token).digest("hex"));
+    const p = (await ref.get()).data();
+    if (!p || p.revocado) return falla(404, "Esta liga no es válida o ya se canceló. Pídela de nuevo a la agencia.");
+    if (new Date(p.vence).getTime() < Date.now()) return falla(410, "Esta liga ya venció. Pídela de nuevo a la agencia.");
+    const sref = col(db).doc(p.solicitudId);
+    const x = (await sref.get()).data();
+    if (!x || x.etapa === "cancelada") return falla(410, "Esta solicitud ya no está activa.");
+    return { db, ref, p, sref, x, token };
+  }
+
+  function paginaPaquete(titulo: string, cuerpo: string, agencia = "") {
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${escH(titulo)}</title></head>
+<body style="margin:0;background:#f4f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937">
+<div style="max-width:560px;margin:32px auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
+<div style="background:#0f0f10;color:#fff;padding:18px 24px;font-weight:800">${escH(agencia || "Solicitud de crédito")}</div>
+<div style="padding:24px"><h1 style="font-size:20px;margin:0 0 12px">${escH(titulo)}</h1>${cuerpo}</div></div></body></html>`;
+  }
+
+  async function marcarDescarga(t: any, que: string) {
+    try {
+      const primera = !t.p.descargas;
+      await t.ref.update({ descargas: (t.p.descargas || 0) + 1, ultimaDescargaEl: new Date().toISOString() });
+      if (primera) await t.sref.update({ historial: [historial(`El ejecutivo de ${t.p.nombreBanco} abrió el paquete (${que}).`, "ejecutivo"), ...(t.x.historial || [])].slice(0, 200) });
+    } catch { /* no debe estorbar la descarga */ }
+  }
+
+  app.get("/paquete/:token", async (req: any, res: any) => {
+    const t = await paqueteDeToken(req, res, true);
+    if (!t) return;
+    const ag = (await t.db.collection("agencies").doc(t.x.agencyId).get()).data() || {};
+    const archivos = archivosDelPaquete(t.x, t.p.banco, t.p.nombreBanco);
+    const filas = archivos.map((a) => `<li style="margin:6px 0"><a href="/api/paquete/${escH(t.token)}/archivo/${escH(a.d.id)}" style="color:#1d4ed8;font-weight:600;text-decoration:none">${escH(a.nombre)}</a></li>`).join("");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.type("html").send(paginaPaquete(`Solicitud de crédito de ${t.x.clienteNombre || "cliente"}`,
+      `<p style="margin:0 0 4px;color:#4b5563">${escH(t.x.auto || "")} · ${escH(t.p.nombreBanco)}</p>
+<p style="margin:0 0 16px;color:#6b7280;font-size:13px">Disponible hasta el ${new Date(t.p.vence).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}.</p>
+${archivos.length ? `<a href="/api/paquete/${escH(t.token)}/zip" style="display:inline-block;background:#111827;color:#fff;padding:12px 22px;border-radius:9px;text-decoration:none;font-weight:700">Descargar todo (ZIP)</a>
+<p style="margin:20px 0 6px;font-weight:700">O un archivo a la vez:</p><ul style="padding-left:18px;margin:0">${filas}</ul>` : "<p>Todavía no hay archivos.</p>"}
+<p style="margin-top:22px;color:#9ca3af;font-size:12px">Contiene datos personales del cliente. No compartas esta liga.</p>`, ag.name || ""));
+  });
+
+  app.get("/api/paquete/:token/archivo/:docId", async (req: any, res: any) => {
+    const t = await paqueteDeToken(req, res);
+    if (!t) return;
+    const a = archivosDelPaquete(t.x, t.p.banco, t.p.nombreBanco).find((x) => x.d.id === String(req.params.docId));
+    if (!a) return res.status(404).json({ error: "No encontramos ese archivo." });
+    try {
+      const [bytes] = await bucket().file(a.d.ruta).download();
+      await marcarDescarga(t, "archivo");
+      res.setHeader("Content-Type", a.d.mime || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(a.nombre)}`);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.send(bytes);
+    } catch (e) { console.error("paquete/archivo:", e); res.status(500).json({ error: "No se pudo descargar el archivo." }); }
+  });
+
+  app.get("/api/paquete/:token/zip", async (req: any, res: any) => {
+    const t = await paqueteDeToken(req, res);
+    if (!t) return;
+    try {
+      const zip = new JSZip();
+      for (const a of archivosDelPaquete(t.x, t.p.banco, t.p.nombreBanco)) {
+        const [bytes] = await bucket().file(a.d.ruta).download();
+        zip.file(a.nombre, bytes);
+      }
+      const salida = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+      await marcarDescarga(t, "ZIP");
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(limpiarNombre(`Solicitud ${t.p.nombreBanco} - ${t.x.clienteNombre || "Cliente"}`) + ".zip")}`);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(salida);
+    } catch (e) { console.error("paquete/zip:", e); res.status(500).json({ error: "No se pudo armar el paquete." }); }
   });
 
   app.delete("/api/creditos/:id/documentos/:docId", async (req: any, res: any) => {

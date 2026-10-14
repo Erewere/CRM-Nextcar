@@ -4254,7 +4254,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   });
 
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
-  const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos });
+  const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos, mandarCorreo });
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
   registrarPlacasInfo(app, { usuarioQuePide, getAdminDb });
   registrarVentas(app, { usuarioQuePide, getAdminDb });

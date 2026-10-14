@@ -135,6 +135,32 @@ export function CreditoExpediente() {
     } catch (e: any) { alert(e.message); } finally { setTrabajando(''); }
   };
 
+  // Liga privada del paquete de cada banco (la última que se generó en esta sesión).
+  const [ligasPaquete, setLigasPaquete] = useState<Record<string, { url: string; vence: string }>>({});
+  const copiarTexto = async (t: string) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
+  const ligaDelPaquete = async (b: any, correo: boolean) => {
+    const ej = ejecutivos[b.clave] || {};
+    if (correo && !confirm(`Se mandará un correo a ${ej.nombre || 'el ejecutivo'} (${ej.correo}) con una liga privada para descargar la solicitud y los documentos. ¿Mandarlo?`)) return;
+    setTrabajando('paq' + b.clave);
+    try {
+      const r = await creditosApi.paquete(id, b.clave, correo);
+      setLigasPaquete((p) => ({ ...p, [b.clave]: { url: r.url, vence: r.vence } }));
+      const copiada = await copiarTexto(r.url);
+      if (correo) {
+        if (confirm(`Correo enviado a ${r.correoEnviado}.${copiada ? ' La liga también quedó copiada.' : ''}\n\n¿Marcar la solicitud de ${b.nombre} como «Enviada»?`)) {
+          await cambiar({ bancos: s.bancos.map((x: any) => (x.clave === b.clave ? { ...x, estado: 'enviada' } : x)) });
+        }
+      } else {
+        alert(copiada ? 'Liga privada copiada. Pégala donde quieras: WhatsApp, correo, mensaje…' : 'Liga creada. Cópiala de abajo.');
+      }
+      await recargar();
+    } catch (e: any) { alert(e.message); } finally { setTrabajando(''); }
+  };
+  const revocarPaquete = async (b: any) => {
+    if (!confirm('¿Cancelar las ligas privadas de este banco? Las que ya mandaste dejarán de funcionar.')) return;
+    try { await creditosApi.revocarPaquete(id, b.clave); setLigasPaquete((p) => { const n = { ...p }; delete n[b.clave]; return n; }); await recargar(); } catch (e: any) { alert(e.message); }
+  };
+
   const ponerBanco = (b: any, cambios: any) => cambiar({ bancos: s.bancos.map((x: any) => (x.clave === b.clave ? { ...x, ...cambios } : x)) });
   const bancosFaltantes = [...formatos.filter((f) => !s.bancos.some((b: any) => b.clave === f.clave)).map((f) => ({ clave: f.clave, formatoId: f.id, nombre: f.nombre })), ...(s.bancos.some((b: any) => b.clave === 'casa') ? [] : [{ clave: 'casa', nombre: 'Crédito de la casa' }])];
   const indiceEtapa = ETAPAS_CREDITO.findIndex((e) => e.id === s.etapa);
@@ -291,6 +317,20 @@ export function CreditoExpediente() {
                           <button type="button" onClick={() => enviarAlEjecutivo(b, 'whatsapp')} disabled={!!trabajando} className="h-9 rounded-lg bg-[#1fa855] text-white text-xs font-bold flex items-center justify-center gap-1">{trabajando === 'env' + b.clave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} WhatsApp al ejecutivo</button>
                           <button type="button" onClick={() => enviarAlEjecutivo(b, 'correo')} disabled={!!trabajando || !ej.correo} title={ej.correo ? '' : 'Captura el correo del ejecutivo en «Formatos de bancos»'} className="h-9 rounded-lg bg-slate-900 text-white text-xs font-bold disabled:opacity-40">Correo al ejecutivo</button>
                         </div>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <button type="button" onClick={() => ligaDelPaquete(b, false)} disabled={!!trabajando} title="Crea una liga privada (vence en 7 días) y la copia para pegarla donde quieras" className="h-9 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 flex items-center justify-center gap-1">{trabajando === 'paq' + b.clave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />} Copiar liga privada</button>
+                          <button type="button" onClick={() => ligaDelPaquete(b, true)} disabled={!!trabajando || !ej.correo} title={ej.correo ? 'El CRM manda el correo con la liga' : 'Captura el correo del ejecutivo en «Formatos de bancos»'} className="h-9 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40">Mandar liga por correo</button>
+                        </div>
+                        {ligasPaquete[b.clave] && (
+                          <div className="mt-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 p-2 text-[11px]">
+                            <p className="font-mono break-all text-slate-700 dark:text-slate-300">{ligasPaquete[b.clave].url}</p>
+                            <div className="flex items-center gap-3 mt-1 text-slate-500">
+                              <span>Vence el {fecha(ligasPaquete[b.clave].vence)}</span>
+                              <button type="button" onClick={async () => alert((await copiarTexto(ligasPaquete[b.clave].url)) ? 'Liga copiada.' : 'No se pudo copiar.')} className="font-bold text-blue-700 hover:underline">Copiar</button>
+                              <button type="button" onClick={() => revocarPaquete(b)} className="font-bold text-red-600 hover:underline">Cancelar ligas</button>
+                            </div>
+                          </div>
+                        )}
                         <p className="text-[11px] text-slate-500 mt-1">{ej.nombre || ej.whatsapp || ej.correo ? `Ejecutivo: ${[ej.nombre, ej.whatsapp, ej.correo].filter(Boolean).join(' · ')}` : 'Sin ejecutivo capturado (en «Formatos de bancos»).'}</p>
                       </>
                     )}

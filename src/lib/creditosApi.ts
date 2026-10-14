@@ -21,6 +21,9 @@ export const creditosApi = {
   ver: async (id: string) => (await json(await api(`/api/creditos/${id}`))).solicitud,
   cambiar: async (id: string, cambios: any) => (await json(await api(`/api/creditos/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cambios) }))).solicitud,
   liga: async (id: string) => json(await api(`/api/creditos/${id}/liga`, { method: 'POST' })) as Promise<{ url: string; vence: string }>,
+  /** Liga privada con la solicitud firmada y los documentos, para el ejecutivo del banco. correo=true la manda el CRM. */
+  paquete: async (id: string, banco: string, correo = false) => json(await api(`/api/creditos/${id}/paquete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ banco, correo }) })) as Promise<{ url: string; vence: string; correoEnviado: string | null }>,
+  revocarPaquete: async (id: string, banco: string) => json(await api(`/api/creditos/${id}/paquete?banco=${encodeURIComponent(banco)}`, { method: 'DELETE' })),
   quitarLiga: async (id: string) => json(await api(`/api/creditos/${id}/liga`, { method: 'DELETE' })),
   subir: async (id: string, archivo: File | Blob, tipo: string, nombre: string, banco?: string) => (await json(await api(`/api/creditos/${id}/documentos`, {
     method: 'POST', body: archivo,
