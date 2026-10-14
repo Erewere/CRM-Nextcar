@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import crypto from "crypto";
-import { avanceDatos, camposDelPdf, heredarMapa } from "../lib/creditoCampos.ts";
+import { aplanar, avanceDatos, camposDelPdf, heredarMapa, llenarFormato } from "../lib/creditoCampos.ts";
 
 /**
  * Solicitudes de crédito (mejora 8).
@@ -555,10 +555,27 @@ export function registrarCreditos(app: any, deps: {
     const firmadas = docs.filter((d) => d.tipo === "firmada" && d.banco === banco);
     const cotizaciones = docs.filter((d) => d.tipo === "cotizacion" && d.banco === banco);
     const delCliente = docs.filter((d) => DOCS_DEL_CLIENTE.has(d.tipo));
-    return [...firmadas, ...cotizaciones, ...delCliente].map((d, i) => ({
+    // La solicitud del banco ya llenada con los datos del cliente (se genera al
+    // descargar), además de la firmada si ya la hay.
+    const conFormato = (x.bancos || []).some((b: any) => b.clave === banco && b.formatoId);
+    const llenada = conFormato ? [{ id: "llenada", tipo: "llenada", nombre: `${nombreBanco}.pdf`, mime: "application/pdf" }] : [];
+    return [...llenada, ...firmadas, ...cotizaciones, ...delCliente].map((d: any, i) => ({
       d,
-      nombre: limpiarNombre(`${d.tipo === "firmada" ? `Solicitud firmada ${nombreBanco}` : d.tipo === "cotizacion" ? `Cotización ${nombreBanco}` : (ETIQUETA_DOC[d.tipo] || "Documento")} - ${cliente}${i ? ` (${i + 1})` : ""}`) + extDe(d),
+      nombre: limpiarNombre(`${d.tipo === "llenada" ? `Solicitud ${nombreBanco} (llenada)` : d.tipo === "firmada" ? `Solicitud firmada ${nombreBanco}` : d.tipo === "cotizacion" ? `Cotización ${nombreBanco}` : (ETIQUETA_DOC[d.tipo] || "Documento")} - ${cliente}${i ? ` (${i + 1})` : ""}`) + extDe(d),
     }));
+  }
+
+  /** La solicitud del banco, llenada con los datos del cliente (misma lógica que el botón «Descargar llenada»). */
+  async function solicitudLlenadaDelBanco(db: any, x: any, clave: string): Promise<Buffer | null> {
+    const b = (x.bancos || []).find((y: any) => y.clave === clave);
+    if (!b?.formatoId || !idValido(String(b.formatoId))) return null;
+    const f = (await colFormatos(db).doc(String(b.formatoId)).get()).data();
+    if (!f) return null;
+    const [bytes] = await bucket().file(f.ruta).download();
+    const ag = (await db.collection("agencies").doc(x.agencyId).get()).data() || {};
+    const plano = aplanar(x.datos || {}, { operacion: x.operacion, agencia: ag, auto: x.auto });
+    const salida = await llenarFormato(new Uint8Array(bytes), { mapa: f.mapa || {}, mayusculas: f.mayusculas ?? true }, plano);
+    return Buffer.from(salida);
   }
 
   app.post("/api/creditos/:id/paquete", express.json(), async (req: any, res: any) => {
@@ -567,7 +584,7 @@ export function registrarCreditos(app: any, deps: {
     const clave = String(req.body?.banco || "");
     const banco = (s.x.bancos || []).find((b: any) => b.clave === clave);
     if (!banco) return res.status(400).json({ error: "Ese banco no está en esta solicitud." });
-    if (!archivosDelPaquete(s.x, clave, banco.nombre).length) return res.status(400).json({ error: "Todavía no hay archivos que compartir: sube la solicitud firmada o los documentos del cliente." });
+    if (!archivosDelPaquete(s.x, clave, banco.nombre).filter((a) => a.d.tipo !== "llenada").length && !banco.formatoId) return res.status(400).json({ error: "Todavía no hay archivos que compartir: sube la solicitud firmada o los documentos del cliente." });
     try {
       const token = crypto.randomBytes(24).toString("base64url");
       const hash = crypto.createHash("sha256").update(token).digest("hex");
@@ -667,7 +684,8 @@ ${archivos.length ? `<a href="/api/paquete/${escH(t.token)}/zip" style="display:
     const a = archivosDelPaquete(t.x, t.p.banco, t.p.nombreBanco).find((x) => x.d.id === String(req.params.docId));
     if (!a) return res.status(404).json({ error: "No encontramos ese archivo." });
     try {
-      const [bytes] = await bucket().file(a.d.ruta).download();
+      const bytes = a.d.tipo === "llenada" ? await solicitudLlenadaDelBanco(t.db, t.x, t.p.banco) : (await bucket().file(a.d.ruta).download())[0];
+      if (!bytes) return res.status(404).json({ error: "No se pudo preparar la solicitud." });
       await marcarDescarga(t, "archivo");
       res.setHeader("Content-Type", a.d.mime || "application/octet-stream");
       res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(a.nombre)}`);
@@ -683,6 +701,10 @@ ${archivos.length ? `<a href="/api/paquete/${escH(t.token)}/zip" style="display:
     try {
       const zip = new JSZip();
       for (const a of archivosDelPaquete(t.x, t.p.banco, t.p.nombreBanco)) {
+        if (a.d.tipo === "llenada") {
+          try { const l = await solicitudLlenadaDelBanco(t.db, t.x, t.p.banco); if (l) zip.file(a.nombre, l); } catch (e) { console.error("paquete/llenada:", e); }
+          continue;
+        }
         const [bytes] = await bucket().file(a.d.ruta).download();
         zip.file(a.nombre, bytes);
       }

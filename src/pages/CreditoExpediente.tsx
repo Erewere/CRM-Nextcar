@@ -116,6 +116,8 @@ export function CreditoExpediente() {
     setTrabajando('env' + b.clave);
     try {
       const archivos: File[] = [];
+      // La solicitud llenada con los datos del cliente va primero (además de la firmada, si ya hay).
+      if (b.formatoId) archivos.push(new File([await llenada(b)], `Solicitud ${b.nombre} (llenada) - ${s.clienteNombre}.pdf`.replace(/[\\/:*?"<>|]+/g, ''), { type: 'application/pdf' }));
       for (const d of [...firmadas, ...cotizaciones, ...deCliente]) {
         const blob = await creditosApi.archivo(id, d.id);
         const etiqueta = d.tipo === 'firmada' ? `Solicitud firmada ${b.nombre}` : d.tipo === 'cotizacion' ? `Cotización ${b.nombre}` : (DOCUMENTOS_CREDITO.find((t) => t.tipo === d.tipo)?.etiqueta || 'Documento');
