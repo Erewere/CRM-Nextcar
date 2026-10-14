@@ -3,7 +3,7 @@ import { documentosQueFaltan } from '../lib/creditoDocs';
 import { useNavigate, useParams } from 'react-router';
 import clsx from 'clsx';
 import { doc, getDoc } from 'firebase/firestore';
-import { ChevronLeft, Download, Eye, FileText, Link2, Loader2, Send, Trash2, Upload } from 'lucide-react';
+import { ChevronLeft, Download, Eye, FileText, Link2, Loader2, Send, Trash2, Upload, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -107,16 +107,18 @@ export function CreditoExpediente() {
   const enviarAlEjecutivo = async (b: any, via: 'whatsapp' | 'correo') => {
     const ej = ejecutivos[b.clave] || {};
     const firmadas = docs.filter((d) => d.tipo === 'firmada' && d.banco === b.clave);
+    const cotizaciones = docs.filter((d) => d.tipo === 'cotizacion' && d.banco === b.clave);
     const deCliente = docs.filter((d) => ['ine', 'domicilio', 'ingresos', 'constancia', 'otro'].includes(d.tipo));
     if (!firmadas.length && !confirm('Aún no hay solicitud firmada de este banco. ¿Mandar el paquete sin ella?')) return;
+    if (!cotizaciones.length && !confirm(`Aún no adjuntas la cotización de ${b.nombre}. ¿Mandar el paquete sin ella?`)) return;
     const faltanDocs = documentosQueFaltan(docs.map((d) => d.tipo));
     if (faltanDocs.length && !confirm(`Todavía faltan documentos del cliente: ${faltanDocs.join(', ')}. ¿Mandar el paquete incompleto?`)) return;
     setTrabajando('env' + b.clave);
     try {
       const archivos: File[] = [];
-      for (const d of [...firmadas, ...deCliente]) {
+      for (const d of [...firmadas, ...cotizaciones, ...deCliente]) {
         const blob = await creditosApi.archivo(id, d.id);
-        const etiqueta = d.tipo === 'firmada' ? `Solicitud firmada ${b.nombre}` : (DOCUMENTOS_CREDITO.find((t) => t.tipo === d.tipo)?.etiqueta || 'Documento');
+        const etiqueta = d.tipo === 'firmada' ? `Solicitud firmada ${b.nombre}` : d.tipo === 'cotizacion' ? `Cotización ${b.nombre}` : (DOCUMENTOS_CREDITO.find((t) => t.tipo === d.tipo)?.etiqueta || 'Documento');
         const ext = (d.nombre.match(/\.[a-z0-9]+$/i)?.[0]) || (d.mime === 'application/pdf' ? '.pdf' : '.jpg');
         archivos.push(new File([blob], `${etiqueta} - ${s.clienteNombre}${archivos.length ? ` (${archivos.length + 1})` : ''}${ext}`.replace(/[\\/:*?"<>|]+/g, ''), { type: d.mime }));
       }
@@ -141,6 +143,7 @@ export function CreditoExpediente() {
   const copiarTexto = async (t: string) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
   const ligaDelPaquete = async (b: any, correo: boolean) => {
     const ej = ejecutivos[b.clave] || {};
+    if (!docs.some((d) => d.tipo === 'cotizacion' && d.banco === b.clave) && !confirm(`Aún no adjuntas la cotización de ${b.nombre}. ¿Crear la liga sin ella?`)) return;
     if (correo && !confirm(`Se mandará un correo a ${ej.nombre || 'el ejecutivo'} (${ej.correo}) con una liga privada para descargar la solicitud y los documentos. ¿Mandarlo?`)) return;
     setTrabajando('paq' + b.clave);
     try {
@@ -295,12 +298,27 @@ export function CreditoExpediente() {
             <div className="flex flex-col gap-3">
               {s.bancos.map((b: any) => {
                 const firmadas = docs.filter((d) => d.tipo === 'firmada' && d.banco === b.clave);
+                const cotizaciones = docs.filter((d) => d.tipo === 'cotizacion' && d.banco === b.clave);
                 const ej = ejecutivos[b.clave] || {};
                 return (
                   <div key={b.clave} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-extrabold">{b.nombre}</p>
                       <span className={clsx('text-[10px] font-bold rounded-full px-2 py-0.5', ESTILO_BANCO[b.estado])}>{TEXTO_ESTADO_BANCO[b.estado]}</span>
+                    </div>
+                    {/* La cotización que sale del sistema del banco: la adjunta el asesor. */}
+                    <div className={clsx('mt-2 rounded-lg border px-2.5 py-2', cotizaciones.length ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20')}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Cotización del banco</p>
+                        <label className="h-8 px-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
+                          {trabajando === 'subcotizacion' + b.clave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} {cotizaciones.length ? 'Agregar otra' : 'Adjuntar'}
+                          <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subir('cotizacion', elegidos, b.clave); }} />
+                        </label>
+                      </div>
+                      {cotizaciones.length === 0 && <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-1">Falta adjuntarla: se hace en el sistema de {b.nombre} y la sube el asesor.</p>}
+                      {cotizaciones.map((d) => (
+                        <div key={d.id} className="flex items-center gap-1.5 text-xs mt-1.5 text-emerald-800 dark:text-emerald-300"><Eye className="w-3.5 h-3.5 shrink-0" /><button type="button" onClick={() => ver(d)} className="truncate hover:underline">{d.nombre}</button><button type="button" onClick={() => quitar(d)} className="ml-auto text-slate-400 hover:text-red-600" aria-label="Quitar cotización"><X className="w-3.5 h-3.5" /></button></div>
+                      ))}
                     </div>
                     {b.formatoId && (
                       <>

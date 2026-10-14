@@ -21,7 +21,8 @@ const MAX_FORMATO = 15 * 1024 * 1024;
 const MAX_DOCS_POR_SOLICITUD = 40;
 const DIAS_LIGA = 7;
 const TIPOS_ARCHIVO = /^(application\/pdf|image\/(jpeg|png|webp|heic|heif))$/;
-const TIPOS_DOC = new Set(["ine", "domicilio", "ingresos", "constancia", "firmada", "otro"]);
+// «cotizacion»: la que sale del sistema de cada banco; la adjunta el asesor, no el cliente.
+const TIPOS_DOC = new Set(["ine", "domicilio", "ingresos", "constancia", "firmada", "cotizacion", "otro"]);
 const ETAPAS = ["recibida", "datos", "enviada", "respuesta", "cerrada", "cancelada"];
 const ESTADOS_BANCO = new Set(["pendiente", "firmada", "enviada", "aprobado", "condiciones", "rechazado"]);
 const idValido = (s: string) => /^[A-Za-z0-9_-]{1,64}$/.test(s);
@@ -552,10 +553,11 @@ export function registrarCreditos(app: any, deps: {
     const docs: any[] = x.documentos || [];
     const cliente = x.clienteNombre || "Cliente";
     const firmadas = docs.filter((d) => d.tipo === "firmada" && d.banco === banco);
+    const cotizaciones = docs.filter((d) => d.tipo === "cotizacion" && d.banco === banco);
     const delCliente = docs.filter((d) => DOCS_DEL_CLIENTE.has(d.tipo));
-    return [...firmadas, ...delCliente].map((d, i) => ({
+    return [...firmadas, ...cotizaciones, ...delCliente].map((d, i) => ({
       d,
-      nombre: limpiarNombre(`${d.tipo === "firmada" ? `Solicitud firmada ${nombreBanco}` : (ETIQUETA_DOC[d.tipo] || "Documento")} - ${cliente}${i ? ` (${i + 1})` : ""}`) + extDe(d),
+      nombre: limpiarNombre(`${d.tipo === "firmada" ? `Solicitud firmada ${nombreBanco}` : d.tipo === "cotizacion" ? `Cotización ${nombreBanco}` : (ETIQUETA_DOC[d.tipo] || "Documento")} - ${cliente}${i ? ` (${i + 1})` : ""}`) + extDe(d),
     }));
   }
 
@@ -769,6 +771,7 @@ ${archivos.length ? `<a href="/api/paquete/${escH(t.token)}/zip" style="display:
     if (!limite(req, res, 60)) return;
     const sub = leerSubida(req, res);
     if (!sub) return;
+    if (sub.tipo === "cotizacion") return res.status(403).json({ error: "Ese documento lo adjunta tu asesor." });
     if ((t.x.documentos || []).length >= MAX_DOCS_POR_SOLICITUD) return res.status(400).json({ error: "Ya subiste demasiados archivos. Habla con tu asesor." });
     try {
       const doc = await guardarDocumento(t.ref, t.x, sub.cuerpo, sub.mime, { tipo: sub.tipo, nombre: sub.nombre, banco: sub.banco, por: "cliente", porNombre: "El cliente" });
