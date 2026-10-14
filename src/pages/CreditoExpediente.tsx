@@ -30,6 +30,8 @@ export function CreditoExpediente() {
   const [trabajando, setTrabajando] = useState('');
   const [nota, setNota] = useState('');
   const temporizador = useRef<any>(null);
+  // Liga privada del paquete de cada banco (la última que se generó en esta sesión).
+  const [ligasPaquete, setLigasPaquete] = useState<Record<string, { url: string; vence: string }>>({});
   const cargado = useRef(false);
 
   const recargar = () => creditosApi.ver(id).then((x) => { setS(x); setDatos(x.datos || {}); }).catch((e) => setError(e.message));
@@ -136,7 +138,6 @@ export function CreditoExpediente() {
   };
 
   // Liga privada del paquete de cada banco (la última que se generó en esta sesión).
-  const [ligasPaquete, setLigasPaquete] = useState<Record<string, { url: string; vence: string }>>({});
   const copiarTexto = async (t: string) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
   const ligaDelPaquete = async (b: any, correo: boolean) => {
     const ej = ejecutivos[b.clave] || {};
