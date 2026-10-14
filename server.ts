@@ -535,6 +535,15 @@ async function checkAdminDbAccess() {
 async function startServer() {
   const app = express();
   app.set("trust proxy", true);
+  // Candados estándar del navegador. No hay CSP aquí a propósito: la CDN de
+  // Hostinger lo pisa (ver nota hostinger_cdn_pisa_csp). Estos sí llegan.
+  app.use((_req, res, next) => {
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Strict-Transport-Security", "max-age=15552000");
+    next();
+  });
   app.use(cors({
     origin: true,
     credentials: true,
@@ -4785,6 +4794,23 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     return await buscarSesionMcp(db, apiKey);
   };
 
+  // A dónde se puede mandar el código de autorización. Esta pantalla pide la
+  // clave personal y el token que devuelve ES esa clave: si el código pudiera
+  // viajar a cualquier dirección, un enlace falso a nuestro dominio bastaría
+  // para robarla. Solo Claude (web/escritorio) y apps locales (Claude Code).
+  const redirectOauthPermitido = (uri: string): boolean => {
+    try {
+      const u = new URL(uri);
+      if (u.username || u.password) return false;
+      if ((u.hostname === "claude.ai" || u.hostname === "claude.com") && u.protocol === "https:") {
+        return u.pathname.startsWith("/api/mcp/");
+      }
+      return u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+    } catch {
+      return false;
+    }
+  };
+
   const verifyPkce = (codeVerifier: string, codeChallenge: string, method: string): boolean => {
     if (!codeChallenge) return true;
     if (!codeVerifier) return false;
@@ -5958,18 +5984,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const code_challenge_method = (req.query.code_challenge_method as string) || "S256";
     const response_type = (req.query.response_type as string) || "code";
 
-    let isValidRedirect = false;
-    if (redirect_uri && typeof redirect_uri === "string") {
-      try {
-        new URL(redirect_uri);
-        isValidRedirect = true;
-      } catch (e) {
-        isValidRedirect = false;
-      }
-    }
-
-    if (!isValidRedirect) {
-      return res.status(400).send("redirect_uri inválida o ausente.");
+    if (!redirect_uri || typeof redirect_uri !== "string" || !redirectOauthPermitido(redirect_uri)) {
+      return res.status(400).send("redirect_uri inválida, ausente o no permitida.");
     }
 
     const html = renderOauthAuthorizeHtml({
@@ -5996,18 +6012,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const code_challenge_method = body.code_challenge_method ? decodeURIComponent(body.code_challenge_method) : ((req.query.code_challenge_method as string) || "S256");
     const response_type = body.response_type ? decodeURIComponent(body.response_type) : ((req.query.response_type as string) || "code");
 
-    let isValidRedirect = false;
-    if (redirect_uri && typeof redirect_uri === "string") {
-      try {
-        new URL(redirect_uri);
-        isValidRedirect = true;
-      } catch (e) {
-        isValidRedirect = false;
-      }
-    }
-
-    if (!isValidRedirect) {
-      return res.status(400).send("redirect_uri inválida o ausente.");
+    if (!redirect_uri || typeof redirect_uri !== "string" || !redirectOauthPermitido(redirect_uri)) {
+      return res.status(400).send("redirect_uri inválida, ausente o no permitida.");
     }
 
     const adminDb = getAdminDb();
