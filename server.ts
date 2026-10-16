@@ -2441,18 +2441,52 @@ async function startServer() {
     return `${litros.toFixed(1)}L${cil > 1 ? ` ${cil} cilindros` : ""}`;
   };
   const CACHE_CATALOGO_WEB_MS = 60 * 1000;
-  let cacheCatalogoWeb: { momento: number; datos: any } | null = null;
+  // Una entrada por llave de cache: "todas" (la pagina de Nextcar) o el id de una agencia.
+  const cacheCatalogoWeb = new Map<string, { momento: number; datos: any }>();
 
-  app.get("/api/public/v1/catalogo-web", async (_req, res) => {
+  // ----- Llave propia de cada agencia para su pagina -----
+  // La llave es "<agencyId>.<secreto>"; en la agencia solo se guarda la huella
+  // sha256 del secreto, asi que ni nosotros podemos volver a verla.
+  const huellaLlave = (secreto: string) => crypto.createHash("sha256").update(secreto).digest("hex");
+  async function agenciaDeLaLlave(adminDb: any, req: any): Promise<{ id: string; data: any } | null | "invalida"> {
+    const cruda = String(req.headers["x-pagina-llave"] || (String(req.headers.authorization || "").startsWith("Bearer ") ? String(req.headers.authorization).slice(7) : "")).trim();
+    if (!cruda) return null;
+    const punto = cruda.indexOf(".");
+    if (punto < 1) return "invalida";
+    const id = cruda.slice(0, punto);
+    const secreto = cruda.slice(punto + 1);
+    if (!/^[A-Za-z0-9]{10,40}$/.test(id) || secreto.length < 20) return "invalida";
+    const data = (await adminDb.collection("agencies").doc(id).get()).data();
+    const guardada = String(data?.paginaWeb?.llaveHash || "");
+    const dada = huellaLlave(secreto);
+    if (!data || guardada.length !== dada.length || !crypto.timingSafeEqual(Buffer.from(guardada), Buffer.from(dada))) return "invalida";
+    return { id, data };
+  }
+  const ultimaLecturaGuardada = new Map<string, number>();
+
+  app.get("/api/public/v1/catalogo-web", async (req, res) => {
     try {
-      if (cacheCatalogoWeb && Date.now() - cacheCatalogoWeb.momento < CACHE_CATALOGO_WEB_MS) {
-        return res.json(cacheCatalogoWeb.datos);
-      }
       const adminDb = getAdminDb();
       if (!adminDb) return res.status(500).json({ error: "Base de datos no disponible" });
 
+      // Con llave: es la pagina propia de una agencia y recibe SOLO sus autos.
+      // Sin llave: el catalogo de siempre, el de nextcar.erewere.com.
+      const propia = await agenciaDeLaLlave(adminDb, req);
+      if (propia === "invalida") return res.status(401).json({ error: "Llave no válida. Genera una nueva en el CRM." });
+      const claveCache = propia ? propia.id : "todas";
+      const guardado = cacheCatalogoWeb.get(claveCache);
+      if (guardado && Date.now() - guardado.momento < CACHE_CATALOGO_WEB_MS) {
+        return res.json(guardado.datos);
+      }
+      if (propia && !hasActiveAccess(propia.data)) {
+        return res.status(402).json({ error: "La suscripción del CRM de la agencia no está activa." });
+      }
+
       // Una sola igualdad: no necesita indice compuesto.
-      const snap = await adminDb.collection("vehicles").where("publicarEnWeb", "==", true).get();
+      const soloMarcados = !propia || propia.data?.paginaWeb?.soloMarcados === true;
+      const snap = propia
+        ? await adminDb.collection("vehicles").where("agencyId", "==", propia.id).get()
+        : await adminDb.collection("vehicles").where("publicarEnWeb", "==", true).get();
       const candidatos = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as any) }))
         .filter((v) => {
@@ -2462,7 +2496,7 @@ async function startServer() {
           const estadoOk = !v.status || v.status === "available" || v.status === "reserved"
             || (v.status === "sold" && vendidoHace < 60 * 86_400_000);
           const fotos = (Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length) || v.photoUrl;
-          return estadoOk && fotos && v.agencyId && v.agencyId !== "unassigned" && !v.isDeleted;
+          return estadoOk && fotos && v.agencyId && v.agencyId !== "unassigned" && !v.isDeleted && (!soloMarcados || v.publicarEnWeb === true);
         });
 
       const idsAgencias = [...new Set(candidatos.map((v) => String(v.agencyId)))];
@@ -2523,12 +2557,85 @@ async function startServer() {
         });
 
       const datos = { generadoEn: new Date().toISOString(), total: autos.length, autos };
-      cacheCatalogoWeb = { momento: Date.now(), datos };
+      cacheCatalogoWeb.set(claveCache, { momento: Date.now(), datos });
+      if (propia && Date.now() - (ultimaLecturaGuardada.get(propia.id) || 0) > 5 * 60_000) {
+        ultimaLecturaGuardada.set(propia.id, Date.now());
+        adminDb.collection("agencies").doc(propia.id).set(
+          { paginaWeb: { ultimaLecturaAt: new Date().toISOString(), ultimaLecturaTotal: autos.length } }, { merge: true }
+        ).catch(() => {});
+      }
       res.json(datos);
     } catch (e: any) {
       console.error("Error armando el catalogo web:", e);
       res.status(500).json({ error: "No se pudo armar el catalogo" });
     }
+  });
+
+  // ----- «Mi página web»: el administrador de la agencia la conecta desde el CRM -----
+  const conexionPublica = (a: any) => {
+    const w = a?.paginaWeb || {};
+    return {
+      url: String(w.url || ""),
+      soloMarcados: w.soloMarcados === true,
+      tieneLlave: !!w.llaveHash,
+      llavePrefijo: String(w.llaveFin || ""),
+      llaveCreadaAt: w.llaveCreadaAt || null,
+      ultimaLecturaAt: w.ultimaLecturaAt || null,
+      ultimaLecturaTotal: Number(w.ultimaLecturaTotal) || 0,
+    };
+  };
+  const adminDeAgencia = async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return null;
+    if (q.rol !== "admin" || !q.agencyId || q.agencyId === "unassigned") {
+      res.status(403).json({ error: "Solo el administrador de la agencia puede conectar su página." });
+      return null;
+    }
+    return q;
+  };
+
+  app.get("/api/pagina/mi-conexion", async (req: any, res: any) => {
+    const q = await adminDeAgencia(req, res);
+    if (!q) return;
+    const a = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
+    res.json({ agencyId: q.agencyId, ...conexionPublica(a) });
+  });
+
+  app.put("/api/pagina/mi-conexion", async (req: any, res: any) => {
+    const q = await adminDeAgencia(req, res);
+    if (!q) return;
+    let url = String(req.body?.url || "").trim().slice(0, 200);
+    if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+    if (url && !/^https?:\/\/[^\s/]+\.[^\s/]+/i.test(url)) return res.status(400).json({ error: "Escribe la dirección de tu página, por ejemplo https://tuagencia.com" });
+    await q.adminDb.collection("agencies").doc(q.agencyId).set(
+      { paginaWeb: { url, soloMarcados: req.body?.soloMarcados === true } }, { merge: true }
+    );
+    cacheCatalogoWeb.delete(q.agencyId);
+    const a = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
+    res.json({ agencyId: q.agencyId, ...conexionPublica(a) });
+  });
+
+  // La llave se muestra UNA vez, al crearla. Volver a crearla invalida la anterior.
+  app.post("/api/pagina/mi-conexion/llave", async (req: any, res: any) => {
+    const q = await adminDeAgencia(req, res);
+    if (!q) return;
+    const secreto = crypto.randomBytes(24).toString("hex");
+    const llave = `${q.agencyId}.${secreto}`;
+    await q.adminDb.collection("agencies").doc(q.agencyId).set({
+      paginaWeb: { llaveHash: huellaLlave(secreto), llaveFin: secreto.slice(-4), llaveCreadaAt: new Date().toISOString() },
+    }, { merge: true });
+    cacheCatalogoWeb.delete(q.agencyId);
+    res.json({ llave });
+  });
+
+  app.delete("/api/pagina/mi-conexion/llave", async (req: any, res: any) => {
+    const q = await adminDeAgencia(req, res);
+    if (!q) return;
+    await q.adminDb.collection("agencies").doc(q.agencyId).set(
+      { paginaWeb: { llaveHash: FieldValue.delete(), llaveFin: FieldValue.delete(), llaveCreadaAt: FieldValue.delete() } }, { merge: true }
+    );
+    cacheCatalogoWeb.delete(q.agencyId);
+    res.json({ ok: true });
   });
 
   // ===== Portal de agencias de nextcar.erewere.com =====
@@ -2688,7 +2795,7 @@ async function startServer() {
         });
         resultado.push({ siteId, crmId: ref.id, nuevo: true });
       }
-      cacheCatalogoWeb = null;
+      cacheCatalogoWeb.clear();
       res.json({ ok: true, autos: resultado });
     } catch (e) {
       console.error("Error importando autos de la pagina:", e);

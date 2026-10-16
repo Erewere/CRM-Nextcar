@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle, Copy, Bot, Key, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { MiPaginaWeb } from '../components/integraciones/MiPaginaWeb';
 
 export function Integrations() {
   const { userData, googleToken, googleAccount, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
@@ -675,6 +676,8 @@ export function Integrations() {
             </div>
           </div>
         </div>
+
+        {userData?.role === 'admin' && <MiPaginaWeb />}
 
         {/* Avisos de escritorio */}
         <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
