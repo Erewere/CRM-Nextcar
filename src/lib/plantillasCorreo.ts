@@ -227,8 +227,9 @@ export function correoInvitacionEquipo(d: {
  *
  * A diferencia de los correos de arriba, aquí no hay cuenta creada: quien lee
  * esto no conoce Nextcar. El correo tiene que explicarse solo, como si fuera
- * el home de una página, y la anécdota del 81-a-1 la vivimos nosotros mismos
- * vendiendo autos — no es un caso de estudio prestado.
+ * el home de una página. El enfoque es el problema del lote (seguimiento,
+ * inventario, pagos), no la historia de Nextcar: sin "como la suya", sin
+ * "lo construimos nosotros" y sin cifras propias.
  */
 export function correoInvitacionAgencia(d: {
   agencia: string;
@@ -241,21 +242,20 @@ export function correoInvitacionAgencia(d: {
       Una invitación de Nextcar
     </p>
     <h1 style="margin:0 0 14px;color:${NEGRO};font-size:25px;font-weight:800;letter-spacing:-0.02em;line-height:1.25;">
-      Lo construimos para nosotros.<br>Lo compartimos con ${esc(saludo)}.
+      Menos tareas a mano en ${esc(saludo)}.<br>Ningún cliente sin seguimiento.
     </h1>
     <p style="margin:0 0 22px;color:${CUERPO};font-size:15px;line-height:1.65;">
-      Somos una agencia de seminuevos, como la suya. Nextcar CRM nació de
-      nuestra propia operación y hoy lo usamos todos los días para vender
-      autos — ahora lo ponemos a disposición de otras agencias de seminuevos
-      en México.
+      Desarrollamos una herramienta para lotes y agencias de seminuevos que
+      resuelve lo que más tiempo quita en el día a día: dar seguimiento a
+      cada cliente que escribe, tener el inventario en orden y saber quién
+      debe qué.
     </p>
 
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BLANCO};border:1px solid ${LINEA};border-radius:8px;padding:16px 18px;margin:0 0 26px;">
       <tr><td style="color:${NEGRO};font-size:15px;line-height:1.6;">
-        En una sola campaña generamos <strong>81 conversaciones</strong> por
-        WhatsApp y Meta — y cerramos <strong>1 venta</strong>. No porque
-        faltaran interesados, sino porque el seguimiento se perdía en el
-        camino. <span style="color:${CUERPO};">Por eso existe Nextcar CRM.</span>
+        Los clientes escriben por WhatsApp y Meta, el seguimiento vive en la
+        memoria de cada vendedor y los interesados se enfrían.
+        <span style="color:${CUERPO};">Nextcar junta todo en un solo lugar para que cada mensaje tenga dueño y cada venta avance.</span>
       </td></tr>
     </table>
 
@@ -264,7 +264,7 @@ export function correoInvitacionAgencia(d: {
     </h2>
     <ul style="margin:0 0 24px;padding-left:20px;color:${NEGRO};font-size:15px;line-height:1.8;">
       <li><strong>Tablero de negociaciones</strong> — cada cliente en su etapa, desde el primer mensaje hasta la firma, sin post-its ni WhatsApp perdido.</li>
-      <li><strong>Leads automáticos de WhatsApp y Meta</strong> — entran solos al CRM; nadie los captura a mano.</li>
+      <li><strong>Leads automáticos de WhatsApp y Meta</strong> — entran solos a la herramienta; nadie los captura a mano.</li>
       <li><strong>Equipo de ventas</strong> — se asignan los clientes, se mide a cada vendedor y ninguno se queda sin dueño.</li>
       <li><strong>Inventario y pagos</strong> — autos, gastos, consignaciones y mensualidades de crédito en un solo lugar.</li>
       <li><strong>Reportes reales</strong> — qué campaña y qué vendedor están cerrando ventas de verdad.</li>
@@ -284,7 +284,7 @@ export function correoInvitacionAgencia(d: {
     </p>`;
 
   return {
-    subject: `${d.agencia}: pruebe ${DURACION_PRUEBA_DIAS} días gratis el CRM que usamos en Nextcar`,
+    subject: `${d.agencia}: pruebe ${DURACION_PRUEBA_DIAS} días gratis una herramienta para su lote`,
     html: envoltura(
       `Conozca Nextcar CRM`,
       cuerpo,
