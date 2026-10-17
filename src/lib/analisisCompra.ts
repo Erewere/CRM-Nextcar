@@ -83,6 +83,8 @@ export function resumirCompras(todas: CompraAnalizada[]) {
   const sinGuia = todas.length - comp.length;
   const pctPorEncimaDeGuia = comp.length ? Math.round((caras.length / comp.length) * 100) : 0;
   const sobreprecioPromedioPct = caras.length ? redondear1(caras.reduce((a, c) => a + (c.diferenciaPct || 0), 0) / caras.length) : 0;
+  const ordenadas = comp.map((c) => c.diferenciaPct as number).sort((a, b) => a - b);
+  const medianaDiferenciaPct = ordenadas.length ? redondear1(ordenadas.length % 2 ? ordenadas[(ordenadas.length - 1) / 2] : (ordenadas[ordenadas.length / 2 - 1] + ordenadas[ordenadas.length / 2]) / 2) : 0;
   const sobreprecioTotal = caras.reduce((a, c) => a + Math.max(0, c.diferenciaMonto || 0), 0);
   const ahorroTotal = buenas.reduce((a, c) => a + Math.max(0, -(c.diferenciaMonto || 0)), 0);
 
@@ -96,6 +98,12 @@ export function resumirCompras(todas: CompraAnalizada[]) {
   } else {
     insights.push(`De ${comp.length} compras comparables con la guía, ${caras.length} (${pctPorEncimaDeGuia}%) se pagaron por encima${caras.length ? `, con un sobreprecio promedio de ${sobreprecioPromedioPct}% (${dinero(sobreprecioTotal)} en total)` : ''}.`);
     if (buenas.length) insights.push(`${buenas.length} ${buenas.length === 1 ? 'compra salió' : 'compras salieron'} por debajo de la guía, ${dinero(ahorroTotal)} menos de lo que vale${buenas.length === 1 ? '' : 'n'} según ella.`);
+    // Si TODAS las compras quedan del mismo lado de la guía, lo más probable es que la guía
+    // esté sesgada para este mercado y no que se pague mal siempre. Se dice, para que nadie
+    // lea «63 % caras» como un regaño cuando es una guía corta.
+    if (comp.length >= 10 && Math.abs(medianaDiferenciaPct) > UMBRAL_ALTA_PCT) {
+      insights.push(`Ojo: la compra típica (la mediana) está ${medianaDiferenciaPct > 0 ? '+' : ''}${medianaDiferenciaPct}% ${medianaDiferenciaPct > 0 ? 'arriba' : 'abajo'} de la guía. Cuando casi todo cae del mismo lado, suele ser que la guía se queda ${medianaDiferenciaPct > 0 ? 'corta' : 'alta'} para este mercado y no que se pague mal siempre. Fíjate más en qué autos y qué meses se salen de lo normal que en el porcentaje total.`);
+    }
     const marcaCara = porMarca.filter((g) => g.autos >= 3 && g.caras > 0).sort((a, b) => b.diferenciaPromedioPct - a.diferenciaPromedioPct)[0];
     if (marcaCara && marcaCara.diferenciaPromedioPct > UMBRAL_ALTA_PCT) insights.push(`La marca donde más se paga arriba de la guía es ${marcaCara.clave}: ${marcaCara.diferenciaPromedioPct}% en promedio (${marcaCara.autos} autos).`);
     const reciente = porMes.slice(-3);
@@ -114,7 +122,7 @@ export function resumirCompras(todas: CompraAnalizada[]) {
   return {
     comprasTotales: todas.length, comparables: comp.length, sinGuia,
     caras: caras.length, buenas: buenas.length, enLinea: comp.length - caras.length - buenas.length,
-    pctPorEncimaDeGuia, sobreprecioPromedioPct, sobreprecioTotal, ahorroTotal,
+    pctPorEncimaDeGuia, medianaDiferenciaPct, sobreprecioPromedioPct, sobreprecioTotal, ahorroTotal,
     porMes, porMarca, porComprador, insights,
   };
 }

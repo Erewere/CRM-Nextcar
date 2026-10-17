@@ -13,7 +13,7 @@ import { getApiUrl } from '../../lib/api';
 type Grupo = { clave: string; autos: number; caras: number; pctCaras: number; diferenciaPromedioPct: number };
 type Resumen = {
   comprasTotales: number; comparables: number; sinGuia: number; caras: number; buenas: number; enLinea: number;
-  pctPorEncimaDeGuia: number; sobreprecioPromedioPct: number; sobreprecioTotal: number; ahorroTotal: number;
+  pctPorEncimaDeGuia: number; medianaDiferenciaPct: number; sobreprecioPromedioPct: number; sobreprecioTotal: number; ahorroTotal: number;
   porMes: Grupo[]; porMarca: Grupo[]; porComprador: Grupo[]; insights: string[];
 };
 type Compra = {
@@ -85,7 +85,7 @@ export function CalidadDeCompras() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {tarjeta('Compradas arriba de la guía', `${r.pctPorEncimaDeGuia}%`, `${r.caras} de ${r.comparables} comparables`, r.pctPorEncimaDeGuia > 40 ? 'text-red-600' : '')}
+        {tarjeta('Compradas arriba de la guía', `${r.pctPorEncimaDeGuia}%`, `${r.caras} de ${r.comparables} comparables · compra típica ${r.medianaDiferenciaPct > 0 ? '+' : ''}${r.medianaDiferenciaPct}%`, '')}
         {tarjeta('Sobreprecio promedio', r.caras ? `+${r.sobreprecioPromedioPct}%` : '—', r.caras ? `${dinero(r.sobreprecioTotal)} en total` : 'sin compras caras')}
         {tarjeta('Buenas compras', String(r.buenas), r.buenas ? `${dinero(r.ahorroTotal)} bajo la guía` : undefined, r.buenas ? 'text-emerald-600' : '')}
         {tarjeta('Sin guía confiable', String(r.sinGuia), `de ${r.comprasTotales} compras`)}
