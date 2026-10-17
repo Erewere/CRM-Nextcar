@@ -11,7 +11,7 @@ import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } f
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { analizarPrecio, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
-import { analizarCompra, resumirCompras } from "./src/lib/analisisCompra.ts";
+import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
@@ -4150,6 +4150,18 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       const mercadoDe = new Map<string, any>();
       const guiaDe = new Map<string, any>();
       hechos.docs.forEach((d: any) => { mercadoDe.set(d.id, d.data()?.mercado || null); guiaDe.set(d.id, d.data()?.guia || null); });
+      // Dias en inventario de lo ya vendido, por marca y primer palabra del modelo,
+      // para saber que tan comercial es cada modelo para ESTA agencia.
+      const claveModelo = (v: any) => `${v.agencyId}|${String(v.make || "").toLowerCase().trim()}|${String(v.model || "").toLowerCase().trim().split(/\s+/)[0]}`;
+      const diasVendidos = new Map<string, number[]>();
+      autos.docs.forEach((d: any) => {
+        const v = d.data() || {};
+        const a = Date.parse(v.receivedAt || v.createdAt || ""), b = Date.parse(v.soldAt || "");
+        if (v.status === "sold" && Number.isFinite(a) && Number.isFinite(b) && b >= a) {
+          const k = claveModelo(v);
+          diasVendidos.set(k, [...(diasVendidos.get(k) || []), Math.floor((b - a) / 86_400_000)]);
+        }
+      });
       const costoDe = new Map<string, number>();
       costos.docs.forEach((d: any) => costoDe.set(d.id, Number(d.data()?.purchasePrice) || 0));
       const escriturasCompra: { ref: any; datos: any }[] = [];
@@ -4168,7 +4180,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
           const costo = costoDe.get(d.id) || 0;
           if (v.ownership !== "consignacion" && costo > 0) {
             const g = guiaDe.get(d.id);
-            const c = analizarCompra({ precioCompra: costo, guiaCompra: g?.compra, confianzaGuia: g?.confianza });
+            const com = comercialidad({ anuncios: mercadoDe.get(d.id)?.n, diasPropios: diasVendidos.get(claveModelo(v)) });
+            const c = analizarCompra({ precioCompra: costo, guiaCompra: g?.compra, guiaVenta: g?.venta, confianzaGuia: g?.confianza, nivelComercial: com.nivel });
             cuentaCompras[c.clasificacion] = (cuentaCompras[c.clasificacion] || 0) + 1;
             vigentesCompra.add(d.id);
             escriturasCompra.push({
@@ -4180,6 +4193,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
                 precioCompra: costo, guiaCompra: g?.compra || null, guiaVenta: g?.venta || null,
                 confianzaGuia: g?.confianza || null, guiaDe: g?.fecha || null,
                 clasificacion: c.clasificacion, diferenciaPct: c.diferenciaPct, diferenciaMonto: c.diferenciaMonto, motivo: c.motivo,
+                techoCompra: c.techoCompra, comercial: com.nivel, comercialMotivo: com.motivo,
                 mes: String(v.receivedAt || v.createdAt || "").slice(0, 7),
                 compradoPorId: v.compradoPorId || null, compradoPorNombre: v.compradoPorNombre || "",
                 analizadoEn: inicio, versionReglas: VERSION_REGLAS,

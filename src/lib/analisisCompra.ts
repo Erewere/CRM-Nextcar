@@ -1,46 +1,91 @@
 /**
- * Calidad de las compras: lo que se pagó por cada auto contra el precio de
- * COMPRA de la guía de Autocosmos (`guiaPrecios.ts`, 87 % de la venta).
+ * Calidad de las compras: lo que se pagó por cada auto contra la guía de
+ * Autocosmos (`guiaPrecios.ts`).
+ *
+ * La regla de compra es de Luis (oct 2026) y depende de qué tan COMERCIAL es el auto:
+ *  - poco comercial (cuesta venderlo): se compra POR DEBAJO de la compra de la guía;
+ *  - muy comercial (se vende rápido): se puede pagar hasta la MEDIA de la guía
+ *    (la mitad entre su precio de compra y su precio de venta);
+ *  - en medio: a medio camino.
+ * Ese tope es el «máximo a pagar» (`techoDeCompra`) y la Fase 3 lo reutiliza.
+ *
+ * Qué tan comercial es (`comercialidad`), de lo más confiable a lo menos:
+ *  1. Si la agencia ya vendió 2 o más autos de ese modelo: sus días en inventario
+ *     (mediana de 45 días o menos = muy comercial; 90 o más = poco).
+ *  2. Si no, cuántos anuncios parecidos hay en Mercado Libre (40 o más = muy
+ *     comercial; menos de 15 = poco). Un modelo que todos publican es un modelo
+ *     que todos buscan.
+ *
+ * Resultado: BUENA COMPRA si pagaste 5 % o más por debajo de la compra de la guía;
+ * EN LÍNEA si estás entre eso y el máximo a pagar; CARA si pasaste el máximo.
  *
  * Límites que hay que tener presentes al leer los números:
- *  - La guía es la de HOY, no la del día en que se compró. Un auto comprado hace
- *    medio año se compara contra el valor actual.
- *  - Con confianza «baja» no se compara (la guía no sabe qué versión es).
- *  - Los autos en consignación no cuentan: lo que se les paga es lo del dueño,
- *    no una compra.
- *  - Es un promedio de guía, no una oferta real: ±5 % ya es ruido (así de
- *    precisa fue contra el Libro Azul), por eso «en línea» es de −5 % a +5 %.
- *
- * Reglas, para quien vende y no programa:
- *  buena compra  = pagaste al menos 5 % menos que la guía,
- *  en línea      = dentro de ±5 %,
- *  cara          = pagaste más de 5 % por encima.
- *  Con confianza «media» en la guía el margen es de 8 %, porque se equivoca más.
+ *  - La guía es la de HOY, no la del día en que se compró.
+ *  - Con confianza «baja» no se compara. Con «media» se da 3 % de holgura.
+ *  - Los autos en consignación no cuentan (lo que se paga al dueño no es compra).
+ *  - Esta guía se queda corta frente a lo que de verdad se paga y se vende en este
+ *    mercado (los precios de venta propios andan ~19 % sobre la guía de venta):
+ *    por eso casi todo sale «arriba» y conviene mirar los casos que se salen del resto.
  */
 
 export type ClasificacionCompra = 'buena' | 'en-linea' | 'cara' | 'sin-guia';
+export type Comercialidad = 'alta' | 'media' | 'baja';
 
-export const UMBRAL_ALTA_PCT = 5;
-export const UMBRAL_MEDIA_PCT = 8;
+export const MARGEN_BUENA_PCT = 5;
+export const HOLGURA_GUIA_MEDIA_PCT = 3;
+export const DIAS_MUY_COMERCIAL = 45;
+export const DIAS_POCO_COMERCIAL = 90;
+export const ANUNCIOS_MUY_COMERCIAL = 40;
+export const ANUNCIOS_POCO_COMERCIAL = 15;
+
+/** Qué tan fácil es vender este modelo. `diasPropios`: días en inventario de los autos del mismo modelo ya vendidos. */
+export function comercialidad(input: { anuncios: number | null | undefined; diasPropios?: number[] }): { nivel: Comercialidad; motivo: string } {
+  const dias = (input.diasPropios || []).filter((d) => Number.isFinite(d)).sort((a, b) => a - b);
+  if (dias.length >= 2) {
+    const med = dias.length % 2 ? dias[(dias.length - 1) / 2] : (dias[dias.length / 2 - 1] + dias[dias.length / 2]) / 2;
+    const m = Math.round(med);
+    const nivel: Comercialidad = med <= DIAS_MUY_COMERCIAL ? 'alta' : med >= DIAS_POCO_COMERCIAL ? 'baja' : 'media';
+    return { nivel, motivo: `Tus ${dias.length} ventas de este modelo tardaron ${m} días en promedio.` };
+  }
+  const n = Number(input.anuncios) || 0;
+  const nivel: Comercialidad = n >= ANUNCIOS_MUY_COMERCIAL ? 'alta' : n >= ANUNCIOS_POCO_COMERCIAL ? 'media' : 'baja';
+  return { nivel, motivo: `Hay ${n} anuncios parecidos en el mercado${n >= ANUNCIOS_MUY_COMERCIAL ? ': se publica y se busca mucho.' : n >= ANUNCIOS_POCO_COMERCIAL ? '.' : ': es un modelo poco común.'}` };
+}
+
+/** Lo máximo que conviene pagar. Poco comercial: la compra de la guía. Muy comercial: la media de la guía. */
+export function techoDeCompra(g: { guiaCompra: number; guiaVenta: number | null | undefined; nivel: Comercialidad; confianzaGuia?: string | null }): number {
+  const media = g.guiaVenta && g.guiaVenta > g.guiaCompra ? (g.guiaCompra + g.guiaVenta) / 2 : g.guiaCompra;
+  const avance = g.nivel === 'alta' ? 1 : g.nivel === 'media' ? 0.5 : 0;
+  const base = g.guiaCompra + (media - g.guiaCompra) * avance;
+  return Math.round(base * (g.confianzaGuia === 'media' ? 1 + HOLGURA_GUIA_MEDIA_PCT / 100 : 1));
+}
 
 export function analizarCompra(input: {
   precioCompra: number;
   guiaCompra: number | null | undefined;
+  guiaVenta?: number | null;
   confianzaGuia: string | null | undefined;
-}): { clasificacion: ClasificacionCompra; diferenciaPct: number | null; diferenciaMonto: number | null; motivo: string } {
+  nivelComercial?: Comercialidad;
+}): { clasificacion: ClasificacionCompra; diferenciaPct: number | null; diferenciaMonto: number | null; techoCompra: number | null; motivo: string } {
   const { precioCompra, guiaCompra, confianzaGuia } = input;
-  if (!(precioCompra > 0)) return { clasificacion: 'sin-guia', diferenciaPct: null, diferenciaMonto: null, motivo: 'No hay precio de compra capturado.' };
-  if (!(guiaCompra && guiaCompra > 0)) return { clasificacion: 'sin-guia', diferenciaPct: null, diferenciaMonto: null, motivo: 'La guía no tiene este modelo y año.' };
-  if (confianzaGuia !== 'alta' && confianzaGuia !== 'media') {
-    return { clasificacion: 'sin-guia', diferenciaPct: null, diferenciaMonto: null, motivo: 'La guía no es confiable para este auto (no se pudo saber la versión).' };
-  }
+  const sin = (motivo: string) => ({ clasificacion: 'sin-guia' as const, diferenciaPct: null, diferenciaMonto: null, techoCompra: null, motivo });
+  if (!(precioCompra > 0)) return sin('No hay precio de compra capturado.');
+  if (!(guiaCompra && guiaCompra > 0)) return sin('La guía no tiene este modelo y año.');
+  if (confianzaGuia !== 'alta' && confianzaGuia !== 'media') return sin('La guía no es confiable para este auto (no se pudo saber la versión).');
+
+  const nivel = input.nivelComercial || 'baja';
+  const techoCompra = techoDeCompra({ guiaCompra, guiaVenta: input.guiaVenta, nivel, confianzaGuia });
   const diferenciaMonto = Math.round(precioCompra - guiaCompra);
   const diferenciaPct = Math.round(((precioCompra - guiaCompra) / guiaCompra) * 1000) / 10;
-  const umbral = confianzaGuia === 'alta' ? UMBRAL_ALTA_PCT : UMBRAL_MEDIA_PCT;
-  const clasificacion: ClasificacionCompra = diferenciaPct <= -umbral ? 'buena' : diferenciaPct > umbral ? 'cara' : 'en-linea';
-  const abs = Math.abs(diferenciaPct);
-  const motivo = clasificacion === 'buena' ? `Pagaste ${abs}% menos que la guía.` : clasificacion === 'cara' ? `Pagaste ${abs}% más que la guía.` : `Pagaste lo que dice la guía (${diferenciaPct >= 0 ? '+' : ''}${diferenciaPct}%).`;
-  return { clasificacion, diferenciaPct, diferenciaMonto, motivo };
+  const clasificacion: ClasificacionCompra = diferenciaPct <= -MARGEN_BUENA_PCT ? 'buena' : precioCompra > techoCompra ? 'cara' : 'en-linea';
+  const dinero0 = (n: number) => '$' + Math.round(n).toLocaleString('es-MX');
+  const nom = nivel === 'alta' ? 'muy comercial' : nivel === 'media' ? 'medianamente comercial' : 'poco comercial';
+  const motivo = clasificacion === 'buena'
+    ? `Pagaste ${Math.abs(diferenciaPct)}% menos que la compra de la guía.`
+    : clasificacion === 'cara'
+      ? `Pagaste ${dinero0(precioCompra - techoCompra)} por encima de lo máximo recomendado (${dinero0(techoCompra)}) para un auto ${nom}.`
+      : `Dentro de lo recomendado para un auto ${nom} (hasta ${dinero0(techoCompra)}).`;
+  return { clasificacion, diferenciaPct, diferenciaMonto, techoCompra, motivo };
 }
 
 export interface CompraAnalizada {
@@ -101,11 +146,11 @@ export function resumirCompras(todas: CompraAnalizada[]) {
     // Si TODAS las compras quedan del mismo lado de la guía, lo más probable es que la guía
     // esté sesgada para este mercado y no que se pague mal siempre. Se dice, para que nadie
     // lea «63 % caras» como un regaño cuando es una guía corta.
-    if (comp.length >= 10 && Math.abs(medianaDiferenciaPct) > UMBRAL_ALTA_PCT) {
+    if (comp.length >= 10 && Math.abs(medianaDiferenciaPct) > MARGEN_BUENA_PCT) {
       insights.push(`Ojo: la compra típica (la mediana) está ${medianaDiferenciaPct > 0 ? '+' : ''}${medianaDiferenciaPct}% ${medianaDiferenciaPct > 0 ? 'arriba' : 'abajo'} de la guía. Cuando casi todo cae del mismo lado, suele ser que la guía se queda ${medianaDiferenciaPct > 0 ? 'corta' : 'alta'} para este mercado y no que se pague mal siempre. Fíjate más en qué autos y qué meses se salen de lo normal que en el porcentaje total.`);
     }
     const marcaCara = porMarca.filter((g) => g.autos >= 3 && g.caras > 0).sort((a, b) => b.diferenciaPromedioPct - a.diferenciaPromedioPct)[0];
-    if (marcaCara && marcaCara.diferenciaPromedioPct > UMBRAL_ALTA_PCT) insights.push(`La marca donde más se paga arriba de la guía es ${marcaCara.clave}: ${marcaCara.diferenciaPromedioPct}% en promedio (${marcaCara.autos} autos).`);
+    if (marcaCara && marcaCara.diferenciaPromedioPct > MARGEN_BUENA_PCT) insights.push(`La marca donde más se paga arriba de la guía es ${marcaCara.clave}: ${marcaCara.diferenciaPromedioPct}% en promedio (${marcaCara.autos} autos).`);
     const reciente = porMes.slice(-3);
     if (reciente.length >= 2) {
       const a = reciente[0], b = reciente[reciente.length - 1];

@@ -18,6 +18,7 @@ type Resumen = {
 };
 type Compra = {
   vehicleId: string; titulo: string; estado: string; precioCompra: number; guiaCompra: number | null; confianzaGuia: string | null;
+  techoCompra: number | null; comercial: 'alta' | 'media' | 'baja' | null; comercialMotivo: string;
   clasificacion: 'buena' | 'en-linea' | 'cara' | 'sin-guia'; diferenciaPct: number | null; diferenciaMonto: number | null; motivo: string;
   mes: string; compradoPorNombre: string;
 };
@@ -94,7 +95,9 @@ export function CalidadDeCompras() {
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Conclusiones</p>
         <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300 list-disc pl-5">{r.insights.map((t, i) => <li key={i}>{t}</li>)}</ul>
-        <p className="text-xs text-slate-500 mt-3">{d.limites}</p>
+        <p className="text-xs text-slate-500 mt-3">
+          <b>Cómo se juzga:</b> un auto poco comercial se compra por debajo de la compra de la guía; uno muy comercial puede pagarse hasta la media de la guía (entre su compra y su venta); los intermedios, a medio camino. «Cara» es pasarse de ese máximo. {d.limites}
+        </p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-3">
@@ -104,10 +107,10 @@ export function CalidadDeCompras() {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
-        <table className="w-full text-sm min-w-[760px]">
+        <table className="w-full text-sm min-w-[960px]">
           <thead>
             <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200 dark:border-slate-700">
-              <th className="px-4 py-3">Auto</th><th className="px-3 py-3 text-right">Pagaste</th><th className="px-3 py-3 text-right">Compra según guía</th>
+              <th className="px-4 py-3">Auto</th><th className="px-3 py-3 text-right">Pagaste</th><th className="px-3 py-3 text-right">Compra según guía</th><th className="px-3 py-3 text-right">Máximo a pagar</th><th className="px-3 py-3">Comercial</th>
               <th className="px-3 py-3 text-right">Diferencia</th><th className="px-3 py-3">Resultado</th><th className="px-3 py-3">Compró</th>
             </tr>
           </thead>
@@ -119,7 +122,9 @@ export function CalidadDeCompras() {
                   <td className="px-4 py-2.5 font-semibold text-slate-900 dark:text-white">{a.titulo}{a.estado === 'vendido' && <span className="ml-2 text-xs font-normal text-slate-400">vendido</span>}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{dinero(a.precioCompra)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{dinero(a.guiaCompra)}</td>
-                  <td className={clsx('px-3 py-2.5 text-right tabular-nums font-semibold', a.diferenciaPct === null ? 'text-slate-400' : a.diferenciaPct > 5 ? 'text-red-600' : a.diferenciaPct <= -5 ? 'text-emerald-600' : 'text-slate-600')}>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{dinero(a.techoCompra)}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500" title={a.comercialMotivo}>{a.comercial === 'alta' ? 'Mucho' : a.comercial === 'media' ? 'Medio' : a.comercial === 'baja' ? 'Poco' : '—'}</td>
+                  <td className={clsx('px-3 py-2.5 text-right tabular-nums font-semibold', a.diferenciaPct === null ? 'text-slate-400' : a.clasificacion === 'cara' ? 'text-red-600' : a.clasificacion === 'buena' ? 'text-emerald-600' : 'text-slate-600')}>
                     {a.diferenciaPct === null ? '—' : `${a.diferenciaPct > 0 ? '+' : ''}${a.diferenciaPct}%`}
                   </td>
                   <td className="px-3 py-2.5"><span className={clsx('inline-flex rounded-full border px-2.5 py-1 text-xs font-bold', p.c)}>{p.t}</span></td>
