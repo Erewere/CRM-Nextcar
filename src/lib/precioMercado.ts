@@ -20,6 +20,8 @@ export interface PrecioMercado {
   minimo: number;
   maximo: number;
   promedio: number;
+  /** Precio de en medio. Los análisis viejos no lo traen: usa `medianaDe(m)`. */
+  mediana?: number;
   /** Cortes de las franjas: hasta p33 excelente, hasta p66 bueno, hasta p90 justo. */
   p33: number;
   p66: number;
@@ -45,6 +47,7 @@ export function resumirPrecios(precios: number[], consulta: string, fecha = new 
     minimo: ps[0],
     maximo: ps[ps.length - 1],
     promedio: Math.round(ps.reduce((a, b) => a + b, 0) / ps.length),
+    mediana: percentil(ps, 0.5),
     p33: percentil(ps, 0.33),
     p66: percentil(ps, 0.66),
     p90: percentil(ps, 0.9),
@@ -89,6 +92,9 @@ export async function consultarMercado(marca: string, modelo: string, anio: numb
   }
   return resumirPrecios(precios, consulta);
 }
+
+/** Mediana del mercado; en consultas guardadas antes de que existiera, se usa el promedio. */
+export const medianaDe = (m: Pick<PrecioMercado, 'promedio' | 'mediana'>) => m.mediana || m.promedio;
 
 export type FranjaPrecio = 'excelente' | 'bueno' | 'justo' | 'arriba';
 

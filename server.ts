@@ -10,6 +10,7 @@ import { normalizarTipo, procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
+import { analizarPrecio } from "./src/lib/analisisPrecio.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
@@ -4096,6 +4097,163 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // Cada 6 horas: cada revision lee todos los autos (~270 lecturas). Cada
   // hora eran ~6,400 lecturas al dia de Firestore solo para esto.
   setInterval(actualizarPreciosDeMercado, 6 * 60 * 60 * 1000);
+
+  // ===== Revision de precios de venta (coleccion analisis_precio) =====
+  //
+  // Una vez al dia revisa cada auto del inventario contra el precio de mercado
+  // que ya guardo la vuelta semanal de arriba (mercadoAutos). NO llama a
+  // Mercado Libre: solo lee lo guardado, asi que es barata y no depende de que
+  // la pagina de Nextcar conteste. Si un auto no tiene mercado, se anota «sin
+  // datos» y se sigue con el siguiente. Las reglas viven en
+  // src/lib/analisisPrecio.ts. Estas colecciones son solo del servidor (sin
+  // reglas de Firestore): la pantalla las pide por /api/precios/analisis.
+  //   analisis_precio/{vehicleId}      el analisis mas reciente de cada auto
+  //   analisis_precio_corridas/{id}    una por revision: cuando, cuantos, fallas
+  const COL_ANALISIS = "analisis_precio";
+  const COL_CORRIDAS = "analisis_precio_corridas";
+  const HORAS_ENTRE_REVISIONES = 20;
+  const MERCADO_VIEJO_DIAS = 21;
+  let revisionCorriendo = false;
+
+  async function revisarPreciosDelInventario(origen: "programada" | "manual", soloAgencia?: string) {
+    const adminDb = getAdminDb();
+    if (!adminDb) return { ok: false as const, error: "Base de datos no disponible" };
+    if (revisionCorriendo) return { ok: false as const, error: "Ya hay una revisión en curso." };
+    revisionCorriendo = true;
+    const inicio = new Date().toISOString();
+    const corridaRef = adminDb.collection(COL_CORRIDAS).doc();
+    const cuenta = { bajar: 0, subir: 0, mantener: 0, "sin-datos": 0 } as Record<string, number>;
+    const errores: string[] = [];
+    let revisados = 0;
+    try {
+      await corridaRef.set({ inicio, estado: "en_curso", origen, agencyId: soloAgencia || null });
+      const vehiculos = adminDb.collection("vehicles");
+      const mercados = adminDb.collection("mercadoAutos");
+      const [autos, hechos, previos] = await Promise.all([
+        soloAgencia ? vehiculos.where("agencyId", "==", soloAgencia).get() : vehiculos.get(),
+        soloAgencia ? mercados.where("agencyId", "==", soloAgencia).get() : mercados.get(),
+        soloAgencia ? adminDb.collection(COL_ANALISIS).where("agencyId", "==", soloAgencia).get() : adminDb.collection(COL_ANALISIS).get(),
+      ]);
+      const mercadoDe = new Map<string, any>();
+      hechos.docs.forEach((d: any) => mercadoDe.set(d.id, d.data()?.mercado || null));
+
+      const escrituras: { ref: any; datos: any }[] = [];
+      const vigentes = new Set<string>();
+      for (const d of autos.docs) {
+        try {
+          const v: any = d.data() || {};
+          if (v.isDeleted || v.status === "sold" || !v.make || !v.model || !v.year || !v.agencyId || v.agencyId === "unassigned") continue;
+          vigentes.add(d.id);
+          const desde = new Date(v.receivedAt || v.createdAt || "").getTime();
+          const dias = Number.isFinite(desde) ? Math.max(0, Math.floor((Date.now() - desde) / 86_400_000)) : null;
+          const precio = Number(v.price) || 0;
+          const m = mercadoDe.get(d.id) || null;
+          const r = analizarPrecio({ precio, mercado: m, dias });
+          const mercadoHaceDias = m?.fecha ? Math.floor((Date.now() - Date.parse(m.fecha)) / 86_400_000) : null;
+          const viejo = mercadoHaceDias !== null && mercadoHaceDias > MERCADO_VIEJO_DIAS;
+          cuenta[r.sugerencia] = (cuenta[r.sugerencia] || 0) + 1;
+          escrituras.push({
+            ref: adminDb.collection(COL_ANALISIS).doc(d.id),
+            datos: {
+              vehicleId: d.id,
+              agencyId: v.agencyId,
+              titulo: `${v.make} ${v.model} ${v.year}`,
+              precioLista: precio,
+              medianaMercado: m ? (m.mediana || m.promedio || null) : null,
+              rangoMercado: m ? { minimo: m.minimo, maximo: m.maximo, p33: m.p33, p66: m.p66, p90: m.p90 } : null,
+              comparables: m ? Number(m.n) || 0 : 0,
+              diasEnInventario: dias,
+              analizadoEn: inicio,
+              mercadoDe: m?.fecha || null,
+              sugerencia: r.sugerencia,
+              precioSugerido: r.precioSugerido,
+              razon: viejo ? `${r.razon} (Ojo: los datos de mercado tienen ${mercadoHaceDias} días.)` : r.razon,
+              confianza: r.confianza,
+              diferenciaVsMedianaPct: r.diferenciaVsMedianaPct,
+            },
+          });
+          revisados++;
+        } catch (e: any) {
+          errores.push(`${d.id}: ${String(e?.message || e).slice(0, 120)}`);
+        }
+      }
+      for (let i = 0; i < escrituras.length; i += 400) {
+        const lote = adminDb.batch();
+        escrituras.slice(i, i + 400).forEach((w) => lote.set(w.ref, w.datos));
+        await lote.commit();
+      }
+      // Autos que se vendieron o se borraron: su analisis ya no sirve (es un
+      // calculo derivado, se vuelve a generar; nada de lo capturado se pierde).
+      const sobrantes = previos.docs.filter((d: any) => !vigentes.has(d.id));
+      for (let i = 0; i < sobrantes.length; i += 400) {
+        const lote = adminDb.batch();
+        sobrantes.slice(i, i + 400).forEach((d: any) => lote.delete(d.ref));
+        await lote.commit();
+      }
+      await corridaRef.set({
+        inicio, fin: new Date().toISOString(), origen, agencyId: soloAgencia || null,
+        estado: errores.length ? "con_errores" : "ok",
+        revisados, sugerencias: cuenta, errores: errores.slice(0, 10), retirados: sobrantes.length,
+      });
+      console.log(`Revision de precios: ${revisados} autos (${origen}).`);
+      return { ok: true as const, revisados, sugerencias: cuenta, errores: errores.length };
+    } catch (e: any) {
+      console.error("Revision de precios:", e);
+      await corridaRef.set({ inicio, fin: new Date().toISOString(), origen, agencyId: soloAgencia || null, estado: "error", error: String(e?.message || e).slice(0, 300), revisados }).catch(() => {});
+      return { ok: false as const, error: "No se pudo completar la revisión." };
+    } finally {
+      revisionCorriendo = false;
+    }
+  }
+
+  async function revisionProgramada() {
+    const adminDb = getAdminDb();
+    if (!adminDb) return;
+    try {
+      const ult = await adminDb.collection(COL_CORRIDAS).orderBy("inicio", "desc").limit(10).get();
+      const ultimaBuena = ult.docs.map((d: any) => d.data()).find((x: any) => x.origen === "programada" && (x.estado === "ok" || x.estado === "con_errores"));
+      if (ultimaBuena && Date.now() - Date.parse(ultimaBuena.inicio) < HORAS_ENTRE_REVISIONES * 3_600_000) return;
+    } catch { /* sin historial: se corre */ }
+    await revisarPreciosDelInventario("programada");
+  }
+  // Despues de la vuelta de mercado (que tarda), y luego se revisa cada 6 horas si ya toca.
+  setTimeout(revisionProgramada, 15 * 60 * 1000);
+  setInterval(revisionProgramada, 6 * 60 * 60 * 1000);
+
+  const ROLES_PRECIOS = ["admin", "manager"];
+
+  app.get("/api/precios/analisis", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no ve el análisis de precios." });
+    try {
+      const snap = await q.adminDb.collection(COL_ANALISIS).where("agencyId", "==", q.agencyId).get();
+      const orden: Record<string, number> = { bajar: 0, subir: 1, mantener: 2, "sin-datos": 3 };
+      const autos = snap.docs.map((d: any) => d.data()).sort((a: any, b: any) => (orden[a.sugerencia] ?? 9) - (orden[b.sugerencia] ?? 9) || (b.diasEnInventario || 0) - (a.diasEnInventario || 0));
+      // Las revisiones programadas son de toda la plataforma: lo que cada agencia
+      // necesita saber es cuando se analizaron SUS autos por ultima vez.
+      const ultimaRevision = autos.reduce((m: string, a: any) => (String(a.analizadoEn || "") > m ? String(a.analizadoEn) : m), "") || null;
+      res.json({ autos, ultimaRevision });
+    } catch (e) {
+      console.error("precios/analisis:", e);
+      res.status(500).json({ error: "No se pudo leer el análisis." });
+    }
+  });
+
+  // Revisar ahora, sin esperar a la de la noche. Solo reanaliza con el mercado
+  // ya guardado; no consulta Mercado Libre. Una cada 10 minutos por agencia.
+  const ultimaRevisionManual = new Map<string, number>();
+  app.post("/api/precios/revisar", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no puede correr la revisión." });
+    if (Date.now() - (ultimaRevisionManual.get(q.agencyId) || 0) < 10 * 60_000) {
+      return res.status(429).json({ error: "Ya se revisó hace unos minutos. Intenta de nuevo en un rato." });
+    }
+    ultimaRevisionManual.set(q.agencyId, Date.now());
+    const r = await revisarPreciosDelInventario("manual", q.agencyId);
+    res.status(r.ok ? 200 : 500).json(r);
+  });
 
   // ===== Liga de la publicacion en la pagina Nextcar =====
   //
