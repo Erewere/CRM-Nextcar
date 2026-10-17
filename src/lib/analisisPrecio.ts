@@ -9,6 +9,8 @@
  *
  * Reglas, en este orden:
  *  1. Menos de 5 anuncios comparables -> «sin datos»: no se sugiere nada.
+ *  1b. Más de 30 % de diferencia contra la mediana (para arriba o para abajo)
+ *     -> «revisar»: casi siempre es otra versión, no un mal precio.
  *  2. BAJAR si el precio está por encima de lo normal del mercado (arriba del
  *     corte p66) y el auto ya lleva tiempo parado, o si está muy arriba (p90).
  *       - muy arriba (sobre p90): baja a la franja «buena» (p66), o a la
@@ -22,12 +24,23 @@
 
 import { MINIMO_ANUNCIOS, medianaDe, type PrecioMercado } from './precioMercado';
 
-export type Sugerencia = 'mantener' | 'bajar' | 'subir' | 'sin-datos';
+/** Sube cuando cambian las reglas: la revisión programada se repite sola en cuanto estrena versión. */
+export const VERSION_REGLAS = 2;
+
+/** `revisar` = el precio está tan lejos del mercado que probablemente no sean comparables. */
+export type Sugerencia = 'mantener' | 'bajar' | 'subir' | 'revisar' | 'sin-datos';
 export type ConfianzaAnalisis = 'alta' | 'media' | 'baja' | 'ninguna';
 
 export const DIAS_PARADO = 45;
 export const DIAS_MUY_PARADO = 60;
 export const DIAS_NUEVO = 30;
+/**
+ * El mercado se busca por marca, modelo y año, sin versión ni kilometraje. Un
+ * auto muy equipado (un Mini JCW contra los Cooper básicos) sale «carísimo» sin
+ * serlo. Pasado este porcentaje de diferencia no se sugiere un precio: se pide
+ * revisar que de verdad sean comparables.
+ */
+export const DIFERENCIA_SOSPECHOSA_PCT = 30;
 
 export interface ResultadoAnalisis {
   sugerencia: Sugerencia;
@@ -76,6 +89,17 @@ export function analizarPrecio(input: {
   const dd = dias ?? 0;
   const parado = dias === null ? '' : ` y lleva ${dias} día${dias === 1 ? '' : 's'} en inventario`;
   const base = { confianza, diferenciaVsMedianaPct: dif };
+
+  // 1b. Demasiado lejos para fiarse de la comparación
+  if (Math.abs(dif) > DIFERENCIA_SOSPECHOSA_PCT) {
+    return {
+      ...base,
+      confianza: 'baja',
+      sugerencia: 'revisar',
+      precioSugerido: precio,
+      razon: `Está ${Math.abs(dif)}% ${dif > 0 ? 'arriba' : 'abajo'} de la mediana del mercado (${dinero(mediana)}, ${mercado.n} anuncios)${parado}. Es tanta diferencia que probablemente no sean la misma versión: el mercado se busca por marca, modelo y año, sin versión ni kilometraje. Confirma que sean comparables antes de mover el precio.`,
+    };
+  }
 
   // 2. Bajar
   if (precio > mercado.p90 || (precio > mercado.p66 && dd >= DIAS_PARADO)) {

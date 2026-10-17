@@ -10,7 +10,7 @@ import { normalizarTipo, procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
-import { analizarPrecio } from "./src/lib/analisisPrecio.ts";
+import { analizarPrecio, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
@@ -4122,7 +4122,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     revisionCorriendo = true;
     const inicio = new Date().toISOString();
     const corridaRef = adminDb.collection(COL_CORRIDAS).doc();
-    const cuenta = { bajar: 0, subir: 0, mantener: 0, "sin-datos": 0 } as Record<string, number>;
+    const cuenta = { bajar: 0, subir: 0, revisar: 0, mantener: 0, "sin-datos": 0 } as Record<string, number>;
     const errores: string[] = [];
     let revisados = 0;
     try {
@@ -4164,6 +4164,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
               comparables: m ? Number(m.n) || 0 : 0,
               diasEnInventario: dias,
               analizadoEn: inicio,
+              versionReglas: VERSION_REGLAS,
               mercadoDe: m?.fecha || null,
               sugerencia: r.sugerencia,
               precioSugerido: r.precioSugerido,
@@ -4192,7 +4193,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       }
       await corridaRef.set({
         inicio, fin: new Date().toISOString(), origen, agencyId: soloAgencia || null,
-        estado: errores.length ? "con_errores" : "ok",
+        estado: errores.length ? "con_errores" : "ok", version: VERSION_REGLAS,
         revisados, sugerencias: cuenta, errores: errores.slice(0, 10), retirados: sobrantes.length,
       });
       console.log(`Revision de precios: ${revisados} autos (${origen}).`);
@@ -4211,7 +4212,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     if (!adminDb) return;
     try {
       const ult = await adminDb.collection(COL_CORRIDAS).orderBy("inicio", "desc").limit(10).get();
-      const ultimaBuena = ult.docs.map((d: any) => d.data()).find((x: any) => x.origen === "programada" && (x.estado === "ok" || x.estado === "con_errores"));
+      const ultimaBuena = ult.docs.map((d: any) => d.data()).find((x: any) => x.origen === "programada" && x.version === VERSION_REGLAS && (x.estado === "ok" || x.estado === "con_errores"));
       if (ultimaBuena && Date.now() - Date.parse(ultimaBuena.inicio) < HORAS_ENTRE_REVISIONES * 3_600_000) return;
     } catch { /* sin historial: se corre */ }
     await revisarPreciosDelInventario("programada");
@@ -4228,7 +4229,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no ve el análisis de precios." });
     try {
       const snap = await q.adminDb.collection(COL_ANALISIS).where("agencyId", "==", q.agencyId).get();
-      const orden: Record<string, number> = { bajar: 0, subir: 1, mantener: 2, "sin-datos": 3 };
+      const orden: Record<string, number> = { bajar: 0, revisar: 1, subir: 2, mantener: 3, "sin-datos": 4 };
       const autos = snap.docs.map((d: any) => d.data()).sort((a: any, b: any) => (orden[a.sugerencia] ?? 9) - (orden[b.sugerencia] ?? 9) || (b.diasEnInventario || 0) - (a.diasEnInventario || 0));
       // Las revisiones programadas son de toda la plataforma: lo que cada agencia
       // necesita saber es cuando se analizaron SUS autos por ultima vez.
