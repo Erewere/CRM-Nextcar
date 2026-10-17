@@ -12,9 +12,8 @@
  * Qué tan comercial es (`comercialidad`), de lo más confiable a lo menos:
  *  1. Si la agencia ya vendió 2 o más autos de ese modelo: sus días en inventario
  *     (mediana de 45 días o menos = muy comercial; 90 o más = poco).
- *  2. Si no, cuántos anuncios parecidos hay en Mercado Libre (40 o más = muy
- *     comercial; menos de 15 = poco). Un modelo que todos publican es un modelo
- *     que todos buscan.
+ *  2. Si no hay ventas propias suficientes, se toma como POCO comercial (por
+ *     prudencia: el número de anuncios en el mercado mide la oferta, no la rapidez).
  *
  * Resultado: BUENA COMPRA si pagaste 5 % o más por debajo de la compra de la guía;
  * EN LÍNEA si estás entre eso y el máximo a pagar; CARA si pasaste el máximo.
@@ -35,10 +34,16 @@ export const MARGEN_BUENA_PCT = 5;
 export const HOLGURA_GUIA_MEDIA_PCT = 3;
 export const DIAS_MUY_COMERCIAL = 45;
 export const DIAS_POCO_COMERCIAL = 90;
-export const ANUNCIOS_MUY_COMERCIAL = 40;
-export const ANUNCIOS_POCO_COMERCIAL = 15;
 
-/** Qué tan fácil es vender este modelo. `diasPropios`: días en inventario de los autos del mismo modelo ya vendidos. */
+/**
+ * Qué tan fácil es vender este modelo, según los días que tardó la agencia en vender los suyos.
+ *
+ * Sin al menos 2 ventas propias del modelo se toma como POCO comercial, por prudencia. Antes
+ * se adivinaba con el número de anuncios en Mercado Libre, pero eso mide cuánta oferta hay,
+ * no qué tan rápido sale, y topaba en ~48 anuncios (un Sentra con 48 anuncios salía «muy
+ * comercial» y se recomendaba pagar de más, 18 oct 2026). Pagar de menos cuesta una
+ * oportunidad; pagar de más cuesta dinero.
+ */
 export function comercialidad(input: { anuncios: number | null | undefined; diasPropios?: number[] }): { nivel: Comercialidad; motivo: string } {
   const dias = (input.diasPropios || []).filter((d) => Number.isFinite(d)).sort((a, b) => a - b);
   if (dias.length >= 2) {
@@ -48,8 +53,7 @@ export function comercialidad(input: { anuncios: number | null | undefined; dias
     return { nivel, motivo: `Tus ${dias.length} ventas de este modelo tardaron ${m} días en promedio.` };
   }
   const n = Number(input.anuncios) || 0;
-  const nivel: Comercialidad = n >= ANUNCIOS_MUY_COMERCIAL ? 'alta' : n >= ANUNCIOS_POCO_COMERCIAL ? 'media' : 'baja';
-  return { nivel, motivo: `Hay ${n} anuncios parecidos en el mercado${n >= ANUNCIOS_MUY_COMERCIAL ? ': se publica y se busca mucho.' : n >= ANUNCIOS_POCO_COMERCIAL ? '.' : ': es un modelo poco común.'}` };
+  return { nivel: 'baja', motivo: `Sin ventas tuyas de este modelo no se sabe qué tan rápido sale (hay ${n} anuncios parecidos); por prudencia se toma como poco comercial.` };
 }
 
 /** Lo máximo que conviene pagar. Poco comercial: la compra de la guía. Muy comercial: la media de la guía. */

@@ -24,6 +24,7 @@
  */
 
 import { comercialidad, techoDeCompra, type Comercialidad } from './analisisCompra';
+import { FACTOR_COMPRA } from './guiaPrecios';
 import type { PrecioMercado } from './precioMercado';
 import { medianaDe } from './precioMercado';
 
@@ -134,7 +135,11 @@ export function recomendarPrecios(input: {
   marca: string; modelo: string; version?: string; anio: number; km?: number | null;
   operaciones: Operacion[];
   mercado?: PrecioMercado | null;
-  guia?: { compra: number; venta: number; confianza: string } | null;
+  /**
+   * Guía de Autocosmos, o la que la persona escribió a mano (p. ej. del Libro Azul: `manual`).
+   * `ventaMin` = la versión más barata de la guía; sirve de tope prudente cuando no se sabe la versión.
+   */
+  guia?: { compra: number; venta: number; confianza: string; ventaMin?: number | null; manual?: boolean } | null;
   margenObjetivoPct?: number;
   /** Lo que piden por el auto, si ya hay una oferta sobre la mesa. */
   precioOfrecido?: number | null;
@@ -196,9 +201,27 @@ export function recomendarPrecios(input: {
   // ---- Máximo a pagar
   const maxMargen = venta ? Math.max(0, redondear(venta * (1 - margen / 100) - gastosEst)) : null;
   const g = input.guia;
-  const maxGuia = g && (g.confianza === 'alta' || g.confianza === 'media') && g.compra > 0
-    ? techoDeCompra({ guiaCompra: g.compra, guiaVenta: g.venta, nivel: com.nivel, confianzaGuia: g.confianza }) : null;
-  if (g && !maxGuia) advertencias.push('La guía no es confiable para este auto; el máximo se calcula solo por el margen.');
+  let maxGuia: number | null = null;
+  if (g && g.compra > 0) {
+    if (g.confianza === 'alta' || g.confianza === 'media') {
+      maxGuia = techoDeCompra({ guiaCompra: g.compra, guiaVenta: g.venta, nivel: com.nivel, confianzaGuia: g.confianza });
+      if (g.manual) advertencias.push('El tope de compra usa los precios de guía que escribiste a mano.');
+    } else if (g.ventaMin && g.ventaMin > 0) {
+      // No se supo qué versión es: nunca se descarta la guía. Se toma la versión más barata como tope.
+      maxGuia = Math.round((g.ventaMin * FACTOR_COMPRA) / 500) * 500;
+      advertencias.push(`No se pudo saber qué versión es y la guía las tiene muy distintas. Por prudencia el tope usa la versión más barata de la guía (${dinero(maxGuia)}). Escribe la versión para afinarlo.`);
+    } else {
+      advertencias.push('La guía no es confiable para este auto; el máximo se calcula solo por el margen.');
+    }
+  }
+  if (!g && venta && origen !== 'ventas-propias') {
+    advertencias.push('No hay guía para este auto. El máximo sale solo del margen sobre precios de lista del mercado y puede quedar alto: contrástalo con tu Libro Azul (puedes escribirlo para que mande).');
+  }
+  // Los anuncios son precios de lista y suelen estar muy arriba de la guía: si el precio de venta
+  // sale de ellos, el margen daría un máximo inflado. Se avisa para que se mire el tope de la guía.
+  if (g && g.venta > 0 && venta && venta > g.venta * 1.15 && origen !== 'ventas-propias') {
+    advertencias.push(`El precio de venta sugerido está ${Math.round(((venta - g.venta) / g.venta) * 100)}% arriba de la guía de venta (${dinero(g.venta)}): son precios de lista del mercado. Por eso el máximo a pagar lo limita la guía.`);
+  }
   const candidatos = [maxMargen, maxGuia].filter((x): x is number => x !== null && x > 0);
   const maxRecomendado = candidatos.length ? Math.min(...candidatos) : (maxMargen === 0 ? 0 : null);
 

@@ -25,7 +25,7 @@
 import { MINIMO_ANUNCIOS, medianaDe, type PrecioMercado } from './precioMercado';
 
 /** Sube cuando cambian las reglas: la revisión programada se repite sola en cuanto estrena versión. */
-export const VERSION_REGLAS = 5;
+export const VERSION_REGLAS = 6;
 
 /** `revisar` = el precio está tan lejos del mercado que probablemente no sean comparables. */
 export type Sugerencia = 'mantener' | 'bajar' | 'subir' | 'revisar' | 'sin-datos';

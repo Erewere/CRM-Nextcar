@@ -4351,7 +4351,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   }
 
   /** Valida lo que escribe la persona para pedir una recomendación; devuelve el error o los datos limpios. */
-  function validarConsultaReco(b: any): { error: string } | { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null } {
+  function validarConsultaReco(b: any): { error: string } | { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null; guiaManual: { compra: number; venta: number } | null } {
     const marca = String(b?.marca || "").trim().slice(0, 60);
     const modelo = String(b?.modelo || "").trim().slice(0, 80);
     const version = String(b?.version || "").trim().slice(0, 80);
@@ -4360,17 +4360,27 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const ofrecido = b?.precioOfrecido ? Number(b.precioOfrecido) : null;
     if (!marca || !modelo || !(anio >= 1980 && anio <= new Date().getFullYear() + 2)) return { error: "Escribe marca, modelo y año." };
     if (km !== null && !(km >= 0 && km < 1_000_000)) return { error: "El kilometraje no parece correcto." };
-    return { marca, modelo, version, anio, km, ofrecido };
+    // Precios de guía escritos a mano (por ejemplo del Libro Azul). Con uno solo se calcula el otro (compra = 87 % de la venta).
+    let gc = Number(b?.guiaCompra) || 0, gv = Number(b?.guiaVenta) || 0;
+    if ((gc && gc < 10_000) || (gv && gv < 10_000)) return { error: "Los precios de la guía deben ir completos, por ejemplo 181000." };
+    if (gc && !gv) gv = Math.round(gc / 0.87);
+    if (gv && !gc) gc = Math.round(gv * 0.87);
+    if (gc && gv && gc > gv) return { error: "La compra de la guía no puede ser mayor que la venta." };
+    return { marca, modelo, version, anio, km, ofrecido, guiaManual: gc && gv ? { compra: gc, venta: gv } : null };
   }
 
   // Mercado y guia de un modelo, guardados 12 horas para no repetir una consulta lenta.
   const cacheConsultaModelo = new Map<string, { momento: number; mercado: any; guia: any }>();
 
-  async function recomendarParaAgencia(adminDb: any, agencyId: string, c: { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null }) {
-    const clave = `${c.marca}|${c.modelo}|${c.anio}`.toLowerCase();
+  async function recomendarParaAgencia(adminDb: any, agencyId: string, c: { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null; guiaManual?: { compra: number; venta: number } | null }) {
+    // La versión viaja a la guía y al mercado: sin ella la guía ve todas las versiones juntas
+    // y no sabe cuál es (un Sentra Advance se consultaba como «Sentra» y salía confianza baja).
+    const yaTrae = c.version && c.modelo.toLowerCase().includes(c.version.toLowerCase());
+    const consulta = c.version && !yaTrae ? `${c.modelo} ${c.version}` : c.modelo;
+    const clave = `${c.marca}|${consulta}|${c.anio}`.toLowerCase();
     let cache = cacheConsultaModelo.get(clave);
     if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
-      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, c.modelo, c.anio), consultarGuia(c.marca, c.modelo, c.anio)]);
+      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio), consultarGuia(c.marca, consulta, c.anio)]);
       cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
       // Si una consulta falló no se guarda: se reintenta la próxima vez.
       if (m.status === "fulfilled" && g.status === "fulfilled") cacheConsultaModelo.set(clave, cache);
@@ -4380,17 +4390,20 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       adminDb.collection("agencies").doc(agencyId).get(),
     ]);
     const margen = Number(agSnap.data()?.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT;
+    const guiaUsada = c.guiaManual
+      ? { compra: c.guiaManual.compra, venta: c.guiaManual.venta, confianza: "alta", manual: true }
+      : cache.guia ? { compra: cache.guia.compra, venta: cache.guia.venta, confianza: cache.guia.confianza, ventaMin: cache.guia.ventaMin } : null;
     const reco = recomendarPrecios({
       marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km,
       operaciones: opsSnap.docs.map((d: any) => d.data()),
-      mercado: cache.mercado, guia: cache.guia && cache.guia.confianza !== "baja" ? cache.guia : null,
+      mercado: cache.mercado, guia: guiaUsada,
       margenObjetivoPct: margen, precioOfrecido: c.ofrecido,
     });
     return {
       consulta: { marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km },
       fechaAnalisis: new Date().toISOString(),
       mercado: cache.mercado ? { n: cache.mercado.n, mediana: cache.mercado.mediana || cache.mercado.promedio, minimo: cache.mercado.minimo, maximo: cache.mercado.maximo } : null,
-      guia: cache.guia ? { compra: cache.guia.compra, venta: cache.guia.venta, confianza: cache.guia.confianza } : null,
+      guia: guiaUsada ? { compra: guiaUsada.compra, venta: guiaUsada.venta, confianza: guiaUsada.confianza, manual: !!c.guiaManual, versionDeLaGuia: c.guiaManual ? null : (cache.guia?.version || null) } : null,
       ...reco,
     };
   }
@@ -5716,7 +5729,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     },
     {
       name: "recomendar_precios",
-      description: "Antes de comprar un auto: dice en cuánto venderlo, cuánto pagar como MÁXIMO y en cuántos días se vendería, usando las ventas parecidas de la agencia (misma marca y modelo, año y kilometraje parecidos), el mercado y la guía, con el margen objetivo de la agencia. Devuelve el nivel de confianza y cuántos comparables se usaron; con pocos, lo dice y se apoya en mercado y guía. Úsala para «¿cuánto pago por este Sentra 2020 con 70 mil km?». Tarda unos 15 segundos. Si dan lo que piden por el auto, pásalo en precioOfrecido y dirá si conviene. Requiere permiso de costos.",
+      description: "Antes de comprar un auto: dice en cuánto venderlo, cuánto pagar como MÁXIMO y en cuántos días se vendería, usando las ventas parecidas de la agencia (misma marca y modelo, año y kilometraje parecidos), el mercado y la guía, con el margen objetivo de la agencia. Devuelve el nivel de confianza y cuántos comparables se usaron; con pocos, lo dice y se apoya en mercado y guía. Úsala para «¿cuánto pago por este Sentra 2020 con 70 mil km?». Pregunta SIEMPRE la versión (Sense, Advance…): sin ella la guía mezcla versiones y el tope sale impreciso. Si la persona te dice el precio del Libro Azul u otra guía, pásalo en guiaCompra/guiaVenta. Tarda unos 15 segundos. Si dan lo que piden por el auto, pásalo en precioOfrecido y dirá si conviene. Requiere permiso de costos.",
       inputSchema: {
         type: "object",
         properties: {
@@ -5725,7 +5738,9 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
           version: { type: "string", description: "Versión, por ejemplo Advance (opcional)" },
           anio: { type: "number", description: "Año del auto" },
           km: { type: "number", description: "Kilometraje (opcional pero recomendado)" },
-          precioOfrecido: { type: "number", description: "Lo que piden por el auto, si ya lo saben (opcional)" }
+          precioOfrecido: { type: "number", description: "Lo que piden por el auto, si ya lo saben (opcional)" },
+          guiaCompra: { type: "number", description: "Precio de COMPRA de la guía que la persona tenga a la mano, por ejemplo el Libro Azul (opcional). Si lo dan, úsalo: manda sobre la guía automática." },
+          guiaVenta: { type: "number", description: "Precio de VENTA de esa misma guía (opcional)" }
         },
         required: ["marca", "modelo", "anio"]
       }

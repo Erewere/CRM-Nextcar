@@ -39,7 +39,7 @@ const campo = 'h-10 w-full px-3 rounded-lg border border-slate-300 dark:border-s
 
 export function Recomendador() {
   const { userData } = useAuth();
-  const [f, setF] = useState({ marca: '', modelo: '', version: '', anio: '', km: '', precioOfrecido: '' });
+  const [f, setF] = useState({ marca: '', modelo: '', version: '', anio: '', km: '', precioOfrecido: '', guiaCompra: '', guiaVenta: '' });
   const [margen, setMargen] = useState('');
   const [guardado, setGuardado] = useState(false);
   const [r, setR] = useState<Resultado | null>(null);
@@ -56,6 +56,8 @@ export function Recomendador() {
       setR(await llamar('/api/precios/recomendar', 'POST', {
         marca: f.marca, modelo: f.modelo, version: f.version, anio: Number(f.anio), km: f.km === '' ? null : Number(f.km.replace(/,/g, '')),
         precioOfrecido: f.precioOfrecido ? Number(f.precioOfrecido.replace(/[$,]/g, '')) : null,
+        guiaCompra: f.guiaCompra ? Number(f.guiaCompra.replace(/[$,]/g, '')) : null,
+        guiaVenta: f.guiaVenta ? Number(f.guiaVenta.replace(/[$,]/g, '')) : null,
       }));
     } catch (er: any) { setError(er.message); } finally { setCargando(false); }
   };
@@ -82,6 +84,11 @@ export function Recomendador() {
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Año<input required inputMode="numeric" value={f.anio} onChange={poner('anio')} placeholder="2020" className={campo} /></label>
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Kilometraje<input inputMode="numeric" value={f.km} onChange={poner('km')} placeholder="68,000" className={campo} /></label>
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Piden (opcional)<input inputMode="numeric" value={f.precioOfrecido} onChange={poner('precioOfrecido')} placeholder="$215,000" className={campo} /></label>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 md:col-span-2">Libro Azul: compra (opcional)<input inputMode="numeric" value={f.guiaCompra} onChange={poner('guiaCompra')} placeholder="$181,000" className={campo} /></label>
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 md:col-span-2">Libro Azul: venta (opcional)<input inputMode="numeric" value={f.guiaVenta} onChange={poner('guiaVenta')} placeholder="$207,000" className={campo} /></label>
+          <p className="text-xs text-slate-500 md:col-span-2 self-end">Si los escribes, mandan sobre la guía automática. Con uno solo se calcula el otro.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button disabled={cargando} className="h-10 px-4 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-2">
