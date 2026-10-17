@@ -7,7 +7,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs, getDoc } from 'firebase/firestore';
 import { getApiUrl } from '../lib/api';
 import { Vehicle, Client, VehicleExpense } from '../types';
-import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp, Share2, FileText } from 'lucide-react';
+import { Plus, Car as CarIcon, Search, Trash2, Edit2, LayoutGrid, List, Settings, Target, Download, X, ChevronDown, ChevronUp, Share2, FileText, TrendingUp } from 'lucide-react';
 import { VehicleDetailModal } from '../components/VehicleDetailModal';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 import { MobileInventory } from './mobile/MobileInventory';
@@ -1028,6 +1028,16 @@ export function Inventory() {
               title="Lo que piden los clientes y no hay en el inventario"
             >
               <Search className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lo que buscan</span>
+            </button>
+          )}
+          {activeTab === 'my' && userData?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => navigate('/precios')}
+              className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 text-sm shrink-0"
+              title="Cada auto contra el precio de mercado: cuáles bajar, subir o revisar"
+            >
+              <TrendingUp className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Revisión de precios</span>
             </button>
           )}
           {activeTab === 'my' && userData?.role !== 'master' && (
