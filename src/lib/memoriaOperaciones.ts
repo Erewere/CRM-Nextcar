@@ -27,7 +27,8 @@ import { comercialidad, techoDeCompra, type Comercialidad } from './analisisComp
 import type { PrecioMercado } from './precioMercado';
 import { medianaDe } from './precioMercado';
 
-export const MARGEN_OBJETIVO_INICIAL_PCT = 10;
+/** Margen con el que arranca cada agencia (Luis, 18 oct 2026); el administrador lo cambia en Revisión de precios. */
+export const MARGEN_OBJETIVO_INICIAL_PCT = 12;
 export const KM_PARECIDO = 60_000;
 
 export interface Operacion {
