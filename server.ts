@@ -11,6 +11,7 @@ import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } f
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { analizarPrecio, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
+import { analizarCompra, resumirCompras } from "./src/lib/analisisCompra.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
@@ -4030,15 +4031,21 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       ]);
       const fechaDe = new Map<string, string>();
       const guiaDe = new Map<string, string>();
+      const conGuia = new Set<string>();
       hechos.docs.forEach((d: any) => {
         fechaDe.set(d.id, String(d.data()?.intentoEl || ""));
         guiaDe.set(d.id, String(d.data()?.guiaEl || ""));
+        if (d.data()?.guia) conGuia.add(d.id);
       });
       // Un auto está pendiente si le toca Mercado Libre, la guía de Autocosmos, o las dos.
       const pendientes = autos.docs
         .filter((d: any) => {
           const v = d.data() || {};
-          if (v.isDeleted || v.status === "sold" || !v.make || !v.model || !v.year) return false;
+          if (v.isDeleted || !v.make || !v.model || !v.year) return false;
+          // Los vendidos ya no necesitan precio de mercado, pero sí la guía UNA vez:
+          // con ella se mide si su compra fue buena (analisis_compra). Si ya la
+          // tienen, no se vuelve a consultar.
+          if (v.status === "sold") return Number(v.year) >= ANIO_MINIMO_GUIA && !conGuia.has(d.id) && (guiaDe.get(d.id) || "") < limite;
           return (fechaDe.get(d.id) || "") < limite || (guiaDe.get(d.id) || "") < limite;
         })
         .slice(0, AUTOS_POR_VUELTA);
@@ -4048,7 +4055,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         const ahora = new Date().toISOString();
         // Mercado Libre: igual que siempre, solo cuando le toca. (merge: la guia
         // vive en el mismo documento y no se debe borrar al refrescar el mercado.)
-        if ((fechaDe.get(d.id) || "") < limite) {
+        const vendido = v.status === "sold";
+        if (!vendido && (fechaDe.get(d.id) || "") < limite) {
           try {
             const m = await consultarMercado(String(v.make), String(v.model), v.year);
             await adminDb.collection("mercadoAutos").doc(d.id).set({
@@ -4070,7 +4078,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         // reintenta en un dia, no en una semana (Autocosmos a veces se niega
         // por unos minutos); los modelos de 2014 o menos no tienen guia: semana.
         if ((guiaDe.get(d.id) || "") < limite) {
-          const reintento = Number(v.year) < ANIO_MINIMO_GUIA ? ahora : new Date(Date.now() - (DIAS_MERCADO - 1) * 86_400_000).toISOString();
+          const reintento = Number(v.year) < ANIO_MINIMO_GUIA || vendido ? ahora : new Date(Date.now() - (DIAS_MERCADO - 1) * 86_400_000).toISOString();
           try {
             const g = await consultarGuia(String(v.make), String(v.model), v.year);
             await adminDb.collection("mercadoAutos").doc(d.id).set(
@@ -4111,6 +4119,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   //   analisis_precio_corridas/{id}    una por revision: cuando, cuantos, fallas
   const COL_ANALISIS = "analisis_precio";
   const COL_CORRIDAS = "analisis_precio_corridas";
+  // Calidad de compras (Fase 2): una ficha por auto comprado, con lo pagado contra la guia.
+  const COL_COMPRAS = "analisis_compra";
   const HORAS_ENTRE_REVISIONES = 20;
   const MERCADO_VIEJO_DIAS = 21;
   let revisionCorriendo = false;
@@ -4129,20 +4139,55 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       await corridaRef.set({ inicio, estado: "en_curso", origen, agencyId: soloAgencia || null });
       const vehiculos = adminDb.collection("vehicles");
       const mercados = adminDb.collection("mercadoAutos");
-      const [autos, hechos, previos] = await Promise.all([
+      const delaAgencia = (c: any) => (soloAgencia ? adminDb.collection(c).where("agencyId", "==", soloAgencia).get() : adminDb.collection(c).get());
+      const [autos, hechos, previos, costos, comprasPrevias] = await Promise.all([
         soloAgencia ? vehiculos.where("agencyId", "==", soloAgencia).get() : vehiculos.get(),
         soloAgencia ? mercados.where("agencyId", "==", soloAgencia).get() : mercados.get(),
-        soloAgencia ? adminDb.collection(COL_ANALISIS).where("agencyId", "==", soloAgencia).get() : adminDb.collection(COL_ANALISIS).get(),
+        delaAgencia(COL_ANALISIS),
+        delaAgencia("vehicleFinancials"),
+        delaAgencia(COL_COMPRAS),
       ]);
       const mercadoDe = new Map<string, any>();
-      hechos.docs.forEach((d: any) => mercadoDe.set(d.id, d.data()?.mercado || null));
+      const guiaDe = new Map<string, any>();
+      hechos.docs.forEach((d: any) => { mercadoDe.set(d.id, d.data()?.mercado || null); guiaDe.set(d.id, d.data()?.guia || null); });
+      const costoDe = new Map<string, number>();
+      costos.docs.forEach((d: any) => costoDe.set(d.id, Number(d.data()?.purchasePrice) || 0));
+      const escriturasCompra: { ref: any; datos: any }[] = [];
+      const vigentesCompra = new Set<string>();
+      const cuentaCompras: Record<string, number> = { buena: 0, "en-linea": 0, cara: 0, "sin-guia": 0 };
 
       const escrituras: { ref: any; datos: any }[] = [];
       const vigentes = new Set<string>();
       for (const d of autos.docs) {
         try {
           const v: any = d.data() || {};
-          if (v.isDeleted || v.status === "sold" || !v.make || !v.model || !v.year || !v.agencyId || v.agencyId === "unassigned") continue;
+          if (v.isDeleted || !v.make || !v.model || !v.year || !v.agencyId || v.agencyId === "unassigned") continue;
+
+          // Calidad de la compra: precio pagado contra la compra de la guia.
+          // Consignacion no cuenta (lo que se le paga al dueno no es una compra).
+          const costo = costoDe.get(d.id) || 0;
+          if (v.ownership !== "consignacion" && costo > 0) {
+            const g = guiaDe.get(d.id);
+            const c = analizarCompra({ precioCompra: costo, guiaCompra: g?.compra, confianzaGuia: g?.confianza });
+            cuentaCompras[c.clasificacion] = (cuentaCompras[c.clasificacion] || 0) + 1;
+            vigentesCompra.add(d.id);
+            escriturasCompra.push({
+              ref: adminDb.collection(COL_COMPRAS).doc(d.id),
+              datos: {
+                vehicleId: d.id, agencyId: v.agencyId,
+                titulo: `${v.make} ${v.model} ${v.year}`, marca: String(v.make).trim(),
+                estado: v.status === "sold" ? "vendido" : "disponible",
+                precioCompra: costo, guiaCompra: g?.compra || null, guiaVenta: g?.venta || null,
+                confianzaGuia: g?.confianza || null, guiaDe: g?.fecha || null,
+                clasificacion: c.clasificacion, diferenciaPct: c.diferenciaPct, diferenciaMonto: c.diferenciaMonto, motivo: c.motivo,
+                mes: String(v.receivedAt || v.createdAt || "").slice(0, 7),
+                compradoPorId: v.compradoPorId || null, compradoPorNombre: v.compradoPorNombre || "",
+                analizadoEn: inicio, versionReglas: VERSION_REGLAS,
+              },
+            });
+          }
+
+          if (v.status === "sold") continue;
           vigentes.add(d.id);
           const desde = new Date(v.receivedAt || v.createdAt || "").getTime();
           const dias = Number.isFinite(desde) ? Math.max(0, Math.floor((Date.now() - desde) / 86_400_000)) : null;
@@ -4183,6 +4228,17 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         escrituras.slice(i, i + 400).forEach((w) => lote.set(w.ref, w.datos));
         await lote.commit();
       }
+      for (let i = 0; i < escriturasCompra.length; i += 400) {
+        const lote = adminDb.batch();
+        escriturasCompra.slice(i, i + 400).forEach((w) => lote.set(w.ref, w.datos));
+        await lote.commit();
+      }
+      const sobrantesCompra = comprasPrevias.docs.filter((d: any) => !vigentesCompra.has(d.id));
+      for (let i = 0; i < sobrantesCompra.length; i += 400) {
+        const lote = adminDb.batch();
+        sobrantesCompra.slice(i, i + 400).forEach((d: any) => lote.delete(d.ref));
+        await lote.commit();
+      }
       // Autos que se vendieron o se borraron: su analisis ya no sirve (es un
       // calculo derivado, se vuelve a generar; nada de lo capturado se pierde).
       const sobrantes = previos.docs.filter((d: any) => !vigentes.has(d.id));
@@ -4194,7 +4250,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       await corridaRef.set({
         inicio, fin: new Date().toISOString(), origen, agencyId: soloAgencia || null,
         estado: errores.length ? "con_errores" : "ok", version: VERSION_REGLAS,
-        revisados, sugerencias: cuenta, errores: errores.slice(0, 10), retirados: sobrantes.length,
+        revisados, sugerencias: cuenta, compras: cuentaCompras, errores: errores.slice(0, 10), retirados: sobrantes.length,
       });
       console.log(`Revision de precios: ${revisados} autos (${origen}).`);
       return { ok: true as const, revisados, sugerencias: cuenta, errores: errores.length };
@@ -4238,6 +4294,26 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     } catch (e) {
       console.error("precios/analisis:", e);
       res.status(500).json({ error: "No se pudo leer el análisis." });
+    }
+  });
+
+  // Calidad de compras: lo pagado contra la guia. Es un dato de costos, asi que
+  // solo para quien ya puede ver costos en el inventario.
+  app.get("/api/precios/compras", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!ROLES_PRECIOS.includes(q.rol) || !puedeRol(q.rol, "vehiculos.costo")) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    try {
+      const snap = await q.adminDb.collection(COL_COMPRAS).where("agencyId", "==", q.agencyId).get();
+      const compras = snap.docs.map((d: any) => d.data());
+      const resumen = resumirCompras(compras);
+      const orden: Record<string, number> = { cara: 0, buena: 1, "en-linea": 2, "sin-guia": 3 };
+      const autos = compras.sort((a: any, b: any) => (orden[a.clasificacion] ?? 9) - (orden[b.clasificacion] ?? 9) || (b.diferenciaPct || 0) - (a.diferenciaPct || 0));
+      const ultimaRevision = compras.reduce((m: string, a: any) => (String(a.analizadoEn || "") > m ? String(a.analizadoEn) : m), "") || null;
+      res.json({ resumen, autos, ultimaRevision, limites: "La guía es la de hoy, no la del día de la compra; con confianza baja o en consignación no se compara." });
+    } catch (e) {
+      console.error("precios/compras:", e);
+      res.status(500).json({ error: "No se pudo leer el análisis de compras." });
     }
   });
 

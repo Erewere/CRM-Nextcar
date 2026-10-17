@@ -313,6 +313,8 @@ export function Inventory() {
             bodyType: vBodyType,
             km: vKm,
             status: "available",
+            compradoPorId: userData?.id || null,
+            compradoPorNombre: userData?.name || "",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };

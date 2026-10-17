@@ -143,6 +143,9 @@ export function AutoNuevo() {
         expenses: [],
         ...(f.publicarEnWeb && userData?.role !== 'seller' ? { publicarEnWeb: true } : {}),
         createdAt: ahora,
+        // Quién dio de alta el auto = quién lo compró; lo usa la calidad de compras.
+        compradoPorId: userData?.id || null,
+        compradoPorNombre: userData?.name || '',
         updatedAt: ahora,
       }));
       if (puedeVerCostos && f.costo !== '') await guardarCosto(nuevoId, f.agencyId, numero(f.costo));
