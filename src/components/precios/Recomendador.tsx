@@ -13,7 +13,8 @@ import { useAuth } from '../../contexts/AuthContext';
 
 type Comp = { vehicleId: string; titulo: string; anio: number; km: number | null; precioCompra: number | null; gastos: number; precioVenta: number | null; utilidad: number | null; diasEnInventario: number | null };
 type Resultado = {
-  precioVentaSugerido: number | null; origenPrecioVenta: string; maxCompraPorMargen: number | null; maxCompraPorGuia: number | null; maxCompraRecomendado: number | null;
+  precioVentaEsperado: number | null; precioVentaPesimista: number | null; origenPrecioVenta: string; maxCompraPorPesimista: number | null; maxCompraPorGuia: number | null; maxCompraRecomendado: number | null;
+  utilidadEsperada: number | null; utilidadPesimista: number | null; margenEsperadoPct: number | null; margenPesimistaPct: number | null;
   gastosEstimados: number; diasEstimados: number | null; diasRango: [number, number] | null; comercial: string | null; margenObjetivoPct: number;
   confianza: 'alta' | 'media' | 'baja' | 'ninguna'; comparables: number; advertencias: string[]; insights: string[]; comparablesUsados: Comp[];
   mercado: { n: number; mediana: number } | null; guia: { compra: number; venta: number; confianza: string } | null; fechaAnalisis: string;
@@ -95,12 +96,12 @@ export function Recomendador() {
             {cargando && <Loader2 className="w-4 h-4 animate-spin" />} {cargando ? 'Buscando… (puede tardar 15 segundos)' : 'Recomendar precios'}
           </button>
           <div className="ml-auto flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            Margen objetivo
+            Margen de referencia
             <input value={margen} onChange={(e) => { setMargen(e.target.value); setGuardado(false); }} disabled={userData?.role !== 'admin'} inputMode="decimal" className="h-9 w-16 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-center" /> %
             {userData?.role === 'admin' && <button type="button" onClick={guardarMargen} className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold hover:bg-slate-50">{guardado ? 'Guardado' : 'Guardar'}</button>}
           </div>
         </div>
-        <p className="text-xs text-slate-500">Margen = utilidad entre precio de venta. Con 10 %, un auto que se vende en $300,000 deja $30,000.</p>
+        <p className="text-xs text-slate-500">El precio lo manda el mercado (esperado = mediana; peor caso = cerca del mínimo). El margen de referencia solo avisa si comprar al máximo deja menos ganancia que ese porcentaje.</p>
       </form>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -112,11 +113,17 @@ export function Recomendador() {
             {r.mercado && <span className="text-xs text-slate-500">Mercado: {r.mercado.n} anuncios, mediana {dinero(r.mercado.mediana)}</span>}
             {r.guia && <span className="text-xs text-slate-500">· Guía: compra {dinero(r.guia.compra)} / venta {dinero(r.guia.venta)}</span>}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {grande('Venderlo en', dinero(r.precioVentaSugerido), r.origenPrecioVenta === 'ventas-propias' ? 'mediana de tus ventas' : r.origenPrecioVenta === 'ventas-y-mercado' ? 'tus ventas + mercado' : r.origenPrecioVenta === 'mercado' ? 'anuncios del mercado' : r.origenPrecioVenta === 'guia' ? 'guía' : '')}
-            {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), `por margen ${dinero(r.maxCompraPorMargen)} · por guía ${dinero(r.maxCompraPorGuia)}`)}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {grande('Se vendería en (esperado)', dinero(r.precioVentaEsperado), r.origenPrecioVenta === 'mercado' ? 'mediana del precio comercial' : r.origenPrecioVenta === 'ventas-propias' ? 'mediana de tus ventas' : r.origenPrecioVenta === 'guia' ? 'guía de venta' : '')}
+            {grande('Peor caso', dinero(r.precioVentaPesimista), 'si no es muy comercial')}
+            {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), `guía ${dinero(r.maxCompraPorGuia)} · peor caso ${dinero(r.maxCompraPorPesimista)}`)}
             {grande('Se vendería en', r.diasEstimados === null ? '—' : `${r.diasEstimados} días`, r.diasRango ? `normalmente entre ${r.diasRango[0]} y ${r.diasRango[1]}` : undefined)}
           </div>
+          {r.utilidadEsperada !== null && r.utilidadPesimista !== null && (
+            <p className="text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+              Comprando al máximo: <b>{dinero(r.utilidadEsperada)}</b> de ganancia ({r.margenEsperadoPct}%) si se vende al esperado, y <b className={r.utilidadPesimista < 0 ? 'text-red-600' : ''}>{r.utilidadPesimista < 0 ? `pérdida de ${dinero(-r.utilidadPesimista)}` : dinero(r.utilidadPesimista)}</b> ({r.margenPesimistaPct}%) en el peor caso. <span className="text-slate-400">Es informativo: el precio lo manda el mercado.</span>
+            </p>
+          )}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Conclusiones</p>
             <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300 list-disc pl-5">{r.insights.map((t, i) => <li key={i}>{t}</li>)}</ul>

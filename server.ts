@@ -5729,7 +5729,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     },
     {
       name: "recomendar_precios",
-      description: "Antes de comprar un auto: dice en cuánto venderlo, cuánto pagar como MÁXIMO y en cuántos días se vendería, usando las ventas parecidas de la agencia (misma marca y modelo, año y kilometraje parecidos), el mercado y la guía, con el margen objetivo de la agencia. Devuelve el nivel de confianza y cuántos comparables se usaron; con pocos, lo dice y se apoya en mercado y guía. Úsala para «¿cuánto pago por este Sentra 2020 con 70 mil km?». Pregunta SIEMPRE la versión (Sense, Advance…): sin ella la guía mezcla versiones y el tope sale impreciso. Si la persona te dice el precio del Libro Azul u otra guía, pásalo en guiaCompra/guiaVenta. Tarda unos 15 segundos. Si dan lo que piden por el auto, pásalo en precioOfrecido y dirá si conviene. Requiere permiso de costos.",
+      description: "Antes de comprar un auto: dice en cuánto se vendería (precio ESPERADO = mediana del precio comercial del mercado, y precio PESIMISTA = cerca del mínimo del mercado, para si el auto no es muy comercial), cuánto pagar como MÁXIMO (el menor entre el tope de la guía y lo que se recuperaría en el peor caso) y en cuántos días se vendería. La utilidad es solo informativa. Usa el mercado como referencia, la guía como tope de compra y las ventas parecidas de la agencia como contraste. Devuelve el nivel de confianza y cuántos comparables se usaron; con pocos, lo dice. Úsala para «¿cuánto pago por este Sentra 2020 con 70 mil km?». Pregunta SIEMPRE la versión (Sense, Advance…): sin ella la guía mezcla versiones y el tope sale impreciso. Si la persona te dice el precio del Libro Azul u otra guía, pásalo en guiaCompra/guiaVenta. Tarda unos 15 segundos. Si dan lo que piden por el auto, pásalo en precioOfrecido y dirá si conviene. Requiere permiso de costos.",
       inputSchema: {
         type: "object",
         properties: {
@@ -6575,7 +6575,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
             margenObjetivoPct: Number(agSnap.data()?.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT,
           });
           salida.ventasPropiasParecidas = { cuantas: reco.comparables, confianza: reco.confianza, lista: reco.comparablesUsados.slice(0, 8).map((o) => ({ auto: o.titulo, km: o.km, compra: o.precioCompra, venta: o.precioVenta, utilidad: o.utilidad, dias: o.diasEnInventario })) };
-          salida.recomendacionSiSeCompraraHoy = { precioVentaSugerido: reco.precioVentaSugerido, maxCompraRecomendado: reco.maxCompraRecomendado, diasEstimados: reco.diasEstimados };
+          salida.recomendacionSiSeCompraraHoy = { precioVentaEsperado: reco.precioVentaEsperado, precioVentaPesimista: reco.precioVentaPesimista, maxCompraRecomendado: reco.maxCompraRecomendado, diasEstimados: reco.diasEstimados };
           const c: any = cSnap.data();
           if (c) { salida.compra = { pagaste: c.precioCompra, compraSegunGuia: c.guiaCompra, maximoRecomendado: c.techoCompra, resultado: c.clasificacion, diferenciaPct: c.diferenciaPct, comercial: c.comercial, motivo: c.motivo }; insights.push(c.motivo); }
           if (reco.comparables) insights.push(`La agencia ha vendido ${reco.comparables} auto${reco.comparables === 1 ? "" : "s"} parecido${reco.comparables === 1 ? "" : "s"} (confianza ${reco.confianza}).`);
@@ -6610,9 +6610,11 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         const r: any = await recomendarParaAgencia(db, targetAgencyId, c);
         return texto({
           fechaAnalisis: r.fechaAnalisis, comparables: r.comparables, confianza: r.confianza, consulta: r.consulta,
-          precioVentaSugerido: r.precioVentaSugerido, origenPrecioVenta: r.origenPrecioVenta,
-          maxCompraRecomendado: r.maxCompraRecomendado, maxCompraPorMargen: r.maxCompraPorMargen, maxCompraPorGuia: r.maxCompraPorGuia,
-          gastosEsperados: r.gastosEstimados, diasEstimadosDeVenta: r.diasEstimados, rangoDias: r.diasRango, margenObjetivoPct: r.margenObjetivoPct,
+          precioVentaEsperado: r.precioVentaEsperado, precioVentaPesimista: r.precioVentaPesimista, origenPrecioVenta: r.origenPrecioVenta,
+          maxCompraRecomendado: r.maxCompraRecomendado, maxCompraPorGuia: r.maxCompraPorGuia, maxCompraPorPesimista: r.maxCompraPorPesimista,
+          gastosEsperados: r.gastosEstimados, utilidadSiSeVendeAlEsperado: r.utilidadEsperada, utilidadEnElPeorCaso: r.utilidadPesimista,
+          margenEsperadoPct: r.margenEsperadoPct, margenPeorCasoPct: r.margenPesimistaPct,
+          diasEstimadosDeVenta: r.diasEstimados, rangoDias: r.diasRango, comercial: r.comercial, margenDeReferenciaPct: r.margenObjetivoPct,
           mercado: r.mercado, guia: r.guia,
           ventasParecidas: r.comparablesUsados.slice(0, 5).map((o: any) => ({ auto: o.titulo, km: o.km, compra: o.precioCompra, venta: o.precioVenta, utilidad: o.utilidad, dias: o.diasEnInventario })),
           advertencias: r.advertencias, insights: r.insights,

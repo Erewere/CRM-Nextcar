@@ -9,7 +9,7 @@ import { llamarPrecios } from '../../lib/preciosApi';
  */
 
 type Reco = {
-  precioVentaSugerido: number | null; maxCompraRecomendado: number | null; diasEstimados: number | null; confianza: 'alta' | 'media' | 'baja' | 'ninguna';
+  precioVentaEsperado: number | null; precioVentaPesimista: number | null; maxCompraRecomendado: number | null; diasEstimados: number | null; confianza: 'alta' | 'media' | 'baja' | 'ninguna';
   comparables: number; insights: string[]; advertencias: string[];
 };
 const dinero = (n: number | null | undefined) => (n || n === 0 ? '$' + Math.round(n).toLocaleString('es-MX') : '—');
@@ -50,11 +50,15 @@ export function RecomendacionAlta({ marca, modelo, anio, km, costo, onUsarVenta 
       {error && <p className="text-sm text-red-600">{error}</p>}
       {r && (
         <>
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
             <div className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Venderlo en</p>
-              <p className="text-base font-extrabold tabular-nums">{dinero(r.precioVentaSugerido)}</p>
-              {onUsarVenta && r.precioVentaSugerido ? <button type="button" onClick={() => onUsarVenta(r.precioVentaSugerido!)} className="text-[11px] font-bold text-slate-600 hover:underline">Usar como precio</button> : null}
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Se vendería en</p>
+              <p className="text-base font-extrabold tabular-nums">{dinero(r.precioVentaEsperado)}</p>
+              {onUsarVenta && r.precioVentaEsperado ? <button type="button" onClick={() => onUsarVenta(r.precioVentaEsperado!)} className="text-[11px] font-bold text-slate-600 hover:underline">Usar como precio</button> : null}
+            </div>
+            <div className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Peor caso</p>
+              <p className="text-base font-extrabold tabular-nums">{dinero(r.precioVentaPesimista)}</p>
             </div>
             <div className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pagar máximo</p>

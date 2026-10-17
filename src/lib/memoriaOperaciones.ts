@@ -15,12 +15,13 @@
  * Libre) y en la guía. Reglas simples y explicadas; ninguna IA.
  *
  * Decisiones (Luis, oct 2026):
- *  - El precio de venta sugerido sale de lo que de verdad se vendió y del mercado,
- *    NO de la guía de venta: aquí se vende casi siempre arriba de ella.
- *  - El margen es utilidad entre precio de venta (un auto que se vende en $300,000
- *    con 10 % deja $30,000), y es configurable por agencia.
- *  - El máximo a pagar es el MENOR entre lo que deja el margen objetivo y el tope de
- *    la guía según qué tan comercial es el auto (`techoDeCompra`).
+ *  - (18 oct, ajustado) La referencia es el MERCADO: precio esperado = mediana del precio
+ *    comercial; precio pesimista = cerca del mínimo del mercado, para el auto que no es muy
+ *    comercial. NO se usa la guía de venta (aquí se vende casi siempre arriba de ella).
+ *  - La utilidad ya no decide el precio: se informa (cuánto dejaría al esperado y al
+ *    pesimista). El margen de la agencia solo sirve para avisar si queda corto.
+ *  - El máximo a pagar es el MENOR entre el tope de la guía según qué tan comercial es el
+ *    auto (`techoDeCompra`, tu regla) y lo que recuperarías en el peor caso menos gastos.
  */
 
 import { comercialidad, techoDeCompra, type Comercialidad } from './analisisCompra';
@@ -112,14 +113,24 @@ const dinero = (n: number) => '$' + Math.round(n).toLocaleString('es-MX');
 export type ConfianzaReco = 'alta' | 'media' | 'baja' | 'ninguna';
 
 export interface Recomendacion {
+  /** Precio de venta esperado = la mediana del precio comercial (mercado). Alias de `precioVentaEsperado`. */
   precioVentaSugerido: number | null;
-  /** De dónde sale: ventas propias, mezcla con el mercado, anuncios del mercado o guía. */
-  origenPrecioVenta: 'ventas-propias' | 'ventas-y-mercado' | 'mercado' | 'guia' | 'ninguno';
-  maxCompraPorMargen: number | null;
+  precioVentaEsperado: number | null;
+  /** Peor caso razonable si el auto no es muy comercial: cerca del mínimo del mercado. */
+  precioVentaPesimista: number | null;
+  /** De dónde sale: mercado, ventas propias o guía. */
+  origenPrecioVenta: 'mercado' | 'ventas-propias' | 'guia' | 'ninguno';
+  /** Lo que recuperarías en el peor caso, menos gastos. */
+  maxCompraPorPesimista: number | null;
   maxCompraPorGuia: number | null;
   /** El menor de los dos que existan. */
   maxCompraRecomendado: number | null;
   gastosEstimados: number;
+  /** Informativas: lo que dejaría comprar al máximo recomendado, vendiendo al precio esperado o al pesimista. */
+  utilidadEsperada: number | null;
+  utilidadPesimista: number | null;
+  margenEsperadoPct: number | null;
+  margenPesimistaPct: number | null;
   diasEstimados: number | null;
   diasRango: [number, number] | null;
   comercial: Comercialidad | null;
@@ -130,6 +141,9 @@ export interface Recomendacion {
   insights: string[];
   comparablesUsados: Operacion[];
 }
+
+/** El mínimo del mercado a veces es un caso raro (otra versión, un golpe). No se baja de este porcentaje de la mediana. */
+export const PISO_PESIMISTA = 0.75;
 
 export function recomendarPrecios(input: {
   marca: string; modelo: string; version?: string; anio: number; km?: number | null;
@@ -171,16 +185,35 @@ export function recomendarPrecios(input: {
   const medMercado = input.mercado ? medianaDe(input.mercado) : null;
   const mercadoOk = !!input.mercado && input.mercado.n >= 5;
 
-  // ---- Precio de venta
-  let venta: number | null = null;
+  // ---- Precio de venta: el mercado manda (Luis, 18 oct 2026)
+  // Esperado = mediana del precio comercial. Pesimista = cerca del mínimo del mercado, para cuando
+  // el auto no es muy comercial. La utilidad ya no decide nada: se informa al final.
+  const g = input.guia;
+  let esperado: number | null = null;
+  let pesimista: number | null = null;
   let origen: Recomendacion['origenPrecioVenta'] = 'ninguno';
-  if (n >= 3 && medVenta) { venta = medVenta; origen = 'ventas-propias'; }
-  else if (n >= 1 && medVenta && mercadoOk && medMercado) { venta = (medVenta + medMercado) / 2; origen = 'ventas-y-mercado'; advertencias.push(`Solo hay ${n} venta${n === 1 ? '' : 's'} parecida${n === 1 ? '' : 's'}; el precio mezcla lo que vendiste con los anuncios del mercado.`); }
-  else if (n >= 1 && medVenta) { venta = medVenta; origen = 'ventas-propias'; advertencias.push(`Solo hay ${n} venta${n === 1 ? '' : 's'} parecida${n === 1 ? '' : 's'} y no hay consulta de mercado.`); }
-  else if (mercadoOk && medMercado) { venta = medMercado; origen = 'mercado'; advertencias.push('No tienes ventas de este modelo. El precio sale de anuncios del mercado: son precios de lista, no de venta, así que lo vendido suele quedar algo abajo.'); }
-  else if (input.guia?.venta) { venta = input.guia.venta; origen = 'guia'; advertencias.push('Sin ventas tuyas ni mercado: se usa la guía de venta, que en este mercado suele quedarse corta.'); }
+  if (mercadoOk && medMercado && input.mercado) {
+    esperado = medMercado; origen = 'mercado';
+    const piso = medMercado * PISO_PESIMISTA;
+    pesimista = Math.max(input.mercado.minimo, piso);
+    if (input.mercado.minimo < piso) advertencias.push(`El anuncio más barato del mercado (${dinero(input.mercado.minimo)}) es muy bajo contra la mediana y parece un caso raro (otra versión o un auto golpeado); el peor caso se puso en ${dinero(pesimista)}.`);
+    advertencias.push('Los anuncios del mercado son precios de lista: lo que se cierra suele quedar algo abajo.');
+    if (n >= 3 && medVenta && Math.abs(medVenta - esperado) / esperado > 0.15) {
+      advertencias.push(`Tus ${n} ventas parecidas se cerraron en una mediana de ${dinero(medVenta)}, ${medVenta < esperado ? 'abajo' : 'arriba'} de la mediana del mercado (${dinero(esperado)}). Considera tu propia experiencia.`);
+    }
+  } else if (n >= 1 && medVenta) {
+    esperado = medVenta; origen = 'ventas-propias';
+    const ventas = comps.map((o) => o.precioVenta as number);
+    pesimista = n >= 2 ? Math.min(...ventas) : medVenta;
+    advertencias.push(`No hay mercado suficiente: el precio sale de ${n} venta${n === 1 ? '' : 's'} tuya${n === 1 ? '' : 's'} parecida${n === 1 ? '' : 's'}${n === 1 ? ' y no hay forma de calcular un peor caso' : ''}.`);
+  } else if (g?.venta) {
+    esperado = g.venta; origen = 'guia';
+    pesimista = g.ventaMin && g.ventaMin > 0 ? Math.min(g.ventaMin, g.venta) : g.venta;
+    advertencias.push('Sin mercado ni ventas tuyas: el precio sale de la guía de venta, que en este mercado suele quedarse corta.');
+  }
   if (input.mercado && !mercadoOk) advertencias.push(`El mercado tiene solo ${input.mercado.n} anuncios parecidos: no alcanza para fiarse.`);
-  if (venta) venta = redondear(venta);
+  if (esperado) esperado = redondear(esperado);
+  if (pesimista) pesimista = redondear(Math.min(pesimista, esperado ?? pesimista));
 
   // ---- Gastos esperados
   const gastosComps = comps.filter((o) => o.gastosRegistrados).map((o) => o.gastos);
@@ -198,9 +231,8 @@ export function recomendarPrecios(input: {
   if (diasComps.length < 2) advertencias.push(diasTodos.length ? 'Los días para vender son los de una venta típica de tu agencia: pocas ventas de este modelo.' : 'No hay ventas con fechas para estimar los días.');
   const com = comercialidad({ anuncios: input.mercado?.n, diasPropios: diasComps });
 
-  // ---- Máximo a pagar
-  const maxMargen = venta ? Math.max(0, redondear(venta * (1 - margen / 100) - gastosEst)) : null;
-  const g = input.guia;
+  // ---- Máximo a pagar: el menor entre la guía (tu regla) y lo que recuperarías en el peor caso
+  const maxPesimista = pesimista ? Math.max(0, redondear(pesimista - gastosEst)) : null;
   let maxGuia: number | null = null;
   if (g && g.compra > 0) {
     if (g.confianza === 'alta' || g.confianza === 'media') {
@@ -211,31 +243,42 @@ export function recomendarPrecios(input: {
       maxGuia = Math.round((g.ventaMin * FACTOR_COMPRA) / 500) * 500;
       advertencias.push(`No se pudo saber qué versión es y la guía las tiene muy distintas. Por prudencia el tope usa la versión más barata de la guía (${dinero(maxGuia)}). Escribe la versión para afinarlo.`);
     } else {
-      advertencias.push('La guía no es confiable para este auto; el máximo se calcula solo por el margen.');
+      advertencias.push('La guía no es confiable para este auto; el máximo se calcula solo con el peor caso de venta.');
     }
+  } else if (!g) {
+    advertencias.push('No hay guía para este auto: el máximo sale solo del peor caso de venta. Contrástalo con tu Libro Azul (puedes escribirlo para que mande).');
   }
-  if (!g && venta && origen !== 'ventas-propias') {
-    advertencias.push('No hay guía para este auto. El máximo sale solo del margen sobre precios de lista del mercado y puede quedar alto: contrástalo con tu Libro Azul (puedes escribirlo para que mande).');
+  if (g && g.venta > 0 && esperado && esperado > g.venta * 1.15 && origen === 'mercado') {
+    advertencias.push(`El precio esperado está ${Math.round(((esperado - g.venta) / g.venta) * 100)}% arriba de la guía de venta (${dinero(g.venta)}): son precios de lista. Para comprar manda la guía.`);
   }
-  // Los anuncios son precios de lista y suelen estar muy arriba de la guía: si el precio de venta
-  // sale de ellos, el margen daría un máximo inflado. Se avisa para que se mire el tope de la guía.
-  if (g && g.venta > 0 && venta && venta > g.venta * 1.15 && origen !== 'ventas-propias') {
-    advertencias.push(`El precio de venta sugerido está ${Math.round(((venta - g.venta) / g.venta) * 100)}% arriba de la guía de venta (${dinero(g.venta)}): son precios de lista del mercado. Por eso el máximo a pagar lo limita la guía.`);
-  }
-  const candidatos = [maxMargen, maxGuia].filter((x): x is number => x !== null && x > 0);
-  const maxRecomendado = candidatos.length ? Math.min(...candidatos) : (maxMargen === 0 ? 0 : null);
+  const candidatos = [maxGuia, maxPesimista].filter((x): x is number => x !== null && x > 0);
+  const maxRecomendado = candidatos.length ? Math.min(...candidatos) : null;
+
+  // ---- Lo que dejaría (informativo)
+  const utilEsp = esperado !== null && maxRecomendado !== null ? esperado - maxRecomendado - gastosEst : null;
+  const utilPes = pesimista !== null && maxRecomendado !== null ? pesimista - maxRecomendado - gastosEst : null;
+  const margenEsp = utilEsp !== null && esperado ? Math.round((utilEsp / esperado) * 1000) / 10 : null;
+  const margenPes = utilPes !== null && pesimista ? Math.round((utilPes / pesimista) * 1000) / 10 : null;
+  if (margenEsp !== null && margenEsp < margen) advertencias.push(`Comprando al máximo, la ganancia esperada (${margenEsp}%) queda debajo de tu margen de referencia (${margen}%).`);
 
   // ---- Conclusiones
   const insights: string[] = [];
   if (n === 0) insights.push('Tu agencia no tiene ventas completas de este modelo; la recomendación se apoya en el mercado y la guía y es poco segura.');
   else insights.push(`Se usaron ${n} venta${n === 1 ? '' : 's'} parecida${n === 1 ? '' : 's'} de tu agencia (confianza ${confianza}).`);
-  if (venta) insights.push(`Precio de venta sugerido: ${dinero(venta)} (${origen === 'ventas-propias' ? 'mediana de lo que vendiste' : origen === 'ventas-y-mercado' ? 'mezcla de tus ventas y el mercado' : origen === 'mercado' ? 'mediana de anuncios del mercado' : 'guía de venta'}).`);
+  if (esperado) {
+    const de = origen === 'mercado' ? `mediana de ${input.mercado?.n} anuncios del mercado` : origen === 'ventas-propias' ? 'mediana de lo que vendiste' : 'guía de venta';
+    insights.push(`Precio de venta esperado: ${dinero(esperado)} (${de}).`);
+  }
+  if (pesimista && esperado) {
+    insights.push(`Peor caso, si el auto no es muy comercial: ${dinero(pesimista)} (cerca del mínimo del mercado). ${com.nivel === 'alta' ? 'Como en tus ventas sale rápido, el esperado es lo normal.' : 'Sin ventas tuyas rápidas de este modelo, conviene planear con este precio.'}`);
+  }
   if (maxRecomendado !== null) {
-    const razon = maxGuia !== null && maxMargen !== null ? (maxGuia <= maxMargen ? 'lo limita la guía' : 'lo limita el margen') : maxMargen !== null ? 'por el margen' : 'por la guía';
-    insights.push(`Máximo a pagar: ${dinero(maxRecomendado)} (${razon}; margen objetivo ${margen}% y gastos esperados ${dinero(gastosEst)}).`);
-    if (maxMargen !== null && maxGuia !== null && Math.abs(maxMargen - maxGuia) / Math.max(maxMargen, maxGuia) > 0.1) {
-      insights.push(`El margen permite hasta ${dinero(maxMargen)} y la guía, según qué tan comercial es el auto (${com.nivel === 'alta' ? 'muy' : com.nivel === 'media' ? 'medio' : 'poco'}), ${dinero(maxGuia)}. Gana el menor.`);
+    const razon = maxGuia !== null && maxPesimista !== null ? (maxGuia <= maxPesimista ? 'lo limita la guía' : 'lo limita el peor caso de venta') : maxGuia !== null ? 'por la guía' : 'por el peor caso de venta';
+    insights.push(`Máximo a pagar: ${dinero(maxRecomendado)} (${razon}).`);
+    if (maxGuia !== null && maxPesimista !== null && Math.abs(maxGuia - maxPesimista) / Math.max(maxGuia, maxPesimista) > 0.1) {
+      insights.push(`La guía permite hasta ${dinero(maxGuia)} y el peor caso de venta, ${dinero(maxPesimista)} (ya sin gastos de ${dinero(gastosEst)}). Gana el menor.`);
     }
+    if (utilEsp !== null && utilPes !== null) insights.push(`Comprando a ${dinero(maxRecomendado)}: ganarías ${dinero(utilEsp)} (${margenEsp}%) si se vende al precio esperado y ${utilPes >= 0 ? `ganarías ${dinero(utilPes)}` : `perderías ${dinero(-utilPes)}`} (${margenPes}%) en el peor caso.`);
   }
   if (diasEstimados !== null) insights.push(`Tiempo estimado de venta: ${Math.round(diasEstimados)} días${diasRango ? ` (lo normal: entre ${diasRango[0]} y ${diasRango[1]})` : ''}.`);
   if (input.precioOfrecido && maxRecomendado) {
@@ -244,9 +287,10 @@ export function recomendarPrecios(input: {
   }
 
   return {
-    precioVentaSugerido: venta, origenPrecioVenta: origen,
-    maxCompraPorMargen: maxMargen, maxCompraPorGuia: maxGuia, maxCompraRecomendado: maxRecomendado,
-    gastosEstimados: gastosEst, diasEstimados: diasEstimados === null ? null : Math.round(diasEstimados), diasRango,
+    precioVentaSugerido: esperado, precioVentaEsperado: esperado, precioVentaPesimista: pesimista, origenPrecioVenta: origen,
+    maxCompraPorPesimista: maxPesimista, maxCompraPorGuia: maxGuia, maxCompraRecomendado: maxRecomendado,
+    gastosEstimados: gastosEst, utilidadEsperada: utilEsp, utilidadPesimista: utilPes, margenEsperadoPct: margenEsp, margenPesimistaPct: margenPes,
+    diasEstimados: diasEstimados === null ? null : Math.round(diasEstimados), diasRango,
     comercial: com.nivel, margenObjetivoPct: margen, confianza, comparables: n, advertencias, insights,
     comparablesUsados: comps.slice(0, 10),
   };
