@@ -5,6 +5,8 @@ import clsx from 'clsx';
 import { auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { CalidadDeCompras } from '../components/precios/CalidadDeCompras';
+import { Recomendador } from '../components/precios/Recomendador';
+import { MemoriaDeVentas } from '../components/precios/MemoriaDeVentas';
 
 /**
  * Revisión de precios de venta: cada auto contra el mercado. Los datos los
@@ -55,7 +57,7 @@ export function RevisionPrecios() {
   const [filtro, setFiltro] = useState<Sugerencia | 'todos'>('todos');
   const [busca, setBusca] = useState('');
   const [revisando, setRevisando] = useState(false);
-  const [vista, setVista] = useState<'venta' | 'compras'>('venta');
+  const [vista, setVista] = useState<'venta' | 'compras' | 'recomendar' | 'memoria'>('venta');
 
   const cargar = () => pedir('/api/precios/analisis').then((d) => { setAutos(d.autos || []); setUltima(d.ultimaRevision || null); setError(''); }).catch((e) => setError(e.message));
   useEffect(() => { cargar(); }, []);
@@ -92,13 +94,15 @@ export function RevisionPrecios() {
           </button>
         </div>
 
-        <div className="inline-flex h-9 p-0.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
-          {([['venta', 'Precios de venta'], ['compras', 'Calidad de compras']] as const).map(([k, t]) => (
-            <button key={k} onClick={() => setVista(k)} className={clsx('px-3 rounded-md text-sm font-semibold transition', vista === k ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500')}>{t}</button>
+        <div className="inline-flex flex-wrap h-auto min-h-9 p-0.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
+          {([['venta', 'Precios de venta'], ['compras', 'Calidad de compras'], ['recomendar', 'Recomendar precios'], ['memoria', 'Ventas pasadas']] as const).map(([k, t]) => (
+            <button key={k} onClick={() => setVista(k)} className={clsx('px-3 h-8 rounded-md text-sm font-semibold transition', vista === k ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500')}>{t}</button>
           ))}
         </div>
 
         {vista === 'compras' && <CalidadDeCompras />}
+        {vista === 'recomendar' && <Recomendador />}
+        {vista === 'memoria' && <MemoriaDeVentas />}
 
         {vista === 'venta' && <p className="text-xs text-slate-500 dark:text-slate-400 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2">
           El mercado se busca por <b>marca, modelo y año</b>, sin versión ni kilometraje: un auto muy equipado puede verse «caro» sin serlo. Cuando la diferencia pasa de 30 % sale como <b>Revisar</b> y no se propone precio. Esta pantalla solo muestra; no cambia ningún precio.

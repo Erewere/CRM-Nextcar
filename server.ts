@@ -12,6 +12,7 @@ import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { analizarPrecio, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
 import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
+import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
@@ -4121,6 +4122,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   const COL_CORRIDAS = "analisis_precio_corridas";
   // Calidad de compras (Fase 2): una ficha por auto comprado, con lo pagado contra la guia.
   const COL_COMPRAS = "analisis_compra";
+  // Memoria de operaciones (Fase 3): una ficha por auto vendido (compra, gastos, venta, utilidad, dias).
+  const COL_OPERACIONES = "operaciones_venta";
   const HORAS_ENTRE_REVISIONES = 20;
   const MERCADO_VIEJO_DIAS = 21;
   let revisionCorriendo = false;
@@ -4140,13 +4143,27 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       const vehiculos = adminDb.collection("vehicles");
       const mercados = adminDb.collection("mercadoAutos");
       const delaAgencia = (c: any) => (soloAgencia ? adminDb.collection(c).where("agencyId", "==", soloAgencia).get() : adminDb.collection(c).get());
-      const [autos, hechos, previos, costos, comprasPrevias] = await Promise.all([
+      const [autos, hechos, previos, costos, comprasPrevias, gastosSnap, opsPrevias] = await Promise.all([
         soloAgencia ? vehiculos.where("agencyId", "==", soloAgencia).get() : vehiculos.get(),
         soloAgencia ? mercados.where("agencyId", "==", soloAgencia).get() : mercados.get(),
         delaAgencia(COL_ANALISIS),
         delaAgencia("vehicleFinancials"),
         delaAgencia(COL_COMPRAS),
+        delaAgencia("vehicleExpenses"),
+        delaAgencia(COL_OPERACIONES),
       ]);
+      // Gastos de cada auto: los de la coleccion y los que viven dentro del auto,
+      // sin repetir (igual que la ficha del auto: se junta por id).
+      const gastosDe = new Map<string, Map<string, any>>();
+      gastosSnap.docs.forEach((d: any) => {
+        const e = d.data() || {};
+        if (!e.vehicleId) return;
+        if (!gastosDe.has(e.vehicleId)) gastosDe.set(e.vehicleId, new Map());
+        gastosDe.get(e.vehicleId)!.set(d.id, e);
+      });
+      const escriturasOps: { ref: any; datos: any }[] = [];
+      const vigentesOps = new Set<string>();
+      let opsCompletas = 0;
       const mercadoDe = new Map<string, any>();
       const guiaDe = new Map<string, any>();
       hechos.docs.forEach((d: any) => { mercadoDe.set(d.id, d.data()?.mercado || null); guiaDe.set(d.id, d.data()?.guia || null); });
@@ -4201,7 +4218,15 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
             });
           }
 
-          if (v.status === "sold") continue;
+          if (v.status === "sold") {
+            const mapa = new Map<string, any>(gastosDe.get(d.id) || []);
+            (Array.isArray(v.expenses) ? v.expenses : []).forEach((e: any, i: number) => { const id = e?.id || `emb${i}`; if (e && !mapa.has(id)) mapa.set(id, e); });
+            const op = armarOperacion({ ...v, id: d.id }, costo, [...mapa.values()]);
+            if (op.completa) opsCompletas++;
+            vigentesOps.add(d.id);
+            escriturasOps.push({ ref: adminDb.collection(COL_OPERACIONES).doc(d.id), datos: { ...op, agencyId: v.agencyId, analizadoEn: inicio, versionReglas: VERSION_REGLAS } });
+            continue;
+          }
           vigentes.add(d.id);
           const desde = new Date(v.receivedAt || v.createdAt || "").getTime();
           const dias = Number.isFinite(desde) ? Math.max(0, Math.floor((Date.now() - desde) / 86_400_000)) : null;
@@ -4247,6 +4272,17 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         escriturasCompra.slice(i, i + 400).forEach((w) => lote.set(w.ref, w.datos));
         await lote.commit();
       }
+      for (let i = 0; i < escriturasOps.length; i += 400) {
+        const lote = adminDb.batch();
+        escriturasOps.slice(i, i + 400).forEach((w) => lote.set(w.ref, w.datos));
+        await lote.commit();
+      }
+      const sobrantesOps = opsPrevias.docs.filter((d: any) => !vigentesOps.has(d.id));
+      for (let i = 0; i < sobrantesOps.length; i += 400) {
+        const lote = adminDb.batch();
+        sobrantesOps.slice(i, i + 400).forEach((d: any) => lote.delete(d.ref));
+        await lote.commit();
+      }
       const sobrantesCompra = comprasPrevias.docs.filter((d: any) => !vigentesCompra.has(d.id));
       for (let i = 0; i < sobrantesCompra.length; i += 400) {
         const lote = adminDb.batch();
@@ -4264,7 +4300,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       await corridaRef.set({
         inicio, fin: new Date().toISOString(), origen, agencyId: soloAgencia || null,
         estado: errores.length ? "con_errores" : "ok", version: VERSION_REGLAS,
-        revisados, sugerencias: cuenta, compras: cuentaCompras, errores: errores.slice(0, 10), retirados: sobrantes.length,
+        revisados, sugerencias: cuenta, compras: cuentaCompras, operaciones: { total: escriturasOps.length, completas: opsCompletas }, errores: errores.slice(0, 10), retirados: sobrantes.length,
       });
       console.log(`Revision de precios: ${revisados} autos (${origen}).`);
       return { ok: true as const, revisados, sugerencias: cuenta, errores: errores.length };
@@ -4328,6 +4364,102 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     } catch (e) {
       console.error("precios/compras:", e);
       res.status(500).json({ error: "No se pudo leer el análisis de compras." });
+    }
+  });
+
+  // ----- Fase 3: memoria de operaciones y recomendador de precios -----
+  const verCostos = (q: any) => ROLES_PRECIOS.includes(q.rol) && puedeRol(q.rol, "vehiculos.costo");
+
+  app.get("/api/precios/config", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no ve esta configuración." });
+    const a = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
+    res.json({ margenObjetivoPct: Number(a.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT, esElInicial: !a.precios?.margenObjetivoPct });
+  });
+
+  app.put("/api/precios/config", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (q.rol !== "admin") return res.status(403).json({ error: "Solo el administrador cambia el margen objetivo." });
+    const m = Number(req.body?.margenObjetivoPct);
+    if (!(m >= 1 && m <= 50)) return res.status(400).json({ error: "El margen objetivo va de 1 % a 50 %." });
+    await q.adminDb.collection("agencies").doc(q.agencyId).set({ precios: { margenObjetivoPct: Math.round(m * 10) / 10 } }, { merge: true });
+    res.json({ margenObjetivoPct: Math.round(m * 10) / 10, esElInicial: false });
+  });
+
+  // Ventas pasadas con su utilidad. Es dato de costos.
+  app.get("/api/precios/operaciones", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    try {
+      const snap = await q.adminDb.collection(COL_OPERACIONES).where("agencyId", "==", q.agencyId).get();
+      const ops = snap.docs.map((d: any) => d.data()).sort((a: any, b: any) => String(b.fechaVenta).localeCompare(String(a.fechaVenta)));
+      const completas = ops.filter((o: any) => o.completa);
+      const med = (xs: number[]) => { const o = xs.filter(Number.isFinite).sort((a, b) => a - b); if (!o.length) return null; const m = Math.floor(o.length / 2); return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2; };
+      res.json({
+        operaciones: ops,
+        resumen: {
+          vendidos: ops.length, completas: completas.length,
+          utilidadTotal: completas.reduce((a: number, o: any) => a + (o.utilidad || 0), 0),
+          margenMedianoPct: med(completas.map((o: any) => o.margenPct)),
+          diasMediana: med(ops.map((o: any) => o.diasEnInventario).filter((x: any) => x !== null)),
+          incompletas: ops.filter((o: any) => !o.completa && !o.esConsignacion).length,
+        },
+      });
+    } catch (e) {
+      console.error("precios/operaciones:", e);
+      res.status(500).json({ error: "No se pudo leer la memoria de ventas." });
+    }
+  });
+
+  // Mercado y guia de un modelo, guardados 12 horas para no repetir una consulta lenta.
+  const cacheConsultaModelo = new Map<string, { momento: number; mercado: any; guia: any }>();
+
+  app.post("/api/precios/recomendar", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    if (!frenoPermite(`reco:${q.agencyId}`, 20)) return res.status(429).json({ error: "Muchas consultas seguidas. Intenta en un minuto." });
+    const marca = String(req.body?.marca || "").trim().slice(0, 60);
+    const modelo = String(req.body?.modelo || "").trim().slice(0, 80);
+    const version = String(req.body?.version || "").trim().slice(0, 80);
+    const anio = Number(req.body?.anio);
+    const km = req.body?.km === "" || req.body?.km == null ? null : Number(req.body.km);
+    const ofrecido = req.body?.precioOfrecido ? Number(req.body.precioOfrecido) : null;
+    if (!marca || !modelo || !(anio >= 1980 && anio <= new Date().getFullYear() + 2)) return res.status(400).json({ error: "Escribe marca, modelo y año." });
+    if (km !== null && !(km >= 0 && km < 1_000_000)) return res.status(400).json({ error: "El kilometraje no parece correcto." });
+    try {
+      const clave = `${marca}|${modelo}|${anio}`.toLowerCase();
+      let c = cacheConsultaModelo.get(clave);
+      if (!c || Date.now() - c.momento > 12 * 3_600_000) {
+        const [m, g] = await Promise.allSettled([consultarMercado(marca, modelo, anio), consultarGuia(marca, modelo, anio)]);
+        c = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
+        // Si una consulta falló no se guarda: se reintenta la próxima vez.
+        if (m.status === "fulfilled" && g.status === "fulfilled") cacheConsultaModelo.set(clave, c);
+      }
+      const [opsSnap, agSnap] = await Promise.all([
+        q.adminDb.collection(COL_OPERACIONES).where("agencyId", "==", q.agencyId).get(),
+        q.adminDb.collection("agencies").doc(q.agencyId).get(),
+      ]);
+      const margen = Number(agSnap.data()?.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT;
+      const reco = recomendarPrecios({
+        marca, modelo, version, anio, km,
+        operaciones: opsSnap.docs.map((d: any) => d.data()),
+        mercado: c.mercado, guia: c.guia && c.guia.confianza !== "baja" ? c.guia : null,
+        margenObjetivoPct: margen, precioOfrecido: ofrecido,
+      });
+      res.json({
+        consulta: { marca, modelo, version, anio, km },
+        fechaAnalisis: new Date().toISOString(),
+        mercado: c.mercado ? { n: c.mercado.n, mediana: c.mercado.mediana || c.mercado.promedio, minimo: c.mercado.minimo, maximo: c.mercado.maximo } : null,
+        guia: c.guia ? { compra: c.guia.compra, venta: c.guia.venta, confianza: c.guia.confianza } : null,
+        ...reco,
+      });
+    } catch (e) {
+      console.error("precios/recomendar:", e);
+      res.status(500).json({ error: "No se pudo armar la recomendación." });
     }
   });
 
