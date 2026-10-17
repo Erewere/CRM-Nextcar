@@ -15,6 +15,7 @@ import { auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { AvisoPaginaWeb } from '../components/auto/AvisoPaginaWeb';
 import { LlenarDesdeVin } from '../components/auto/LlenarDesdeVin';
+import { RecomendacionAlta } from '../components/precios/RecomendacionAlta';
 import { ConsultarPrecio } from '../components/auto/ConsultarPrecio';
 
 /**
@@ -260,6 +261,18 @@ export function AutoNuevo() {
                 <select value={f.ownership} onChange={poner('ownership')} className={campoClase}><option value="propio">Propio</option><option value="consignacion">Consignación</option></select>
               </Campo>
               <Campo etiqueta="Fecha de recepción"><input type="date" value={f.receivedAt} onChange={poner('receivedAt')} className={campoClase} /></Campo>
+              {puedeVerCostos && userData?.role === 'admin' && f.ownership !== 'consignacion' && (
+                <div className="col-span-2 md:col-span-4">
+                  <RecomendacionAlta
+                    marca={f.make}
+                    modelo={f.model}
+                    anio={numero(f.year)}
+                    km={numero(f.km) || undefined}
+                    costo={numero(f.costo) || undefined}
+                    onUsarVenta={(v) => { tocados.current.add('price'); setF((prev: any) => ({ ...prev, price: String(v) })); }}
+                  />
+                </div>
+              )}
               <Campo etiqueta="Motor (litros)"><input value={f.liters} onChange={poner('liters')} inputMode="decimal" className={campoClase} /></Campo>
               <Campo etiqueta="Cilindros"><input value={f.cylinders} onChange={poner('cylinders')} inputMode="numeric" className={campoClase} /></Campo>
               <Campo etiqueta="Pasajeros"><input value={f.passengers} onChange={poner('passengers')} inputMode="numeric" className={campoClase} /></Campo>

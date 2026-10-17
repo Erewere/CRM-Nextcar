@@ -4463,6 +4463,46 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     }
   });
 
+  // Aplicar el precio sugerido a un auto. Nunca cambia solo: lo pide una persona
+  // despues de ver la sugerencia y confirmar. El servidor vuelve a comprobar todo
+  // (que la sugerencia siga vigente, que el precio no haya cambiado desde la
+  // revision, que el auto siga a la venta) y deja constancia en analisis_precio_cambios.
+  app.post("/api/precios/aplicar", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no puede cambiar precios desde aquí." });
+    const vehicleId = String(req.body?.vehicleId || "");
+    const precio = Number(req.body?.precio);
+    if (!/^[A-Za-z0-9_-]{5,40}$/.test(vehicleId) || !(precio > 0)) return res.status(400).json({ error: "Datos incompletos." });
+    try {
+      const aRef = q.adminDb.collection(COL_ANALISIS).doc(vehicleId);
+      const vRef = q.adminDb.collection("vehicles").doc(vehicleId);
+      const [aSnap, vSnap] = await Promise.all([aRef.get(), vRef.get()]);
+      const a: any = aSnap.data(), v: any = vSnap.data();
+      if (!a || !v || a.agencyId !== q.agencyId || v.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese auto en tu agencia." });
+      if (v.isDeleted || v.status === "sold") return res.status(409).json({ error: "Ese auto ya no está a la venta." });
+      if (a.sugerencia !== "bajar" && a.sugerencia !== "subir") return res.status(409).json({ error: "Ese auto ya no tiene una sugerencia de cambio. Actualiza la pantalla." });
+      if (Math.round(precio) !== Math.round(Number(a.precioSugerido))) return res.status(409).json({ error: "La sugerencia cambió. Actualiza la pantalla y vuelve a intentar." });
+      if (Math.round(Number(v.price)) !== Math.round(Number(a.precioLista))) return res.status(409).json({ error: "El precio del auto cambió después de la revisión. Pulsa «Revisar ahora» para tener una sugerencia al día." });
+      const ahora = new Date().toISOString();
+      await vRef.set({ price: Math.round(precio), updatedAt: ahora }, { merge: true });
+      await q.adminDb.collection("analisis_precio_cambios").add({
+        vehicleId, agencyId: q.agencyId, titulo: a.titulo, de: Number(v.price), a: Math.round(precio), sugerencia: a.sugerencia,
+        razon: a.razon, porUid: q.uid, cuando: ahora,
+      });
+      await aRef.set({
+        precioLista: Math.round(precio), precioSugerido: Math.round(precio), sugerencia: "mantener",
+        razon: `Precio cambiado a ${"$" + Math.round(precio).toLocaleString("es-MX")} (antes ${"$" + Math.round(Number(v.price)).toLocaleString("es-MX")}). La próxima revisión lo vuelve a evaluar.`,
+        diferenciaVsMedianaPct: a.medianaMercado ? Math.round(((precio - a.medianaMercado) / a.medianaMercado) * 1000) / 10 : null,
+      }, { merge: true });
+      cacheCatalogoWeb.clear();
+      res.json({ ok: true, precio: Math.round(precio) });
+    } catch (e) {
+      console.error("precios/aplicar:", e);
+      res.status(500).json({ error: "No se pudo cambiar el precio." });
+    }
+  });
+
   // Revisar ahora, sin esperar a la de la noche. Solo reanaliza con el mercado
   // ya guardado; no consulta Mercado Libre. Una cada 10 minutos por agencia.
   const ultimaRevisionManual = new Map<string, number>();

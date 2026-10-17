@@ -15,6 +15,8 @@ import { MetasDelEquipo } from "../metas/MetasDelEquipo";
 import { MetaBarra } from "../metas/MetaBarra";
 import { useMetas } from "../../lib/metasApi";
 import { nombreDelMes } from "../../lib/metas";
+import { SaludDelInventario } from "../precios/SaludDelInventario";
+import { ResumenComprasTablero } from "../precios/ResumenComprasTablero";
 
 /**
  * El tablero del administrador: lo que vende, lo que tiene, de donde le llegan
@@ -213,7 +215,13 @@ export function TableroAgencia(p: TableroAgenciaProps) {
         <Resumen a={a} h={h} verCostos={p.verCostos} irA={setPestana} periodo={nombrePeriodo} pendientes={p.pendientes} inteligencia={p.inteligencia} />
       )}
       {pestana === "ventas" && <Ventas a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
-      {pestana === "inventario" && <Inventario a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
+      {pestana === "inventario" && (
+        <div className="space-y-4">
+          <SaludDelInventario />
+          {p.verCostos && <ResumenComprasTablero />}
+          <Inventario a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />
+        </div>
+      )}
       {pestana === "clientes" && <Clientes a={a} />}
       {pestana === "equipo" && <div className="space-y-4"><MetasDelEquipo /><Equipo a={a} /></div>}
     </div>
