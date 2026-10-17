@@ -10,7 +10,7 @@ import { normalizarTipo, procesarLeadPublico } from "./src/lib/leadPublico.ts";
 import { cabecerasFirmadas, firmarPase, firmaDeLlamadaValida, REGRESO_PAGINA } from "./src/lib/pasePagina.ts";
 import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
-import { analizarPrecio, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
+import { analizarPrecio, resumirAnalisisDeVenta, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
 import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
@@ -4327,6 +4327,105 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   setTimeout(revisionProgramada, 15 * 60 * 1000);
   setInterval(revisionProgramada, 6 * 60 * 60 * 1000);
 
+  // ----- Logica compartida entre la pantalla (REST) y el asistente (MCP) -----
+  // Una sola version de cada calculo: lo que ve la persona en el tablero es
+  // exactamente lo que le contesta el asistente.
+  async function leerAnalisisDeVenta(adminDb: any, agencyId: string) {
+    const snap = await adminDb.collection(COL_ANALISIS).where("agencyId", "==", agencyId).get();
+    const orden: Record<string, number> = { bajar: 0, revisar: 1, subir: 2, mantener: 3, "sin-datos": 4 };
+    const autos = snap.docs.map((d: any) => d.data()).sort((a: any, b: any) => (orden[a.sugerencia] ?? 9) - (orden[b.sugerencia] ?? 9) || (b.diasEnInventario || 0) - (a.diasEnInventario || 0));
+    // Las revisiones programadas son de toda la plataforma: lo que cada agencia
+    // necesita saber es cuando se analizaron SUS autos por ultima vez.
+    const ultimaRevision = autos.reduce((m: string, a: any) => (String(a.analizadoEn || "") > m ? String(a.analizadoEn) : m), "") || null;
+    return { autos, ultimaRevision };
+  }
+
+  async function leerCalidadDeCompras(adminDb: any, agencyId: string) {
+    const snap = await adminDb.collection(COL_COMPRAS).where("agencyId", "==", agencyId).get();
+    const compras = snap.docs.map((d: any) => d.data());
+    const resumen = resumirCompras(compras);
+    const orden: Record<string, number> = { cara: 0, buena: 1, "en-linea": 2, "sin-guia": 3 };
+    const autos = compras.sort((a: any, b: any) => (orden[a.clasificacion] ?? 9) - (orden[b.clasificacion] ?? 9) || (b.diferenciaPct || 0) - (a.diferenciaPct || 0));
+    const ultimaRevision = compras.reduce((m: string, a: any) => (String(a.analizadoEn || "") > m ? String(a.analizadoEn) : m), "") || null;
+    return { resumen, autos, ultimaRevision, limites: "La guía es la de hoy, no la del día de la compra; con confianza baja o en consignación no se compara." };
+  }
+
+  /** Valida lo que escribe la persona para pedir una recomendación; devuelve el error o los datos limpios. */
+  function validarConsultaReco(b: any): { error: string } | { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null } {
+    const marca = String(b?.marca || "").trim().slice(0, 60);
+    const modelo = String(b?.modelo || "").trim().slice(0, 80);
+    const version = String(b?.version || "").trim().slice(0, 80);
+    const anio = Number(b?.anio);
+    const km = b?.km === "" || b?.km == null ? null : Number(b.km);
+    const ofrecido = b?.precioOfrecido ? Number(b.precioOfrecido) : null;
+    if (!marca || !modelo || !(anio >= 1980 && anio <= new Date().getFullYear() + 2)) return { error: "Escribe marca, modelo y año." };
+    if (km !== null && !(km >= 0 && km < 1_000_000)) return { error: "El kilometraje no parece correcto." };
+    return { marca, modelo, version, anio, km, ofrecido };
+  }
+
+  // Mercado y guia de un modelo, guardados 12 horas para no repetir una consulta lenta.
+  const cacheConsultaModelo = new Map<string, { momento: number; mercado: any; guia: any }>();
+
+  async function recomendarParaAgencia(adminDb: any, agencyId: string, c: { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null }) {
+    const clave = `${c.marca}|${c.modelo}|${c.anio}`.toLowerCase();
+    let cache = cacheConsultaModelo.get(clave);
+    if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
+      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, c.modelo, c.anio), consultarGuia(c.marca, c.modelo, c.anio)]);
+      cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
+      // Si una consulta falló no se guarda: se reintenta la próxima vez.
+      if (m.status === "fulfilled" && g.status === "fulfilled") cacheConsultaModelo.set(clave, cache);
+    }
+    const [opsSnap, agSnap] = await Promise.all([
+      adminDb.collection(COL_OPERACIONES).where("agencyId", "==", agencyId).get(),
+      adminDb.collection("agencies").doc(agencyId).get(),
+    ]);
+    const margen = Number(agSnap.data()?.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT;
+    const reco = recomendarPrecios({
+      marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km,
+      operaciones: opsSnap.docs.map((d: any) => d.data()),
+      mercado: cache.mercado, guia: cache.guia && cache.guia.confianza !== "baja" ? cache.guia : null,
+      margenObjetivoPct: margen, precioOfrecido: c.ofrecido,
+    });
+    return {
+      consulta: { marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km },
+      fechaAnalisis: new Date().toISOString(),
+      mercado: cache.mercado ? { n: cache.mercado.n, mediana: cache.mercado.mediana || cache.mercado.promedio, minimo: cache.mercado.minimo, maximo: cache.mercado.maximo } : null,
+      guia: cache.guia ? { compra: cache.guia.compra, venta: cache.guia.venta, confianza: cache.guia.confianza } : null,
+      ...reco,
+    };
+  }
+
+  /** Cambia el precio de un auto al sugerido. Revalida todo: nunca confia en lo que vio la pantalla o el asistente. */
+  async function aplicarPrecioSugerido(adminDb: any, p: { agencyId: string; uid: string; vehicleId: string; precio: number }): Promise<{ status: number; body: any }> {
+    const { agencyId, uid, vehicleId, precio } = p;
+    if (!/^[A-Za-z0-9_-]{5,40}$/.test(vehicleId) || !(precio > 0)) return { status: 400, body: { error: "Datos incompletos." } };
+    const aRef = adminDb.collection(COL_ANALISIS).doc(vehicleId);
+    const vRef = adminDb.collection("vehicles").doc(vehicleId);
+    const [aSnap, vSnap] = await Promise.all([aRef.get(), vRef.get()]);
+    const a: any = aSnap.data(), v: any = vSnap.data();
+    if (!a || !v || a.agencyId !== agencyId || v.agencyId !== agencyId) return { status: 404, body: { error: "No encontramos ese auto en tu agencia." } };
+    if (v.isDeleted || v.status === "sold") return { status: 409, body: { error: "Ese auto ya no está a la venta." } };
+    if (a.sugerencia !== "bajar" && a.sugerencia !== "subir") return { status: 409, body: { error: "Ese auto ya no tiene una sugerencia de cambio. Actualiza la pantalla." } };
+    if (Math.round(precio) !== Math.round(Number(a.precioSugerido))) return { status: 409, body: { error: "La sugerencia cambió. Actualiza la pantalla y vuelve a intentar." } };
+    if (Math.round(Number(v.price)) !== Math.round(Number(a.precioLista))) return { status: 409, body: { error: "El precio del auto cambió después de la revisión. Pulsa «Revisar ahora» para tener una sugerencia al día." } };
+    const ahora = new Date().toISOString();
+    await vRef.set({ price: Math.round(precio), updatedAt: ahora }, { merge: true });
+    await adminDb.collection("analisis_precio_cambios").add({
+      vehicleId, agencyId, titulo: a.titulo, de: Number(v.price), a: Math.round(precio), sugerencia: a.sugerencia,
+      razon: a.razon, porUid: uid, cuando: ahora,
+    });
+    await aRef.set({
+      precioLista: Math.round(precio), precioSugerido: Math.round(precio), sugerencia: "mantener",
+      razon: `Precio cambiado a ${"$" + Math.round(precio).toLocaleString("es-MX")} (antes ${"$" + Math.round(Number(v.price)).toLocaleString("es-MX")}). La próxima revisión lo vuelve a evaluar.`,
+      diferenciaVsMedianaPct: a.medianaMercado ? Math.round(((precio - a.medianaMercado) / a.medianaMercado) * 1000) / 10 : null,
+    }, { merge: true });
+    cacheCatalogoWeb.clear();
+    return { status: 200, body: { ok: true, precio: Math.round(precio), precioAnterior: Number(v.price), titulo: a.titulo } };
+  }
+
+  // Una revision manual por agencia cada 10 minutos (pantalla y asistente comparten el tope).
+  const ultimaRevisionManual = new Map<string, number>();
+
   const ROLES_PRECIOS = ["admin", "manager"];
 
   app.get("/api/precios/analisis", async (req: any, res: any) => {
@@ -4334,33 +4433,19 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     if (!q) return;
     if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no ve el análisis de precios." });
     try {
-      const snap = await q.adminDb.collection(COL_ANALISIS).where("agencyId", "==", q.agencyId).get();
-      const orden: Record<string, number> = { bajar: 0, revisar: 1, subir: 2, mantener: 3, "sin-datos": 4 };
-      const autos = snap.docs.map((d: any) => d.data()).sort((a: any, b: any) => (orden[a.sugerencia] ?? 9) - (orden[b.sugerencia] ?? 9) || (b.diasEnInventario || 0) - (a.diasEnInventario || 0));
-      // Las revisiones programadas son de toda la plataforma: lo que cada agencia
-      // necesita saber es cuando se analizaron SUS autos por ultima vez.
-      const ultimaRevision = autos.reduce((m: string, a: any) => (String(a.analizadoEn || "") > m ? String(a.analizadoEn) : m), "") || null;
-      res.json({ autos, ultimaRevision });
+      res.json(await leerAnalisisDeVenta(q.adminDb, q.agencyId));
     } catch (e) {
       console.error("precios/analisis:", e);
       res.status(500).json({ error: "No se pudo leer el análisis." });
     }
   });
 
-  // Calidad de compras: lo pagado contra la guia. Es un dato de costos, asi que
-  // solo para quien ya puede ver costos en el inventario.
   app.get("/api/precios/compras", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
     if (!q) return;
     if (!ROLES_PRECIOS.includes(q.rol) || !puedeRol(q.rol, "vehiculos.costo")) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
     try {
-      const snap = await q.adminDb.collection(COL_COMPRAS).where("agencyId", "==", q.agencyId).get();
-      const compras = snap.docs.map((d: any) => d.data());
-      const resumen = resumirCompras(compras);
-      const orden: Record<string, number> = { cara: 0, buena: 1, "en-linea": 2, "sin-guia": 3 };
-      const autos = compras.sort((a: any, b: any) => (orden[a.clasificacion] ?? 9) - (orden[b.clasificacion] ?? 9) || (b.diferenciaPct || 0) - (a.diferenciaPct || 0));
-      const ultimaRevision = compras.reduce((m: string, a: any) => (String(a.analizadoEn || "") > m ? String(a.analizadoEn) : m), "") || null;
-      res.json({ resumen, autos, ultimaRevision, limites: "La guía es la de hoy, no la del día de la compra; con confianza baja o en consignación no se compara." });
+      res.json(await leerCalidadDeCompras(q.adminDb, q.agencyId));
     } catch (e) {
       console.error("precios/compras:", e);
       res.status(500).json({ error: "No se pudo leer el análisis de compras." });
@@ -4414,49 +4499,15 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     }
   });
 
-  // Mercado y guia de un modelo, guardados 12 horas para no repetir una consulta lenta.
-  const cacheConsultaModelo = new Map<string, { momento: number; mercado: any; guia: any }>();
-
   app.post("/api/precios/recomendar", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
     if (!q) return;
     if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
     if (!frenoPermite(`reco:${q.agencyId}`, 20)) return res.status(429).json({ error: "Muchas consultas seguidas. Intenta en un minuto." });
-    const marca = String(req.body?.marca || "").trim().slice(0, 60);
-    const modelo = String(req.body?.modelo || "").trim().slice(0, 80);
-    const version = String(req.body?.version || "").trim().slice(0, 80);
-    const anio = Number(req.body?.anio);
-    const km = req.body?.km === "" || req.body?.km == null ? null : Number(req.body.km);
-    const ofrecido = req.body?.precioOfrecido ? Number(req.body.precioOfrecido) : null;
-    if (!marca || !modelo || !(anio >= 1980 && anio <= new Date().getFullYear() + 2)) return res.status(400).json({ error: "Escribe marca, modelo y año." });
-    if (km !== null && !(km >= 0 && km < 1_000_000)) return res.status(400).json({ error: "El kilometraje no parece correcto." });
+    const c = validarConsultaReco(req.body);
+    if ("error" in c) return res.status(400).json(c);
     try {
-      const clave = `${marca}|${modelo}|${anio}`.toLowerCase();
-      let c = cacheConsultaModelo.get(clave);
-      if (!c || Date.now() - c.momento > 12 * 3_600_000) {
-        const [m, g] = await Promise.allSettled([consultarMercado(marca, modelo, anio), consultarGuia(marca, modelo, anio)]);
-        c = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
-        // Si una consulta falló no se guarda: se reintenta la próxima vez.
-        if (m.status === "fulfilled" && g.status === "fulfilled") cacheConsultaModelo.set(clave, c);
-      }
-      const [opsSnap, agSnap] = await Promise.all([
-        q.adminDb.collection(COL_OPERACIONES).where("agencyId", "==", q.agencyId).get(),
-        q.adminDb.collection("agencies").doc(q.agencyId).get(),
-      ]);
-      const margen = Number(agSnap.data()?.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT;
-      const reco = recomendarPrecios({
-        marca, modelo, version, anio, km,
-        operaciones: opsSnap.docs.map((d: any) => d.data()),
-        mercado: c.mercado, guia: c.guia && c.guia.confianza !== "baja" ? c.guia : null,
-        margenObjetivoPct: margen, precioOfrecido: ofrecido,
-      });
-      res.json({
-        consulta: { marca, modelo, version, anio, km },
-        fechaAnalisis: new Date().toISOString(),
-        mercado: c.mercado ? { n: c.mercado.n, mediana: c.mercado.mediana || c.mercado.promedio, minimo: c.mercado.minimo, maximo: c.mercado.maximo } : null,
-        guia: c.guia ? { compra: c.guia.compra, venta: c.guia.venta, confianza: c.guia.confianza } : null,
-        ...reco,
-      });
+      res.json(await recomendarParaAgencia(q.adminDb, q.agencyId, c));
     } catch (e) {
       console.error("precios/recomendar:", e);
       res.status(500).json({ error: "No se pudo armar la recomendación." });
@@ -4471,32 +4522,9 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const q = await usuarioQuePide(req, res);
     if (!q) return;
     if (!ROLES_PRECIOS.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no puede cambiar precios desde aquí." });
-    const vehicleId = String(req.body?.vehicleId || "");
-    const precio = Number(req.body?.precio);
-    if (!/^[A-Za-z0-9_-]{5,40}$/.test(vehicleId) || !(precio > 0)) return res.status(400).json({ error: "Datos incompletos." });
     try {
-      const aRef = q.adminDb.collection(COL_ANALISIS).doc(vehicleId);
-      const vRef = q.adminDb.collection("vehicles").doc(vehicleId);
-      const [aSnap, vSnap] = await Promise.all([aRef.get(), vRef.get()]);
-      const a: any = aSnap.data(), v: any = vSnap.data();
-      if (!a || !v || a.agencyId !== q.agencyId || v.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese auto en tu agencia." });
-      if (v.isDeleted || v.status === "sold") return res.status(409).json({ error: "Ese auto ya no está a la venta." });
-      if (a.sugerencia !== "bajar" && a.sugerencia !== "subir") return res.status(409).json({ error: "Ese auto ya no tiene una sugerencia de cambio. Actualiza la pantalla." });
-      if (Math.round(precio) !== Math.round(Number(a.precioSugerido))) return res.status(409).json({ error: "La sugerencia cambió. Actualiza la pantalla y vuelve a intentar." });
-      if (Math.round(Number(v.price)) !== Math.round(Number(a.precioLista))) return res.status(409).json({ error: "El precio del auto cambió después de la revisión. Pulsa «Revisar ahora» para tener una sugerencia al día." });
-      const ahora = new Date().toISOString();
-      await vRef.set({ price: Math.round(precio), updatedAt: ahora }, { merge: true });
-      await q.adminDb.collection("analisis_precio_cambios").add({
-        vehicleId, agencyId: q.agencyId, titulo: a.titulo, de: Number(v.price), a: Math.round(precio), sugerencia: a.sugerencia,
-        razon: a.razon, porUid: q.uid, cuando: ahora,
-      });
-      await aRef.set({
-        precioLista: Math.round(precio), precioSugerido: Math.round(precio), sugerencia: "mantener",
-        razon: `Precio cambiado a ${"$" + Math.round(precio).toLocaleString("es-MX")} (antes ${"$" + Math.round(Number(v.price)).toLocaleString("es-MX")}). La próxima revisión lo vuelve a evaluar.`,
-        diferenciaVsMedianaPct: a.medianaMercado ? Math.round(((precio - a.medianaMercado) / a.medianaMercado) * 1000) / 10 : null,
-      }, { merge: true });
-      cacheCatalogoWeb.clear();
-      res.json({ ok: true, precio: Math.round(precio) });
+      const r = await aplicarPrecioSugerido(q.adminDb, { agencyId: q.agencyId, uid: q.uid, vehicleId: String(req.body?.vehicleId || ""), precio: Number(req.body?.precio) });
+      res.status(r.status).json(r.body);
     } catch (e) {
       console.error("precios/aplicar:", e);
       res.status(500).json({ error: "No se pudo cambiar el precio." });
@@ -4505,7 +4533,6 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
 
   // Revisar ahora, sin esperar a la de la noche. Solo reanaliza con el mercado
   // ya guardado; no consulta Mercado Libre. Una cada 10 minutos por agencia.
-  const ultimaRevisionManual = new Map<string, number>();
   app.post("/api/precios/revisar", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
     if (!q) return;
@@ -5641,12 +5668,13 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     },
     {
       name: "actualizar_precio",
-      description: "Cambia el precio de venta de un vehículo del inventario.",
+      description: "Cambia el precio de venta de un vehículo del inventario. ESCRIBE, por eso pide confirmación: la primera llamada (sin confirmar) solo muestra el cambio; enséñaselo a la persona y, solo si dice que sí, vuelve a llamar con confirmar=true.",
       inputSchema: {
         type: "object",
         properties: {
           vehicleId: { type: "string", description: "Identificador del vehículo" },
-          precio: { type: "number", description: "Nuevo precio de venta" }
+          precio: { type: "number", description: "Nuevo precio de venta" },
+          confirmar: { type: "boolean", description: "true únicamente cuando la persona ya aceptó el cambio. Sin esto solo se muestra qué cambiaría." }
         },
         required: ["vehicleId", "precio"]
       }
@@ -5663,6 +5691,60 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
           fecha: { type: "string", description: "Fecha en formato AAAA-MM-DD, opcional" }
         },
         required: ["vehicleId", "concepto", "importe"]
+      }
+    },
+    {
+      name: "analisis_inventario",
+      description: "Revisión de precios de venta de TODO el inventario contra el mercado (Mercado Libre) y los días parados. Devuelve cuántos autos conviene bajar, subir, mantener o revisar, y la lista de los que tienen sugerencia, con precio actual, precio sugerido, días en inventario, número de comparables y la razón. Úsala para preguntas como «¿qué autos tengo caros?», «¿qué debería bajar?» o «¿cómo está mi inventario?». Incluye la fecha del análisis (se recalcula cada día) y un campo insights con las conclusiones. No cambia nada. Solo administrador o gerente.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sugerencia: { type: "string", enum: ["bajar", "subir", "revisar", "mantener", "sin-datos", "todas"], description: "Qué autos listar. Por omisión: los que tienen una sugerencia (bajar, subir o revisar)." },
+          limite: { type: "number", description: "Máximo de autos en la lista (por omisión 20, tope 50)." }
+        }
+      }
+    },
+    {
+      name: "analisis_precio_auto",
+      description: "Detalle del análisis de precio de UN auto: su precio contra la mediana y el rango del mercado, número de comparables, días en inventario, la sugerencia y su razón. Si quien pregunta puede ver costos, añade las ventas parecidas que ha hecho la agencia (compra, venta, utilidad, días) y si la compra de ese auto fue buena o cara contra la guía. Úsala cuando pregunten por un auto concreto («¿está bien el precio de la Tiguan?»). Necesita el identificador del auto (búscalo con get_inventory). No cambia nada.",
+      inputSchema: { type: "object", properties: { vehicleId: { type: "string", description: "Identificador del vehículo" } }, required: ["vehicleId"] }
+    },
+    {
+      name: "calidad_de_compras",
+      description: "Qué tan bien se ha comprado: compara lo pagado por cada auto con la compra de la guía de Autocosmos, según qué tan comercial es el auto (lo poco comercial se compra por debajo de la guía; lo muy comercial puede llegar a la media de la guía). Devuelve el porcentaje de compras que pasaron su máximo, el sobreprecio promedio, las buenas compras, la tendencia por mes y el resumen por marca y por quién compró, con los autos más caros primero. Úsala para «¿estamos comprando bien?». La guía es la de hoy y suele quedarse corta en este mercado: el resumen lo advierte. Incluye fecha del análisis, comparables e insights. Requiere permiso de costos.",
+      inputSchema: { type: "object", properties: {} }
+    },
+    {
+      name: "recomendar_precios",
+      description: "Antes de comprar un auto: dice en cuánto venderlo, cuánto pagar como MÁXIMO y en cuántos días se vendería, usando las ventas parecidas de la agencia (misma marca y modelo, año y kilometraje parecidos), el mercado y la guía, con el margen objetivo de la agencia. Devuelve el nivel de confianza y cuántos comparables se usaron; con pocos, lo dice y se apoya en mercado y guía. Úsala para «¿cuánto pago por este Sentra 2020 con 70 mil km?». Tarda unos 15 segundos. Si dan lo que piden por el auto, pásalo en precioOfrecido y dirá si conviene. Requiere permiso de costos.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          marca: { type: "string", description: "Marca, por ejemplo Nissan" },
+          modelo: { type: "string", description: "Modelo, por ejemplo Sentra" },
+          version: { type: "string", description: "Versión, por ejemplo Advance (opcional)" },
+          anio: { type: "number", description: "Año del auto" },
+          km: { type: "number", description: "Kilometraje (opcional pero recomendado)" },
+          precioOfrecido: { type: "number", description: "Lo que piden por el auto, si ya lo saben (opcional)" }
+        },
+        required: ["marca", "modelo", "anio"]
+      }
+    },
+    {
+      name: "correr_revision_precios",
+      description: "Vuelve a calcular ahora la revisión de precios de venta y de compras de la agencia, sin esperar a la de la noche. Usa el precio de mercado y la guía ya guardados (no vuelve a consultar Mercado Libre; eso se refresca solo cada semana). Úsala si acaban de cambiar precios, costos o ventas y quieren ver el efecto. Solo una vez cada 10 minutos. Regresa el resumen nuevo con insights. Solo administrador o gerente.",
+      inputSchema: { type: "object", properties: {} }
+    },
+    {
+      name: "aplicar_precio_sugerido",
+      description: "Cambia el precio de venta de un auto al precio que sugirió la revisión de precios. ESCRIBE en el inventario, por eso pide confirmación: la primera llamada (sin confirmar) solo muestra el cambio propuesto; muéstraselo a la persona y, SOLO si dice que sí, vuelve a llamar con confirmar=true. Se rechaza si la sugerencia ya no está vigente o si el precio cambió después de la revisión. Solo administrador o gerente con permiso de precios.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          vehicleId: { type: "string", description: "Identificador del vehículo" },
+          confirmar: { type: "boolean", description: "true únicamente cuando la persona ya aceptó el cambio" }
+        },
+        required: ["vehicleId"]
       }
     },
     {
@@ -6152,6 +6234,15 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         if (!(precio > 0)) return texto({ error: "El precio debe ser mayor que cero." });
 
         const v: any = snap.data();
+        if (toolArgs.confirmar !== true) {
+          return texto({
+            requiereConfirmacion: true,
+            auto: `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim(),
+            precioActual: v.price ?? null,
+            precioNuevo: precio,
+            instruccion: "No se cambió nada. Enséñale a la persona este cambio y pregúntale si lo confirma. Solo si dice que sí, vuelve a llamar con confirmar=true.",
+          });
+        }
         await ref.set({ price: precio, ...marcaDeAutor() }, { merge: true });
         return texto({
           ok: true,
@@ -6412,6 +6503,142 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
             ]
           }
         };
+      }
+
+      // ----- Inteligencia de precios (Fases 1 a 4, vistas desde el asistente) -----
+      const precioRol = ["admin", "manager"].includes(sesion?.role);
+      const precioCostos = precioRol && sesionPuede(sesion, "vehiculos.costo");
+      const sinAgencia = !targetAgencyId || targetAgencyId === "unassigned";
+
+      if (toolName === "analisis_inventario") {
+        if (!precioRol) return sinPermiso(id, "el análisis de precios");
+        if (sinAgencia) return texto({ error: "Tu usuario no pertenece a una agencia." });
+        const { autos } = await leerAnalisisDeVenta(db, targetAgencyId);
+        const r = resumirAnalisisDeVenta(autos);
+        const filtro = String(toolArgs.sugerencia || "");
+        const limite = Math.min(50, Math.max(1, Number(toolArgs.limite) || 20));
+        const lista = autos
+          .filter((a: any) => (filtro && filtro !== "todas" ? a.sugerencia === filtro : filtro === "todas" ? true : ["bajar", "subir", "revisar"].includes(a.sugerencia)))
+          .slice(0, limite)
+          .map((a: any) => ({
+            vehicleId: a.vehicleId, auto: a.titulo, precioActual: a.precioLista, sugerencia: a.sugerencia, precioSugerido: a.sugerencia === "bajar" || a.sugerencia === "subir" ? a.precioSugerido : null,
+            medianaMercado: a.medianaMercado, diferenciaVsMedianaPct: a.diferenciaVsMedianaPct, diasEnInventario: a.diasEnInventario, comparables: a.comparables, confianza: a.confianza, razon: a.razon,
+          }));
+        return texto({
+          fechaAnalisis: r.fechaAnalisis, comparablesPromedio: r.comparablesPromedio,
+          resumen: { autosRevisados: r.total, porSugerencia: r.porSugerencia, autosConMasDe90Dias: r.parados90, recorteTotalSiSeBajanTodos: r.valorSobrevaluado },
+          autos: lista, mostrados: lista.length, insights: r.insights,
+        });
+      }
+
+      if (toolName === "analisis_precio_auto") {
+        if (!precioRol) return sinPermiso(id, "el análisis de precios");
+        if (sinAgencia) return texto({ error: "Tu usuario no pertenece a una agencia." });
+        const vid = String(toolArgs.vehicleId || "");
+        const [aSnap, vSnap, mSnap] = await Promise.all([
+          db.collection(COL_ANALISIS).doc(vid).get(), db.collection("vehicles").doc(vid).get(), db.collection("mercadoAutos").doc(vid).get(),
+        ]);
+        const a: any = aSnap.data(), v: any = vSnap.data(), m: any = mSnap.data();
+        if (!v || v.agencyId !== targetAgencyId) return texto({ error: "No existe ese vehículo en tu agencia." });
+        if (!a) return texto({ error: "Ese auto todavía no tiene análisis (puede estar vendido o ser muy reciente). Usa correr_revision_precios.", auto: `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim() });
+        const insights: string[] = [a.razon];
+        const salida: any = {
+          fechaAnalisis: a.analizadoEn, comparables: a.comparables,
+          auto: { vehicleId: vid, nombre: a.titulo, precioActual: a.precioLista, km: v.km ?? null, diasEnInventario: a.diasEnInventario },
+          analisis: { sugerencia: a.sugerencia, precioSugerido: a.sugerencia === "bajar" || a.sugerencia === "subir" ? a.precioSugerido : null, confianza: a.confianza, diferenciaVsMedianaPct: a.diferenciaVsMedianaPct, razon: a.razon },
+          mercado: a.rangoMercado ? { anuncios: a.comparables, mediana: a.medianaMercado, minimo: a.rangoMercado.minimo, maximo: a.rangoMercado.maximo, p33: a.rangoMercado.p33, p66: a.rangoMercado.p66, p90: a.rangoMercado.p90, datosDe: a.mercadoDe } : null,
+        };
+        if (precioCostos) {
+          const [opsSnap, cSnap, agSnap] = await Promise.all([
+            db.collection(COL_OPERACIONES).where("agencyId", "==", targetAgencyId).get(),
+            db.collection(COL_COMPRAS).doc(vid).get(),
+            db.collection("agencies").doc(targetAgencyId).get(),
+          ]);
+          const reco = recomendarPrecios({
+            marca: String(v.make || ""), modelo: String(v.model || ""), anio: Number(v.year) || 0, km: Number(v.km) || null,
+            operaciones: opsSnap.docs.map((d: any) => d.data()), mercado: m?.mercado || null, guia: m?.guia && m.guia.confianza !== "baja" ? m.guia : null,
+            margenObjetivoPct: Number(agSnap.data()?.precios?.margenObjetivoPct) || MARGEN_OBJETIVO_INICIAL_PCT,
+          });
+          salida.ventasPropiasParecidas = { cuantas: reco.comparables, confianza: reco.confianza, lista: reco.comparablesUsados.slice(0, 8).map((o) => ({ auto: o.titulo, km: o.km, compra: o.precioCompra, venta: o.precioVenta, utilidad: o.utilidad, dias: o.diasEnInventario })) };
+          salida.recomendacionSiSeCompraraHoy = { precioVentaSugerido: reco.precioVentaSugerido, maxCompraRecomendado: reco.maxCompraRecomendado, diasEstimados: reco.diasEstimados };
+          const c: any = cSnap.data();
+          if (c) { salida.compra = { pagaste: c.precioCompra, compraSegunGuia: c.guiaCompra, maximoRecomendado: c.techoCompra, resultado: c.clasificacion, diferenciaPct: c.diferenciaPct, comercial: c.comercial, motivo: c.motivo }; insights.push(c.motivo); }
+          if (reco.comparables) insights.push(`La agencia ha vendido ${reco.comparables} auto${reco.comparables === 1 ? "" : "s"} parecido${reco.comparables === 1 ? "" : "s"} (confianza ${reco.confianza}).`);
+        }
+        salida.insights = insights;
+        return texto(salida);
+      }
+
+      if (toolName === "calidad_de_compras") {
+        if (!precioCostos) return sinPermiso(id, "los costos de compra");
+        if (sinAgencia) return texto({ error: "Tu usuario no pertenece a una agencia." });
+        const c = await leerCalidadDeCompras(db, targetAgencyId);
+        const r: any = c.resumen;
+        return texto({
+          fechaAnalisis: c.ultimaRevision, comparables: r.comparables,
+          resumen: {
+            comprasTotales: r.comprasTotales, comparables: r.comparables, sinGuiaConfiable: r.sinGuia, pasaronSuMaximo: r.caras, enLinea: r.enLinea, buenasCompras: r.buenas,
+            porcentajePasaronSuMaximo: r.pctPorEncimaDeGuia, sobreprecioPromedioPct: r.sobreprecioPromedioPct, sobreprecioTotal: r.sobreprecioTotal, ahorroTotalEnBuenasCompras: r.ahorroTotal, compraTipicaVsGuiaPct: r.medianaDiferenciaPct,
+          },
+          porMes: r.porMes, porMarca: r.porMarca.slice(0, 10), porQuienCompro: r.porComprador,
+          autos: c.autos.slice(0, 15).map((a: any) => ({ vehicleId: a.vehicleId, auto: a.titulo, pagaste: a.precioCompra, compraSegunGuia: a.guiaCompra, maximoRecomendado: a.techoCompra, resultado: a.clasificacion, diferenciaPct: a.diferenciaPct, comercial: a.comercial, compro: a.compradoPorNombre || null })),
+          limites: c.limites, insights: r.insights,
+        });
+      }
+
+      if (toolName === "recomendar_precios") {
+        if (!precioCostos) return sinPermiso(id, "los costos de compra");
+        if (sinAgencia) return texto({ error: "Tu usuario no pertenece a una agencia." });
+        if (!frenoPermite(`reco:${targetAgencyId}`, 20)) return texto({ error: "Muchas consultas seguidas. Intenta en un minuto." });
+        const c = validarConsultaReco({ ...toolArgs, modelo: toolArgs.modelo || toolArgs.version });
+        if ("error" in c) return texto(c);
+        const r: any = await recomendarParaAgencia(db, targetAgencyId, c);
+        return texto({
+          fechaAnalisis: r.fechaAnalisis, comparables: r.comparables, confianza: r.confianza, consulta: r.consulta,
+          precioVentaSugerido: r.precioVentaSugerido, origenPrecioVenta: r.origenPrecioVenta,
+          maxCompraRecomendado: r.maxCompraRecomendado, maxCompraPorMargen: r.maxCompraPorMargen, maxCompraPorGuia: r.maxCompraPorGuia,
+          gastosEsperados: r.gastosEstimados, diasEstimadosDeVenta: r.diasEstimados, rangoDias: r.diasRango, margenObjetivoPct: r.margenObjetivoPct,
+          mercado: r.mercado, guia: r.guia,
+          ventasParecidas: r.comparablesUsados.slice(0, 5).map((o: any) => ({ auto: o.titulo, km: o.km, compra: o.precioCompra, venta: o.precioVenta, utilidad: o.utilidad, dias: o.diasEnInventario })),
+          advertencias: r.advertencias, insights: r.insights,
+        });
+      }
+
+      if (toolName === "correr_revision_precios") {
+        if (!precioRol) return sinPermiso(id, "el análisis de precios");
+        if (sinAgencia) return texto({ error: "Tu usuario no pertenece a una agencia." });
+        if (Date.now() - (ultimaRevisionManual.get(targetAgencyId) || 0) < 10 * 60_000) {
+          return texto({ error: "Ya se revisó hace menos de 10 minutos. Consulta analisis_inventario para ver el resultado." });
+        }
+        ultimaRevisionManual.set(targetAgencyId, Date.now());
+        const corrida = await revisarPreciosDelInventario("manual", targetAgencyId);
+        if (!corrida.ok) return texto({ error: corrida.error });
+        const { autos } = await leerAnalisisDeVenta(db, targetAgencyId);
+        const r = resumirAnalisisDeVenta(autos);
+        return texto({
+          ok: true, fechaAnalisis: r.fechaAnalisis, comparablesPromedio: r.comparablesPromedio, autosRevisados: corrida.revisados, porSugerencia: r.porSugerencia,
+          aviso: "Se recalculó con el precio de mercado y la guía ya guardados; esos se refrescan solos cada semana.",
+          insights: r.insights,
+        });
+      }
+
+      if (toolName === "aplicar_precio_sugerido") {
+        if (!precioRol || !sesionPuede(sesion, "vehiculos.editar") || !sesionPuede(sesion, "vehiculos.precio")) return sinPermiso(id, "cambiar precios");
+        if (sinAgencia) return texto({ error: "Tu usuario no pertenece a una agencia." });
+        const vid = String(toolArgs.vehicleId || "");
+        const a: any = (await db.collection(COL_ANALISIS).doc(vid).get()).data();
+        if (!a || a.agencyId !== targetAgencyId) return texto({ error: "No existe ese vehículo en tu agencia, o todavía no tiene análisis." });
+        if (a.sugerencia !== "bajar" && a.sugerencia !== "subir") return texto({ error: `Ese auto no tiene una sugerencia de cambio (${a.sugerencia}).`, razon: a.razon });
+        if (toolArgs.confirmar !== true) {
+          return texto({
+            requiereConfirmacion: true, fechaAnalisis: a.analizadoEn, comparables: a.comparables,
+            auto: a.titulo, precioActual: a.precioLista, precioSugerido: a.precioSugerido, confianza: a.confianza, razon: a.razon,
+            instruccion: "No se cambió nada. Enséñale a la persona este cambio y pregúntale si lo confirma. Solo si dice que sí, vuelve a llamar con confirmar=true.",
+            insights: [a.razon],
+          });
+        }
+        const r = await aplicarPrecioSugerido(db, { agencyId: targetAgencyId, uid: sesion?.userId || "mcp-agencia", vehicleId: vid, precio: Number(a.precioSugerido) });
+        return texto(r.status === 200 ? { ok: true, auto: r.body.titulo, precioAnterior: r.body.precioAnterior, precioNuevo: r.body.precio, insights: [`Precio cambiado de $${Math.round(r.body.precioAnterior).toLocaleString("es-MX")} a $${r.body.precio.toLocaleString("es-MX")}. Quedó registrado quién lo hizo.`] } : { error: r.body.error });
       }
 
       if (toolName === "get_sales_stats") {

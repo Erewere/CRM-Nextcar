@@ -143,3 +143,37 @@ export function analizarPrecio(input: {
     razon: `Está ${lugar} contra ${mercado.n} anuncios parecidos (mediana ${dinero(mediana)}, ${dif >= 0 ? '+' : ''}${dif}%)${parado}. ${cierre}`,
   };
 }
+
+
+// ---------- Resumen del inventario (tablero, asistente y exportaciones) ----------
+
+export interface AnalisisGuardado {
+  vehicleId: string; titulo: string; precioLista: number; medianaMercado: number | null; comparables: number;
+  diasEnInventario: number | null; analizadoEn: string; sugerencia: Sugerencia; precioSugerido: number; razon: string;
+  confianza: ConfianzaAnalisis; diferenciaVsMedianaPct: number | null;
+}
+
+/** Cuenta, agrupa y redacta las conclusiones de la revisión de precios de venta de una agencia. */
+export function resumirAnalisisDeVenta(autos: AnalisisGuardado[]) {
+  const por: Record<Sugerencia, number> = { bajar: 0, subir: 0, mantener: 0, revisar: 0, 'sin-datos': 0 };
+  autos.forEach((a) => { por[a.sugerencia] = (por[a.sugerencia] || 0) + 1; });
+  const parados = autos.filter((a) => (a.diasEnInventario ?? 0) >= 90);
+  const conComparables = autos.filter((a) => a.comparables > 0).map((a) => a.comparables);
+  const comparablesPromedio = conComparables.length ? Math.round(conComparables.reduce((a, b) => a + b, 0) / conComparables.length) : 0;
+  const valorSobrevaluado = autos.filter((a) => a.sugerencia === 'bajar').reduce((s, a) => s + Math.max(0, a.precioLista - a.precioSugerido), 0);
+  const ultima = autos.reduce((m, a) => (String(a.analizadoEn || '') > m ? String(a.analizadoEn) : m), '') || null;
+  const dinero = (n: number) => '$' + Math.round(n).toLocaleString('es-MX');
+  const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
+  const insights: string[] = [];
+  if (!autos.length) {
+    insights.push('Todavía no hay revisión de precios para esta agencia: se genera sola cada día, o con «correr_revision_precios».');
+  } else {
+    insights.push(`De ${autos.length} autos revisados: ${plural(por.bajar, 'parece caro', 'parecen caros')} contra el mercado, ${plural(por.subir, 'tiene', 'tienen')} oportunidad de subir, ${por.mantener} están bien, ${por.revisar} piden revisión manual y ${por['sin-datos']} no tienen datos suficientes.`);
+    if (por.bajar) insights.push(`Bajar los precios sugeridos recortaría ${dinero(valorSobrevaluado)} en total.`);
+    if (parados.length) insights.push(`${plural(parados.length, 'auto lleva', 'autos llevan')} 90 días o más en inventario${parados.filter((a) => a.sugerencia === 'bajar').length ? `; ${parados.filter((a) => a.sugerencia === 'bajar').length} de ellos ya tienen sugerencia de bajar` : ''}.`);
+    if (por.revisar) insights.push(`${plural(por.revisar, 'auto está', 'autos están')} a más de ${DIFERENCIA_SOSPECHOSA_PCT}% del mercado; casi siempre es otra versión y no un mal precio, así que no se sugiere cambio.`);
+    insights.push('El mercado se compara por marca, modelo y año, sin versión ni kilometraje: úsalo como guía, no como orden.');
+  }
+  return { total: autos.length, porSugerencia: por, parados90: parados.length, comparablesPromedio, valorSobrevaluado, fechaAnalisis: ultima, insights };
+}
