@@ -116,7 +116,7 @@ export function Recomendador() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {grande('Se vendería en (esperado)', dinero(r.precioVentaEsperado), r.origenPrecioVenta === 'mercado' ? 'mediana del precio comercial' : r.origenPrecioVenta === 'ventas-propias' ? 'mediana de tus ventas' : r.origenPrecioVenta === 'guia' ? 'guía de venta' : '')}
             {grande('Peor caso', dinero(r.precioVentaPesimista), 'si no es muy comercial')}
-            {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), `guía ${dinero(r.maxCompraPorGuia)} · peor caso ${dinero(r.maxCompraPorPesimista)}`)}
+            {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), r.maxCompraPorGuia !== null ? 'tope de la guía' : 'sin guía: sale del peor caso')}
             {grande('Se vendería en', r.diasEstimados === null ? '—' : `${r.diasEstimados} días`, r.diasRango ? `normalmente entre ${r.diasRango[0]} y ${r.diasRango[1]}` : undefined)}
           </div>
           {r.utilidadEsperada !== null && r.utilidadPesimista !== null && (

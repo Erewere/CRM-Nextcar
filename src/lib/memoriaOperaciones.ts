@@ -20,8 +20,10 @@
  *    comercial. NO se usa la guía de venta (aquí se vende casi siempre arriba de ella).
  *  - La utilidad ya no decide el precio: se informa (cuánto dejaría al esperado y al
  *    pesimista). El margen de la agencia solo sirve para avisar si queda corto.
- *  - El máximo a pagar es el MENOR entre el tope de la guía según qué tan comercial es el
- *    auto (`techoDeCompra`, tu regla) y lo que recuperarías en el peor caso menos gastos.
+ *  - Se COMPRA a precio de guía y se VENDE a precio de mercado (Luis, 18 oct): el máximo a
+ *    pagar es el tope de la guía según qué tan comercial es el auto (`techoDeCompra`). Solo si
+ *    no hay guía se usa lo que recuperarías en el peor caso menos gastos. Si el tope de la guía
+ *    quedara por encima de ese peor caso, se avisa.
  */
 
 import { comercialidad, techoDeCompra, type Comercialidad } from './analisisCompra';
@@ -123,7 +125,7 @@ export interface Recomendacion {
   /** Lo que recuperarías en el peor caso, menos gastos. */
   maxCompraPorPesimista: number | null;
   maxCompraPorGuia: number | null;
-  /** El menor de los dos que existan. */
+  /** El tope de la guía; sin guía, el peor caso de venta menos gastos. */
   maxCompraRecomendado: number | null;
   gastosEstimados: number;
   /** Informativas: lo que dejaría comprar al máximo recomendado, vendiendo al precio esperado o al pesimista. */
@@ -231,7 +233,7 @@ export function recomendarPrecios(input: {
   if (diasComps.length < 2) advertencias.push(diasTodos.length ? 'Los días para vender son los de una venta típica de tu agencia: pocas ventas de este modelo.' : 'No hay ventas con fechas para estimar los días.');
   const com = comercialidad({ anuncios: input.mercado?.n, diasPropios: diasComps });
 
-  // ---- Máximo a pagar: el menor entre la guía (tu regla) y lo que recuperarías en el peor caso
+  // ---- Máximo a pagar: el tope de la guía (tu regla); sin guía, lo que recuperarías en el peor caso
   const maxPesimista = pesimista ? Math.max(0, redondear(pesimista - gastosEst)) : null;
   let maxGuia: number | null = null;
   if (g && g.compra > 0) {
@@ -251,8 +253,12 @@ export function recomendarPrecios(input: {
   if (g && g.venta > 0 && esperado && esperado > g.venta * 1.15 && origen === 'mercado') {
     advertencias.push(`El precio esperado está ${Math.round(((esperado - g.venta) / g.venta) * 100)}% arriba de la guía de venta (${dinero(g.venta)}): son precios de lista. Para comprar manda la guía.`);
   }
-  const candidatos = [maxGuia, maxPesimista].filter((x): x is number => x !== null && x > 0);
-  const maxRecomendado = candidatos.length ? Math.min(...candidatos) : null;
+  // Se COMPRA a precio de guía y se VENDE a precio de mercado (Luis, 18 oct): el tope de compra es el
+  // de la guía. El peor caso de venta solo avisa; únicamente decide cuando no hay guía.
+  const maxRecomendado = maxGuia ?? maxPesimista;
+  if (maxGuia !== null && maxPesimista !== null && maxPesimista < maxGuia) {
+    advertencias.push(`Ojo: comprando al tope de la guía (${dinero(maxGuia)}), si se vende en el peor caso (${dinero(pesimista as number)}) no se recuperaría el costo más los gastos (${dinero(gastosEst)}).`);
+  }
 
   // ---- Lo que dejaría (informativo)
   const utilEsp = esperado !== null && maxRecomendado !== null ? esperado - maxRecomendado - gastosEst : null;
@@ -273,12 +279,8 @@ export function recomendarPrecios(input: {
     insights.push(`Peor caso, si el auto no es muy comercial: ${dinero(pesimista)} (cerca del mínimo del mercado). ${com.nivel === 'alta' ? 'Como en tus ventas sale rápido, el esperado es lo normal.' : 'Sin ventas tuyas rápidas de este modelo, conviene planear con este precio.'}`);
   }
   if (maxRecomendado !== null) {
-    const razon = maxGuia !== null && maxPesimista !== null ? (maxGuia <= maxPesimista ? 'lo limita la guía' : 'lo limita el peor caso de venta') : maxGuia !== null ? 'por la guía' : 'por el peor caso de venta';
-    insights.push(`Máximo a pagar: ${dinero(maxRecomendado)} (${razon}).`);
-    if (maxGuia !== null && maxPesimista !== null && Math.abs(maxGuia - maxPesimista) / Math.max(maxGuia, maxPesimista) > 0.1) {
-      insights.push(`La guía permite hasta ${dinero(maxGuia)} y el peor caso de venta, ${dinero(maxPesimista)} (ya sin gastos de ${dinero(gastosEst)}). Gana el menor.`);
-    }
-    if (utilEsp !== null && utilPes !== null) insights.push(`Comprando a ${dinero(maxRecomendado)}: ganarías ${dinero(utilEsp)} (${margenEsp}%) si se vende al precio esperado y ${utilPes >= 0 ? `ganarías ${dinero(utilPes)}` : `perderías ${dinero(-utilPes)}`} (${margenPes}%) en el peor caso.`);
+    insights.push(`Máximo a pagar: ${dinero(maxRecomendado)} (${maxGuia !== null ? `el tope de la guía según qué tan comercial es el auto: ${com.nivel === 'alta' ? 'muy comercial' : com.nivel === 'media' ? 'medianamente comercial' : 'poco comercial'}` : 'no hay guía: sale del peor caso de venta menos gastos'}).`);
+    if (utilEsp !== null && utilPes !== null) insights.push(`Comprando a ${dinero(maxRecomendado)}: ganarías ${dinero(utilEsp)} (${margenEsp}%) si se vende al precio de mercado y ${utilPes >= 0 ? `ganarías ${dinero(utilPes)}` : `perderías ${dinero(-utilPes)}`} (${margenPes}%) en el peor caso.`);
   }
   if (diasEstimados !== null) insights.push(`Tiempo estimado de venta: ${Math.round(diasEstimados)} días${diasRango ? ` (lo normal: entre ${diasRango[0]} y ${diasRango[1]})` : ''}.`);
   if (input.precioOfrecido && maxRecomendado) {
