@@ -865,7 +865,7 @@ export function NotificationsPopover() {
         {isOpen && (
           <>
             <div className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40 sm:hidden" onClick={() => setIsOpen(false)} />
-            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right flex flex-col max-h-[80vh]">
+            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right flex flex-col max-h-[80dvh]">
               <div className="px-4 pt-3 pb-2 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                   <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base">Pendientes</h3>

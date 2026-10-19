@@ -93,7 +93,7 @@ export function MobileFab() {
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-[85px] right-4 z-50 md:hidden flex flex-col items-center gap-3">
+      <div className="fixed bottom-[calc(5.3rem+env(safe-area-inset-bottom,0px))] right-4 z-50 md:hidden flex flex-col items-center gap-3">
         <AnimatePresence>
           {isOpen && (
              <motion.div 

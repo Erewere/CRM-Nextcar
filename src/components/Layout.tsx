@@ -362,7 +362,7 @@ export function Layout() {
 
   return (
     <div className={clsx(
-      "bg-gray-50 dark:bg-slate-900 flex w-full h-screen overflow-hidden",
+      "bg-gray-50 dark:bg-slate-900 flex w-full h-pantalla overflow-hidden",
       isMobile ? "flex-col" : "flex-row"
     )}>
       {/* Sidebar */}
@@ -751,7 +751,7 @@ export function Layout() {
 
           <Outlet />
           {avisoCredito && (
-            <div role="status" className="fixed bottom-20 md:bottom-6 right-4 left-4 md:left-auto z-[120] md:max-w-sm bg-slate-900 text-white rounded-xl shadow-2xl p-4 flex items-start gap-3">
+            <div role="status" className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-4 left-4 md:left-auto z-[120] md:max-w-sm bg-slate-900 text-white rounded-xl shadow-2xl p-4 flex items-start gap-3">
               <Landmark className="w-5 h-5 shrink-0 mt-0.5 text-emerald-300" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold">{avisoCredito.creada ? 'Se abrió la solicitud de crédito' : 'Ya tenía una solicitud de crédito'}</p>
@@ -773,7 +773,7 @@ export function Layout() {
 
       {/* Mobile Bottom Navigation */}
       {isMobile && (
-        <nav className="md:hidden w-full bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-around h-16 px-2 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0">
+        <nav className="md:hidden w-full bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-around barra-inferior-movil px-2 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] shrink-0">
           {[
             { name: "Inicio", path: "/", icon: LayoutDashboard },
             // El embudo no estaba en esta barra, y en el telefono no hay menu

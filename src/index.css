@@ -100,3 +100,28 @@ div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-
   100% { background-color: transparent; }
 }
 .resalte-letra { animation: resalteLetra 1.3s ease-out; border-radius: 12px; }
+
+
+/* ===== iPhone / Safari móvil =====
+   Cuatro cosas que en Android no pasan y en iPhone sí:
+   1. 100vh en Safari es la altura con las barras escondidas: la pantalla queda más alta que lo
+      visible y la barra de abajo se tapa con la de Safari. `dvh` es la altura que de verdad se ve.
+   2. Sin `viewport-fit=cover` (index.html), `env(safe-area-inset-*)` vale 0 y nada respeta la
+      barra de inicio del iPhone.
+   3. `pb-safe` se usaba en varias pantallas pero nunca existió: ahora sí.
+   4. Un campo con letra menor a 16 px hace que iOS amplíe la pantalla al tocarlo, y se queda así. */
+.h-pantalla { height: 100vh; height: 100dvh; }
+
+.pb-safe { padding-bottom: max(0.875rem, env(safe-area-inset-bottom, 0px)); }
+
+.barra-inferior-movil {
+  height: calc(4rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea { font-size: 16px; }
+  html, body { overscroll-behavior-y: none; }
+}
