@@ -4051,6 +4051,10 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         })
         .slice(0, AUTOS_POR_VUELTA);
 
+      // Si Autocosmos deja de contestar (se cuelga), no se le sigue insistiendo: con 3 fallos seguidos se
+      // deja la guía para la siguiente vuelta. Insistir es lo que hace que bloqueen la dirección.
+      let fallosGuiaSeguidos = 0;
+      let guiaPausada = false;
       for (const d of pendientes) {
         const v = d.data();
         const ahora = new Date().toISOString();
@@ -4078,10 +4082,11 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         // Guia de Autocosmos (venta y compra). Sin guia o sin respuesta se
         // reintenta en un dia, no en una semana (Autocosmos a veces se niega
         // por unos minutos); los modelos de 2014 o menos no tienen guia: semana.
-        if ((guiaDe.get(d.id) || "") < limite) {
+        if (!guiaPausada && (guiaDe.get(d.id) || "") < limite) {
           const reintento = Number(v.year) < ANIO_MINIMO_GUIA || vendido ? ahora : new Date(Date.now() - (DIAS_MERCADO - 1) * 86_400_000).toISOString();
           try {
             const g = await consultarGuia(String(v.make), String(v.model), v.year);
+            fallosGuiaSeguidos = 0;
             await adminDb.collection("mercadoAutos").doc(d.id).set(
               { vehicleId: d.id, agencyId: v.agencyId || null, guia: g, guiaEl: g ? ahora : reintento },
               { merge: true },
@@ -4091,6 +4096,10 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
               { vehicleId: d.id, agencyId: v.agencyId || null, guiaEl: reintento },
               { merge: true },
             );
+            if (++fallosGuiaSeguidos >= 3) {
+              guiaPausada = true;
+              console.warn("Guia de Autocosmos: 3 fallos seguidos, se pausa hasta la siguiente vuelta.");
+            }
           }
         }
         await new Promise((r) => setTimeout(r, 3000));
@@ -4372,6 +4381,28 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // Mercado y guia de un modelo, guardados 12 horas para no repetir una consulta lenta.
   const cacheConsultaModelo = new Map<string, { momento: number; mercado: any; guia: any }>();
 
+  /** Guía ya guardada de un auto de la agencia (inventario o vendido) con la misma marca, modelo y año. */
+  async function guiaGuardadaDelModelo(adminDb: any, agencyId: string, marca: string, modelo: string, version: string, anio: number): Promise<{ guia: any; deAuto: string } | null> {
+    const norm = (x: any) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+    const primera = (x: any) => norm(x).split(" ")[0] || "";
+    const [vs, ms] = await Promise.all([
+      adminDb.collection("vehicles").where("agencyId", "==", agencyId).get(),
+      adminDb.collection("mercadoAutos").where("agencyId", "==", agencyId).get(),
+    ]);
+    const guias = new Map<string, any>();
+    ms.docs.forEach((d: any) => { const g = d.data()?.guia; if (g && g.compra > 0 && g.confianza !== "baja") guias.set(d.id, g); });
+    const palabras = norm(version).split(" ").filter((p) => p.length > 1);
+    const candidatos = vs.docs
+      .map((d: any) => ({ id: d.id, v: d.data() || {} }))
+      .filter(({ id, v }: any) => guias.has(id) && !v.isDeleted && norm(v.make) === norm(marca) && Number(v.year) === Number(anio) && primera(v.model) === primera(modelo));
+    if (!candidatos.length) return null;
+    // Si dieron versión, gana el auto cuya versión coincide; si no, el de la guía más reciente.
+    const puntos = (x: any) => palabras.filter((p) => norm(`${x.v.model} ${guias.get(x.id)?.version || ""}`).includes(p)).length;
+    candidatos.sort((a: any, b: any) => puntos(b) - puntos(a) || String(guias.get(b.id)?.fecha || "").localeCompare(String(guias.get(a.id)?.fecha || "")));
+    const mejor = candidatos[0];
+    return { guia: guias.get(mejor.id), deAuto: `${mejor.v.make} ${mejor.v.model} ${mejor.v.year}` };
+  }
+
   async function recomendarParaAgencia(adminDb: any, agencyId: string, c: { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null; guiaManual?: { compra: number; venta: number } | null }) {
     // La versión viaja a la guía y al mercado: sin ella la guía ve todas las versiones juntas
     // y no sabe cuál es (un Sentra Advance se consultaba como «Sentra» y salía confianza baja).
@@ -4379,11 +4410,25 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const consulta = c.version && !yaTrae ? `${c.modelo} ${c.version}` : c.modelo;
     const clave = `${c.marca}|${consulta}|${c.anio}`.toLowerCase();
     let cache = cacheConsultaModelo.get(clave);
+    let guiaFallo = false;
     if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
       const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio), consultarGuia(c.marca, consulta, c.anio)]);
+      guiaFallo = g.status === "rejected";
       cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
       // Si una consulta falló no se guarda: se reintenta la próxima vez.
       if (m.status === "fulfilled" && g.status === "fulfilled") cacheConsultaModelo.set(clave, cache);
+    }
+    // Autocosmos a veces no contesta (se queda colgado) o no tiene el modelo. Antes de quedarnos sin guía,
+    // se busca una guardada de un auto de esta agencia con la misma marca, modelo y año.
+    let estadoGuia: { estado: "en-vivo" | "guardada" | "no-disponible"; motivo: string; edadDias?: number } =
+      cache.guia ? { estado: "en-vivo", motivo: "Consultada ahora en Autocosmos." } : { estado: "no-disponible", motivo: guiaFallo ? "Autocosmos no respondió." : "Autocosmos no tiene este modelo y año (o no respondió)." };
+    if (!cache.guia && !c.guiaManual) {
+      const g = await guiaGuardadaDelModelo(adminDb, agencyId, c.marca, c.modelo, c.version, c.anio);
+      if (g) {
+        cache = { ...cache, guia: g.guia };
+        const edad = g.guia.fecha ? Math.max(0, Math.round((Date.now() - Date.parse(g.guia.fecha)) / 86_400_000)) : undefined;
+        estadoGuia = { estado: "guardada", motivo: `Autocosmos no respondió: se usa la guía guardada de un auto tuyo (${g.deAuto})${edad !== undefined ? `, de hace ${edad} días` : ""}.`, edadDias: edad };
+      }
     }
     const [opsSnap, agSnap] = await Promise.all([
       adminDb.collection(COL_OPERACIONES).where("agencyId", "==", agencyId).get(),
@@ -4404,7 +4449,10 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       fechaAnalisis: new Date().toISOString(),
       mercado: cache.mercado ? { n: cache.mercado.n, mediana: cache.mercado.mediana || cache.mercado.promedio, minimo: cache.mercado.minimo, maximo: cache.mercado.maximo } : null,
       guia: guiaUsada ? { compra: guiaUsada.compra, venta: guiaUsada.venta, confianza: guiaUsada.confianza, manual: !!c.guiaManual, versionDeLaGuia: c.guiaManual ? null : (cache.guia?.version || null) } : null,
+      estadoGuia: c.guiaManual ? { estado: "manual", motivo: "Usa el Libro Azul que escribiste." } : estadoGuia,
       ...reco,
+      // Sin guía el máximo NO es confiable: se dice primero y claro.
+      advertencias: !guiaUsada ? ["NO SE PUDO CONSULTAR LA GUÍA. " + estadoGuia.motivo + " El máximo a pagar de abajo sale solo de anuncios del mercado y no es confiable: escribe tu Libro Azul o vuelve a intentar más tarde.", ...reco.advertencias] : reco.advertencias,
     };
   }
 
@@ -6615,7 +6663,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
           gastosEsperados: r.gastosEstimados, utilidadSiSeVendeAlEsperado: r.utilidadEsperada, utilidadEnElPeorCaso: r.utilidadPesimista,
           margenEsperadoPct: r.margenEsperadoPct, margenPeorCasoPct: r.margenPesimistaPct,
           diasEstimadosDeVenta: r.diasEstimados, rangoDias: r.diasRango, comercial: r.comercial, margenDeReferenciaPct: r.margenObjetivoPct,
-          mercado: r.mercado, guia: r.guia,
+          mercado: r.mercado, guia: r.guia, estadoDeLaGuia: r.estadoGuia,
           ventasParecidas: r.comparablesUsados.slice(0, 5).map((o: any) => ({ auto: o.titulo, km: o.km, compra: o.precioCompra, venta: o.precioVenta, utilidad: o.utilidad, dias: o.diasEnInventario })),
           advertencias: r.advertencias, insights: r.insights,
         });

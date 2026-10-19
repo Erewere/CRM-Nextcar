@@ -17,6 +17,7 @@ type Resultado = {
   utilidadEsperada: number | null; utilidadPesimista: number | null; margenEsperadoPct: number | null; margenPesimistaPct: number | null;
   gastosEstimados: number; diasEstimados: number | null; diasRango: [number, number] | null; comercial: string | null; margenObjetivoPct: number;
   confianza: 'alta' | 'media' | 'baja' | 'ninguna'; comparables: number; advertencias: string[]; insights: string[]; comparablesUsados: Comp[];
+  estadoGuia?: { estado: 'en-vivo' | 'guardada' | 'no-disponible' | 'manual'; motivo: string; edadDias?: number };
   mercado: { n: number; mediana: number } | null; guia: { compra: number; venta: number; confianza: string } | null; fechaAnalisis: string;
 };
 
@@ -113,6 +114,15 @@ export function Recomendador() {
             {r.mercado && <span className="text-xs text-slate-500">Mercado: {r.mercado.n} anuncios, mediana {dinero(r.mercado.mediana)}</span>}
             {r.guia && <span className="text-xs text-slate-500">· Guía: compra {dinero(r.guia.compra)} / venta {dinero(r.guia.venta)}</span>}
           </div>
+          {r.estadoGuia?.estado === 'no-disponible' && (
+            <div className="rounded-xl border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 p-4 text-sm text-red-900 dark:text-red-200 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div><b>No se pudo consultar la guía.</b> {r.estadoGuia.motivo} El «pagar como máximo» de abajo <b>no es confiable</b>: sale solo de anuncios del mercado. Escribe tu Libro Azul arriba y vuelve a consultar, o intenta más tarde.</div>
+            </div>
+          )}
+          {r.estadoGuia?.estado === 'guardada' && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-200">{r.estadoGuia.motivo}</div>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {grande('Se vendería en (esperado)', dinero(r.precioVentaEsperado), r.origenPrecioVenta === 'mercado' ? 'mediana del precio comercial' : r.origenPrecioVenta === 'ventas-propias' ? 'mediana de tus ventas' : r.origenPrecioVenta === 'guia' ? 'guía de venta' : '')}
             {grande('Peor caso', dinero(r.precioVentaPesimista), 'si no es muy comercial')}
