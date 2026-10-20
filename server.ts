@@ -6924,6 +6924,47 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     next();
   };
 
+  // Registro de diagnostico del asistente (MCP): que pide cada cliente y que se le contesta. NUNCA guarda llaves, cuerpos ni
+  // argumentos: solo cuando, a que ruta, que metodo del protocolo (y herramienta), con que forma de autenticacion llego (sin el
+  // valor), el navegador o programa que pregunta y el codigo de respuesta. Sirve para entender por que un cliente nuevo (Gemini,
+  // por ejemplo) no logra conectarse. Se borra solo a los 3 dias. Coleccion mcpRegistro: solo la lee el servidor.
+  const rutasMcpRegistradas = ["/.well-known", "/mcp", "/sse", "/api/mcp", "/oauth"];
+  app.use(rutasMcpRegistradas, (req: any, res: any, next: any) => {
+    const inicio = Date.now();
+    res.on("finish", () => {
+      try {
+        const db = getAdminDb();
+        if (!db) return;
+        const cab = req.headers || {};
+        const auth = String(cab.authorization || "");
+        const rpc = req.body && typeof req.body === "object" ? req.body : {};
+        db.collection("mcpRegistro").add({
+          ts: new Date().toISOString(),
+          metodo: req.method,
+          ruta: String(req.originalUrl || req.url || "").split("?")[0].slice(0, 80),
+          rpc: typeof rpc.method === "string" ? rpc.method.slice(0, 60) : "",
+          herramienta: typeof rpc.params?.name === "string" ? rpc.params.name.slice(0, 60) : "",
+          conLlave: auth.startsWith("Bearer ") ? "bearer" : auth ? "authorization" : cab["x-api-key"] ? "x-api-key" : req.query?.apiKey || req.query?.token ? "en-la-direccion" : "ninguna",
+          estado: res.statusCode,
+          ms: Date.now() - inicio,
+          cliente: String(cab["user-agent"] || "").slice(0, 90),
+          origen: String(cab.origin || "").slice(0, 60),
+          acepta: String(cab.accept || "").slice(0, 60),
+          version: String(cab["mcp-protocol-version"] || "").slice(0, 20),
+        }).catch(() => {});
+      } catch { /* el registro nunca debe afectar al servicio */ }
+    });
+    next();
+  });
+  setInterval(async () => {
+    try {
+      const db = getAdminDb();
+      if (!db) return;
+      const viejos = await db.collection("mcpRegistro").where("ts", "<", new Date(Date.now() - 3 * 86_400_000).toISOString()).limit(400).get();
+      for (const d of viejos.docs) await d.ref.delete();
+    } catch { /* se intenta en la siguiente vuelta */ }
+  }, 6 * 60 * 60 * 1000).unref();
+
   app.use("/.well-known", mcpCors);
   app.use("/mcp", mcpCors);
   app.use("/sse", mcpCors);
