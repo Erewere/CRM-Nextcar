@@ -153,7 +153,12 @@ export function PaymentInventory() {
     // no lo reclaman: un trato perdido sin auto tomaba el del contacto y salía
     // como otra venta del mismo auto (Enrique Macias, 11 oct 2026: tres filas).
     const esDeOtroTrato = !!vehicle && !!(vehicle as any).soldDealId && (vehicle as any).soldDealId !== deal.id;
-    const tratoPerdidoSinVenta = checkIsLost(deal.status, pipelineStages) && !deal.saleDetails?.price;
+    // Un trato perdido solo cuenta como venta si tiene dinero REAL registrado (pagos en la colección o cuenta
+    // con lo pagado). Un trato perdido que trae copiada la venta del contacto es un fantasma: eso fue lo que
+    // mostró la X1 de Isaias dos veces (19 oct 2026). Su venta de verdad está en el trato ganado.
+    const tieneVentaReal = !!(deal as any).pagosEnColeccion || Number((deal as any).cuenta?.pagado) > 0;
+    const tratoPerdidoSinVenta = checkIsLost(deal.status, pipelineStages) && !tieneVentaReal;
+    const ventaDelTrato = tratoPerdidoSinVenta ? undefined : deal.saleDetails;
     const isRecordedBuyer = !!vehicle && !esDeOtroTrato && !tratoPerdidoSinVenta && (
       vehicle.buyerId === person.id ||
       vehicle.soldToClientId === deal.clientId ||
@@ -173,13 +178,13 @@ export function PaymentInventory() {
       ? { ...person.saleDetails, payments: (person.saleDetails.payments || []).filter((p: any) => !pagosDeOtros.has(p?.id)) }
       : undefined;
 
-    const dealIsWon = isWon(deal.status) || Boolean(deal.saleDetails?.price) ||
+    const dealIsWon = isWon(deal.status) || Boolean(ventaDelTrato?.price) ||
       (contactoEsDeEsteTrato && !tratoPerdidoSinVenta && (isWon(person.status) || Boolean(person.saleDetails?.price))) ||
       (isRecordedBuyer && (vehicle?.status === 'sold' || Boolean(vehicle?.saleDetails?.price)));
 
-    const mergedSaleDetails = getMergedSaleDetails(deal.saleDetails, ventaDelPerfil, isRecordedBuyer ? vehicle?.saleDetails : undefined);
+    const mergedSaleDetails = getMergedSaleDetails(ventaDelTrato, ventaDelPerfil, isRecordedBuyer ? vehicle?.saleDetails : undefined);
 
-    const mergedDealValue = deal.saleDetails?.price ?? ventaDelPerfil?.price ?? (isRecordedBuyer ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
+    const mergedDealValue = ventaDelTrato?.price ?? ventaDelPerfil?.price ?? (isRecordedBuyer ? vehicle?.saleDetails?.price : undefined) ?? deal.value ?? deal.dealValue ?? person.dealValue;
     const soldAt = deal.soldAt || person.soldAt || vehicle?.soldAt || deal.updatedAt || person.updatedAt;
 
     const statusToUse = dealIsWon ? 'won' : (deal.status || person.status || 'lead');

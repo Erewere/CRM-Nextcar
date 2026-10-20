@@ -1378,7 +1378,9 @@ export function ClientDetailModal({
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        if (finalFormData.saleDetails) dealDataToSave.saleDetails = finalFormData.saleDetails;
+        // La venta del contacto NO se copia a un trato nuevo (salvo que ese trato nazca ganado): el formulario
+        // trae la venta de otro trato y el nuevo salía como segunda venta del mismo auto (X1 de Isaias, 7 oct 2026).
+        if (finalFormData.saleDetails && checkIsWon(initialStage, pipelineStages as any)) dealDataToSave.saleDetails = finalFormData.saleDetails;
         await setDoc(newDealRef, sanitizeFirestoreData(dealDataToSave));
 
         // El trato ya existe: la ventana se queda abierta, ahora como trato de
