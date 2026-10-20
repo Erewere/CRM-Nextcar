@@ -27,6 +27,7 @@ import {
   Building2,
   Bot,
   Phone,
+  UserPlus,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -236,6 +237,12 @@ export function Layout() {
       name: "Dashboard",
       path: "/",
       icon: LayoutDashboard,
+      roles: ["admin", "seller"],
+    },
+    {
+      name: "Nuevos",
+      path: "/nuevos",
+      icon: UserPlus,
       roles: ["admin", "seller"],
     },
     {

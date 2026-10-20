@@ -27,6 +27,7 @@ import { PaymentInventory } from './pages/PaymentInventory';
 // Créditos se cargan aparte: traen la librería de PDF y casi nadie las abre en cada visita.
 const Creditos = React.lazy(() => import('./pages/Creditos').then((m) => ({ default: m.Creditos })));
 const CreditoExpediente = React.lazy(() => import('./pages/CreditoExpediente').then((m) => ({ default: m.CreditoExpediente })));
+const ProspectosNuevos = React.lazy(() => import('./pages/ProspectosNuevos').then((m) => ({ default: m.ProspectosNuevos })));
 const RevisionPrecios = React.lazy(() => import('./pages/RevisionPrecios').then((m) => ({ default: m.RevisionPrecios })));
 const VentaPagos = React.lazy(() => import('./pages/VentaPagos').then((m) => ({ default: m.VentaPagos })));
 const SolicitudPublica = React.lazy(() => import('./pages/SolicitudPublica').then((m) => ({ default: m.SolicitudPublica })));
@@ -136,6 +137,7 @@ export default function App() {
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
             <Route path="closed-sales" element={<ProtectedRoute requireRole={['admin', 'seller']}><ClosedSales /></ProtectedRoute>} />
             <Route path="venta/:dealId" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><React.Suspense fallback={<Cargando />}><VentaPagos /></React.Suspense></ProtectedRoute>} />
+            <Route path="nuevos" element={<ProtectedRoute requireRole={['admin', 'seller']}><React.Suspense fallback={<Cargando />}><ProspectosNuevos /></React.Suspense></ProtectedRoute>} />
             <Route path="precios" element={<ProtectedRoute requireRole={['admin']}><React.Suspense fallback={<Cargando />}><RevisionPrecios /></React.Suspense></ProtectedRoute>} />
             <Route path="payments" element={<ProtectedRoute requireRole={['admin']}><PaymentInventory /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />

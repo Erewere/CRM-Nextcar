@@ -40,6 +40,7 @@ export function AgencyUsers() {
   const [ciudadAgencia, setCiudadAgencia] = useState('');
   const [waRoutingMode, setWaRoutingMode] = useState<'manual' | 'roundRobin'>('manual');
   const [waRoutingSellers, setWaRoutingSellers] = useState<string[]>([]);
+  const [waReglas, setWaReglas] = useState<Record<string, string>>({});
   const [savingRouting, setSavingRouting] = useState(false);
   const [savingSharing, setSavingSharing] = useState(false);
   
@@ -143,6 +144,7 @@ export function AgencyUsers() {
             if (agencyData.whatsappRouting) {
               setWaRoutingMode(agencyData.whatsappRouting.mode === 'roundRobin' ? 'roundRobin' : 'manual');
               setWaRoutingSellers(Array.isArray(agencyData.whatsappRouting.sellerIds) ? agencyData.whatsappRouting.sellerIds : []);
+              setWaReglas(agencyData.whatsappRouting.reglas && typeof agencyData.whatsappRouting.reglas === 'object' ? agencyData.whatsappRouting.reglas : {});
             }
             if (agencyData.shareInventory !== undefined) {
               setShareInventory(!!agencyData.shareInventory);
@@ -558,6 +560,30 @@ export function AgencyUsers() {
     } catch (e) {
       console.error(e);
       alert('Error al guardar la asignación de conversaciones de WhatsApp.');
+    } finally {
+      setSavingRouting(false);
+    }
+  };
+
+  // «Los de crédito, con Ana»: reglas por tipo de solicitud de los formularios de la página. Un tipo sin regla
+  // se reparte como diga la configuración de arriba (manual o por turnos).
+  const TIPOS_REGLA: { etiqueta: string; claves: string[] }[] = [
+    { etiqueta: 'Quiere comprar un auto', claves: ['QUIERE COMPRAR'] },
+    { etiqueta: 'Busca un auto (lo que busca)', claves: ['BUSCA AUTO'] },
+    { etiqueta: 'Crédito y solicitud de crédito', claves: ['CRÉDITO', 'SOLICITUD DE CRÉDITO'] },
+    { etiqueta: 'Quiere vender su auto', claves: ['VENDE SU AUTO'] },
+  ];
+  const handleSaveReglas = async (claves: string[], sellerId: string) => {
+    if (!userData?.agencyId) return;
+    const siguiente = { ...waReglas };
+    claves.forEach((k) => { if (sellerId) siguiente[k] = sellerId; else delete siguiente[k]; });
+    setSavingRouting(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), { 'whatsappRouting.reglas': siguiente });
+      setWaReglas(siguiente);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar la regla.');
     } finally {
       setSavingRouting(false);
     }
@@ -1009,7 +1035,7 @@ export function AgencyUsers() {
               Asignación de Conversaciones de Clientes
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Define qué pasa cuando un cliente nuevo escribe por WhatsApp o por Messenger. Las conversaciones de contactos que ya tienen vendedor asignado siempre se quedan con él.
+              Define qué pasa cuando un cliente nuevo escribe por WhatsApp o Messenger, o llena un formulario de tu página. Los contactos que ya tienen vendedor asignado siempre se quedan con él.
             </p>
           </div>
 
@@ -1074,6 +1100,31 @@ export function AgencyUsers() {
                   </label>
                 ))
               )}
+            </div>
+          </div>
+
+          <div className="p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">Reglas para los formularios de tu página</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              Elige a quién le toca cada tipo de solicitud. Mandan sobre el reparto de arriba; «Según el reparto» deja que decida la opción que elegiste (manual o por turnos).
+            </p>
+            <div className="space-y-2">
+              {TIPOS_REGLA.map((t) => (
+                <div key={t.claves[0]} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                  <span className="text-sm text-slate-700 dark:text-slate-300 sm:w-60">{t.etiqueta}</span>
+                  <select
+                    disabled={savingRouting}
+                    value={waReglas[t.claves[0]] || ''}
+                    onChange={(e) => handleSaveReglas(t.claves, e.target.value)}
+                    className="h-9 px-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm sm:w-64"
+                  >
+                    <option value="">Según el reparto</option>
+                    {users.filter((u: any) => u.role === 'seller' || u.role === 'admin').map((u: any) => (
+                      <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
           </div>
         </div>

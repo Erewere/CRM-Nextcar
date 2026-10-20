@@ -2074,11 +2074,20 @@ async function startServer() {
   // "manual" la deja sin dueño para que un admin la asigne; "roundRobin" va
   // rotando. El turno se avanza dentro de una transacción porque dos mensajes
   // que entran a la vez tomarían el mismo índice y caerían en el mismo vendedor.
-  async function pickSellerForAgency(adminDb: any, agencyId: string): Promise<string> {
+  async function pickSellerForAgency(adminDb: any, agencyId: string, tipo = ""): Promise<string> {
     try {
       const agencyRef = adminDb.collection("agencies").doc(agencyId);
       const agencySnap = await agencyRef.get();
       const routing = agencySnap.data()?.whatsappRouting || {};
+
+      // Reglas por tipo de solicitud (formularios de la pagina): «los de credito, con Ana». Mandan sobre
+      // el reparto por turnos, pero solo si esa persona sigue siendo de la agencia.
+      const regla = tipo && routing.reglas && typeof routing.reglas === "object" ? String(routing.reglas[tipo] || "") : "";
+      if (regla) {
+        const u = await adminDb.collection("users").doc(regla).get();
+        if (u.exists && u.data()?.agencyId === agencyId) return regla;
+      }
+
       if (routing.mode !== "roundRobin") return "";
 
       let pool: string[] = Array.isArray(routing.sellerIds) ? routing.sellerIds.filter(Boolean) : [];
@@ -3181,6 +3190,7 @@ async function startServer() {
         primeraEtapaDelEmbudo,
         camposQueFaltan,
         serverTimestamp: () => FieldValue.serverTimestamp(),
+        elegirVendedor: (agencyId: string, tipo: string) => pickSellerForAgency(adminDb, agencyId, tipo),
       });
       // «Solicitud de crédito» completa de la página: se abre en Créditos. Si
       // falla, el lead ya quedó guardado y no se pierde.

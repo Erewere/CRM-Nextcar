@@ -32,6 +32,8 @@ export interface DepsLead {
   camposQueFaltan: (existente: any, entrante: Record<string, any>) => Record<string, any>;
   serverTimestamp: () => any;
   ahora?: () => Date;
+  /** Quién atiende a un contacto nuevo (reglas por tipo y reparto por turnos de la agencia). Vacío = sin asignar. */
+  elegirVendedor?: (agencyId: string, tipo: string) => Promise<string>;
 }
 
 export const LARGOS = {
@@ -200,6 +202,13 @@ export async function procesarLeadPublico(adminDb: any, cuerpo: any, deps: DepsL
     existente = q.docs.find((d: any) => !d.data()?.isDeleted) || null;
   }
 
+  // Un contacto nuevo (o uno que nadie atiende) se reparte con las reglas de la agencia, igual que
+  // los que llegan por WhatsApp. Si la página mandó un vendedor, ese manda.
+  let vendedorAuto = "";
+  if (!validatedSellerId && deps.elegirVendedor && (!existente || !(existente.data()?.sellerId))) {
+    try { vendedorAuto = (await deps.elegirVendedor(agencyId, tipo)) || ""; } catch (e) { console.warn("No se pudo repartir el lead:", e); }
+  }
+
   let clientId: string;
   let yaExistia = false;
   let datosContacto: any = {};
@@ -211,6 +220,7 @@ export async function procesarLeadPublico(adminDb: any, cuerpo: any, deps: DepsL
     // Si llego por correo (el Radar no pide telefono) y ahora trae telefono, se completa.
     const relleno = deps.camposQueFaltan(datosContacto, { name, email, vehicle, phone });
     const cambios: Record<string, any> = { ...relleno, updatedAt: deps.serverTimestamp() };
+    if (vendedorAuto) { cambios.sellerId = vendedorAuto; datosContacto.sellerId = vendedorAuto; }
     if (formatoNuevo) {
       const tags = Array.isArray(datosContacto.tags) ? [...datosContacto.tags] : [];
       for (const e of etiquetasNuevas) if (!tags.some((t) => sinAcentos(String(t)) === sinAcentos(e))) tags.push(e);
@@ -232,7 +242,7 @@ export async function procesarLeadPublico(adminDb: any, cuerpo: any, deps: DepsL
       vehicle,
       origin,
       status: "new",
-      sellerId: validatedSellerId,
+      sellerId: validatedSellerId || vendedorAuto,
       createdAt: deps.serverTimestamp(),
       updatedAt: deps.serverTimestamp(),
     };

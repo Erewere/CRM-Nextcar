@@ -77,6 +77,7 @@ import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 import { TableroAgencia } from "../components/tablero/TableroAgencia";
+import { AvisoProspectosNuevos } from "../components/tablero/AvisoProspectosNuevos";
 import { LeadInteligente } from "../components/tablero/LeadInteligente";
 import { SaludoDelDia } from "../components/SaludoDelDia";
 import { MiMeta } from "../components/metas/MiMeta";
@@ -110,7 +111,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function Dashboard() {
-  const { userData } = useAuth();
+  const { userData, agencyData } = useAuth();
 
   if (userData?.role === 'taller') {
     return <Navigate to="/inventory" replace />;
@@ -910,6 +911,10 @@ export function Dashboard() {
     <div className={isReadOnly ? "pointer-events-none opacity-80 select-none relative" : ""}>
       {isReadOnly && <div className="absolute inset-0 z-50 pointer-events-auto cursor-not-allowed bg-transparent" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} />}
       <div className="space-y-4 pb-8">
+
+      {(userData?.role === "admin" || userData?.role === "seller") && (
+        <AvisoProspectosNuevos clientes={clients} notas={notes} tareas={tasks} etapas={pipelineStages} horario={(agencyData as any)?.businessHours} />
+      )}
 
       {isMobile ? (
         <>
