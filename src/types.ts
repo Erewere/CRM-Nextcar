@@ -177,6 +177,8 @@ export interface SaleDetails {
 
 export interface Client {
   id: string;
+  /** Estado de cada auto de interés para este cliente, puesto a mano: { [vehicleId]: { estado, en, porNombre } }. Ver lib/autosDeInteres.ts. */
+  autosInteres?: Record<string, { estado: string; en: string; porNombre?: string }>;
   originalClientId?: string;
   agencyId: string;
   sellerId: string;

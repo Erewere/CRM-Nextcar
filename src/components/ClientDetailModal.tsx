@@ -3705,6 +3705,13 @@ export function ClientDetailModal({
                 notas={notes}
                 onAbrirAuto={(v) => setSelectedVehicleForModal(v)}
                 onCotizar={(v) => setCotizandoAuto(v)}
+                soloLectura={isReadOnly || !canModify}
+                onCambiarEstadoAuto={async (vehicleId, estado) => {
+                  // Un solo campo, sin tocar el resto de la ficha. Si falla, el selector vuelve al estado anterior.
+                  const dato = { estado, en: new Date().toISOString(), porNombre: userData?.name || "" };
+                  await updateDoc(doc(db, "clients", formData.id), { [`autosInteres.${vehicleId}`]: dato });
+                  setFormData((prev: any) => ({ ...prev, autosInteres: { ...(prev.autosInteres || {}), [vehicleId]: dato } }));
+                }}
               />
               {deals.length > 0 && (
                 <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">

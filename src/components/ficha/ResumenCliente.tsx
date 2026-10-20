@@ -14,6 +14,7 @@ import { priorizarProspectos } from '../../lib/prospectosInteligentes';
 import { getClientMatches } from '../../services/matchingEngine';
 import { useSharedInventoryMatches } from '../../hooks/useSharedInventoryMatches';
 import { GraficaMercado } from '../inventario/GraficaMercado';
+import { FilaAutoInteres } from './FilaAutoInteres';
 import type { Task, Vehicle } from '../../types';
 
 /**
@@ -38,6 +39,9 @@ interface Props {
   soloAutos?: boolean;
   /** Columna angosta de la ficha en pantalla completa: interés y autos en lista. */
   columna?: boolean;
+  /** Cambia el estado de un auto de interés del cliente (Interesado, Cotizado, Visitó…). */
+  onCambiarEstadoAuto?: (vehicleId: string, estado: string) => Promise<void> | void;
+  soloLectura?: boolean;
 }
 
 const pesos = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-MX')}`;
@@ -110,7 +114,7 @@ function TarjetaInteres({ interes, compacta }: { interes: { nivel: string; pct: 
   );
 }
 
-export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, notas, onAbrirAuto, onCotizar, soloAutos, columna }: Props) {
+export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inventario, notas, onAbrirAuto, onCotizar, soloAutos, columna, onCambiarEstadoAuto, soloLectura }: Props) {
   const [mercado, setMercado] = useState<Record<string, PrecioMercado | null> | null>(null);
   useEffect(() => {
     let vigente = true;
@@ -262,7 +266,17 @@ export function ResumenCliente({ cliente, tratos, tareas, etapas, usuarios, inve
             <h2 className="font-extrabold text-slate-900 dark:text-white">Autos de interés</h2>
             {onCotizar && <button type="button" onClick={() => onCotizar(null)} className="text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline">Cotizar otro</button>}
           </div>
-          {propios.length ? <ul className="flex flex-col gap-3">{propios.map(fila)}</ul>
+          {propios.length ? (
+            <ul className="flex flex-col gap-4">
+              {propios.map(({ v, tipo }) => (
+                <FilaAutoInteres
+                  key={v.id} v={v} tipo={tipo as 'trato' | 'ficha'} cliente={cliente} tratos={tratos} notas={notas || []} etapas={etapas}
+                  mercado={mercado && v.id in mercado ? mercado[v.id] : undefined} liga={whatsapp(v)} soloLectura={soloLectura}
+                  onAbrirAuto={onAbrirAuto} onCotizar={onCotizar} onCambiarEstado={onCambiarEstadoAuto}
+                />
+              ))}
+            </ul>
+          )
             : <p className="text-sm text-slate-500 dark:text-slate-400">Sin auto asignado. Elígelo en «Datos del cliente».</p>}
         </section>
 
