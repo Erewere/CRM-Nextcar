@@ -42,6 +42,7 @@ export function AgencyUsers() {
   const [waRoutingSellers, setWaRoutingSellers] = useState<string[]>([]);
   const [waReglas, setWaReglas] = useState<Record<string, string>>({});
   const [postventaActiva, setPostventaActiva] = useState(false);
+  const [seguimientoActivo, setSeguimientoActivo] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [savingSharing, setSavingSharing] = useState(false);
   
@@ -148,6 +149,7 @@ export function AgencyUsers() {
               setWaReglas(agencyData.whatsappRouting.reglas && typeof agencyData.whatsappRouting.reglas === 'object' ? agencyData.whatsappRouting.reglas : {});
             }
             setPostventaActiva((agencyData as any).postventa?.activa === true);
+            setSeguimientoActivo((agencyData as any).seguimiento?.activa === true);
             if (agencyData.shareInventory !== undefined) {
               setShareInventory(!!agencyData.shareInventory);
             }
@@ -603,6 +605,23 @@ export function AgencyUsers() {
     } catch (e) {
       console.error(e);
       alert('No se pudo guardar el seguimiento de postventa.');
+    } finally {
+      setSavingRouting(false);
+    }
+  };
+
+  // Seguimiento a quienes no responden: igual que la postventa, solo cuenta lo que se escribe desde que se enciende.
+  const cambiarSeguimiento = async (activa: boolean) => {
+    if (!userData?.agencyId) return;
+    setSavingRouting(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), activa
+        ? { 'seguimiento.activa': true, 'seguimiento.desde': new Date().toLocaleDateString('en-CA') }
+        : { 'seguimiento.activa': false });
+      setSeguimientoActivo(activa);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo guardar el seguimiento.');
     } finally {
       setSavingRouting(false);
     }
@@ -1164,6 +1183,25 @@ export function AgencyUsers() {
           <label className="flex items-center gap-3 p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800 cursor-pointer">
             <input type="checkbox" checked={postventaActiva} disabled={savingRouting} onChange={(e) => cambiarPostventa(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
             <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{postventaActiva ? 'Encendido' : 'Apagado'}: crear las tareas de postventa de cada venta nueva</span>
+          </label>
+        </div>
+      )}
+
+      {/* Seguimiento a quienes no responden */}
+      {userData?.role === 'admin' && (
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-sky-600" />
+              Seguimiento a quienes no responden
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Si le escribiste a un cliente desde el chat del CRM y no contesta, el vendedor recibe una tarea a las 24 horas, otra a las 72 y una última a las 144 (seis días), cada una con un mensaje sugerido para revisar y mandar. Si el cliente contesta, las tareas pendientes se quitan solas. Solo cuentan los mensajes que mandes desde que lo enciendes, y solo a contactos con vendedor asignado. Los mensajes que mandas desde tu teléfono, fuera del CRM, no se ven aquí.
+            </p>
+          </div>
+          <label className="flex items-center gap-3 p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800 cursor-pointer">
+            <input type="checkbox" checked={seguimientoActivo} disabled={savingRouting} onChange={(e) => cambiarSeguimiento(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{seguimientoActivo ? 'Encendido' : 'Apagado'}: crear las tareas de seguimiento a quienes no contestan</span>
           </label>
         </div>
       )}

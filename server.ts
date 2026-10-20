@@ -13,6 +13,7 @@ import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { analizarPrecio, resumirAnalisisDeVenta, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
 import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
 import { sembrarPostventa } from "./src/servidor/postventa.ts";
+import { sembrarSeguimiento } from "./src/servidor/seguimiento.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
@@ -4677,6 +4678,27 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   }
   setTimeout(correrPostventa, 5 * 60 * 1000);
   setInterval(correrPostventa, 15 * 60 * 1000);
+
+  // ===== Seguimiento a quienes no responden =====
+  // Cada 30 minutos: a los contactos a quienes la agencia les escribio por el chat y no han contestado, les programa
+  // al vendedor una tarea a las 24, 72 y 144 horas con un mensaje sugerido. Opcional por agencia
+  // (seguimiento.activa). Ver src/servidor/seguimiento.ts.
+  let seguimientoCorriendo = false;
+  async function correrSeguimiento() {
+    const adminDb = getAdminDb();
+    if (!adminDb || seguimientoCorriendo) return;
+    seguimientoCorriendo = true;
+    try {
+      const hechas = await sembrarSeguimiento(adminDb);
+      if (hechas.length) console.log(`Seguimiento: ${hechas.length} contactos con tarea nueva.`);
+    } catch (e) {
+      console.error("Seguimiento:", e);
+    } finally {
+      seguimientoCorriendo = false;
+    }
+  }
+  setTimeout(correrSeguimiento, 7 * 60 * 1000);
+  setInterval(correrSeguimiento, 30 * 60 * 1000);
 
   // ===== Liga de la publicacion en la pagina Nextcar =====
   //
