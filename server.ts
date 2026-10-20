@@ -6951,6 +6951,9 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
           origen: String(cab.origin || "").slice(0, 60),
           acepta: String(cab.accept || "").slice(0, 60),
           version: String(cab["mcp-protocol-version"] || "").slice(0, 20),
+          // A donde pide el cliente que se regrese tras autorizar (solo origen y ruta, sin parametros): es lo que decide si la
+          // pantalla de autorizacion lo acepta, y no es un secreto.
+          redireccion: (() => { try { const u = new URL(String(req.query?.redirect_uri || "")); return `${u.origin}${u.pathname}`.slice(0, 120); } catch { return ""; } })(),
         }).catch(() => {});
       } catch { /* el registro nunca debe afectar al servicio */ }
     });
