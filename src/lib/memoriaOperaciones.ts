@@ -135,6 +135,8 @@ export interface Recomendacion {
   margenPesimistaPct: number | null;
   diasEstimados: number | null;
   diasRango: [number, number] | null;
+  /** De dónde salen los días: cuántas ventas tuyas y cuántos anuncios de Mercado Libre se usaron. */
+  diasBase: { ventasPropias: number; anunciosMercado: number; tipicaAgencia: boolean };
   comercial: Comercialidad | null;
   margenObjetivoPct: number;
   confianza: ConfianzaReco;
@@ -223,14 +225,43 @@ export function recomendarPrecios(input: {
   const gastosEst = Math.round(mediana(gastosComps.length ? gastosComps : gastosTodos) ?? 0);
   if (!gastosComps.length) advertencias.push(gastosTodos.length ? 'Los gastos esperados son los de una venta típica de tu agencia, no de este modelo.' : 'No hay gastos capturados en tus ventas: se calculan en cero.');
 
-  // ---- Tiempo de venta y qué tan comercial es
+  // ---- Tiempo de venta: tus ventas y los anuncios de Mercado Libre, juntos
   const diasComps = comps.map((o) => o.diasEnInventario).filter((d): d is number => d !== null);
   const diasTodos = buenas.map((o) => o.diasEnInventario).filter((d): d is number => d !== null);
-  const diasFuente = diasComps.length >= 2 ? diasComps : diasTodos;
-  const diasEstimados = mediana(diasFuente);
   const q = (xs: number[], p: number) => { const o = [...xs].sort((a, b) => a - b); return o[Math.min(o.length - 1, Math.max(0, Math.round((o.length - 1) * p)))]; };
-  const diasRango: [number, number] | null = diasFuente.length >= 3 ? [q(diasFuente, 0.25), q(diasFuente, 0.75)] : null;
-  if (diasComps.length < 2) advertencias.push(diasTodos.length ? 'Los días para vender son los de una venta típica de tu agencia: pocas ventas de este modelo.' : 'No hay ventas con fechas para estimar los días.');
+  // Tus ventas de ese modelo cuentan si son al menos 2. De los anuncios: lo que lleva publicado un auto que
+  // sigue a la venta es más o menos la mitad de lo que tarda en venderse, así que se estima entre 1 y 2 veces
+  // su edad típica (mediana), y se toma el punto medio.
+  const propios = diasComps.length >= 2 ? diasComps : [];
+  const ed = input.mercado?.edad && input.mercado.edad.n >= 5 ? input.mercado.edad : null;
+  const mlPunto = ed ? ed.mediana * 1.5 : null;
+  const mlRango: [number, number] | null = ed ? [ed.mediana, ed.mediana * 2] : null;
+  let diasEstimados: number | null = null;
+  let diasRango: [number, number] | null = null;
+  let tipicaAgencia = false;
+  if (propios.length && ed && mlPunto !== null && mlRango) {
+    // Tus ventas pesan más (son de tu agencia); los anuncios completan.
+    const pp = 3 * Math.min(propios.length, 10), pm = Math.min(ed.n, 14);
+    const mezcla = (a: number, b: number) => (pp * a + pm * b) / (pp + pm);
+    const propioPunto = mediana(propios) as number;
+    const propioRango: [number, number] = propios.length >= 3 ? [q(propios, 0.25), q(propios, 0.75)] : [propioPunto, propioPunto];
+    diasEstimados = mezcla(propioPunto, mlPunto);
+    diasRango = [Math.round(mezcla(propioRango[0], mlRango[0])), Math.round(mezcla(propioRango[1], mlRango[1]))];
+  } else if (ed && mlPunto !== null && mlRango) {
+    diasEstimados = mlPunto;
+    diasRango = [Math.round(mlRango[0]), Math.round(mlRango[1])];
+  } else if (propios.length) {
+    diasEstimados = mediana(propios);
+    diasRango = propios.length >= 3 ? [q(propios, 0.25), q(propios, 0.75)] : null;
+  } else if (diasTodos.length) {
+    tipicaAgencia = true;
+    diasEstimados = mediana(diasTodos);
+    diasRango = diasTodos.length >= 3 ? [q(diasTodos, 0.25), q(diasTodos, 0.75)] : null;
+    advertencias.push('Los días para vender son los de una venta típica de tu agencia: pocas ventas de este modelo y no se pudieron leer anuncios de Mercado Libre.');
+  } else {
+    advertencias.push('No hay ventas con fechas ni anuncios de Mercado Libre para estimar los días.');
+  }
+  const diasBase = { ventasPropias: propios.length, anunciosMercado: ed ? ed.n : 0, tipicaAgencia };
   const com = comercialidad({ anuncios: input.mercado?.n, diasPropios: diasComps });
 
   // ---- Máximo a pagar: el tope de la guía (tu regla); sin guía, lo que recuperarías en el peor caso
@@ -282,7 +313,7 @@ export function recomendarPrecios(input: {
     insights.push(`Máximo a pagar: ${dinero(maxRecomendado)} (${maxGuia !== null ? `el tope de la guía según qué tan comercial es el auto: ${com.nivel === 'alta' ? 'muy comercial' : com.nivel === 'media' ? 'medianamente comercial' : 'poco comercial'}` : 'no hay guía: sale del peor caso de venta menos gastos'}).`);
     if (utilEsp !== null && utilPes !== null) insights.push(`Comprando a ${dinero(maxRecomendado)}: ganarías ${dinero(utilEsp)} (${margenEsp}%) si se vende al precio de mercado y ${utilPes >= 0 ? `ganarías ${dinero(utilPes)}` : `perderías ${dinero(-utilPes)}`} (${margenPes}%) en el peor caso.`);
   }
-  if (diasEstimados !== null) insights.push(`Tiempo estimado de venta: ${Math.round(diasEstimados)} días${diasRango ? ` (lo normal: entre ${diasRango[0]} y ${diasRango[1]})` : ''}.`);
+  if (diasEstimados !== null) insights.push(`Tiempo estimado de venta: ${Math.round(diasEstimados)} días${diasRango ? ` (lo normal: entre ${diasRango[0]} y ${diasRango[1]})` : ''}${diasBase.ventasPropias && diasBase.anunciosMercado ? `, según ${diasBase.ventasPropias} ventas tuyas y ${diasBase.anunciosMercado} anuncios de Mercado Libre` : diasBase.anunciosMercado ? `, según ${diasBase.anunciosMercado} anuncios de Mercado Libre` : ''}.`);
   if (input.precioOfrecido && maxRecomendado) {
     const dif = input.precioOfrecido - maxRecomendado;
     insights.push(dif <= 0 ? `Lo que piden (${dinero(input.precioOfrecido)}) está dentro del máximo.` : `Lo que piden (${dinero(input.precioOfrecido)}) pasa del máximo por ${dinero(dif)}: conviene negociar o dejarlo pasar.`);
@@ -292,7 +323,7 @@ export function recomendarPrecios(input: {
     precioVentaSugerido: esperado, precioVentaEsperado: esperado, precioVentaPesimista: pesimista, origenPrecioVenta: origen,
     maxCompraPorPesimista: maxPesimista, maxCompraPorGuia: maxGuia, maxCompraRecomendado: maxRecomendado,
     gastosEstimados: gastosEst, utilidadEsperada: utilEsp, utilidadPesimista: utilPes, margenEsperadoPct: margenEsp, margenPesimistaPct: margenPes,
-    diasEstimados: diasEstimados === null ? null : Math.round(diasEstimados), diasRango,
+    diasEstimados: diasEstimados === null ? null : Math.round(diasEstimados), diasRango, diasBase,
     comercial: com.nivel, margenObjetivoPct: margen, confianza, comparables: n, advertencias, insights,
     comparablesUsados: comps.slice(0, 10),
   };

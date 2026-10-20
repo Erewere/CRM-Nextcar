@@ -4414,7 +4414,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     let cache = cacheConsultaModelo.get(clave);
     let guiaFallo = false;
     if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
-      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio), consultarGuia(c.marca, consulta, c.anio, c.km)]);
+      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio, { edades: true }), consultarGuia(c.marca, consulta, c.anio, c.km)]);
       guiaFallo = g.status === "rejected";
       cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
       // Si una consulta falló no se guarda: se reintenta la próxima vez.

@@ -15,7 +15,7 @@ type Comp = { vehicleId: string; titulo: string; anio: number; km: number | null
 type Resultado = {
   precioVentaEsperado: number | null; precioVentaPesimista: number | null; origenPrecioVenta: string; maxCompraPorPesimista: number | null; maxCompraPorGuia: number | null; maxCompraRecomendado: number | null;
   utilidadEsperada: number | null; utilidadPesimista: number | null; margenEsperadoPct: number | null; margenPesimistaPct: number | null;
-  gastosEstimados: number; diasEstimados: number | null; diasRango: [number, number] | null; comercial: string | null; margenObjetivoPct: number;
+  gastosEstimados: number; diasEstimados: number | null; diasRango: [number, number] | null; diasBase?: { ventasPropias: number; anunciosMercado: number; tipicaAgencia: boolean }; comercial: string | null; margenObjetivoPct: number;
   confianza: 'alta' | 'media' | 'baja' | 'ninguna'; comparables: number; advertencias: string[]; insights: string[]; comparablesUsados: Comp[];
   estadoGuia?: { estado: 'en-vivo' | 'guardada' | 'no-disponible' | 'manual'; motivo: string; edadDias?: number };
   consulta?: { km: number | null };
@@ -111,13 +111,23 @@ export function Recomendador() {
     try { await llamar('/api/precios/config', 'PUT', { margenObjetivoPct: Number(margen) }); setGuardado(true); setTimeout(() => setGuardado(false), 2000); } catch (er: any) { setError(er.message); }
   };
 
-  const grande = (titulo: string, valor: string, sub?: string) => (
+  const grande = (titulo: string, valor: string, sub?: string, fuente?: string) => (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{titulo}</p>
       <p className="text-2xl font-extrabold tracking-tight mt-1 text-slate-900 dark:text-white">{valor}</p>
       {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+      {fuente && <p className="text-[10px] text-slate-400 mt-1">{fuente}</p>}
     </div>
   );
+  // De dónde salen los días, en una línea chica.
+  const fuenteDias = (b?: Resultado['diasBase']) => {
+    if (!b) return undefined;
+    if (b.ventasPropias && b.anunciosMercado) return `Tus ${b.ventasPropias} ventas y ${b.anunciosMercado} anuncios de Mercado Libre`;
+    if (b.anunciosMercado) return `${b.anunciosMercado} anuncios de Mercado Libre`;
+    if (b.ventasPropias) return `Tus ${b.ventasPropias} ventas de este modelo`;
+    if (b.tipicaAgencia) return 'Ventas típicas de tu agencia';
+    return undefined;
+  };
 
   return (
     <div className="space-y-4">
@@ -191,7 +201,7 @@ export function Recomendador() {
             {grande('Se vendería en (esperado)', dinero(r.precioVentaEsperado), r.origenPrecioVenta === 'mercado' ? 'mediana del precio comercial' : r.origenPrecioVenta === 'ventas-propias' ? 'mediana de tus ventas' : r.origenPrecioVenta === 'guia' ? 'guía de venta' : '')}
             {grande('Peor caso', dinero(r.precioVentaPesimista), 'si no es muy comercial')}
             {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), r.maxCompraPorGuia !== null ? 'tope de la guía' : 'sin guía: sale del peor caso')}
-            {grande('Se vendería en', r.diasEstimados === null ? '—' : `${r.diasEstimados} días`, r.diasRango ? `normalmente entre ${r.diasRango[0]} y ${r.diasRango[1]}` : undefined)}
+            {grande('Se vendería en', r.diasEstimados === null ? '—' : `${r.diasEstimados} días`, r.diasRango ? `normalmente entre ${r.diasRango[0]} y ${r.diasRango[1]}` : undefined, fuenteDias(r.diasBase))}
           </div>
           {r.utilidadEsperada !== null && r.utilidadPesimista !== null && (
             <p className="text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
