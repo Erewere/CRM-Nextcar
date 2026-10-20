@@ -245,6 +245,7 @@ export function AutoNuevo() {
                   marca={f.make}
                   modelo={f.model}
                   anio={numero(f.year)}
+                  km={numero(f.km) || undefined}
                   precio={numero(f.price)}
                   onUsarVenta={(v) => { tocados.current.add('price'); setF((prev: any) => ({ ...prev, price: String(v) })); }}
                 />

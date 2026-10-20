@@ -10,8 +10,8 @@ import { LineaGuia, type GuiaVista } from '../inventario/LineaGuia';
  * compra de la guía de Autocosmos. Nada se escribe en el formulario hasta que
  * la persona toca «Usar como precio de venta».
  */
-export function ConsultarPrecio({ marca, modelo, anio, precio, onUsarVenta }: {
-  marca: string; modelo: string; anio: number; precio?: number; onUsarVenta: (venta: number) => void;
+export function ConsultarPrecio({ marca, modelo, anio, km, precio, onUsarVenta }: {
+  marca: string; modelo: string; anio: number; km?: number; precio?: number; onUsarVenta: (venta: number) => void;
 }) {
   const [cargando, setCargando] = useState(false);
   const [guia, setGuia] = useState<GuiaVista | null | undefined>(undefined);
@@ -26,6 +26,7 @@ export function ConsultarPrecio({ marca, modelo, anio, precio, onUsarVenta }: {
     try {
       const token = await auth.currentUser?.getIdToken();
       const qs = new URLSearchParams({ marca: marca.trim(), modelo: modelo.trim(), anio: String(anio) });
+      if (km && km > 0) qs.set('km', String(km));
       const r = await fetch(getApiUrl(`/api/guia/consultar?${qs}`), { headers: { Authorization: `Bearer ${token}` } });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setAviso(d?.error || 'No se pudo consultar la guía.'); return; }
@@ -44,7 +45,8 @@ export function ConsultarPrecio({ marca, modelo, anio, precio, onUsarVenta }: {
         <div className="flex flex-col">
           <span className="text-sm font-bold">¿Cuánto vale?</span>
           <span className="text-xs text-slate-600 dark:text-slate-400">
-            Consulta la guía de Autocosmos con la marca, modelo y año.{anio < ANIO_MINIMO_GUIA ? ' (No hay guía de 2014 o anteriores.)' : ''}
+            Consulta la guía de Autocosmos con la marca, modelo, año y kilometraje.{anio < ANIO_MINIMO_GUIA ? ' (No hay guía de 2014 o anteriores.)' : ''}
+            {!(km && km > 0) && !!anio && anio >= ANIO_MINIMO_GUIA ? ' Escribe el kilometraje para un precio más exacto.' : ''}
           </span>
         </div>
         <button
@@ -69,7 +71,7 @@ export function ConsultarPrecio({ marca, modelo, anio, precio, onUsarVenta }: {
               Usar como precio de venta
             </button>
           )}
-          <p className="text-[10px] text-slate-500 dark:text-slate-400">Es una referencia, no un avalúo: no cuenta kilometraje ni estado del auto.</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Es una referencia, no un avalúo: no cuenta el estado del auto.</p>
         </div>
       )}
     </div>

@@ -4085,7 +4085,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         if (!guiaPausada && (guiaDe.get(d.id) || "") < limite) {
           const reintento = Number(v.year) < ANIO_MINIMO_GUIA || vendido ? ahora : new Date(Date.now() - (DIAS_MERCADO - 1) * 86_400_000).toISOString();
           try {
-            const g = await consultarGuia(String(v.make), String(v.model), v.year);
+            const g = await consultarGuia(String(v.make), String(v.model), v.year, Number(v.km) || null);
             fallosGuiaSeguidos = 0;
             await adminDb.collection("mercadoAutos").doc(d.id).set(
               { vehicleId: d.id, agencyId: v.agencyId || null, guia: g, guiaEl: g ? ahora : reintento },
@@ -4408,11 +4408,11 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     // y no sabe cuál es (un Sentra Advance se consultaba como «Sentra» y salía confianza baja).
     const yaTrae = c.version && c.modelo.toLowerCase().includes(c.version.toLowerCase());
     const consulta = c.version && !yaTrae ? `${c.modelo} ${c.version}` : c.modelo;
-    const clave = `${c.marca}|${consulta}|${c.anio}`.toLowerCase();
+    const clave = `${c.marca}|${consulta}|${c.anio}|${c.km ?? ""}`.toLowerCase();
     let cache = cacheConsultaModelo.get(clave);
     let guiaFallo = false;
     if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
-      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio), consultarGuia(c.marca, consulta, c.anio)]);
+      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio), consultarGuia(c.marca, consulta, c.anio, c.km)]);
       guiaFallo = g.status === "rejected";
       cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
       // Si una consulta falló no se guarda: se reintenta la próxima vez.
@@ -4764,6 +4764,9 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const marca = String(req.query.marca || "").trim().slice(0, 40);
     const modelo = String(req.query.modelo || "").trim().slice(0, 80);
     const anio = Number(req.query.anio) || 0;
+    // El kilometraje es opcional; sin él la guía lo estima por la edad del auto.
+    const kmQuery = Number(req.query.km);
+    const km = Number.isFinite(kmQuery) && kmQuery > 0 && kmQuery < 1_000_000 ? Math.round(kmQuery) : null;
     if (!marca || !modelo || !anio) return res.status(400).json({ error: "Faltan marca, modelo o año." });
     const hace1h = Date.now() - 3_600_000;
     const mias = (consultasGuia.get(token.uid) || []).filter((t) => t > hace1h);
@@ -4774,12 +4777,12 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       const adminDb = getAdminDb();
       const u = adminDb ? await adminDb.collection("users").doc(token.uid).get() : null;
       const veCostos = puedeRol(String(u?.data()?.role || ""), "vehiculos.costo");
-      const llave = `${marca}|${modelo}|${anio}`.toLowerCase();
+      const llave = `${marca}|${modelo}|${anio}|${km ?? ""}`.toLowerCase();
       const guardada = cacheGuia.get(llave);
       let g: any;
       if (guardada && guardada.en > hace1h) g = guardada.g;
       else {
-        g = await consultarGuia(marca, modelo, anio);
+        g = await consultarGuia(marca, modelo, anio, km);
         cacheGuia.set(llave, { en: Date.now(), g });
       }
       if (!g) return res.json({ guia: null, motivo: anio < ANIO_MINIMO_GUIA ? "Autocosmos no tiene guía de modelos 2014 o anteriores." : "Autocosmos no tiene este modelo y año." });

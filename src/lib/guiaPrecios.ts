@@ -154,14 +154,23 @@ export function interpretarGuia(
     }
   }
 
+  // La guía nueva de Autocosmos da un precio distinto según el kilometraje. Si el CRM no lo tenía y la
+  // página lo estimó por la edad del auto, el número vale menos: nunca queda en confianza alta.
+  if (respuesta.km_estimado && confianza === 'alta') {
+    confianza = 'media';
+    motivo = `${motivo} El kilometraje es estimado.`;
+  }
+
   const venta = redondear500(elegidas.length === 1 ? elegidas[0].venta : mediana(ventas));
   const compra = redondear500(elegidas.length === 1 ? elegidas[0].compra : mediana(elegidas.map((v) => v.compra)));
   void anio;
   return { venta, compra, ventaMin, ventaMax, version, versiones: todas.length, confianza, motivo, fecha };
 }
 
-async function pedirGuia(marca: string, modelo: string, anio: number | string): Promise<any> {
+async function pedirGuia(marca: string, modelo: string, anio: number | string, km?: number | null): Promise<any> {
   const qs = new URLSearchParams({ marca, modelo, anio: String(anio || '') });
+  // Sin km la página estima 15,000 por año y lo avisa en `km_estimado`.
+  if (km != null && Number.isFinite(Number(km)) && Number(km) >= 0) qs.set('km', String(Math.round(Number(km))));
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 45000);
   try {
@@ -179,7 +188,7 @@ async function pedirGuia(marca: string, modelo: string, anio: number | string): 
  * null = no hay guía para este auto (modelo viejo o Autocosmos no lo tiene).
  * Si la página no responde, lanza: quien llama decide si reintenta.
  */
-export async function consultarGuia(marca: string, modelo: string, anio: number | string): Promise<GuiaPrecio | null> {
+export async function consultarGuia(marca: string, modelo: string, anio: number | string, km?: number | null): Promise<GuiaPrecio | null> {
   if (!marca || !modelo || !(Number(anio) >= ANIO_MINIMO_GUIA)) return null;
   const completo = String(modelo).trim();
   const palabrasCompleto = completo.split(/\s+/);
@@ -187,7 +196,7 @@ export async function consultarGuia(marca: string, modelo: string, anio: number 
   const intentos = [completo, palabrasCompleto.slice(0, 2).join(' '), palabrasCompleto[0]]
     .filter((x, i, l) => x && l.indexOf(x) === i);
   for (const q of intentos) {
-    const g = interpretarGuia(await pedirGuia(marca, q, anio), marca, completo, anio);
+    const g = interpretarGuia(await pedirGuia(marca, q, anio, km), marca, completo, anio);
     if (g) return g;
   }
   return null;
