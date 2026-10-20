@@ -551,13 +551,19 @@ async function startServer() {
     res.setHeader("Strict-Transport-Security", "max-age=15552000");
     next();
   });
-  app.use(cors({
+  // CORS general. Las rutas del asistente (MCP) y su descubrimiento NO pasan por aqui: tienen su propio CORS (mcpCors,
+  // mas abajo) con las cabeceras que piden los clientes MCP (mcp-protocol-version, mcp-session-id...). Con el general
+  // primero, la peticion previa del navegador (OPTIONS) se contestaba aqui con una lista corta y un cliente MCP que corre
+  // en un navegador (o un inspector) fallaba antes de llegar a nuestra ruta.
+  const esRutaMcp = (ruta: string) => ruta.startsWith("/mcp") || ruta.startsWith("/sse") || ruta.startsWith("/api/mcp") || ruta.startsWith("/.well-known");
+  const corsGeneral = cors({
     origin: true,
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-  }));
-  app.options("*", cors());
+  });
+  app.use((req, res, next) => (esRutaMcp(req.path) ? next() : corsGeneral(req, res, next)));
+  app.options("*", (req, res, next) => (esRutaMcp(req.path) ? next() : corsGeneral(req, res, next)));
   // Diagnostic check for Admin SDK in background
   checkAdminDbAccess().catch((e) => console.error("Error en verificación Admin SDK:", e));
 
@@ -6909,7 +6915,9 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   const mcpCors = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, mcp-session-id, x-api-key");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, mcp-session-id, mcp-protocol-version, last-event-id, x-api-key");
+    // Un cliente en navegador necesita poder LEER estas cabeceras de la respuesta (la de WWW-Authenticate le dice dónde autenticarse).
+    res.setHeader("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
@@ -7248,7 +7256,10 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         return res.status(202).send("Accepted");
       } else {
         if (!responseJson) {
-          return res.status(200).json({ jsonrpc: "2.0", result: {} });
+          // Una notificacion (notifications/initialized...) no lleva respuesta: el protocolo pide 202 y cuerpo vacio.
+          // Antes se devolvia un 200 con un JSON sin id, y los clientes estrictos (el SDK de MCP que usan Gemini CLI y
+          // otros) lo rechazaban como mensaje invalido justo despues de conectarse.
+          return res.status(202).end();
         }
         return res.status(200).json(responseJson);
       }
