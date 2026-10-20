@@ -5605,10 +5605,34 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // clave personal y el token que devuelve ES esa clave: si el código pudiera
   // viajar a cualquier dirección, un enlace falso a nuestro dominio bastaría
   // para robarla. Solo Claude (web/escritorio) y apps locales (Claude Code).
+  // Gemini. Cada cuenta de Google tiene su PROPIA direccion de regreso:
+  //   https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-<id de la cuenta de Google>-crm_erewere_com
+  // A diferencia de Claude (una sola direccion para todos), esa direccion la controla quien tenga esa cuenta: si aceptaramos
+  // cualquiera, alguien con su propia cuenta de Google podria enganar a una persona para que escriba su llave en esta pantalla y
+  // el codigo (que ES la llave) le llegaria a el. Por eso solo se aceptan las cuentas de Google que se dieron de alta a
+  // proposito: la de Luis, y las que se agreguen en plataforma/oauthPermitidos (campo googleIds, una lista de numeros).
+  const GOOGLE_IDS_INICIALES = ["111341093648467131463"];
+  let googleIdsPermitidos = new Set<string>(GOOGLE_IDS_INICIALES);
+  async function cargarGoogleIdsPermitidos() {
+    try {
+      const db = getAdminDb();
+      if (!db) return;
+      const d = (await db.collection("plataforma").doc("oauthPermitidos").get()).data();
+      const extra = Array.isArray(d?.googleIds) ? d.googleIds.map(String).filter((x: string) => /^\d{10,25}$/.test(x)) : [];
+      googleIdsPermitidos = new Set([...GOOGLE_IDS_INICIALES, ...extra]);
+    } catch { /* se queda con la lista que ya tenia */ }
+  }
+  setTimeout(cargarGoogleIdsPermitidos, 5000);
+  setInterval(cargarGoogleIdsPermitidos, 5 * 60 * 1000).unref();
+
   const redirectOauthPermitido = (uri: string): boolean => {
     try {
       const u = new URL(uri);
       if (u.username || u.password) return false;
+      if (u.protocol === "https:" && u.hostname === "oauth-redirect.googleusercontent.com" && !u.port && !u.search && !u.hash) {
+        const m = /^\/r\/user_bound_custom-mcp-(\d{10,25})-crm_erewere_com$/.exec(u.pathname);
+        return !!m && googleIdsPermitidos.has(m[1]);
+      }
       if ((u.hostname === "claude.ai" || u.hostname === "claude.com") && u.protocol === "https:") {
         return u.pathname.startsWith("/api/mcp/");
       }
