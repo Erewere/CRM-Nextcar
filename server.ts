@@ -5636,6 +5636,13 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       if ((u.hostname === "claude.ai" || u.hostname === "claude.com") && u.protocol === "https:") {
         return u.pathname.startsWith("/api/mcp/");
       }
+      // ChatGPT: direcciones fijas y publicas de OpenAI (iguales para todos, como las de Claude).
+      if (u.protocol === "https:" && !u.port && u.hostname === "chatgpt.com") {
+        return u.pathname === "/connector_platform_oauth_redirect" || /^\/connector\/oauth\/[A-Za-z0-9_-]{4,80}$/.test(u.pathname);
+      }
+      if (u.protocol === "https:" && !u.port && u.hostname === "platform.openai.com") {
+        return u.pathname === "/apps-manage/oauth";
+      }
       return u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
     } catch {
       return false;
@@ -6978,6 +6985,13 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
           // A donde pide el cliente que se regrese tras autorizar (solo origen y ruta, sin parametros): es lo que decide si la
           // pantalla de autorizacion lo acepta, y no es un secreto.
           redireccion: (() => { try { const u = new URL(String(req.query?.redirect_uri || "")); return `${u.origin}${u.pathname}`.slice(0, 120); } catch { return ""; } })(),
+          // Solo NOMBRES de campos (nunca valores) de lo que pide el cliente al registrarse, y a donde se le devolvio tras autorizar
+          // (origen, ruta y nombres de parametros). Ayuda a ver en que paso del acuerdo se queda un cliente.
+          camposRegistro: req.path === "/register" || String(req.originalUrl || "").includes("/oauth/register")
+            ? [Object.keys(rpc).join(","), String(rpc.token_endpoint_auth_method || ""), Array.isArray(rpc.grant_types) ? rpc.grant_types.join(",") : "", Array.isArray(rpc.response_types) ? rpc.response_types.join(",") : "", String(rpc.scope || "").slice(0, 60)].join(" | ").slice(0, 200)
+            : "",
+          devolvio: (() => { try { const l = String(res.getHeader("location") || ""); if (!l) return ""; const u = new URL(l); return `${u.origin}${u.pathname} ?${[...u.searchParams.keys()].join("&")}`.slice(0, 200); } catch { return ""; } })(),
+          camposToken: String(req.originalUrl || "").includes("/oauth/token") ? Object.keys(rpc).join(",").slice(0, 120) : "",
         }).catch(() => {});
       } catch { /* el registro nunca debe afectar al servicio */ }
     });
