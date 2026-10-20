@@ -12,6 +12,7 @@ import { hasActiveAccess } from "./src/lib/subscription.ts";
 import { consultarMercado } from "./src/lib/precioMercado.ts";
 import { analizarPrecio, resumirAnalisisDeVenta, VERSION_REGLAS } from "./src/lib/analisisPrecio.ts";
 import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
+import { sembrarPostventa } from "./src/servidor/postventa.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
@@ -4655,6 +4656,27 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const r = await revisarPreciosDelInventario("manual", q.agencyId);
     res.status(r.ok ? 200 : 500).json(r);
   });
+
+  // ===== Seguimiento de postventa automatico =====
+  // Cada 15 minutos revisa las ventas de los ultimos 14 dias y, si no las ha atendido ya, les programa al
+  // vendedor la llamada de la semana, la resena del mes, el servicio de los 6 meses y el aniversario.
+  // Ver src/servidor/postventa.ts. Una agencia lo apaga con postventa.activa = false.
+  let postventaCorriendo = false;
+  async function correrPostventa() {
+    const adminDb = getAdminDb();
+    if (!adminDb || postventaCorriendo) return;
+    postventaCorriendo = true;
+    try {
+      const hechas = await sembrarPostventa(adminDb);
+      if (hechas.length) console.log(`Postventa: ${hechas.length} ventas con seguimiento nuevo.`);
+    } catch (e) {
+      console.error("Postventa:", e);
+    } finally {
+      postventaCorriendo = false;
+    }
+  }
+  setTimeout(correrPostventa, 5 * 60 * 1000);
+  setInterval(correrPostventa, 15 * 60 * 1000);
 
   // ===== Liga de la publicacion en la pagina Nextcar =====
   //

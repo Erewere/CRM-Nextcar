@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
-import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink, MessageCircle } from 'lucide-react';
+import { Users, Calendar, Shield, Building, Mail, CheckCircle, Plus, Send, Tag, X, Clock, Trash2, Copy, Check, Link, ExternalLink, MessageCircle, CheckSquare } from 'lucide-react';
 import { Task, Client } from '../types';
 import { ROLES_ASIGNABLES, NOMBRE_ROL, DESCRIPCION_ROL, type Rol } from '../lib/permissions';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -41,6 +41,7 @@ export function AgencyUsers() {
   const [waRoutingMode, setWaRoutingMode] = useState<'manual' | 'roundRobin'>('manual');
   const [waRoutingSellers, setWaRoutingSellers] = useState<string[]>([]);
   const [waReglas, setWaReglas] = useState<Record<string, string>>({});
+  const [postventaActiva, setPostventaActiva] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [savingSharing, setSavingSharing] = useState(false);
   
@@ -146,6 +147,7 @@ export function AgencyUsers() {
               setWaRoutingSellers(Array.isArray(agencyData.whatsappRouting.sellerIds) ? agencyData.whatsappRouting.sellerIds : []);
               setWaReglas(agencyData.whatsappRouting.reglas && typeof agencyData.whatsappRouting.reglas === 'object' ? agencyData.whatsappRouting.reglas : {});
             }
+            setPostventaActiva((agencyData as any).postventa?.activa === true);
             if (agencyData.shareInventory !== undefined) {
               setShareInventory(!!agencyData.shareInventory);
             }
@@ -584,6 +586,23 @@ export function AgencyUsers() {
     } catch (e) {
       console.error(e);
       alert('Error al guardar la regla.');
+    } finally {
+      setSavingRouting(false);
+    }
+  };
+
+  // Postventa automática: al encenderla queda la fecha, y solo cuentan las ventas desde ese día.
+  const cambiarPostventa = async (activa: boolean) => {
+    if (!userData?.agencyId) return;
+    setSavingRouting(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), activa
+        ? { 'postventa.activa': true, 'postventa.desde': new Date().toLocaleDateString('en-CA') }
+        : { 'postventa.activa': false });
+      setPostventaActiva(activa);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo guardar el seguimiento de postventa.');
     } finally {
       setSavingRouting(false);
     }
@@ -1127,6 +1146,25 @@ export function AgencyUsers() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Postventa automática */}
+      {userData?.role === 'admin' && (
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-emerald-600" />
+              Seguimiento de postventa automático
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Cuando se cierra una venta, el CRM le programa al vendedor, contando desde la fecha de la venta: una llamada a la semana, pedir reseña o recomendación al mes, el servicio y la verificación a los seis meses, y el aniversario al año (seguro, refrendo o tenencia y cambio de auto). Solo cuentan las ventas desde que lo enciendes; las anteriores no se tocan.
+            </p>
+          </div>
+          <label className="flex items-center gap-3 p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800 cursor-pointer">
+            <input type="checkbox" checked={postventaActiva} disabled={savingRouting} onChange={(e) => cambiarPostventa(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{postventaActiva ? 'Encendido' : 'Apagado'}: crear las tareas de postventa de cada venta nueva</span>
+          </label>
         </div>
       )}
 

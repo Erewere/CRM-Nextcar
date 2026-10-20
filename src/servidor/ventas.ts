@@ -389,7 +389,8 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
       const tareas = await db.collection("tasks").where("dealId", "==", dealId).get();
       for (const tk of tareas.docs) {
         const x = tk.data();
-        if (!x.completed && x.type === "payment") await tk.ref.delete();
+        // Cobros y seguimiento de postventa pendientes: una venta que se elimina no los necesita.
+        if (!x.completed && (x.type === "payment" || x.postventa === true)) await tk.ref.delete();
       }
 
       // 3. El auto vuelve a estar disponible (solo si esta venta es la suya).
@@ -404,7 +405,7 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
       const abierta = etapas.find((e) => !checkIsWon(e.id, etapas) && !checkIsLost(e.id, etapas));
       const nuevaEtapa = abierta?.id || "new";
       await t.ref.update({
-        saleDetails: null, soldAt: null, cuenta: null, status: nuevaEtapa, updatedAt: ahora,
+        saleDetails: null, soldAt: null, cuenta: null, status: nuevaEtapa, updatedAt: ahora, postventaSembrada: null,
         ventaEliminada: { el: ahora, por: q.uid, porNombre: nombre, motivo, precio: Number(d.saleDetails?.price) || Number(d.value) || 0, pagosAnulados: anulados },
       });
 
