@@ -1,3 +1,4 @@
+import { useCerrarConAtras } from "../../hooks/useVolver";
 import React, { useState, useEffect, useRef } from 'react';
 import { quitarVentaDeTratoPerdido } from '../../lib/ventaDescartada';
 import { completarValorDelTrato } from "../../lib/valorDelTrato";
@@ -28,6 +29,8 @@ interface Props {
 }
 
 export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory }: Props) {
+  // El botón de atrás (y el gesto del iPhone) cierra esta ventana en vez de salirse de la pantalla.
+  useCerrarConAtras(onClose);
   const { userData } = useAuth();
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [currentStatus, setCurrentStatus] = useState(client.status || 'new');

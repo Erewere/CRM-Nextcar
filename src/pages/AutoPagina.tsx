@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { alClicWhatsApp } from '../lib/whatsappApp';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useVolver } from '../hooks/useVolver';
 import clsx from 'clsx';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { ArrowLeft, Copy, ExternalLink, FileSignature, FileText, Image as ImageIcon, MessageCircle, Printer, Share2, Upload } from 'lucide-react';
@@ -99,6 +100,7 @@ function Tarjeta({ titulo, accion, children, className }: { titulo?: React.React
 export function AutoPagina() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const volver = useVolver('/inventory');
   const { userData } = useAuth();
   const { can } = usePermissions();
   const { conCosto, puedeVerCostos } = useCostosVehiculos();
@@ -360,7 +362,7 @@ export function AutoPagina() {
     return (
       <div className="p-10 text-center flex flex-col items-center gap-3">
         <p className="text-slate-600 dark:text-slate-400">No encontramos este auto, o es de otra agencia.</p>
-        <button type="button" onClick={() => navigate('/inventory')} className="px-4 py-2 rounded-lg bg-blue-700 text-white font-bold text-sm">Volver al inventario</button>
+        <button type="button" onClick={volver} className="px-4 py-2 rounded-lg bg-blue-700 text-white font-bold text-sm">Volver al inventario</button>
       </div>
     );
   }
@@ -661,7 +663,7 @@ export function AutoPagina() {
         {/* Encabezado */}
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap min-w-0">
-            <button type="button" onClick={() => navigate('/inventory')} className="flex items-center gap-1 text-sm font-bold text-blue-700 hover:underline">
+            <button type="button" onClick={volver} className="flex items-center gap-1 text-sm font-bold text-blue-700 hover:underline">
               <ArrowLeft className="w-4 h-4" /> Inventario
             </button>
             <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{titulo}</h1>

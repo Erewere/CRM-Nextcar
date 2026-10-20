@@ -1,3 +1,4 @@
+import { useCerrarConAtras } from "../hooks/useVolver";
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
@@ -59,6 +60,8 @@ export function VehicleDetailModal(props: Props) {
 }
 
 function VentanaDelAuto({ vehicle, onClose, clientContext, iniciarVenta }: Props) {
+  // El botón de atrás (y el gesto del iPhone) cierra esta ventana en vez de salirse de la pantalla.
+  useCerrarConAtras(onClose);
   const { userData, agencyData } = useAuth();
   const navigate = useNavigate();
   const isNew = !vehicle.id;

@@ -83,8 +83,12 @@ export function eventosDelAuto(p: { v: any; cliente: any; tratos: any[]; notas: 
     ev.push({ fecha: fechaIso(cliente.createdAt), texto: 'Se anotó como su auto de interés', tipo: 'ficha' });
   }
 
+  // Cada cambio de estado deja una nota en la Actividad (type «estado-auto»): ahí está el historial completo.
+  // Los cambios anteriores a las notas solo dejaron el campo; ese último se muestra si no hay nota que lo cubra.
+  const cambios = (notas || []).filter((n) => n.type === 'estado-auto' && n.vehicleId === v.id);
+  cambios.forEach((n) => ev.push({ fecha: fechaIso(n.createdAt), texto: `Marcado como «${textoDeEstado(n.estado)}»${n.createdByName ? ` por ${n.createdByName}` : ''}`, tipo: 'estado' }));
   const manual = cliente?.autosInteres?.[v.id];
-  if (manual?.estado && manual.en) {
+  if (manual?.estado && manual.en && !cambios.some((n) => n.estado === manual.estado && Math.abs(Date.parse(fechaIso(n.createdAt)) - Date.parse(manual.en)) < 60_000)) {
     ev.push({ fecha: manual.en, texto: `Marcado como «${textoDeEstado(manual.estado)}»${manual.porNombre ? ` por ${manual.porNombre}` : ''}`, tipo: 'estado' });
   }
 

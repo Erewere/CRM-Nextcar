@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useVolver } from '../hooks/useVolver';
 import { ArrowLeft, RefreshCw, Search, TrendingDown, TrendingUp, Equal, HelpCircle, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 import { auth } from '../lib/firebase';
@@ -51,6 +52,7 @@ const hace = (iso: string | null) => {
 
 export function RevisionPrecios() {
   const navigate = useNavigate();
+  const volver = useVolver('/inventory');
   const [autos, setAutos] = useState<Analisis[] | null>(null);
   const [ultima, setUltima] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -82,7 +84,7 @@ export function RevisionPrecios() {
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900 overflow-y-auto">
       <div className="p-4 md:p-6 max-w-7xl mx-auto w-full space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => navigate('/inventory')} className="h-9 w-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center hover:bg-slate-50" aria-label="Volver al inventario">
+          <button onClick={volver} className="h-9 w-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center hover:bg-slate-50" aria-label="Volver al inventario">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="min-w-0">

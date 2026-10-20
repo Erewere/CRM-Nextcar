@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { documentosQueFaltan } from '../lib/creditoDocs';
 import { useNavigate, useParams } from 'react-router';
+import { useVolver } from '../hooks/useVolver';
 import clsx from 'clsx';
 import { doc, getDoc } from 'firebase/firestore';
 import { ChevronLeft, Download, Eye, FileText, Link2, Loader2, Send, Trash2, Upload, X } from 'lucide-react';
@@ -19,6 +20,7 @@ const fecha = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('
 export function CreditoExpediente() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const volver = useVolver('/creditos');
   const { userData } = useAuth();
   const [s, setS] = useState<any>(null);
   const [error, setError] = useState('');
@@ -55,7 +57,7 @@ export function CreditoExpediente() {
   const falta = faltantes(datos);
   const cambiar = async (cambios: any) => { try { const x = await creditosApi.cambiar(id, cambios); setS(x); } catch (e: any) { alert(e.message); } };
 
-  if (error) return <div className="p-8 text-center"><p className="font-bold text-red-700">{error}</p><button type="button" onClick={() => navigate('/creditos')} className="mt-3 text-blue-700 font-bold">← Créditos</button></div>;
+  if (error) return <div className="p-8 text-center"><p className="font-bold text-red-700">{error}</p><button type="button" onClick={volver} className="mt-3 text-blue-700 font-bold">← Créditos</button></div>;
   if (!s) return <div className="py-20 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-slate-400" /></div>;
 
   const docs: any[] = s.documentos || [];
@@ -175,7 +177,7 @@ export function CreditoExpediente() {
     <div className="max-w-[1440px] mx-auto px-3 md:px-6 py-4 flex flex-col gap-4">
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={() => navigate('/creditos')} className="text-sm font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Créditos</button>
+          <button type="button" onClick={volver} className="text-sm font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Créditos</button>
           <span className="ml-auto text-xs text-slate-500">{guardado === 'guardando' ? 'Guardando…' : guardado === 'error' ? 'No se pudo guardar' : 'Guardado'}</span>
         </div>
         <div className="flex flex-wrap items-start gap-3">

@@ -1,3 +1,4 @@
+import { useCerrarConAtras } from "../hooks/useVolver";
 import { motion, AnimatePresence } from "motion/react";
 import { mandarActividadAGoogle, ligaAlCRM, AVISO_RECONECTAR, AVISO_FALTAN_PERMISOS, type ContextoActividad } from "../lib/google";
 import { PenTool } from "lucide-react";
@@ -12,6 +13,7 @@ import { getClientMatches } from "../services/matchingEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { db, storage } from "../lib/firebase";
 import { useReadOnly } from "../hooks/useReadOnly";
+import { textoDeEstado } from "../lib/autosDeInteres";
 import { usePermissions } from "../hooks/usePermissions";
 import { ventaYaRegistrada, avisoDeVentaDuplicada, elegirTratoDeLaVenta, elegirTratoAbierto, tratoConVenta } from "../lib/ventas";
 import { hoyLocal } from "../lib/fechas";
@@ -83,6 +85,8 @@ export function ClientDetailModal({
   onClose,
   onUpdated,
 }: Props) {
+  // El botón de atrás (y el gesto del iPhone) cierra esta ventana en vez de salirse de la pantalla.
+  useCerrarConAtras(onClose);
   const { userData, agencyData, googleToken, googleAccount, refrescarTokenGoogle, connectGoogleServices } = useAuth();
   const googleConectado = Boolean(googleAccount || googleToken);
   // Las actividades de la ficha también van a tu Google Calendar (si lo tienes conectado).
@@ -3707,10 +3711,32 @@ export function ClientDetailModal({
                 onCotizar={(v) => setCotizandoAuto(v)}
                 soloLectura={isReadOnly || !canModify}
                 onCambiarEstadoAuto={async (vehicleId, estado) => {
-                  // Un solo campo, sin tocar el resto de la ficha. Si falla, el selector vuelve al estado anterior.
-                  const dato = { estado, en: new Date().toISOString(), porNombre: userData?.name || "" };
-                  await updateDoc(doc(db, "clients", formData.id), { [`autosInteres.${vehicleId}`]: dato });
+                  // Un solo campo en el contacto (sin tocar el resto de la ficha) y una nota en la Actividad,
+                  // para que el cambio quede en el historial del cliente. Si el modal está abierto desde un
+                  // trato, el contacto real es originalClientId.
+                  const clienteId = (formData as any).originalClientId || formData.id;
+                  const ahoraIso = new Date().toISOString();
+                  const dato = { estado, en: ahoraIso, porNombre: userData?.name || "" };
+                  await updateDoc(doc(db, "clients", clienteId), { [`autosInteres.${vehicleId}`]: dato });
                   setFormData((prev: any) => ({ ...prev, autosInteres: { ...(prev.autosInteres || {}), [vehicleId]: dato } }));
+                  const v: any = inventoryVehicles.find((x: any) => x.id === vehicleId);
+                  const nombreAuto = v ? `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim() : "un auto";
+                  const nota: Record<string, any> = {
+                    agencyId: userData?.agencyId || (formData as any).agencyId || "",
+                    sellerId: userData?.id || "",
+                    clientId: clienteId,
+                    content: `${nombreAuto}: marcado como «${textoDeEstado(estado)}»`,
+                    type: "estado-auto",
+                    vehicleId,
+                    estado,
+                    createdAt: ahoraIso,
+                    createdByName: userData?.name || "",
+                  };
+                  try {
+                    const ref = doc(collection(db, "notes"));
+                    await setDoc(ref, nota);
+                    setNotes((prev) => [{ id: ref.id, ...nota } as any, ...prev]);
+                  } catch (e) { console.error("Nota del cambio de estado:", e); }
                 }}
               />
               {deals.length > 0 && (

@@ -1,3 +1,4 @@
+import { useCerrarConAtras } from "../hooks/useVolver";
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
@@ -52,6 +53,8 @@ export function NewActivityModal({
   initialData,
   tasks = [],
 }: NewActivityModalProps) {
+  // El botón de atrás (y el gesto del iPhone) cierra esta ventana en vez de salirse de la pantalla.
+  useCerrarConAtras(onClose);
   const [type, setType] = useState(initialData?.type || "call");
   const [title, setTitle] = useState(initialData?.title || "Llamada");
   const [date, setDate] = useState(

@@ -15,6 +15,7 @@ import { auth } from '../lib/firebase';
 import { getApiUrl } from '../lib/api';
 import { AvisoPaginaWeb } from '../components/auto/AvisoPaginaWeb';
 import { LlenarDesdeVin } from '../components/auto/LlenarDesdeVin';
+import { useVolver } from '../hooks/useVolver';
 import { RecomendacionAlta } from '../components/precios/RecomendacionAlta';
 import { ConsultarPrecio } from '../components/auto/ConsultarPrecio';
 
@@ -38,6 +39,7 @@ function Campo({ etiqueta, obligatorio, children, className }: { etiqueta: strin
 
 export function AutoNuevo() {
   const navigate = useNavigate();
+  const volver = useVolver('/inventory');
   const [params] = useSearchParams();
   const { userData, agencyData } = useAuth();
   const { can } = usePermissions();
@@ -71,7 +73,7 @@ export function AutoNuevo() {
     return (
       <div className="p-10 text-center flex flex-col items-center gap-3">
         <p className="text-slate-600 dark:text-slate-400">Tu usuario no puede dar de alta autos.</p>
-        <button type="button" onClick={() => navigate('/inventory')} className="px-4 py-2 rounded-lg bg-blue-700 text-white font-bold text-sm">Volver al inventario</button>
+        <button type="button" onClick={volver} className="px-4 py-2 rounded-lg bg-blue-700 text-white font-bold text-sm">Volver al inventario</button>
       </div>
     );
   }
@@ -171,11 +173,11 @@ export function AutoNuevo() {
       <form onSubmit={guardar} className="p-3 md:p-4 flex flex-col gap-3 max-w-[1400px] mx-auto">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => navigate('/inventory')} className="flex items-center gap-1 text-sm font-bold text-blue-700 hover:underline"><ArrowLeft className="w-4 h-4" /> Inventario</button>
+            <button type="button" onClick={volver} className="flex items-center gap-1 text-sm font-bold text-blue-700 hover:underline"><ArrowLeft className="w-4 h-4" /> Inventario</button>
             <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Nuevo auto</h1>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => navigate('/inventory')} className="min-h-[40px] px-4 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold">Cancelar</button>
+            <button type="button" onClick={volver} className="min-h-[40px] px-4 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold">Cancelar</button>
             <button type="submit" disabled={guardando || !!subiendo} className="min-h-[40px] px-5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-sm font-bold">{guardando ? 'Guardando…' : 'Guardar auto'}</button>
           </div>
         </header>
