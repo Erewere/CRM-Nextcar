@@ -28,7 +28,7 @@ export function AvisosAlCelular() {
         {e.esteDispositivo ? <Bell className="w-4 h-4 text-emerald-600" /> : <BellOff className="w-4 h-4 text-slate-400" />}
         Avisos al celular
       </p>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Te avisamos cuando entra un prospecto nuevo o un cliente te escribe, aunque tengas el CRM cerrado. El aviso dice quién fue, nunca lo que escribió.</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Te avisamos, aunque tengas el CRM cerrado: cuando entra un prospecto nuevo o un cliente te escribe, 15 minutos antes de una cita o llamada con hora, y cada mañana a las 9 cuántas tareas tienes vencidas y para hoy. Los avisos de clientes dicen quién fue, nunca lo que escribió.</p>
 
       {!e.soportado && !e.necesitaGuardarla && <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">Este navegador no recibe avisos.</p>}
 

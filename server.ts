@@ -15,6 +15,7 @@ import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisi
 import { sembrarPostventa } from "./src/servidor/postventa.ts";
 import { sembrarSeguimiento } from "./src/servidor/seguimiento.ts";
 import { registrarPush } from "./src/servidor/push.ts";
+import { avisarActividades } from "./src/servidor/avisosActividades.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
@@ -4728,6 +4729,26 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   }
   setTimeout(correrSeguimiento, 7 * 60 * 1000);
   setInterval(correrSeguimiento, 30 * 60 * 1000);
+
+  // ===== Avisos al celular de citas y tareas =====
+  // Cada 5 minutos: avisa 15 minutos antes de una actividad con hora y, una vez al dia por la manana, cuantas tareas
+  // vencidas y para hoy tiene cada persona. Solo para quien tiene el celular suscrito. Ver src/servidor/avisosActividades.ts.
+  let avisosActividadesCorriendo = false;
+  async function correrAvisosActividades() {
+    const adminDb = getAdminDb();
+    if (!adminDb || !avisosPush || avisosActividadesCorriendo) return;
+    avisosActividadesCorriendo = true;
+    try {
+      const hechos = await avisarActividades(adminDb, avisosPush.avisarA);
+      if (hechos.length) console.log(`Avisos de actividades: ${hechos.length}.`);
+    } catch (e) {
+      console.error("Avisos de actividades:", e);
+    } finally {
+      avisosActividadesCorriendo = false;
+    }
+  }
+  setTimeout(correrAvisosActividades, 2 * 60 * 1000);
+  setInterval(correrAvisosActividades, 5 * 60 * 1000);
 
   // ===== Liga de la publicacion en la pagina Nextcar =====
   //
