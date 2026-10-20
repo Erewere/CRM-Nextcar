@@ -1,18 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, History, Loader2, Radar, ShieldAlert, ShieldCheck, ShieldQuestion, WifiOff } from 'lucide-react';
+import { AlertTriangle, FileCheck2, FileText, History, Loader2, Radar, ShieldAlert, ShieldCheck, ShieldQuestion, WifiOff } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { getApiUrl } from '../../lib/api';
 import { NOMBRE_FUENTE, TEXTO_VEREDICTO, type EvaluacionPlacas, type VeredictoPlacas } from '../../lib/placasInfo';
+import { descargarOCompartir } from '../../lib/fichaPdf';
+import { folioDeConstancia, generarConstanciaPlacas, nombreDeConstancia, type DatosConstancia, type VarianteConstancia } from '../../lib/constanciaPlacasPdf';
 
 /**
  * Consulta automática con PlacasInfo: seis fuentes en una sola consulta.
  * Cuesta un crédito, así que pide confirmación y no repite el mismo auto
  * dentro de 24 h salvo que se pida. El resultado también queda como la
  * consulta REPUVE del auto (el aviso rojo de la ficha sale de ahí).
+ *
+ * Cada consulta deja su constancia: al terminar, el CRM genera la hoja del
+ * cliente y la guarda en los Documentos del auto (categoría «Verificación»),
+ * para que dentro de un año siga constando qué contestó cada fuente. La hoja
+ * del expediente, con la ficha completa del REPUVE, se baja aparte.
  */
 
-interface Consulta { id: string; estado: 'procesando' | 'lista' | 'error'; consultado: string; fecha: string; porNombre: string; evaluacion?: EvaluacionPlacas; error?: string; creditos?: number }
+interface Constancia { docId: string; nombre?: string; fecha?: string }
+interface Consulta { id: string; estado: 'procesando' | 'lista' | 'error'; consultado: string; fecha: string; porNombre: string; evaluacion?: EvaluacionPlacas; error?: string; creditos?: number; constancia?: Constancia }
 
 async function api(ruta: string, init: RequestInit = {}) {
   const token = await auth.currentUser?.getIdToken();
@@ -31,12 +39,19 @@ const ESTILO: Record<VeredictoPlacas, { caja: string; Icono: any }> = {
 
 const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto }: { autoId: string; puedeConsultar: boolean; auto: { make?: string; model?: string; year?: any } }) {
+export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto, agencia }: {
+  autoId: string;
+  puedeConsultar: boolean;
+  auto: { make?: string; model?: string; year?: any; vin?: string; color?: string; km?: any; bodyType?: string; transmission?: string; licensePlate?: string; checklist?: { platesState?: string } };
+  agencia?: { name?: string; address?: string; phone?: string; logoUrl?: string } | null;
+}) {
   const [activo, setActivo] = useState(false);
   const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
+  const [haciendo, setHaciendo] = useState<VarianteConstancia | ''>('');
   const vivo = useRef(true);
+  const guardadas = useRef(new Set<string>());
 
   const cargar = async () => {
     try { const d = await api(`/api/autos/${autoId}/placasinfo`); if (vivo.current) setConsultas(d.consultas || []); } catch { /* se ve al reintentar */ }
@@ -48,13 +63,73 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto }: { autoId: s
     return () => { vivo.current = false; };
   }, [autoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mientras haya una en proceso, preguntar cada 4 s.
   const ultima = consultas[0];
+
+  // Al terminar una consulta, su constancia queda guardada en el auto. El
+  // servidor anota cuál se guardó, así que dos pantallas abiertas no dejan dos.
+  useEffect(() => {
+    if (!ultima || ultima.estado !== 'lista' || !ultima.evaluacion || ultima.constancia) return;
+    if (guardadas.current.has(ultima.id)) return;
+    guardadas.current.add(ultima.id);
+    guardarEnElAuto(ultima)
+      .then((constancia) => { if (vivo.current) setConsultas((cs) => cs.map((c) => (c.id === ultima.id ? { ...c, constancia } : c))); })
+      .catch(() => { /* sin permiso de documentos, o falló: quedan los botones */ });
+  }, [ultima?.id, ultima?.estado, ultima?.constancia?.docId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mientras haya una en proceso, preguntar cada 4 s.
   useEffect(() => {
     if (ultima?.estado !== 'procesando') return;
     const t = setInterval(cargar, 4000);
     return () => clearInterval(t);
   }, [ultima?.id, ultima?.estado]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- Constancia de la consulta
+  const datosDe = (c: Consulta, variante: VarianteConstancia): DatosConstancia => ({
+    variante,
+    evaluacion: c.evaluacion!,
+    consulta: { id: c.id, consultado: c.consultado, fecha: c.fecha, porNombre: c.porNombre },
+    auto: {
+      make: auto.make, model: auto.model, year: auto.year, vin: auto.vin, color: auto.color, km: auto.km,
+      bodyType: auto.bodyType, transmission: auto.transmission,
+      licensePlate: auto.licensePlate, platesState: auto.checklist?.platesState,
+    },
+    agencia,
+    anteriores: consultas
+      .filter((x) => x.id !== c.id && x.estado === 'lista')
+      .map((x) => ({ fecha: x.fecha, veredicto: x.evaluacion ? TEXTO_VEREDICTO[x.evaluacion.veredicto] : undefined, porNombre: x.porNombre })),
+  });
+
+  const bajar = async (c: Consulta, variante: VarianteConstancia) => {
+    if (!c.evaluacion) return;
+    setHaciendo(variante); setError('');
+    try {
+      const d = datosDe(c, variante);
+      const blob = await generarConstanciaPlacas(d);
+      await descargarOCompartir(blob, nombreDeConstancia(d), 'Constancia de verificación');
+    } catch (e: any) { setError(e?.message || 'No se pudo hacer la constancia.'); }
+    finally { setHaciendo(''); }
+  };
+
+  /**
+   * Guarda la constancia en los documentos del auto. Se llama sola al terminar
+   * una consulta. Archivarla pide ser administrador o gerente, igual que ver
+   * los documentos: si quien consultó solo maneja el inventario, el servidor
+   * dice que no y aquí no se enseña ningún error — el resultado se ve igual y
+   * la hoja se puede bajar con los botones.
+   */
+  const guardarEnElAuto = async (c: Consulta): Promise<Constancia> => {
+    const d = datosDe(c, 'cliente');
+    const nombre = nombreDeConstancia(d);
+    const blob = await generarConstanciaPlacas(d);
+    const token = await auth.currentUser?.getIdToken();
+    const r = await fetch(getApiUrl(`/api/autos/${autoId}/placasinfo/${c.id}/constancia`), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/pdf', 'X-Nombre': encodeURIComponent(nombre) },
+      body: blob,
+    });
+    if (!r.ok) throw new Error(`constancia ${r.status}`);
+    return (await r.json()).constancia as Constancia;
+  };
 
   if (!activo) return null;
 
@@ -113,6 +188,36 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto }: { autoId: s
         </div>
       )}
 
+      {ev && ultima && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!!haciendo}
+              onClick={() => bajar(ultima, 'cliente')}
+              className="min-h-[36px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5"
+            >
+              {haciendo === 'cliente' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileCheck2 className="w-3.5 h-3.5" />}
+              Constancia para el cliente
+            </button>
+            <button
+              type="button"
+              disabled={!!haciendo}
+              onClick={() => bajar(ultima, 'interna')}
+              className="min-h-[36px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5"
+            >
+              {haciendo === 'interna' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+              Hoja para el expediente
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {ultima.constancia
+              ? `Guardada en los documentos del auto como «${ultima.constancia.nombre || folioDeConstancia(ultima.id)}», en Verificación.`
+              : 'Al terminar la consulta, la constancia se guarda sola en los documentos del auto (la archiva un administrador o gerente).'}
+          </p>
+        </div>
+      )}
+
       {puedeConsultar && (
         <button
           type="button"
@@ -132,7 +237,14 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto }: { autoId: s
           <summary className="cursor-pointer font-semibold">Consultas anteriores ({consultas.length - 1})</summary>
           <ul className="mt-1.5 flex flex-col gap-1">
             {consultas.slice(1).map((c) => (
-              <li key={c.id}>{fechaHora(c.fecha)} · <b>{c.evaluacion ? TEXTO_VEREDICTO[c.evaluacion.veredicto] : c.estado === 'error' ? 'Falló' : 'En proceso'}</b> · {c.porNombre}</li>
+              <li key={c.id} className="flex flex-wrap items-baseline gap-x-1.5">
+                <span>{fechaHora(c.fecha)} · <b>{c.evaluacion ? TEXTO_VEREDICTO[c.evaluacion.veredicto] : c.estado === 'error' ? 'Falló' : 'En proceso'}</b> · {c.porNombre}</span>
+                {c.evaluacion && (
+                  <button type="button" disabled={!!haciendo} onClick={() => bajar(c, 'cliente')} className="font-bold text-blue-700 dark:text-blue-400 hover:underline disabled:opacity-50">
+                    constancia
+                  </button>
+                )}
+              </li>
             ))}
           </ul>
         </details>

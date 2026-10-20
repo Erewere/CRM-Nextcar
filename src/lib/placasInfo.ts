@@ -9,11 +9,17 @@
 
 export type VeredictoPlacas = 'vigente' | 'antecedente' | 'limpio' | 'incompleto';
 
+/** Cómo quedó cada fuente por separado, para la constancia del auto. */
+export type EstadoFuente = 'alerta' | 'antecedente' | 'limpio' | 'caida' | 'sin_dato';
+export interface ResultadoFuente { clave: string; estado: EstadoFuente; detalle: string[] }
+
 export interface EvaluacionPlacas {
   veredicto: VeredictoPlacas;
   alertas: string[];        // reportes vigentes: detener la operación
   historial: string[];      // antecedentes: revisar documentación
   fuentesCaidas: string[];  // no se pudo preguntar: repetir la consulta
+  /** Una línea por fuente. Falta en las consultas guardadas antes de existir. */
+  fuentes?: ResultadoFuente[];
   ficha?: { marca?: string; modelo?: string; anio?: string; vin?: string; placa?: string; entidad?: string; movimiento?: string; linea?: string; tipo?: string; cilindrada?: string; cilindros?: string; complemento?: string };
 }
 
@@ -27,6 +33,30 @@ export const TEXTO_VEREDICTO: Record<VeredictoPlacas, string> = {
 export const NOMBRE_FUENTE: Record<string, string> = {
   pgj: 'Fiscalías (PGJ)', ocra: 'Aseguradoras (OCRA)', aviso: 'Avisos ministeriales',
   rapi: 'Procedencia ilícita (RAPI)', carfax: 'Robo EE. UU./Canadá', repuve: 'REPUVE',
+};
+
+/** Qué dice la constancia cuando una fuente no encontró nada. */
+export const TEXTO_FUENTE_LIMPIA: Record<string, string> = {
+  pgj: 'Sin reporte de robo', ocra: 'Sin reporte de robo', aviso: 'Sin avisos ministeriales',
+  rapi: 'Sin registro de procedencia ilícita', carfax: 'Sin reporte de robo', repuve: 'Sin reporte de robo',
+};
+
+/** Qué pregunta cada fuente, para que la constancia se explique sola. */
+export const QUE_REVISA_FUENTE: Record<string, string> = {
+  repuve: 'Registro Público Vehicular: ficha del vehículo y robo a nivel nacional',
+  pgj: 'Carpetas de robo de las fiscalías estatales',
+  ocra: 'Reportes de robo y recuperación de las aseguradoras',
+  aviso: 'Avisos ministeriales vigentes y cancelados',
+  rapi: 'Procedencia ilícita (solo Ciudad de México)',
+  carfax: 'Reportes de robo en Estados Unidos y Canadá',
+};
+
+export const TEXTO_ESTADO_FUENTE: Record<EstadoFuente, string> = {
+  alerta: 'Reporte vigente',
+  antecedente: 'Con antecedente',
+  limpio: 'Sin reporte',
+  caida: 'No respondió',
+  sin_dato: 'Sin dato',
 };
 
 const esObj = (x: any) => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -53,7 +83,19 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
   const historial: string[] = [];
   const caidas: string[] = [];
 
+  // Cada fuente se anota aparte sin repetir su lectura: se guarda cuántas
+  // líneas había antes de preguntarle, y lo que agregó es lo suyo.
+  const fuentes: ResultadoFuente[] = [];
+  const marca = () => ({ a: alertas.length, h: historial.length });
+  const anotar = (clave: string, m: { a: number; h: number }, forzado?: EstadoFuente) => {
+    const propias = [...alertas.slice(m.a), ...historial.slice(m.h)];
+    const estado: EstadoFuente = forzado
+      ?? (alertas.length > m.a ? 'alerta' : historial.length > m.h ? 'antecedente' : 'limpio');
+    fuentes.push({ clave, estado, detalle: propias });
+  };
+
   // PGJ — Fiscalías
+  const mPgj = marca();
   const pgj = r?.pgj;
   if (conError(pgj)) caidas.push('pgj');
   for (const rep of registros(pgj)) {
@@ -62,8 +104,11 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
     else if (e === 4 || e === 12) historial.push(`Fiscalía: robado y ${e === 12 ? 'entregado' : 'recuperado'}${entre(rep.FTE_VHI_ROBO, rep.FECHA_ROBO && `robo ${rep.FECHA_ROBO}`, rep.FEC_ACT_REC && `recuperado ${rep.FEC_ACT_REC}`)}`);
   }
 
+  anotar('pgj', mPgj, conError(pgj) ? 'caida' : undefined);
+
   // OCRA — aseguradoras. conReporteRoboRecuperacion es TEXTO "true"/"false";
   // manda roboORecuperacion (1 = robo vigente aunque el texto diga «localizado»).
+  const mOcra = marca();
   const ocra = r?.ocra;
   if (conError(ocra)) caidas.push('ocra');
   else if (esObj(ocra) && String(ocra.conReporteRoboRecuperacion).toLowerCase() === 'true') {
@@ -78,7 +123,10 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
     }
   }
 
+  anotar('ocra', mOcra, conError(ocra) ? 'caida' : undefined);
+
   // AVISO — avisos ministeriales: 1 o 3 vigente; 0, 2 o ausente = cancelado.
+  const mAviso = marca();
   const aviso = r?.aviso;
   if (conError(aviso)) caidas.push('aviso');
   for (const av of registros(aviso)) {
@@ -89,19 +137,25 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
     else historial.push(`Aviso ministerial cancelado: ${detalle}`);
   }
 
+  anotar('aviso', mAviso, conError(aviso) ? 'caida' : undefined);
+
   // RAPI — procedencia ilícita CDMX (tiene_delito es booleano de verdad).
   // Solo CDMX y falla seguido: si no respondió se avisa, pero no vuelve
   // «incompleto» el resultado (la función de su guía ni siquiera lo revisa).
+  const mRapi = marca();
   const rapi = r?.rapi;
-  const rapiCaido = conError(rapi);
+  const rapiCaido = conError(rapi) || !esObj(rapi);
   if (!rapiCaido && esObj(rapi) && rapi.tiene_delito === true) {
     const estado = t(rapi.estado_vehiculo).toUpperCase();
     const txt = `Procedencia ilícita (CDMX): ${t(rapi.delito) || 'con delito'}${estado ? ` [${estado}]` : ''}`;
     (estado === 'PROCEDENCIA ILICITA' || estado === 'ROBADO' ? alertas : historial).push(txt);
   }
 
+  anotar('rapi', mRapi, rapiCaido ? 'caida' : undefined);
+
   // CARFAX — EE. UU./Canadá. Falla muy seguido: se avisa, pero no vuelve
   // «incompleto» el resultado. Un robo:true sí es alerta (a verificar).
+  const mCarfax = marca();
   const carfax = r?.carfax;
   let carfaxSinDato = false;
   if (esObj(carfax)) {
@@ -110,7 +164,10 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
     else if (robo !== false) carfaxSinDato = true;
   } else carfaxSinDato = true;
 
+  anotar('carfax', mCarfax, carfaxSinDato ? 'sin_dato' : undefined);
+
   // REPUVE — ficha técnica; BAJA es señal suave.
+  const mRepuve = marca();
   const repuve = r?.repuve;
   if (conError(repuve)) caidas.push('repuve');
   const fichas = registros(repuve);
@@ -124,11 +181,15 @@ export function evaluarPlacas(r: any): EvaluacionPlacas {
     linea: t(f.LINEA), tipo: t(f.TIPO), cilindrada: t(f.CILINDRADA), cilindros: t(f.NUM_CILINDROS), complemento: t(f.COMPLEMENTO).slice(0, 200),
   } : undefined;
 
+  anotar('repuve', mRepuve, conError(repuve) ? 'caida' : !fichas.length ? 'sin_dato' : undefined);
+
   const fuentesCaidas = [...caidas, ...(rapiCaido ? ['rapi'] : []), ...(carfaxSinDato ? ['carfax'] : [])];
   const veredicto: VeredictoPlacas = alertas.length ? 'vigente'
     : caidas.length ? 'incompleto'
       : historial.length ? 'antecedente' : 'limpio';
-  return { veredicto, alertas, historial, fuentesCaidas, ...(ficha ? { ficha } : {}) };
+  const orden = ['repuve', 'pgj', 'ocra', 'aviso', 'rapi', 'carfax'];
+  fuentes.sort((a, b) => orden.indexOf(a.clave) - orden.indexOf(b.clave));
+  return { veredicto, alertas, historial, fuentesCaidas, fuentes, ...(ficha ? { ficha } : {}) };
 }
 
 /** ¿Ya llegó la respuesta completa, o sigue «processing»? */

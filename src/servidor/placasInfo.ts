@@ -17,6 +17,11 @@ import { datosParaAlta, evaluarPlacas, placaValida, respuestaLista, tipoTitulo, 
 
 const AGENCIAS_ACTIVAS = new Set(["k77PpUc4SKDVCps2qSDw"]); // Nextcar
 const ROLES = new Set(["admin", "manager"]);
+// La constancia se guarda entre los documentos del auto, y ahí solo entran
+// administradores y gerentes: ahí viven las facturas y las identificaciones
+// de los dueños. Consultar antecedentes sí lo puede hacer quien maneja el
+// inventario; archivar la constancia, no (decisión de Luis, 20 oct 2026).
+const ROLES_DOCUMENTOS = new Set(["admin", "manager", "master"]);
 const API = "https://placas.info/api/v2/consultar/";
 const SERVICIOS = ["repuve", "pgj", "aviso", "ocra", "carfax", "rapi"];
 const HORAS_REPETIR = 24;
@@ -32,12 +37,19 @@ function publica(id: string, x: any) {
     fecha: x.fecha,
     porNombre: x.porNombre || "",
     ...(x.evaluacion ? { evaluacion: x.evaluacion } : {}),
+    ...(x.constancia ? { constancia: x.constancia } : {}),
     ...(x.error ? { error: x.error } : {}),
     ...(typeof x.creditos === "number" ? { creditos: x.creditos } : {}),
   };
 }
 
-export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { usuarioQuePide: (req: any, res: any) => Promise<any>; getAdminDb: () => any }) {
+export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb, express, bucket }: {
+  usuarioQuePide: (req: any, res: any) => Promise<any>;
+  getAdminDb: () => any;
+  express: any;
+  /** El mismo depósito de los documentos del auto (server.ts). */
+  bucket: () => any;
+}) {
   const token = () => String(process.env.PLACASINFO_TOKEN || "").trim();
   const baseUrl = () => String(process.env.APP_URL || "https://crm.erewere.com").replace(/\/+$/, "");
 
@@ -163,10 +175,16 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
       for (const d of docs) {
         let x = d.data();
         if (x.estado === "procesando") x = await revisar(q.adminDb, d);
-        else if (x.estado === "lista" && x.respuesta && x.evaluacion?.veredicto === "incompleto") {
-          // Leídas con una regla anterior: se vuelven a leer sin gastar otra consulta.
+        else if (x.estado === "lista" && x.respuesta && (x.evaluacion?.veredicto === "incompleto" || !x.evaluacion?.fuentes)) {
+          // Leídas con una regla anterior: se vuelven a leer sin gastar otra
+          // consulta. Así una consulta vieja también puede dar su constancia,
+          // que necesita el resultado de cada fuente por separado.
           const crudo = JSON.parse(x.respuesta);
-          if (evaluarPlacas(crudo).veredicto !== "incompleto") { await guardarResultado(q.adminDb, d.ref, x, crudo); x = (await d.ref.get()).data(); }
+          const nueva = evaluarPlacas(crudo);
+          if (nueva.veredicto !== "incompleto" || x.evaluacion?.veredicto === "incompleto") {
+            await guardarResultado(q.adminDb, d.ref, x, crudo);
+            x = (await d.ref.get()).data();
+          }
         }
         lista.push(publica(d.id, x));
       }
@@ -211,6 +229,56 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb }: { 
     } catch (e) {
       console.error("placasinfo/consultar:", e);
       res.status(500).json({ error: "No se pudo hacer la consulta. Intenta de nuevo." });
+    }
+  });
+
+  /**
+   * Guarda la constancia de esta consulta en los documentos del auto.
+   *
+   * La hoja la manda el navegador que acaba de hacer la consulta, y solo se
+   * acepta para su propio auto. Guardarla pide el mismo rol que ver los
+   * documentos: administrador o gerente. Si quien consultó solo maneja el
+   * inventario, el resultado se ve igual y puede bajar la hoja, pero no queda
+   * archivada hasta que entre alguien con ese permiso.
+   *
+   * La primera que llega es la que queda: si dos pantallas tienen el auto
+   * abierto, la segunda recibe la que ya estaba y no deja un duplicado.
+   */
+  app.post("/api/autos/:id/placasinfo/:cid/constancia", express.raw({ type: "application/pdf", limit: 2 * 1024 * 1024 }), async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    if (!ROLES_DOCUMENTOS.has(q.rol)) return res.status(403).json({ error: "Solo administradores y gerentes guardan la constancia en el auto." });
+    const id = String(req.params.id || "");
+    const cid = String(req.params.cid || "");
+    if (!idValido(id) || !idValido(cid)) return res.status(400).json({ error: "Datos no válidos." });
+    const cuerpo = req.body as Buffer;
+    if (!Buffer.isBuffer(cuerpo) || !cuerpo.length) return res.status(400).json({ error: "La constancia llegó vacía." });
+    if (cuerpo.subarray(0, 5).toString("latin1") !== "%PDF-") return res.status(400).json({ error: "Eso no es un PDF." });
+    let nombre = "Constancia de verificacion.pdf";
+    try { nombre = decodeURIComponent(String(req.headers["x-nombre"] || nombre)); } catch { /* se queda el de siempre */ }
+    nombre = nombre.replace(/[\u0000-\u001f\\/]+/g, " ").trim().slice(0, 120) || "Constancia de verificacion.pdf";
+    try {
+      const ref = q.adminDb.collection("consultasPlacas").doc(cid);
+      const x = (await ref.get()).data();
+      if (!x || x.agencyId !== q.agencyId || x.vehicleId !== id) return res.status(404).json({ error: "No encontramos esa consulta." });
+      if (x.constancia) return res.json({ constancia: x.constancia, repetida: true });
+      const v = (await q.adminDb.collection("vehicles").doc(id).get()).data();
+      if (!v || v.agencyId !== q.agencyId) return res.status(404).json({ error: "No encontramos ese auto." });
+
+      const docRef = q.adminDb.collection("documentosAutos").doc();
+      const ruta = `documentosAutos/${q.agencyId}/${id}/${docRef.id}`;
+      await bucket().file(ruta).save(cuerpo, { contentType: "application/pdf", resumable: false });
+      await docRef.set({
+        vehicleId: id, agencyId: q.agencyId, nombre, categoria: "Verificación", tipo: "application/pdf",
+        tamano: cuerpo.length, ruta, subidoPor: q.uid, subidoPorNombre: q.nombre,
+        creadoEl: new Date().toISOString(), consultaPlacas: cid,
+      });
+      const constancia = { docId: docRef.id, nombre, fecha: new Date().toISOString() };
+      await ref.update({ constancia });
+      res.json({ constancia });
+    } catch (e) {
+      console.error("placasinfo/constancia:", e);
+      res.status(500).json({ error: "No se pudo guardar la constancia." });
     }
   });
 

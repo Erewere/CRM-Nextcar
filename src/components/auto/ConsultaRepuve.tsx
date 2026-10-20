@@ -22,10 +22,12 @@ export function estiloResultado(r?: ResultadoRepuve) {
       : { caja: 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200', Icono: ShieldQuestion };
 }
 
-export function ConsultaRepuveAuto({ auto, puedeRegistrar, usuario, onGuardar }: {
+export function ConsultaRepuveAuto({ auto, puedeRegistrar, usuario, agencia, onGuardar }: {
   auto: Vehicle;
   puedeRegistrar: boolean;
   usuario: { id?: string; name?: string; email?: string };
+  /** Para membretar la constancia de la consulta automática. */
+  agencia?: { name?: string; address?: string; phone?: string; logoUrl?: string } | null;
   onGuardar: (consulta: ConsultaRepuve, historial: ConsultaRepuve[]) => Promise<void>;
 }) {
   const rev = revisarNiv(auto.vin, Number(auto.year) || undefined);
@@ -91,7 +93,7 @@ export function ConsultaRepuveAuto({ auto, puedeRegistrar, usuario, onGuardar }:
         <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5"><ShieldQuestion className="w-4 h-4" /> Aún no se consulta.</p>
       )}
 
-      {auto.id && <ConsultaPlacasInfo autoId={auto.id} puedeConsultar={puedeRegistrar} auto={auto as any} />}
+      {auto.id && <ConsultaPlacasInfo autoId={auto.id} puedeConsultar={puedeRegistrar} auto={auto as any} agencia={agencia} />}
 
       {/* Revisión del NIV */}
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2.5 flex flex-col gap-1.5">

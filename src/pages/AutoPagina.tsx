@@ -855,6 +855,7 @@ export function AutoPagina() {
                     auto={auto}
                     puedeRegistrar={puedeEditar}
                     usuario={{ id: userData?.id, name: userData?.name, email: userData?.email }}
+                    agencia={agencia ? { name: agencia.name, address: agencia.address, phone: agencia.phone, logoUrl: agencia.logoUrl } : null}
                     onGuardar={(c, historial) => guardar({ repuve: c, repuveHistorial: historial })}
                   />
                 )}

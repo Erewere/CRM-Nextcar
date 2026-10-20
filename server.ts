@@ -5070,7 +5070,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
   const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos, mandarCorreo });
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
-  registrarPlacasInfo(app, { usuarioQuePide, getAdminDb });
+  registrarPlacasInfo(app, { usuarioQuePide, getAdminDb, express, bucket: bucketDocumentos });
   registrarVentas(app, { usuarioQuePide, getAdminDb });
   // Avisos al celular (Web Push). Se asigna aqui, antes de recibir el primer mensaje.
   avisosPush = registrarPush(app, { usuarioQuePide, getAdminDb, frenoPermite });
