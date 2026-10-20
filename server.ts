@@ -4133,6 +4133,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   const COL_COMPRAS = "analisis_compra";
   // Memoria de operaciones (Fase 3): una ficha por auto vendido (compra, gastos, venta, utilidad, dias).
   const COL_OPERACIONES = "operaciones_venta";
+  // Historial de lo que se consultó en «Recomendar precio» (auto, km y precios de la guía). Solo lo lee el servidor.
+  const COL_CONSULTAS_PRECIO = "consultas_precio";
   const HORAS_ENTRE_REVISIONES = 20;
   const MERCADO_VIEJO_DIAS = 21;
   let revisionCorriendo = false;
@@ -4568,10 +4570,48 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     const c = validarConsultaReco(req.body);
     if ("error" in c) return res.status(400).json(c);
     try {
-      res.json(await recomendarParaAgencia(q.adminDb, q.agencyId, c));
+      const resultado: any = await recomendarParaAgencia(q.adminDb, q.agencyId, c);
+      // Queda en el historial de consultas. Si guardar falla, la consulta igual se contesta.
+      try {
+        const g = resultado.guia;
+        await q.adminDb.collection(COL_CONSULTAS_PRECIO).add({
+          agencyId: q.agencyId, porUid: q.uid,
+          marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km,
+          guiaCompra: g?.compra ?? null, guiaVenta: g?.venta ?? null,
+          guiaOrigen: g ? (g.manual ? "manual" : resultado.estadoGuia?.estado === "guardada" ? "guardada" : "autocosmos") : null,
+          maxCompraRecomendado: resultado.maxCompraRecomendado ?? null,
+          precioVentaEsperado: resultado.precioVentaEsperado ?? null,
+          fecha: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("precios/recomendar (historial):", e);
+      }
+      res.json(resultado);
     } catch (e) {
       console.error("precios/recomendar:", e);
       res.status(500).json({ error: "No se pudo armar la recomendación." });
+    }
+  });
+
+  // Historial de consultas de «Recomendar precio»: las últimas 100 de la agencia. Trae precios de compra,
+  // así que lo ve solo quien ve costos (igual que la consulta).
+  app.get("/api/precios/consultas", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    try {
+      const snap = await q.adminDb.collection(COL_CONSULTAS_PRECIO).where("agencyId", "==", q.agencyId).get();
+      const consultas = snap.docs
+        .map((d: any) => {
+          const { agencyId: _a, porUid: _u, ...resto } = d.data() || {};
+          return { id: d.id, ...resto };
+        })
+        .sort((a: any, b: any) => String(b.fecha).localeCompare(String(a.fecha)))
+        .slice(0, 100);
+      res.json({ consultas });
+    } catch (e) {
+      console.error("precios/consultas:", e);
+      res.status(500).json({ error: "No se pudo leer el historial de consultas." });
     }
   });
 

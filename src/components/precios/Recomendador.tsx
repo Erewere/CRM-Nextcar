@@ -18,10 +18,20 @@ type Resultado = {
   gastosEstimados: number; diasEstimados: number | null; diasRango: [number, number] | null; comercial: string | null; margenObjetivoPct: number;
   confianza: 'alta' | 'media' | 'baja' | 'ninguna'; comparables: number; advertencias: string[]; insights: string[]; comparablesUsados: Comp[];
   estadoGuia?: { estado: 'en-vivo' | 'guardada' | 'no-disponible' | 'manual'; motivo: string; edadDias?: number };
-  mercado: { n: number; mediana: number } | null; guia: { compra: number; venta: number; confianza: string } | null; fechaAnalisis: string;
+  consulta?: { km: number | null };
+  mercado: { n: number; mediana: number } | null; guia: { compra: number; venta: number; confianza: string; manual?: boolean } | null; fechaAnalisis: string;
+};
+type Consulta = {
+  id: string; fecha: string; marca: string; modelo: string; version: string; anio: number; km: number | null;
+  guiaCompra: number | null; guiaVenta: number | null; guiaOrigen: 'autocosmos' | 'guardada' | 'manual' | null;
 };
 
 const dinero = (n: number | null | undefined) => (n || n === 0 ? '$' + Math.round(n).toLocaleString('es-MX') : '—');
+const fechaCorta = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+const ORIGEN_GUIA = { autocosmos: 'Autocosmos', guardada: 'Guía guardada', manual: 'Tu Libro Azul' } as const;
 const CONF = {
   alta: { t: 'Confianza alta', c: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   media: { t: 'Confianza media', c: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -47,21 +57,54 @@ export function Recomendador() {
   const [r, setR] = useState<Resultado | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [historial, setHistorial] = useState<Consulta[]>([]);
+  // Lo que la guía de Autocosmos puso sola en «Libro Azul». Mientras la persona no lo cambie, no cuenta como
+  // un Libro Azul escrito a mano: se vuelve a consultar la guía (por ejemplo si cambia el kilometraje).
+  const [autoRelleno, setAutoRelleno] = useState<{ compra: string; venta: string } | null>(null);
 
-  useEffect(() => { llamar('/api/precios/config').then((d) => setMargen(String(d.margenObjetivoPct))).catch(() => {}); }, []);
-  const poner = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const cargarHistorial = () => { llamar('/api/precios/consultas').then((d) => setHistorial(d.consultas || [])).catch(() => {}); };
+  useEffect(() => { llamar('/api/precios/config').then((d) => setMargen(String(d.margenObjetivoPct))).catch(() => {}); cargarHistorial(); }, []);
+  const poner = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setF((x) => {
+      const cambiaElAuto = ['marca', 'modelo', 'version', 'anio', 'km'].includes(k);
+      // Si cambia el auto, los precios que la guía había llenado sola ya no le corresponden.
+      if (cambiaElAuto && autoRelleno && x.guiaCompra === autoRelleno.compra && x.guiaVenta === autoRelleno.venta) {
+        return { ...x, [k]: valor, guiaCompra: '', guiaVenta: '' };
+      }
+      return { ...x, [k]: valor };
+    });
+    if (['marca', 'modelo', 'version', 'anio', 'km'].includes(k)) setAutoRelleno((a) => (a && f.guiaCompra === a.compra && f.guiaVenta === a.venta ? null : a));
+  };
 
   const consultar = async (e: React.FormEvent) => {
     e.preventDefault();
     setCargando(true); setError(''); setR(null);
     try {
-      setR(await llamar('/api/precios/recomendar', 'POST', {
+      const compraEscrita = autoRelleno && f.guiaCompra === autoRelleno.compra ? '' : f.guiaCompra;
+      const ventaEscrita = autoRelleno && f.guiaVenta === autoRelleno.venta ? '' : f.guiaVenta;
+      const res: Resultado = await llamar('/api/precios/recomendar', 'POST', {
         marca: f.marca, modelo: f.modelo, version: f.version, anio: Number(f.anio), km: f.km === '' ? null : Number(f.km.replace(/,/g, '')),
         precioOfrecido: f.precioOfrecido ? Number(f.precioOfrecido.replace(/[$,]/g, '')) : null,
-        guiaCompra: f.guiaCompra ? Number(f.guiaCompra.replace(/[$,]/g, '')) : null,
-        guiaVenta: f.guiaVenta ? Number(f.guiaVenta.replace(/[$,]/g, '')) : null,
-      }));
+        guiaCompra: compraEscrita ? Number(compraEscrita.replace(/[$,]/g, '')) : null,
+        guiaVenta: ventaEscrita ? Number(ventaEscrita.replace(/[$,]/g, '')) : null,
+      });
+      setR(res);
+      // Si la guía contestó, llena sola los dos precios del Libro Azul para que se vean ahí.
+      if (res.guia && !res.guia.manual) {
+        const compra = dinero(res.guia.compra), venta = dinero(res.guia.venta);
+        setF((x) => ({ ...x, guiaCompra: compra, guiaVenta: venta }));
+        setAutoRelleno({ compra, venta });
+      }
+      cargarHistorial();
     } catch (er: any) { setError(er.message); } finally { setCargando(false); }
+  };
+
+  /** Vuelve a cargar en el formulario un auto del historial. */
+  const usarConsulta = (c: Consulta) => {
+    setF({ marca: c.marca, modelo: c.modelo, version: c.version || '', anio: String(c.anio), km: c.km ? String(c.km) : '', precioOfrecido: '', guiaCompra: '', guiaVenta: '' });
+    setAutoRelleno(null); setR(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const guardarMargen = async () => {
@@ -90,7 +133,11 @@ export function Recomendador() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 md:col-span-2">Libro Azul: compra (opcional)<input inputMode="numeric" value={f.guiaCompra} onChange={poner('guiaCompra')} placeholder="$181,000" className={campo} /></label>
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 md:col-span-2">Libro Azul: venta (opcional)<input inputMode="numeric" value={f.guiaVenta} onChange={poner('guiaVenta')} placeholder="$207,000" className={campo} /></label>
-          <p className="text-xs text-slate-500 md:col-span-2 self-end">Si los escribes, mandan sobre la guía automática. Con uno solo se calcula el otro.</p>
+          <p className="text-xs text-slate-500 md:col-span-2 self-end">
+            {autoRelleno && f.guiaCompra === autoRelleno.compra && f.guiaVenta === autoRelleno.venta
+              ? 'Los llenó la guía de Autocosmos. Si escribes otros, mandan los tuyos (por ejemplo, de tu Libro Azul).'
+              : 'Si los escribes, mandan sobre la guía automática. Con uno solo se calcula el otro. Si los dejas vacíos, se llenan solos con la guía.'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button disabled={cargando} className="h-10 px-4 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-2">
@@ -109,6 +156,23 @@ export function Recomendador() {
 
       {r && (
         <>
+          {r.guia && (
+            <section aria-label="Precios de la guía" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                { t: 'Guía · Compra', v: r.guia.compra, s: 'lo que paga la agencia' },
+                { t: 'Guía · Venta', v: r.guia.venta, s: 'lo que paga el cliente' },
+              ] as const).map((p) => (
+                <div key={p.t} className="rounded-2xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-5 py-5 shadow-sm">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-80">{p.t}</p>
+                  <p className="text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums mt-1">{dinero(p.v)}</p>
+                  <p className="text-xs opacity-75 mt-2">
+                    {p.s} · {r.estadoGuia?.estado === 'manual' ? 'tu Libro Azul' : r.estadoGuia?.estado === 'guardada' ? 'guía guardada' : 'Autocosmos'}
+                    {' · '}{r.consulta?.km ? `${r.consulta.km.toLocaleString('es-MX')} km` : 'km estimado'}
+                  </p>
+                </div>
+              ))}
+            </section>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <span className={clsx('inline-flex rounded-full border px-2.5 py-1 text-xs font-bold', CONF[r.confianza].c)}>{CONF[r.confianza].t} · {r.comparables} {r.comparables === 1 ? 'venta parecida' : 'ventas parecidas'}</span>
             {r.mercado && <span className="text-xs text-slate-500">Mercado: {r.mercado.n} anuncios, mediana {dinero(r.mercado.mediana)}</span>}
@@ -165,6 +229,46 @@ export function Recomendador() {
           )}
         </>
       )}
+
+      <section aria-labelledby="historial-consultas" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 id="historial-consultas" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Historial de consultas</h3>
+          <span className="text-xs text-slate-500">Las últimas {historial.length ? historial.length : 100} de tu agencia</span>
+        </div>
+        {historial.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-slate-500">Todavía no hay consultas. Cada vez que recomiendes precios, el auto, el kilometraje y los precios de la guía quedan aquí.</p>
+        ) : (
+          <table className="w-full text-sm min-w-[680px]">
+            <thead>
+              <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <th className="px-4 py-2 font-bold">Fecha</th>
+                <th className="px-3 py-2 font-bold">Auto</th>
+                <th className="px-3 py-2 font-bold text-right">Km</th>
+                <th className="px-3 py-2 font-bold text-right">Guía compra</th>
+                <th className="px-3 py-2 font-bold text-right">Guía venta</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {historial.map((c) => (
+                <tr key={c.id} className="border-t border-slate-100 dark:border-slate-700">
+                  <td className="px-4 py-2 whitespace-nowrap text-slate-500">{fechaCorta(c.fecha)}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {c.marca} {c.modelo}{c.version ? ` ${c.version}` : ''} <span className="text-slate-500 font-normal">{c.anio}</span>
+                    {c.guiaOrigen && c.guiaOrigen !== 'autocosmos' && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">{ORIGEN_GUIA[c.guiaOrigen]}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{c.km ? c.km.toLocaleString('es-MX') : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-extrabold">{dinero(c.guiaCompra)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-extrabold">{dinero(c.guiaVenta)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button type="button" onClick={() => usarConsulta(c)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Consultar otra vez</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
     </div>
   );
 }
