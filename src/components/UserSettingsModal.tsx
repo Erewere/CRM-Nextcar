@@ -9,6 +9,7 @@ import { User } from "../types";
 import { useNavigate } from "react-router";
 import { useIsMobile } from "../hooks/useIsMobile";
 import clsx from "clsx";
+import { AvisosAlCelular } from "./AvisosAlCelular";
 
 interface UserSettingsModalProps {
   isOpen: boolean;
@@ -126,7 +127,7 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 max-h-[85dvh] overflow-y-auto">
           <div className="flex flex-col items-center mb-6">
             <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
               {userData.photoURL ? (
@@ -160,6 +161,8 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
               <p className="text-xs text-slate-500 capitalize">{userData.role}</p>
             </div>
           </div>
+
+          <AvisosAlCelular />
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>

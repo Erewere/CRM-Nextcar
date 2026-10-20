@@ -14,6 +14,7 @@ import { analizarPrecio, resumirAnalisisDeVenta, VERSION_REGLAS } from "./src/li
 import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
 import { sembrarPostventa } from "./src/servidor/postventa.ts";
 import { sembrarSeguimiento } from "./src/servidor/seguimiento.ts";
+import { registrarPush } from "./src/servidor/push.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
@@ -2117,6 +2118,9 @@ async function startServer() {
     }
   }
 
+  // Avisos al celular: se llena cuando arranca el servidor (ver registrarPush).
+  let avisosPush: ReturnType<typeof registrarPush> | null = null;
+
   async function createMetaLead(
     adminDb: any,
     agencyId: string,
@@ -2242,6 +2246,18 @@ async function startServer() {
       // El contacto y el mensaje ya quedaron guardados: que falle el trato no
       // debe perder el lead.
       console.error("No se pudo crear el trato del mensaje entrante:", errTrato);
+    }
+
+    // Aviso al celular del vendedor (o de los administradores si nadie lo tiene): un contacto nuevo o un mensaje.
+    // Una sola vez cada 10 minutos por contacto, para que una ráfaga de mensajes no llene el teléfono.
+    // Nunca lleva lo que escribió el cliente: la pantalla bloqueada la ve cualquiera.
+    if (text && avisosPush && frenoPermite(`push-chat:${clientId}`, 1, 10 * 60_000)) {
+      const dueno = existing ? String(existing.data()?.sellerId || "") : assignedSeller;
+      const nombreVisto = String((existing ? existing.data()?.name : "") || name || "un cliente").slice(0, 60);
+      const canalTxt = origin === "messenger" ? "Messenger" : "WhatsApp";
+      void avisosPush.avisarDeUnContacto(adminDb, agencyId, dueno, existing
+        ? { titulo: `Mensaje de ${nombreVisto}`, cuerpo: `Te escribió por ${canalTxt}.`, url: "/chats", etiqueta: `chat-${clientId}` }
+        : { titulo: `Nuevo prospecto: ${nombreVisto}`, cuerpo: `Entró por ${canalTxt}. Atiéndelo pronto.`, url: "/nuevos", etiqueta: `chat-${clientId}` });
     }
 
     // Solo la primera conversación deja nota: así en el historial del contacto
@@ -3202,6 +3218,19 @@ async function startServer() {
           const s = await abrirSolicitudDeFormulario(adminDb, { agencyId: String(req.body?.agencyId || ""), clientId: r.body.leadId, dealId: r.body.dealId || null, folio });
           if (s?.creada) console.log("Solicitud de crédito abierta desde la página:", s.id);
         } catch (e) { console.error("No se pudo abrir la solicitud de crédito del formulario:", e); }
+      }
+      // Aviso al celular de quien atiende este prospecto (el asignado o, si no hay, los administradores).
+      if (r.status < 300 && r.body?.leadId && avisosPush && frenoPermite(`push-lead:${r.body.leadId}`, 1, 10 * 60_000)) {
+        void (async () => {
+          const c = (await adminDb.collection("clients").doc(String(r.body.leadId)).get()).data() || {};
+          const limpio = (x: any, n: number) => String(x || "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
+          const detalle = [limpio(req.body?.tipo, 40), limpio(req.body?.vehicle, 60)].filter(Boolean).join(" · ");
+          await avisosPush!.avisarDeUnContacto(adminDb, String(c.agencyId || req.body?.agencyId || ""), String(c.sellerId || ""), {
+            titulo: `Nuevo prospecto: ${limpio(c.name || req.body?.name, 60) || "formulario de la página"}`,
+            cuerpo: detalle ? `${detalle}. Atiéndelo pronto.` : "Llenó un formulario de tu página. Atiéndelo pronto.",
+            url: "/nuevos", etiqueta: `lead-${r.body.leadId}`,
+          });
+        })();
       }
       res.status(r.status).json(r.body);
     } catch (e: any) {
@@ -5016,6 +5045,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
   registrarPlacasInfo(app, { usuarioQuePide, getAdminDb });
   registrarVentas(app, { usuarioQuePide, getAdminDb });
+  // Avisos al celular (Web Push). Se asigna aqui, antes de recibir el primer mensaje.
+  avisosPush = registrarPush(app, { usuarioQuePide, getAdminDb, frenoPermite });
   registrarMetas(app, { usuarioQuePide, getAdminDb });
 
   app.get("/api/autos/:id/notas", async (req, res) => {
