@@ -3798,6 +3798,36 @@ ${extra}
     };
   }
 
+  // ===== Usuarios cobrados en Stripe: interruptor y reporte (solo master) =====
+  app.get("/api/admin/facturacion-usuarios", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const [cfg, ultima] = await Promise.all([
+      quien.adminDb.collection("plataforma").doc("facturacion").get(),
+      quien.adminDb.collection("plataforma").doc("facturacionUltimaRevision").get(),
+    ]);
+    res.json({ sincronizar: cfg.data()?.sincronizar === true, ultima: ultima.exists ? ultima.data() : null });
+  });
+  app.post("/api/admin/facturacion-usuarios", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    try {
+      if (typeof req.body?.sincronizar === "boolean") {
+        await quien.adminDb.collection("plataforma").doc("facturacion").set(
+          { sincronizar: req.body.sincronizar, cambiadoEl: new Date().toISOString(), cambiadoPor: quien.uid },
+          { merge: true },
+        );
+      }
+      // Después de cambiar el interruptor (o si solo piden revisar) se hace una revisión ahora mismo.
+      const resultados = process.env.STRIPE_SECRET_KEY ? await sincronizarTodas(quien.adminDb, getStripe()) : [];
+      const ultima = (await quien.adminDb.collection("plataforma").doc("facturacionUltimaRevision").get()).data() || null;
+      res.json({ sincronizar: (await quien.adminDb.collection("plataforma").doc("facturacion").get()).data()?.sincronizar === true, ultima, resultados: resultados.length });
+    } catch (e: any) {
+      console.error("Facturación de usuarios (panel):", e);
+      res.status(500).json({ error: "No se pudo revisar la facturación de usuarios." });
+    }
+  });
+
   app.get("/api/admin/correos", async (req, res) => {
     const quien = await soloMaster(req, res);
     if (!quien) return;

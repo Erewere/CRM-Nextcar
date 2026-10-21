@@ -43,6 +43,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { PRECIO_POR_USUARIO } from '../lib/subscription';
+import { FacturacionUsuarios } from '../components/plataforma/FacturacionUsuarios';
 import { AvisoSinPublicarMaster } from '../components/auto/AvisoPaginaWeb';
 
 /**
@@ -633,6 +634,8 @@ function Resumen({
           </div>
         </div>
       </div>
+
+      <FacturacionUsuarios />
 
       {/* Pruebas por vencer: el momento de convertir */}
       <section>
