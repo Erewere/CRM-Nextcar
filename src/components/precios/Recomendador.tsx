@@ -75,6 +75,8 @@ export function Recomendador() {
     try { await llamar('/api/precios/consultas/todas', 'DELETE'); }
     catch (e: any) { setHistorial(previo); setError(e?.message || 'No se pudo vaciar el historial.'); }
   };
+  // En el teléfono el resultado queda debajo del formulario, fuera de pantalla: al llegar, se baja hasta él.
+  useEffect(() => { if (r) document.getElementById('resultado-cotizacion')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [r]);
   const cargarHistorial = () => { llamar('/api/precios/consultas').then((d) => setHistorial(d.consultas || [])).catch(() => {}); };
   useEffect(() => { llamar('/api/precios/config').then((d) => setMargen(String(d.margenObjetivoPct))).catch(() => {}); cargarHistorial(); }, []);
   const poner = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,7 +119,7 @@ export function Recomendador() {
   const usarConsulta = (c: Consulta) => {
     setF({ marca: c.marca, modelo: c.modelo, version: c.version || '', anio: String(c.anio), km: c.km ? String(c.km) : '', precioOfrecido: '', guiaCompra: '', guiaVenta: '' });
     setAutoRelleno(null); setR(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('cotizador')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const guardarMargen = async () => {
@@ -144,7 +146,7 @@ export function Recomendador() {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={consultar} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+      <form id="cotizador" onSubmit={consultar} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Marca<input required value={f.marca} onChange={poner('marca')} placeholder="Nissan" className={campo} /></label>
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Modelo<input required value={f.modelo} onChange={poner('modelo')} placeholder="Sentra" className={campo} /></label>
@@ -163,7 +165,7 @@ export function Recomendador() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button disabled={cargando} className="h-10 px-4 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-2">
+          <button disabled={cargando} className="h-11 sm:h-10 w-full sm:w-auto justify-center px-4 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-2">
             {cargando && <Loader2 className="w-4 h-4 animate-spin" />} {cargando ? 'Buscando… (puede tardar 15 segundos)' : 'Recomendar precios'}
           </button>
           <div className="ml-auto flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
@@ -179,6 +181,7 @@ export function Recomendador() {
 
       {r && (
         <>
+          <div id="resultado-cotizacion" className="scroll-mt-4" />
           {r.guia && (
             <section aria-label="Precios de la guía" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
@@ -264,7 +267,30 @@ export function Recomendador() {
         {historial.length === 0 ? (
           <p className="px-4 py-6 text-sm text-slate-500">Todavía no hay consultas. Cada vez que recomiendes precios, el auto, el kilometraje y los precios de la guía quedan aquí.</p>
         ) : (
-          <table className="w-full text-sm min-w-[680px]">
+          <>
+          <ul className="md:hidden divide-y divide-slate-100 dark:divide-slate-700">
+            {historial.map((c) => (
+              <li key={c.id} className="px-4 py-3 space-y-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="font-semibold text-sm">{c.marca} {c.modelo}{c.version ? ` ${c.version}` : ''} <span className="text-slate-500 font-normal">{c.anio}</span></p>
+                  <span className="text-xs text-slate-500 whitespace-nowrap">{fechaCorta(c.fecha)}</span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {c.km ? `${c.km.toLocaleString('es-MX')} km` : 'km no indicado'}
+                  {c.guiaOrigen && c.guiaOrigen !== 'autocosmos' ? ` · ${ORIGEN_GUIA[c.guiaOrigen]}` : ''}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Guía compra</p><p className="font-extrabold tabular-nums">{dinero(c.guiaCompra)}</p></div>
+                  <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Guía venta</p><p className="font-extrabold tabular-nums">{dinero(c.guiaVenta)}</p></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => usarConsulta(c)} className="h-10 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold">Consultar otra vez</button>
+                  <button type="button" onClick={() => borrarConsulta(c.id)} aria-label={`Borrar la consulta de ${c.marca} ${c.modelo}`} className="h-10 rounded-lg border border-red-200 text-red-600 text-sm font-semibold dark:border-red-900">Borrar</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <table className="hidden md:table w-full text-sm min-w-[680px]">
             <thead>
               <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-2 font-bold">Fecha</th>
@@ -296,6 +322,7 @@ export function Recomendador() {
               ))}
             </tbody>
           </table>
+          </>
         )}
       </section>
     </div>

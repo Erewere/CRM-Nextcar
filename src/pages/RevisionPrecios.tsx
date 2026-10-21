@@ -59,7 +59,11 @@ export function RevisionPrecios() {
   const [filtro, setFiltro] = useState<Sugerencia | 'todos'>('todos');
   const [busca, setBusca] = useState('');
   const [revisando, setRevisando] = useState(false);
-  const [vista, setVista] = useState<'venta' | 'compras' | 'recomendar' | 'memoria'>('venta');
+  const [vista, setVista] = useState<'venta' | 'compras' | 'recomendar' | 'memoria'>(() => {
+    // /precios?vista=recomendar abre directo el cotizador (es la entrada del botón «Cotizar» del inventario).
+    const v = new URLSearchParams(window.location.search).get('vista');
+    return v === 'compras' || v === 'recomendar' || v === 'memoria' ? v : 'venta';
+  });
 
   const cargar = () => pedir('/api/precios/analisis').then((d) => { setAutos(d.autos || []); setUltima(d.ultimaRevision || null); setError(''); }).catch((e) => setError(e.message));
   useEffect(() => { cargar(); }, []);
@@ -96,9 +100,9 @@ export function RevisionPrecios() {
           </button>
         </div>
 
-        <div className="inline-flex flex-wrap h-auto min-h-9 p-0.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
+        <div className="grid grid-cols-2 sm:inline-flex sm:flex-wrap h-auto min-h-9 p-0.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
           {([['venta', 'Precios de venta'], ['compras', 'Calidad de compras'], ['recomendar', 'Recomendar precios'], ['memoria', 'Ventas pasadas']] as const).map(([k, t]) => (
-            <button key={k} onClick={() => setVista(k)} className={clsx('px-3 h-8 rounded-md text-sm font-semibold transition', vista === k ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500')}>{t}</button>
+            <button key={k} onClick={() => setVista(k)} className={clsx('px-3 h-9 sm:h-8 rounded-md text-sm font-semibold transition', vista === k ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500')}>{t}</button>
           ))}
         </div>
 
