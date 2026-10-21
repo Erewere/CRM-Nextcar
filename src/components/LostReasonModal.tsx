@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import React, { useState } from "react";
 import { X, AlertCircle } from "lucide-react";
 
@@ -33,7 +34,7 @@ export function LostReasonModal({ isOpen, onClose, onConfirm, clientName }: Prop
     onConfirm(selectedReason, details);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
         {/* Header */}
@@ -116,6 +117,7 @@ export function LostReasonModal({ isOpen, onClose, onConfirm, clientName }: Prop
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

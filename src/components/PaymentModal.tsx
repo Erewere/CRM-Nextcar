@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import React, { useState, useEffect } from 'react';
 import { X, Calculator, CheckCircle2 } from 'lucide-react';
@@ -175,7 +176,7 @@ export function PaymentModal({
     });
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end md:items-center justify-center p-0 md:p-4">
       <motion.div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} />
       <motion.div 
@@ -344,6 +345,7 @@ export function PaymentModal({
           </button>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }

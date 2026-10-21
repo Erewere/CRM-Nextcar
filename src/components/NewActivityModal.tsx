@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useCerrarConAtras } from "../hooks/useVolver";
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "motion/react";
@@ -412,7 +413,7 @@ export function NewActivityModal({
   const personaElegida = clientId ? clients.find((c) => c.id === clientId) : null;
   const sugerencias = clientName ? clients.filter((p) => p.name?.toLowerCase().includes(clientName.toLowerCase())).slice(0, 8) : [];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-center items-end md:items-center p-0 md:p-4">
       <motion.div className="absolute inset-0 bg-black/50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
@@ -694,6 +695,7 @@ export function NewActivityModal({
           </div>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }

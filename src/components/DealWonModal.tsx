@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
@@ -138,15 +139,15 @@ export function DealWonModal({ client, vehicle, inicial, onConfirm, onCancel }: 
 
   const auto = vehicle ? `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.replace(/\s+/g, ' ').trim() : (client as any).vehicle || '';
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-stretch md:items-center justify-center md:p-4">
+  return createPortal(
+    <div className="fixed inset-0 h-[100dvh] z-[200] flex items-stretch md:items-center justify-center md:p-4">
       <motion.div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={guardando ? undefined : onCancel} initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
       <motion.form
         onSubmit={handleSubmit}
-        className="relative z-10 bg-white dark:bg-slate-900 md:rounded-2xl shadow-2xl w-full max-w-3xl md:max-h-[94vh] flex flex-col"
+        className="relative z-10 bg-white dark:bg-slate-900 md:rounded-2xl shadow-2xl w-full max-w-3xl md:max-h-[94vh] h-full md:h-auto min-h-0 flex flex-col"
         initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', damping: 24, stiffness: 300 }}
       >
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="min-w-0">
             <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">{yaHabia ? 'Editar la venta' : 'Registrar la venta'}</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 truncate">{client.name}{auto ? ` · ${auto}` : ''}</p>
@@ -274,7 +275,7 @@ export function DealWonModal({ client, vehicle, inicial, onConfirm, onCancel }: 
           </aside>
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-end">
+        <div className="px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-end shrink-0">
           {errores[0] && <p className="text-xs font-semibold text-red-700 dark:text-red-400 sm:mr-auto">{errores[0]}</p>}
           <button type="button" onClick={onCancel} disabled={guardando} className="h-11 px-4 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold">Cancelar</button>
           <button type="submit" disabled={guardando || errores.length > 0} className="h-11 px-5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold">
@@ -282,7 +283,8 @@ export function DealWonModal({ client, vehicle, inicial, onConfirm, onCancel }: 
           </button>
         </div>
       </motion.form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
