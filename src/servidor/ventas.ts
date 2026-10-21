@@ -186,6 +186,27 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     return { ...q, puedeCobrar: !ROLES_NO_COBRAN.has(q.rol), puedeDescontar: ROLES_DESCUENTAN.has(q.rol) };
   }
 
+  /** Los pagos de una venta tal como se ven: los propios, o (si aún no se migró) las tres copias viejas juntas. */
+  async function pagosLegibles(db: any, dealId: string, d: any, auto: any, cliente: any): Promise<PagoVenta[]> {
+    if (d.pagosEnColeccion) return pagosDe(db, dealId);
+    return fusionarPagosViejos(d.saleDetails?.payments, cliente?.ventaDealId === dealId ? cliente?.saleDetails?.payments : null, auto?.datos?.saleDetails?.payments)
+      .map((p: any) => ({ ...deFormaVieja(p, d.saleDetails?.method === "credito"), id: String(p.id || Math.random()) })) as PagoVenta[];
+  }
+
+  /**
+   * Enganche que quien registró la venta anotó (crédito bancario: la agencia lo recibe) pero que nadie ha registrado como
+   * pago. No cuenta como dinero cobrado hasta que un administrador lo confirme; mientras tanto se muestra aparte y avisa.
+   */
+  function engancheDeclaradoDe(d: any, pagos: PagoVenta[]): { monto: number; declarado: number } | null {
+    const plan: any = planDe(d.saleDetails);
+    const declarado = Number(plan.downPayment) || 0;
+    if (plan.method !== "credito_bancario" || !(declarado > 0) || d.engancheDescartado) return null;
+    const recibido = pagos.filter((p: any) => !p.anulado && p.concepto === "enganche").reduce((t: number, p: any) => t + (Number(p.monto) || 0), 0);
+    if (recibido + 0.5 >= declarado) return null;
+    if (estadoDeCuenta(plan, pagos, hoyISO()).saldo <= 0.5) return null;
+    return { monto: Math.round((declarado - recibido) * 100) / 100, declarado };
+  }
+
   // ---------- Leer la venta completa ----------
   app.get("/api/ventas/:dealId", async (req: any, res: any) => {
     const q = await quien(req, res);
@@ -196,22 +217,12 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
       const d = t.datos;
       const auto = await autoDe(q.adminDb, t.ref.id, d);
       const cliente = d.clientId && idValido(String(d.clientId)) ? (await q.adminDb.collection("clients").doc(String(d.clientId)).get()).data() : null;
-      // Ver no migra: lo viejo (las tres copias juntas, como se migrará) se
-      // muestra tal cual hasta que alguien registre algo.
-      const pagos = d.pagosEnColeccion
-        ? await pagosDe(q.adminDb, t.ref.id)
-        : fusionarPagosViejos(d.saleDetails?.payments, cliente?.ventaDealId === t.ref.id ? cliente?.saleDetails?.payments : null, auto?.datos?.saleDetails?.payments)
-          .map((p: any) => ({ ...deFormaVieja(p, d.saleDetails?.method === "credito"), id: String(p.id || Math.random()) }));
+      // Ver no migra: lo viejo (las tres copias juntas, como se migrará) se muestra tal cual hasta que alguien registre algo.
+      const pagos = await pagosLegibles(q.adminDb, t.ref.id, d, auto, cliente);
       const ag = (await q.adminDb.collection("agencies").doc(d.agencyId).get()).data() || {};
       const plan = planDe(d.saleDetails);
       const cuenta = estadoDeCuenta(plan, pagos, hoyISO());
-      // Enganche que quien registró la venta anotó (crédito bancario: la agencia lo recibe) pero que nadie ha registrado como pago.
-      // No cuenta como dinero cobrado hasta que un administrador lo confirme; mientras tanto se muestra aparte.
-      const engDeclarado = Number((plan as any).downPayment) || 0;
-      const engRecibido = pagos.filter((p: any) => !p.anulado && p.concepto === "enganche").reduce((t: number, p: any) => t + (Number(p.monto) || 0), 0);
-      const engancheDeclarado = (plan as any).method === "credito_bancario" && engDeclarado > 0 && !d.engancheDescartado && engRecibido + 0.5 < engDeclarado && cuenta.saldo > 0.5
-        ? { monto: Math.round((engDeclarado - engRecibido) * 100) / 100, declarado: engDeclarado }
-        : null;
+      const engancheDeclarado = engancheDeclaradoDe(d, pagos);
       res.json({
         venta: {
           dealId: t.ref.id,
@@ -223,7 +234,7 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
           plan,
           tienePlan: !!d.saleDetails,
           pagos: pagos.sort((a: any, b: any) => `${b.fecha}|${b.registradoEn || ""}`.localeCompare(`${a.fecha}|${a.registradoEn || ""}`)),
-          cuenta,
+          cuenta: estadoDeCuenta(plan, pagos, hoyISO()),
           engancheDeclarado,
         },
         puedeCobrar: q.puedeCobrar,
@@ -279,6 +290,29 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     } catch (e) {
       console.error("ventas/pagar:", e);
       res.status(500).json({ error: "No se pudo registrar el pago. Intenta de nuevo." });
+    }
+  });
+
+  // ---------- Enganches por confirmar de toda la agencia (para el aviso de la campanita) ----------
+  app.get("/api/ventas-pendientes/enganches", async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    if (!q.puedeCobrar || !q.agencyId) return res.json({ pendientes: [] });
+    try {
+      const snap = await q.adminDb.collection("deals").where("agencyId", "==", q.agencyId).where("saleDetails.method", "==", "credito_bancario").get();
+      const pendientes: any[] = [];
+      for (const doc of snap.docs.slice(0, 300)) {
+        const d = doc.data();
+        if (!(Number(d.saleDetails?.downPayment) > 0) || d.engancheDescartado) continue;
+        const auto = d.pagosEnColeccion ? null : await autoDe(q.adminDb, doc.id, d);
+        const cliente = !d.pagosEnColeccion && d.clientId && idValido(String(d.clientId)) ? (await q.adminDb.collection("clients").doc(String(d.clientId)).get()).data() : null;
+        const e = engancheDeclaradoDe(d, await pagosLegibles(q.adminDb, doc.id, d, auto, cliente));
+        if (e) pendientes.push({ dealId: doc.id, cliente: String(cliente?.name || d.title || "").replace(/^Trato con /, "") || "Cliente", auto: String(d.vehicle || ""), monto: e.monto, vendidoEl: d.soldAt || "", vendedorId: d.sellerId || "" });
+      }
+      res.json({ pendientes });
+    } catch (e) {
+      console.error("ventas/enganches-pendientes:", e);
+      res.status(500).json({ error: "No se pudo revisar los enganches." });
     }
   });
 

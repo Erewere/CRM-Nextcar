@@ -22,6 +22,8 @@ export const ventasApi = {
   nuevaClave: clave,
   pagar: (dealId: string, pago: { monto: number; fecha: string; forma: string; concepto: string; nota?: string; clave: string }) => api(`/api/ventas/${dealId}/pagos`, pago),
   anular: (dealId: string, pagoId: string, motivo: string) => api(`/api/ventas/${dealId}/pagos/${pagoId}/anular`, { motivo }),
+  /** Enganches anotados al vender que un administrador aún no confirma (aviso de la campanita). */
+  enganchesPorConfirmar: () => api('/api/ventas-pendientes/enganches') as Promise<{ pendientes: { dealId: string; cliente: string; auto: string; monto: number; vendidoEl: string }[] }>,
   descartarEnganche: (dealId: string) => api(`/api/ventas/${dealId}/enganche/descartar`, {}),
   eliminar: (dealId: string, motivo: string) => api(`/api/ventas/${dealId}/eliminar`, { motivo }),
   liquidar: (dealId: string, datos: { fecha: string; forma: string; descontarIntereses: boolean; montoEsperado: number; nota?: string; clave: string }) => api(`/api/ventas/${dealId}/liquidar`, datos),

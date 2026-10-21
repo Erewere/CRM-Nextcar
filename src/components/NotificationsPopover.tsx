@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Task, Vehicle, Client } from "../types";
-import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, ChevronDown, Check, Phone, Building2, MessageCircle, FileWarning, ShieldCheck, Clock, Landmark } from "lucide-react";
+import { Bell, Calendar, CreditCard, X, AlertTriangle, Flame, Sparkles, ChevronRight, ChevronDown, Check, Phone, Building2, MessageCircle, FileWarning, ShieldCheck, Clock, Landmark, Banknote } from "lucide-react";
 import { useNavigate } from "react-router";
 import clsx from "clsx";
 import { isBefore, addDays, startOfDay, isAfter } from "date-fns";
@@ -18,6 +18,7 @@ import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { useAvisosDescartados, descartarAviso, idDeMatch } from "../lib/avisosDescartados";
 import { deFormaVieja, estadoDeCuenta } from '../lib/planDePagos';
 import { creditosApi } from "../lib/creditosApi";
+import { ventasApi } from "../lib/ventasApi";
 import { publicarAvisosDelDia } from "../lib/avisosDelDia";
 
 const parseDate = (val: any): Date | null => {
@@ -65,6 +66,7 @@ const CLASE: Record<string, { grupo: string; nivel: Nivel }> = {
   "task-overdue": { grupo: "tareas-vencidas", nivel: "ahora" },
   "payment-overdue": { grupo: "pagos-vencidos", nivel: "ahora" },
   "payment-missing": { grupo: "pagos-vencidos", nivel: "ahora" },
+  "enganche-pendiente": { grupo: "enganches", nivel: "hoy" },
   "admin-approval": { grupo: "aprobaciones", nivel: "ahora" },
   billing: { grupo: "suscripcion", nivel: "ahora" },
   "credito-ahora": { grupo: "creditos", nivel: "ahora" },
@@ -84,6 +86,7 @@ export const GRUPOS: Record<string, { titulo: (n: number) => string; Icono: any;
   citas: { titulo: (n) => (n === 1 ? "Cita en este momento" : "Citas en este momento"), Icono: Calendar, color: "text-emerald-600", ruta: "/tasks", verTodas: "Ver agenda" },
   "tareas-vencidas": { titulo: (n) => `${n === 1 ? "Tarea vencida" : "Tareas vencidas"}`, Icono: Clock, color: "text-red-600", ruta: "/tasks", verTodas: "Ver todas en Tareas", recientesPrimero: true },
   "pagos-vencidos": { titulo: (n) => (n === 1 ? "Cliente con pagos atrasados" : "Clientes con pagos atrasados"), Icono: CreditCard, color: "text-red-600", ruta: "/payments", verTodas: "Ver Pagos", recientesPrimero: true },
+  enganches: { titulo: (n) => (n === 1 ? "Enganche por confirmar" : "Enganches por confirmar"), Icono: Banknote, color: "text-amber-600", verTodas: "Ver Pagos" },
   creditos: { titulo: (n) => (n === 1 ? "Solicitud de crédito por atender" : "Solicitudes de crédito por atender"), Icono: Landmark, color: "text-blue-600", ruta: "/creditos", verTodas: "Ir a Créditos" },
   "creditos-hoy": { titulo: (n) => (n === 1 ? "Crédito para dar seguimiento" : "Créditos para dar seguimiento"), Icono: Landmark, color: "text-blue-600", ruta: "/creditos", verTodas: "Ir a Créditos" },
   "creditos-seguimiento": { titulo: (n) => (n === 1 ? "Crédito a medias" : "Créditos a medias"), Icono: Landmark, color: "text-slate-500", ruta: "/creditos", verTodas: "Ir a Créditos" },
@@ -98,7 +101,7 @@ export const GRUPOS: Record<string, { titulo: (n: number) => string; Icono: any;
 };
 
 /** Qué va primero dentro de cada nivel: el dinero y los créditos antes que lo demás. */
-const ORDEN_GRUPOS = ["pagos-vencidos", "creditos", "aprobaciones", "chats", "citas", "tareas-vencidas", "suscripcion", "pagos-pronto", "creditos-hoy", "tareas-pronto", "creditos-seguimiento", "estancados", "docs", "red", "config"];
+const ORDEN_GRUPOS = ["pagos-vencidos", "enganches", "creditos", "aprobaciones", "chats", "citas", "tareas-vencidas", "suscripcion", "pagos-pronto", "creditos-hoy", "tareas-pronto", "creditos-seguimiento", "estancados", "docs", "red", "config"];
 
 const NIVELES: { id: Nivel; titulo: string; punto: string }[] = [
   { id: "ahora", titulo: "Atiende ahora", punto: "bg-red-500" },
@@ -145,6 +148,16 @@ export function NotificationsPopover() {
     if (!userData || !["admin", "manager", "seller"].includes(String(userData.role))) return;
     let vivo = true;
     const leer = () => creditosApi.lista().then((l) => { if (vivo) setCreditos(l || []); }).catch(() => {});
+    leer();
+    const t = setInterval(leer, 3 * 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [userData?.id, userData?.role]);
+  // Enganches anotados al registrar una venta que un administrador aún no confirma como pago (viven en el servidor).
+  const [enganches, setEnganches] = useState<{ dealId: string; cliente: string; auto: string; monto: number; vendidoEl: string }[]>([]);
+  useEffect(() => {
+    if (!userData || (userData.role !== "admin" && userData.role !== "manager")) return;
+    let vivo = true;
+    const leer = () => ventasApi.enganchesPorConfirmar().then((r) => { if (vivo) setEnganches(r.pendientes || []); }).catch(() => {});
     leer();
     const t = setInterval(leer, 3 * 60 * 1000);
     return () => { vivo = false; clearInterval(t); };
@@ -491,6 +504,20 @@ export function NotificationsPopover() {
     } else if (c.ligaAbiertaEl && !c.clienteTerminoEl && ["recibida", "datos"].includes(c.etapa) && dias(c.actualizadoEl) >= 3) {
       poner("a-medias", "credito-seguimiento", `${quien} dejó a medias su solicitud`, `Lleva ${dias(c.actualizadoEl)} días sin avanzar. Anímalo a terminarla.`);
     }
+  });
+
+  // 1.4. Enganches por confirmar: el dinero se anotó al vender, pero nadie lo ha registrado como pago.
+  enganches.forEach((e) => {
+    const id = `enganche-${e.dealId}`;
+    if (dismissedIds.has(id)) return;
+    notifications.push({
+      id, type: "enganche-pendiente",
+      title: `Enganche por confirmar: ${e.cliente}`,
+      message: `${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(e.monto)}${e.auto ? ` · ${e.auto}` : ""}. Confírmalo como pago o márcalo como no recibido.`,
+      date: e.vendidoEl || new Date().toISOString(),
+      icon: <Banknote className="w-5 h-5 text-amber-600 shrink-0" />,
+      onClick: () => navigate(`/venta/${e.dealId}`),
+    });
   });
 
   // 2. Stale Deals Notifications (3+ days)
