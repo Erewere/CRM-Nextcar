@@ -2,7 +2,7 @@ import { useCerrarConAtras } from "../../hooks/useVolver";
 import React, { useState, useEffect, useRef } from 'react';
 import { quitarVentaDeTratoPerdido } from '../../lib/ventaDescartada';
 import { completarValorDelTrato } from "../../lib/valorDelTrato";
-import { X, Phone, MessageCircle, Mail, MapPin, Tag, Calendar, User, AlignLeft, Send, Check, Car, Mic, Calculator, Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { X, Phone, MessageCircle, Mail, MapPin, Calendar, User, AlignLeft, Send, Check, Car, Calculator, Trash2, Plus, ChevronLeft, ChevronRight, Pencil, CalendarPlus, Clock, Wallet } from 'lucide-react';
 import { Client, Vehicle } from '../../types';
 import { db } from '../../lib/firebase';
 import { elegirTratoDeLaVenta, elegirTratoAbierto } from "../../lib/ventas";
@@ -20,6 +20,9 @@ import { VehicleDetailModal } from '../../components/VehicleDetailModal';
 import { createPaymentTasks } from '../../lib/paymentTasks';
 import { avisarEtapaCredito } from '../../lib/creditoDesdeEmbudo';
 import { useNavigate } from 'react-router';
+import { ClientDetailModal } from '../../components/ClientDetailModal';
+import { NewActivityModal } from '../../components/NewActivityModal';
+import { etiquetaDeFuente, fuenteDelContacto } from '../../lib/fuentes';
 
 interface Props {
   client: Client;
@@ -286,9 +289,7 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
 
   const quickActions = [
     { id: 'call', label: 'Llamada', prefix: 'Llamada saliente', icon: Phone, color: 'text-blue-500' },
@@ -296,53 +297,6 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     { id: 'meeting', label: 'Visita', prefix: 'Visitó agencia', icon: MapPin, color: 'text-rose-500' },
     { id: 'other', label: 'Test Drive', prefix: 'Hizo Test Drive', icon: Car, color: 'text-purple-500' }
   ];
-
-  useEffect(() => {
-    // @ts-ignore
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'es-MX';
-
-      recognitionRef.current.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-             setQuickNote(prev => prev + transcript + ' ');
-          }
-        }
-      };
-      
-      recognitionRef.current.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        if (event.error === 'not-allowed') {
-          alert('No se pudo acceder al micrófono. Por favor, revisa los permisos.');
-        }
-        setIsRecording(false);
-      };
-      
-      recognitionRef.current.onend = () => {
-         setIsRecording(false);
-      };
-    }
-  }, []);
-
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      alert("El dictado por voz no está soportado en este navegador.");
-      return;
-    }
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
-      recognitionRef.current.start();
-      setIsRecording(true);
-    }
-  };
 
   const historyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -747,61 +701,171 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
     }
   };
 
+
+  // --- Pantalla nueva: etapa en hoja inferior, pendientes del cliente, ficha completa y agendar ---
+  const [verEtapas, setVerEtapas] = useState(false);
+  const [verFichaCompleta, setVerFichaCompleta] = useState(false);
+  const [agendando, setAgendando] = useState(false);
+  const [tareas, setTareas] = useState<any[]>([]);
+  const idContacto = client.originalClientId || client.id;
+  useEffect(() => {
+    if (!userData?.agencyId || !idContacto) return;
+    // Solo lectura: las tareas pendientes de este cliente, para ver qué sigue sin salir de la ficha.
+    return onSnapshot(
+      query(collection(db, 'tasks'), where('agencyId', '==', userData.agencyId), where('clientId', '==', idContacto)),
+      (s) => setTareas(s.docs.map((d) => ({ ...d.data(), id: d.id })).filter((t: any) => !t.completed)
+        .sort((a: any, b: any) => `${a.dueDate || '9999'} ${a.startTime || ''}`.localeCompare(`${b.dueDate || '9999'} ${b.startTime || ''}`))),
+      () => {},
+    );
+  }, [userData?.agencyId, idContacto]);
+
+  const hoyStr = hoyLocal();
+  const cuando = (t: any) => {
+    if (!t.dueDate) return 'Sin fecha';
+    const d = new Date(t.dueDate + 'T00:00:00');
+    const man = new Date(); man.setDate(man.getDate() + 1);
+    const manStr = `${man.getFullYear()}-${String(man.getMonth() + 1).padStart(2, '0')}-${String(man.getDate()).padStart(2, '0')}`;
+    const dia = t.dueDate === hoyStr ? 'Hoy' : t.dueDate === manStr ? 'Mañana' : format(d, 'dd MMM');
+    return t.startTime ? `${dia} · ${t.startTime}` : dia;
+  };
+  const pesosMx = (n: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
+  const etapaActual = pipelineStages.find((s) => s.id === currentStatus)?.title || pipelineStages.find((s) => s.id === currentStatus)?.name || '';
+  const gano = checkIsWon(currentStatus, pipelineStages);
+  const perdio = checkIsLost(currentStatus, pipelineStages);
+  const telefono = clientData.phone || client.phone;
+  const correo = (clientData as any).email || (client as any).email;
+  const busca = (() => {
+    const w: any = clientData.wantedVehicle || client.wantedVehicle;
+    if (!w) return '';
+    const t = [w.make, w.model, w.bodyType && w.bodyType !== 'Cualquiera' ? w.bodyType : ''].filter(Boolean).join(' ');
+    const anios = w.yearMin || w.yearMax ? `${w.yearMin || ''}${w.yearMin && w.yearMax ? '–' : w.yearMax ? 'hasta ' : '+'}${w.yearMax || ''}` : '';
+    const precio = w.priceMax ? `hasta ${pesosMx(w.priceMax)}` : '';
+    return [t, anios, precio].filter(Boolean).join(' · ');
+  })();
+  const ICONO_NOTA: Record<string, any> = { call: Phone, whatsapp: MessageCircle, meeting: MapPin, other: Car };
+  const CHIPS = [{ id: 'note', label: 'Nota', prefix: undefined as string | undefined, icon: AlignLeft, color: 'text-slate-500' }, ...quickActions.map((a) => ({ ...a, label: a.id === 'other' ? 'Prueba de manejo' : a.label }))];
+
   const getWhatsAppLink = (phone: string) => {
     let cleaned = phone.replace(/\D/g, '');
     if (cleaned.length === 10) cleaned = '52' + cleaned;
     return `https://wa.me/${cleaned}`;
   };
 
+
   return (
-    <div className="fixed inset-0 bg-slate-100 dark:bg-slate-900 z-[100] flex flex-col animate-in slide-in-from-right duration-300">
-      <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 shrink-0 sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white truncate pr-4">
-          Ficha del Cliente
-        </h2>
-        <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full bg-slate-100 dark:bg-slate-800">
-          <X className="w-6 h-6" />
+    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-900 z-[100] flex flex-col animate-in slide-in-from-right duration-300">
+      {/* Barra superior: volver, nombre y acceso a la ficha completa (donde se edita todo). */}
+      <div className="flex items-center gap-2 px-2 py-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200/70 dark:border-slate-800 shrink-0">
+        <button onClick={onClose} aria-label="Volver" className="h-11 w-11 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 active:bg-slate-100 dark:active:bg-slate-800">
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        <p className="flex-1 min-w-0 text-base font-bold text-slate-900 dark:text-white truncate">{client.name}</p>
+        <button onClick={() => setVerFichaCompleta(true)} className="h-10 px-3 rounded-full flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 active:scale-95 transition-transform">
+          <Pencil className="w-4 h-4" /> Editar
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Profile Header */}
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-b border-gray-200 dark:border-slate-700">
-          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-2xl mb-4">
-            {client.name.substring(0,2).toUpperCase()}
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1 leading-tight">{client.name}</h1>
-          <p className="text-slate-500 flex items-center gap-1.5 text-sm mb-4">
-            <User className="w-4 h-4" />
-            {client.origin === 'facebook' ? 'Facebook' : client.origin === 'whatsapp' ? 'WhatsApp' : client.origin === 'website' ? 'Sitio Web' : 'Manual'}
-          </p>
+        <div className="p-4 space-y-4 max-w-xl mx-auto">
 
-          <div className="flex gap-2">
-            <a 
-              href={client.phone ? `tel:${client.phone.replace(/\D/g, '')}` : undefined}
+          {/* Quién es y en qué va */}
+          <section className="rounded-3xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700 p-5">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xl">
+                {client.name.substring(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight break-words">{client.name}</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{etiquetaDeFuente(fuenteDelContacto(clientData as any))}</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setVerEtapas(true)}
               className={clsx(
-                "flex-1 flex items-center justify-center gap-2 py-3 rounded font-semibold transition-colors text-sm",
-                client.phone ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-slate-100 dark:bg-slate-700 text-slate-400 pointer-events-none"
+                "mt-4 w-full flex items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left active:scale-[0.99] transition-transform",
+                gano ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300" : perdio ? "bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300" : "bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300"
               )}
             >
-              <Phone className="w-4 h-4" />
-              Llamar
-            </a>
-            <a 
-              href={client.phone ? getWhatsAppLink(client.phone) : undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={clsx(
-                "flex-1 flex items-center justify-center gap-2 py-3 rounded font-semibold transition-colors text-sm",
-                client.phone ? "bg-[#25D366] text-white hover:bg-[#20b858]" : "bg-slate-100 dark:bg-slate-700 text-slate-400 pointer-events-none"
-              )}
-            >
-              <MessageCircle className="w-4 h-4" />
-              WhatsApp
-            </a>
-          </div>
-        </div>
+              <span>
+                <span className="block text-[10px] font-bold uppercase tracking-[0.14em] opacity-70">Etapa del embudo</span>
+                <span className="block text-base font-extrabold">{etapaActual || 'Sin etapa'}</span>
+              </span>
+              <span className="text-xs font-bold flex items-center gap-0.5">Cambiar <ChevronRight className="w-4 h-4" /></span>
+            </button>
 
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {[
+                { t: 'Llamar', Icono: Phone, href: telefono ? `tel:${telefono.replace(/\D/g, '')}` : undefined, color: 'bg-blue-600 text-white' },
+                { t: 'WhatsApp', Icono: MessageCircle, href: telefono ? getWhatsAppLink(telefono) : undefined, color: 'bg-[#25D366] text-white', ext: true },
+              ].map((a) => (
+                <a
+                  key={a.t}
+                  href={a.href}
+                  target={a.ext ? '_blank' : undefined}
+                  rel={a.ext ? 'noopener noreferrer' : undefined}
+                  className={clsx("flex flex-col items-center justify-center gap-1 rounded-2xl py-3 text-[12px] font-bold active:scale-95 transition-transform", a.href ? a.color : "bg-slate-100 dark:bg-slate-700 text-slate-400 pointer-events-none")}
+                >
+                  <a.Icono className="w-5 h-5" /> {a.t}
+                </a>
+              ))}
+              <button onClick={() => setAgendando(true)} className="flex flex-col items-center justify-center gap-1 rounded-2xl py-3 text-[12px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 active:scale-95 transition-transform">
+                <CalendarPlus className="w-5 h-5" /> Agendar
+              </button>
+              <button
+                onClick={() => { historyRef.current?.scrollIntoView({ behavior: 'smooth' }); setTimeout(() => (document.getElementById('nota-rapida') as HTMLInputElement | null)?.focus(), 350); }}
+                className="flex flex-col items-center justify-center gap-1 rounded-2xl py-3 text-[12px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 active:scale-95 transition-transform"
+              >
+                <AlignLeft className="w-5 h-5" /> Nota
+              </button>
+            </div>
+          </section>
+
+          {/* Lo que sigue: tareas pendientes de este cliente */}
+          <section className="rounded-3xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Lo que sigue</h2>
+              <button onClick={() => setAgendando(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Agendar</button>
+            </div>
+            {tareas.length === 0 ? (
+              <p className="text-sm text-slate-500 py-2">Sin tareas pendientes. Agenda la siguiente para no perder al cliente.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+                {tareas.slice(0, 3).map((t) => {
+                  const vencida = t.dueDate && t.dueDate < hoyStr;
+                  return (
+                    <li key={t.id} className="py-2.5 flex items-center gap-3">
+                      <span className={clsx("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", vencida ? "bg-red-50 text-red-600 dark:bg-red-950/40" : "bg-amber-50 text-amber-600 dark:bg-amber-950/30")}>
+                        <Clock className="w-4 h-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{t.title}</span>
+                        <span className={clsx("block text-xs", vencida ? "text-red-600 font-bold" : "text-slate-500")}>{vencida ? 'Vencida · ' : ''}{cuando(t)}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+                {tareas.length > 3 && <li className="pt-2 text-xs text-slate-500">y {tareas.length - 3} más en Tareas</li>}
+              </ul>
+            )}
+          </section>
+
+          {/* Datos y lo que busca */}
+          {(telefono || correo || busca || client.vehicle || (clientData.dealValue || client.dealValue)) && (
+            <section className="rounded-3xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700 p-4">
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-2">Datos</h2>
+              <dl className="space-y-3">
+                {telefono && <Dato Icono={Phone} t="Teléfono" v={telefono} href={`tel:${telefono.replace(/\D/g, '')}`} />}
+                {correo && <Dato Icono={Mail} t="Correo" v={correo} href={`mailto:${correo}`} />}
+                {busca && <Dato Icono={Car} t="Busca" v={busca} />}
+                {!busca && client.vehicle && <Dato Icono={Car} t="Auto de interés" v={client.vehicle} />}
+                {(clientData.dealValue || client.dealValue) ? <Dato Icono={Wallet} t="Valor del trato" v={pesosMx(Number(clientData.dealValue || client.dealValue))} /> : null}
+              </dl>
+            </section>
+          )}
+
+          {/* Detalles de la venta (si ya se vendió) */}
+          <div className="rounded-3xl overflow-hidden empty:hidden">
         {/* Detalles de Venta si está ganado o tiene saleDetails */}
         {(clientData?.saleDetails || currentStatus === 'won') && (() => {
           const sDetails = clientData?.saleDetails || {
@@ -1012,114 +1076,120 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
             </div>
           );
         })()}
-
-        {/* Pipeline Stage */}
-                <div className="bg-white dark:bg-slate-800 p-4 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
-          <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Etapa del Embudo</h3>
-          <div className="flex overflow-x-auto pb-2 -mx-4 px-4 snap-x hide-scrollbar gap-2 scroll-smooth">
-            {pipelineStages.map((stage, idx) => {
-              const isActive = currentStatus === stage.id;
-              const isPast = pipelineStages.findIndex(s => s.id === currentStatus) > idx;
-              return (
-                <button
-                  key={`stage-${stage.id}`}
-                  onClick={() => handleStatusChange(stage.id)}
-                  className={clsx(
-                    "flex items-center shrink-0 snap-center px-4 py-2 rounded text-sm font-medium whitespace-nowrap transition-all",
-                    isActive 
-                      ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-slate-800" 
-                      : isPast
-                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50"
-                        : "bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400"
-                  )}
-                >
-                  {stage.title || stage.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Quick Interactions */}
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Registro Rápido</h3>
-          
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {quickActions.map(action => (
-              <button
-                key={`action-${action.id}`}
-                onClick={() => setSelectedActionId(selectedActionId === action.id ? null : action.id)}
-                className={clsx(
-                  "flex items-center justify-center gap-2 py-3 rounded text-sm font-medium transition-colors border",
-                  selectedActionId === action.id 
-                    ? "bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
-                    : "bg-[#f4f5f5] border-transparent dark:bg-slate-900 dark:border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                )}
-              >
-                <action.icon className={clsx("w-4 h-4", action.color)} />
-                {action.label}
-              </button>
-            ))}
           </div>
 
-          <div className="relative">
-            <button
-              onClick={toggleRecording}
-              className={clsx(
-                "absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded transition-colors",
-                isRecording ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 animate-pulse" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              )}
-            >
-              <Mic className="w-4 h-4" />
-            </button>
-            <input
-              type="text"
-              placeholder={isRecording ? "Escuchando..." : "Nota adicional (opcional)..."}
-              value={quickNote}
-              onChange={(e) => setQuickNote(e.target.value)}
-              className="w-full bg-[#f4f5f5] dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded pl-10 pr-12 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-            <button
-              disabled={(!quickNote.trim() && !selectedActionId) || isSubmittingNote}
-              onClick={() => {
-                const action = quickActions.find(a => a.id === selectedActionId);
-                handleAddQuickNote(action ? action.id : 'note', action ? action.prefix : undefined);
-                setSelectedActionId(null);
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded disabled:opacity-50 transition-colors"
-            >
-              {noteSuccess ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Historial (Notas) */}
-        <div ref={historyRef} />
-        <div className="bg-white dark:bg-slate-800 p-6 mb-2 shadow-sm border-y border-gray-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Historial</h3>
-          {notes.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-4">No hay registros en el historial.</p>
-          ) : (
-            <div className="space-y-4">
-              {notes.map(note => (
-                <div key={`note-${note.id}`} className="relative pl-4 border-l-2 border-gray-200 dark:border-slate-700 pb-2 last:border-0 last:pb-0">
-                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      {note.createdByName || "Usuario"}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {format(new Date(note.createdAt), "dd MMM, HH:mm")}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words [word-break:break-word]">{note.content}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Historial */}
+          <div ref={historyRef} />
+          <section className="rounded-3xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700 p-4">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-3">Historial</h2>
+            {notes.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">Todavía no hay registros. Anota abajo la primera llamada o mensaje.</p>
+            ) : (
+              <ol className="space-y-4">
+                {notes.map((note) => {
+                  const Icono = ICONO_NOTA[note.type] || AlignLeft;
+                  return (
+                    <li key={`note-${note.id}`} className="flex gap-3">
+                      <span className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center shrink-0 mt-0.5"><Icono className="w-4 h-4" /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate">{note.createdByName || 'Usuario'}</span>
+                          <span className="text-[11px] text-slate-400 shrink-0">{format(new Date(note.createdAt), 'dd MMM, HH:mm')}</span>
+                        </div>
+                        <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words [word-break:break-word] mt-0.5">{note.content}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
         </div>
       </div>
-      
+
+      {/* Registro rápido: siempre a la mano abajo. Elige qué pasó y, si quieres, añade una nota. */}
+      <div className="shrink-0 bg-white dark:bg-slate-900 border-t border-slate-200/70 dark:border-slate-800 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="flex gap-1.5 overflow-x-auto pb-2 hide-scrollbar">
+          {CHIPS.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedActionId(selectedActionId === c.id ? null : c.id)}
+              className={clsx("shrink-0 h-9 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 border transition-colors",
+                selectedActionId === c.id ? "bg-blue-600 border-blue-600 text-white" : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300")}
+            >
+              <c.icon className={clsx("w-3.5 h-3.5", selectedActionId === c.id ? "text-white" : c.color)} /> {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="nota-rapida"
+            type="text"
+            placeholder={selectedActionId && selectedActionId !== 'note' ? 'Detalle (opcional)…' : 'Escribe una nota…'}
+            value={quickNote}
+            onChange={(e) => setQuickNote(e.target.value)}
+            className="flex-1 min-w-0 h-11 bg-slate-100 dark:bg-slate-800 rounded-full px-4 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            disabled={(!quickNote.trim() && (!selectedActionId || selectedActionId === 'note')) || isSubmittingNote}
+            onClick={() => {
+              const action = quickActions.find((a) => a.id === selectedActionId);
+              handleAddQuickNote(action ? action.id : 'note', action ? action.prefix : undefined);
+              setSelectedActionId(null);
+            }}
+            aria-label="Guardar registro"
+            className="h-11 w-11 rounded-full bg-blue-600 text-white flex items-center justify-center disabled:opacity-40 active:scale-95 transition-all shrink-0"
+          >
+            {noteSuccess ? <Check className="w-5 h-5" /> : <Send className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Cambiar de etapa: hoja desde abajo */}
+      {verEtapas && (
+        <div className="fixed inset-0 z-[110] flex items-end bg-black/50" onClick={() => setVerEtapas(false)}>
+          <div className="w-full bg-white dark:bg-slate-900 rounded-t-3xl pb-[max(1rem,env(safe-area-inset-bottom))] max-h-[80dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600" />
+            <div className="px-5 pt-3 pb-2 flex items-center justify-between">
+              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Cambiar de etapa</h3>
+              <button onClick={() => setVerEtapas(false)} aria-label="Cerrar" className="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><X className="w-5 h-5 text-slate-500" /></button>
+            </div>
+            <ul className="px-3 pb-2">
+              {pipelineStages.map((stage) => {
+                const activa = currentStatus === stage.id;
+                return (
+                  <li key={`stage-${stage.id}`}>
+                    <button
+                      onClick={() => { setVerEtapas(false); if (!activa) handleStatusChange(stage.id); }}
+                      className={clsx("w-full flex items-center justify-between rounded-2xl px-4 py-3.5 text-left text-[15px] font-semibold", activa ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" : "text-slate-800 dark:text-slate-100 active:bg-slate-50 dark:active:bg-slate-800")}
+                    >
+                      {stage.title || stage.name}
+                      {activa && <Check className="w-5 h-5" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {agendando && (
+        <NewActivityModal
+          onClose={() => setAgendando(false)}
+          onSave={() => { setAgendando(false); onUpdated(); }}
+          clients={[{ ...client, id: idContacto } as Client]}
+          currentUser={userData}
+          initialData={{ clientId: idContacto }}
+        />
+      )}
+
+      {verFichaCompleta && (
+        <div className="fixed inset-0 z-[130]">
+          <ClientDetailModal client={client} initialStatus={currentStatus} onClose={() => setVerFichaCompleta(false)} />
+        </div>
+      )}
+
       {showDealWonModal && (
         <DealWonModal
           client={{ ...client, ...clientData } as Client}
@@ -1162,4 +1232,17 @@ export function MobileClientDetail({ client, onClose, onUpdated, scrollToHistory
       )}
     </div>
   );
+}
+
+function Dato({ Icono, t, v, href }: { Icono: any; t: string; v: string; href?: string }) {
+  const cuerpo = (
+    <>
+      <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center shrink-0"><Icono className="w-4 h-4" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] text-slate-500">{t}</span>
+        <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100 break-words">{v}</span>
+      </span>
+    </>
+  );
+  return <div>{href ? <a href={href} className="flex items-center gap-3 active:opacity-70">{cuerpo}</a> : <div className="flex items-center gap-3">{cuerpo}</div>}</div>;
 }
