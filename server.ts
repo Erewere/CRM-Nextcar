@@ -4663,6 +4663,41 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     }
   });
 
+  // Borrar una consulta del historial (o todas las de la agencia con /todas). Solo las de la propia agencia, y solo quien
+  // puede verlas. No toca nada mas: son consultas de apoyo, no operaciones.
+  app.delete("/api/precios/consultas/todas", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    try {
+      const snap = await q.adminDb.collection(COL_CONSULTAS_PRECIO).where("agencyId", "==", q.agencyId).get();
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const lote = q.adminDb.batch();
+        snap.docs.slice(i, i + 400).forEach((d: any) => lote.delete(d.ref));
+        await lote.commit();
+      }
+      res.json({ borradas: snap.size });
+    } catch (e) {
+      console.error("precios/consultas (borrar todas):", e);
+      res.status(500).json({ error: "No se pudo vaciar el historial." });
+    }
+  });
+  app.delete("/api/precios/consultas/:id", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    try {
+      const ref = q.adminDb.collection(COL_CONSULTAS_PRECIO).doc(String(req.params.id || "x"));
+      const d = await ref.get();
+      if (!d.exists || d.data()?.agencyId !== q.agencyId) return res.status(404).json({ error: "Esa consulta ya no existe." });
+      await ref.delete();
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("precios/consultas (borrar):", e);
+      res.status(500).json({ error: "No se pudo borrar la consulta." });
+    }
+  });
+
   // Aplicar el precio sugerido a un auto. Nunca cambia solo: lo pide una persona
   // despues de ver la sugerencia y confirmar. El servidor vuelve a comprobar todo
   // (que la sugerencia siga vigente, que el precio no haya cambiado desde la

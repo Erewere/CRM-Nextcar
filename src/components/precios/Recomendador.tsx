@@ -62,6 +62,19 @@ export function Recomendador() {
   // un Libro Azul escrito a mano: se vuelve a consultar la guía (por ejemplo si cambia el kilometraje).
   const [autoRelleno, setAutoRelleno] = useState<{ compra: string; venta: string } | null>(null);
 
+  const borrarConsulta = async (id: string) => {
+    const previo = historial;
+    setHistorial((h) => h.filter((c) => c.id !== id));
+    try { await llamar(`/api/precios/consultas/${encodeURIComponent(id)}`, 'DELETE'); }
+    catch (e: any) { setHistorial(previo); setError(e?.message || 'No se pudo borrar la consulta.'); }
+  };
+  const vaciarHistorial = async () => {
+    if (!window.confirm(`¿Borrar las ${historial.length} consultas del historial? Esto no se puede deshacer.`)) return;
+    const previo = historial;
+    setHistorial([]);
+    try { await llamar('/api/precios/consultas/todas', 'DELETE'); }
+    catch (e: any) { setHistorial(previo); setError(e?.message || 'No se pudo vaciar el historial.'); }
+  };
   const cargarHistorial = () => { llamar('/api/precios/consultas').then((d) => setHistorial(d.consultas || [])).catch(() => {}); };
   useEffect(() => { llamar('/api/precios/config').then((d) => setMargen(String(d.margenObjetivoPct))).catch(() => {}); cargarHistorial(); }, []);
   const poner = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,7 +256,10 @@ export function Recomendador() {
       <section aria-labelledby="historial-consultas" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-baseline justify-between gap-2">
           <h3 id="historial-consultas" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Historial de consultas</h3>
-          <span className="text-xs text-slate-500">Las últimas {historial.length ? historial.length : 100} de tu agencia</span>
+          <span className="text-xs text-slate-500 flex items-center gap-3">
+            Las últimas {historial.length ? historial.length : 100} de tu agencia
+            {historial.length > 0 && <button type="button" onClick={vaciarHistorial} className="font-semibold text-red-600 hover:underline">Borrar todas</button>}
+          </span>
         </div>
         {historial.length === 0 ? (
           <p className="px-4 py-6 text-sm text-slate-500">Todavía no hay consultas. Cada vez que recomiendes precios, el auto, el kilometraje y los precios de la guía quedan aquí.</p>
@@ -271,7 +287,10 @@ export function Recomendador() {
                   <td className="px-3 py-2 text-right tabular-nums font-extrabold">{dinero(c.guiaCompra)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-extrabold">{dinero(c.guiaVenta)}</td>
                   <td className="px-4 py-2 text-right">
-                    <button type="button" onClick={() => usarConsulta(c)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Consultar otra vez</button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" onClick={() => usarConsulta(c)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Consultar otra vez</button>
+                      <button type="button" onClick={() => borrarConsulta(c.id)} aria-label={`Borrar la consulta de ${c.marca} ${c.modelo}`} title="Borrar esta consulta" className="h-8 px-3 rounded-lg border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950">Borrar</button>
+                    </div>
                   </td>
                 </tr>
               ))}
