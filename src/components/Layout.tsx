@@ -38,6 +38,7 @@ import { WelcomeTour } from "./WelcomeTour";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { UserSettingsModal } from "./UserSettingsModal";
 import { NotificationsPopover } from "./NotificationsPopover";
+import { AvisoDeVersion } from "./AvisoDeVersion";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
 import { useChatsPendientes } from '../contexts/ChatsPendientesContext';
@@ -863,6 +864,7 @@ export function Layout() {
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
       {showClaveMcp && <MiClaveMcp onClose={() => setShowClaveMcp(false)} />}
       <UserSettingsModal isOpen={showUserSettingsModal} onClose={() => setShowUserSettingsModal(false)} />
+      <AvisoDeVersion />
     </div>
   );
 }
