@@ -204,6 +204,14 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
           .map((p: any) => ({ ...deFormaVieja(p, d.saleDetails?.method === "credito"), id: String(p.id || Math.random()) }));
       const ag = (await q.adminDb.collection("agencies").doc(d.agencyId).get()).data() || {};
       const plan = planDe(d.saleDetails);
+      const cuenta = estadoDeCuenta(plan, pagos, hoyISO());
+      // Enganche que quien registró la venta anotó (crédito bancario: la agencia lo recibe) pero que nadie ha registrado como pago.
+      // No cuenta como dinero cobrado hasta que un administrador lo confirme; mientras tanto se muestra aparte.
+      const engDeclarado = Number((plan as any).downPayment) || 0;
+      const engRecibido = pagos.filter((p: any) => !p.anulado && p.concepto === "enganche").reduce((t: number, p: any) => t + (Number(p.monto) || 0), 0);
+      const engancheDeclarado = (plan as any).method === "credito_bancario" && engDeclarado > 0 && !d.engancheDescartado && engRecibido + 0.5 < engDeclarado && cuenta.saldo > 0.5
+        ? { monto: Math.round((engDeclarado - engRecibido) * 100) / 100, declarado: engDeclarado }
+        : null;
       res.json({
         venta: {
           dealId: t.ref.id,
@@ -215,7 +223,8 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
           plan,
           tienePlan: !!d.saleDetails,
           pagos: pagos.sort((a: any, b: any) => `${b.fecha}|${b.registradoEn || ""}`.localeCompare(`${a.fecha}|${a.registradoEn || ""}`)),
-          cuenta: estadoDeCuenta(plan, pagos, hoyISO()),
+          cuenta,
+          engancheDeclarado,
         },
         puedeCobrar: q.puedeCobrar,
         puedeDescontar: q.puedeDescontar,
@@ -270,6 +279,22 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     } catch (e) {
       console.error("ventas/pagar:", e);
       res.status(500).json({ error: "No se pudo registrar el pago. Intenta de nuevo." });
+    }
+  });
+
+  // ---------- «No se recibió»: descartar el enganche que se anotó al registrar la venta ----------
+  app.post("/api/ventas/:dealId/enganche/descartar", async (req: any, res: any) => {
+    const q = await quien(req, res);
+    if (!q) return;
+    if (!q.puedeCobrar) return res.status(403).json({ error: "Solo un administrador puede confirmar o descartar un enganche." });
+    try {
+      const t = await tratoDe(q, String(req.params.dealId || ""));
+      if (!t) return res.status(404).json({ error: "No encontramos esa venta." });
+      await t.ref.update({ engancheDescartado: { por: q.uid, porNombre: await nombreDe(q.adminDb, q.uid), en: new Date().toISOString(), monto: Number(t.datos.saleDetails?.downPayment) || 0 } });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("ventas/enganche-descartar:", e);
+      res.status(500).json({ error: "No se pudo descartar el enganche." });
     }
   });
 

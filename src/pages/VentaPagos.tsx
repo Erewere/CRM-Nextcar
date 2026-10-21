@@ -59,6 +59,8 @@ export function VentaPagos() {
   const [datos, setDatos] = useState<any>(null);
   const [error, setError] = useState('');
   const [pagando, setPagando] = useState<false | 'pago' | 'devolucion'>(false);
+  // Enganche anotado al registrar la venta que se confirma como pago: abre «Registrar pago» ya llenado.
+  const [inicialPago, setInicialPago] = useState<{ concepto: string; monto: number; nota: string } | null>(null);
   const [liquidando, setLiquidando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [verTodas, setVerTodas] = useState(false);
@@ -286,6 +288,33 @@ export function VentaPagos() {
               </section>
             )}
 
+            {/* Enganche anotado al registrar la venta, aún sin registrar como pago */}
+            {v.engancheDeclarado && (
+              <section className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4">
+                <h2 className="font-extrabold text-amber-900 dark:text-amber-200 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Enganche por confirmar · {pesos(v.engancheDeclarado.monto)}</h2>
+                <p className="text-sm text-amber-900/90 dark:text-amber-200/90 mt-1">
+                  Al registrar la venta se anotó que la agencia recibiría este enganche. Todavía <b>no es un pago registrado</b>: no cuenta en «Pagado» ni baja el saldo hasta que un administrador lo confirme.
+                </p>
+                {puede ? (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      onClick={() => { setInicialPago({ concepto: 'enganche', monto: v.engancheDeclarado.monto, nota: 'Enganche anotado al registrar la venta' }); setPagando('pago'); }}
+                      className="h-11 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center gap-1.5"
+                    ><CheckCircle2 className="w-4 h-4" /> Confirmar y registrar el pago</button>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm('¿Marcar que este enganche no se recibió? Dejará de mostrarse aquí. Si después llega, podrás registrarlo con «Registrar pago».')) return;
+                        try { await ventasApi.descartarEnganche(dealId); await cargar(); } catch (e: any) { alert(e.message); }
+                      }}
+                      className="h-11 px-4 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold"
+                    >No se recibió</button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-900/80 dark:text-amber-200/80 mt-2">Un administrador lo revisará y lo registrará.</p>
+                )}
+              </section>
+            )}
+
             {/* Historial */}
             <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
               <h2 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mb-3"><Receipt className="w-4 h-4" /> Pagos registrados</h2>
@@ -324,8 +353,8 @@ export function VentaPagos() {
         </div>
       </div>
 
-      {pagando && <RegistrarPago modo={pagando} dealId={dealId} ec={ec} onCerrar={() => setPagando(false)} onListo={async (id) => {
-        setPagando(false);
+      {pagando && <RegistrarPago modo={pagando} dealId={dealId} ec={ec} inicial={pagando === 'pago' ? inicialPago : null} onCerrar={() => { setPagando(false); setInicialPago(null); }} onListo={async (id) => {
+        setPagando(false); setInicialPago(null);
         const d = await cargar();
         if (d && id && window.confirm('Pago registrado. ¿Hacer el recibo?')) await recibo(d, id);
       }} />}
@@ -385,19 +414,19 @@ function Ventana({ titulo, onCerrar, children }: { titulo: string; onCerrar: () 
   );
 }
 
-function RegistrarPago({ modo, dealId, ec, onCerrar, onListo }: { modo: 'pago' | 'devolucion'; dealId: string; ec: EstadoDeCuenta; onCerrar: () => void; onListo: (id?: string) => void }) {
+function RegistrarPago({ modo, dealId, ec, inicial, onCerrar, onListo }: { modo: 'pago' | 'devolucion'; dealId: string; ec: EstadoDeCuenta; inicial?: { concepto: string; monto: number; nota: string } | null; onCerrar: () => void; onListo: (id?: string) => void }) {
   const devolviendo = modo === 'devolucion';
   const sug = useMemo(() => devolviendo ? { concepto: 'devolucion' as const, monto: ec.aFavor, etiqueta: 'Lo que el cliente pagó de más' } : cobroSugerido(ec), [ec, devolviendo]);
-  const [concepto, setConcepto] = useState<string>(sug.concepto);
-  const [monto, setMonto] = useState(sug.monto ? String(Math.round(sug.monto * 100) / 100) : '');
+  const [concepto, setConcepto] = useState<string>(inicial?.concepto || sug.concepto);
+  const [monto, setMonto] = useState(inicial ? String(Math.round(inicial.monto * 100) / 100) : sug.monto ? String(Math.round(sug.monto * 100) / 100) : '');
   const [fecha, setFecha] = useState(hoyLocal());
   const [forma, setForma] = useState('transferencia');
-  const [nota, setNota] = useState('');
+  const [nota, setNota] = useState(inicial?.nota || '');
   const [clave] = useState(ventasApi.nuevaClave());
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const montoN = Number(String(monto).replace(/[^\d.]/g, '')) || 0;
-  const conceptos = devolviendo ? ['devolucion'] : ec.esCredito ? ['enganche', 'mensualidad', 'abono', ...(ec.comision > 0 && !ec.comisionFinanciada ? ['comision'] : [])] : ['pago'];
+  const conceptos = devolviendo ? ['devolucion'] : ec.esCredito ? ['enganche', 'mensualidad', 'abono', ...(ec.comision > 0 && !ec.comisionFinanciada ? ['comision'] : [])] : inicial ? [inicial.concepto, 'pago'] : ['pago'];
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,7 +440,7 @@ function RegistrarPago({ modo, dealId, ec, onCerrar, onListo }: { modo: 'pago' |
   return (
     <Ventana titulo={devolviendo ? 'Devolución al cliente' : 'Registrar pago'} onCerrar={onCerrar}>
       <form onSubmit={guardar} className="p-4 flex flex-col gap-3">
-        {sug.etiqueta && <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 text-xs px-3 py-2">Sugerido: <b>{sug.etiqueta}</b> por {pesos(sug.monto)}</p>}
+        {sug.etiqueta && !inicial && <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 text-xs px-3 py-2">Sugerido: <b>{sug.etiqueta}</b> por {pesos(sug.monto)}</p>}
         {devolviendo && <p className="text-xs text-slate-600 dark:text-slate-400">Registra el dinero que la agencia le <b>regresa</b> al cliente. Solo se puede devolver lo que pagó de más.</p>}
         {conceptos.length > 1 && (
           <div className="grid grid-cols-2 gap-1.5">

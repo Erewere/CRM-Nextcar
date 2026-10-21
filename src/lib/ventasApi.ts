@@ -22,6 +22,7 @@ export const ventasApi = {
   nuevaClave: clave,
   pagar: (dealId: string, pago: { monto: number; fecha: string; forma: string; concepto: string; nota?: string; clave: string }) => api(`/api/ventas/${dealId}/pagos`, pago),
   anular: (dealId: string, pagoId: string, motivo: string) => api(`/api/ventas/${dealId}/pagos/${pagoId}/anular`, { motivo }),
+  descartarEnganche: (dealId: string) => api(`/api/ventas/${dealId}/enganche/descartar`, {}),
   eliminar: (dealId: string, motivo: string) => api(`/api/ventas/${dealId}/eliminar`, { motivo }),
   liquidar: (dealId: string, datos: { fecha: string; forma: string; descontarIntereses: boolean; montoEsperado: number; nota?: string; clave: string }) => api(`/api/ventas/${dealId}/liquidar`, datos),
   /** Después de guardar la venta: vuelve a poner pagos y tareas de cobro en su lugar. */
