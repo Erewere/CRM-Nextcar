@@ -2,6 +2,7 @@ import { getAuth } from "firebase/auth";
 import React, { useState, useEffect, useMemo } from 'react';
 import { getApiUrl } from '../lib/api';
 import { useNavigate } from 'react-router';
+import { PRECIO_POR_USUARIO } from '../lib/subscription';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, doc, updateDoc, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
@@ -12,7 +13,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 export function AgencyUsers() {
   const navigate = useNavigate();
-  const { userData } = useAuth();
+  const { userData, agencyData: agenciaActual } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -743,6 +744,11 @@ export function AgencyUsers() {
 
       <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col gap-4">
         <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Añadir Nuevo Usuario</h2>
+        {!isMaster && agenciaActual?.subscriptionStatus === 'active' && !agenciaActual?.hasFreeAccess && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1">
+            Cada usuario suma {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(PRECIO_POR_USUARIO)} al mes a tu suscripción, y se quita al eliminarlo.
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full items-end">
           {isMaster && (
             <div className="w-full">

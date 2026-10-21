@@ -15,6 +15,7 @@ import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisi
 import { sembrarPostventa } from "./src/servidor/postventa.ts";
 import { sembrarSeguimiento } from "./src/servidor/seguimiento.ts";
 import { registrarPush } from "./src/servidor/push.ts";
+import { sincronizarTodas, sincronizarUsuariosDeAgencia } from "./src/servidor/usuariosFacturados.ts";
 import { avisarActividades } from "./src/servidor/avisosActividades.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
@@ -863,6 +864,7 @@ async function startServer() {
         console.error("No se pudo mandar la invitacion", e);
       }
 
+      avisarCambioDeUsuarios(agencyId);
       res.status(200).json({ uid: userRecord.uid, email: userRecord.email, tempPassword: password, correoEnviado });
     } catch (err: any) {
       console.error("Create User Error:", err);
@@ -1023,6 +1025,8 @@ async function startServer() {
         }
       }
 
+      const agenciaDelBorrado = String((await adminDb.collection("users").doc(uid).get()).data()?.agencyId || "");
+
       // Delete from Firebase Auth
       try {
         await getAuth(adminApp).deleteUser(uid);
@@ -1032,6 +1036,7 @@ async function startServer() {
 
       // Delete from Firestore
       await adminDb.collection("users").doc(uid).delete();
+      avisarCambioDeUsuarios(agenciaDelBorrado);
 
       return res.status(200).json({ success: true });
     } catch (err: any) {
@@ -4771,6 +4776,38 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   }
   setTimeout(correrPostventa, 5 * 60 * 1000);
   setInterval(correrPostventa, 15 * 60 * 1000);
+
+  // ===== Usuarios cobrados en Stripe =====
+  // La cantidad de la suscripcion sigue a los usuarios de la agencia (ver src/servidor/usuariosFacturados.ts). Con el
+  // interruptor plataforma/facturacion.sincronizar apagado (como arranca), solo se calcula y se deja constancia.
+  async function avisarCambioDeUsuarios(agencyId: string) {
+    try {
+      const adminDb = getAdminDb();
+      if (!adminDb || !agencyId || !process.env.STRIPE_SECRET_KEY) return;
+      const aplicar = (await adminDb.collection("plataforma").doc("facturacion").get()).data()?.sincronizar === true;
+      const r = await sincronizarUsuariosDeAgencia(adminDb, getStripe(), agencyId, { aplicar });
+      if (r.estado !== "cortesia" && r.estado !== "sin-suscripcion") console.log(`Facturación (${r.nombre}): ${r.estado}${r.detalle ? ` · ${r.detalle}` : ""}`);
+    } catch (e) {
+      console.error("Facturación (cambio de usuarios):", e);
+    }
+  }
+  let facturacionCorriendo = false;
+  async function correrFacturacionDeUsuarios() {
+    const adminDb = getAdminDb();
+    if (!adminDb || facturacionCorriendo || !process.env.STRIPE_SECRET_KEY) return;
+    facturacionCorriendo = true;
+    try {
+      const r = await sincronizarTodas(adminDb, getStripe());
+      const raros = r.filter((x) => x.estado === "diferencia" || x.estado === "ajustada" || x.estado === "revisar" || x.estado === "error");
+      if (raros.length) console.log("Facturación de usuarios:", raros.map((x) => `${x.nombre}: ${x.estado} (${x.usuarios ?? "?"} usuarios, ${x.cobrados ?? "?"} cobrados)`).join(" | "));
+    } catch (e) {
+      console.error("Facturación de usuarios:", e);
+    } finally {
+      facturacionCorriendo = false;
+    }
+  }
+  setTimeout(correrFacturacionDeUsuarios, 4 * 60 * 1000);
+  setInterval(correrFacturacionDeUsuarios, 6 * 60 * 60 * 1000);
 
   // ===== Seguimiento a quienes no responden =====
   // Cada 30 minutos: a los contactos a quienes la agencia les escribio por el chat y no han contestado, les programa
