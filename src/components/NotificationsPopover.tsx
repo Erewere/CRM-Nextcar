@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { documentosQueFaltan } from "../lib/creditoDocs";
 import { getTrialDaysLeft, getTrialEnd, hasActiveAccess } from "../lib/subscription";
 import { useAuth } from "../contexts/AuthContext";
@@ -162,6 +163,16 @@ export function NotificationsPopover() {
 
   const { matches, ownAgencySharing } = useSharedInventoryMatches();
   const popoverRef = useRef<HTMLDivElement>(null);
+  const panelMovilRef = useRef<HTMLDivElement>(null);
+  // En el teléfono el panel va a pantalla completa. Dentro del encabezado (z-20) quedaba por debajo del contenido de la
+  // pantalla (el banner oscuro del Inicio lo tapaba), así que ahí se dibuja fuera, directo en el documento.
+  const [esMovil, setEsMovil] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const al = () => setEsMovil(mq.matches);
+    mq.addEventListener("change", al);
+    return () => mq.removeEventListener("change", al);
+  }, []);
   const navigate = useNavigate();
   const { pendientes: chatsPendientes } = useChatsPendientes();
 
@@ -262,7 +273,7 @@ export function NotificationsPopover() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node) && !(panelMovilRef.current && panelMovilRef.current.contains(event.target as Node))) {
         setIsOpen(false);
       }
     };
@@ -846,26 +857,10 @@ export function NotificationsPopover() {
     // Depende solo de la firma: `urgentes` se lee del render que la produjo.
   }, [firmaUrgentes]);
 
-  return (
+  const panelAbierto = (
     <>
-      <div className="relative" ref={popoverRef}>
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 relative"
-          aria-label="Notificaciones"
-        >
-          <Bell className={clsx("w-[22px] h-[22px]", conteo.ahora > 0 && !isOpen && "campana-viva text-red-500")} />
-          {(conteo.ahora > 0 || conteo.hoy > 0) && (
-            <span className={clsx("absolute top-1 right-0.5 flex h-[18px] min-w-[18px] px-1 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900", conteo.ahora > 0 ? "bg-red-500 insignia-viva" : "bg-amber-500", popNuevo && "insignia-nueva")}>
-              {(conteo.ahora > 0 ? conteo.ahora : conteo.hoy) > 99 ? "99+" : conteo.ahora > 0 ? conteo.ahora : conteo.hoy}
-            </span>
-          )}
-        </button>
-
-        {isOpen && (
-          <>
-            <div className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40 sm:hidden" onClick={() => setIsOpen(false)} />
-            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 origin-top-right flex flex-col max-h-[80dvh]">
+            <div className="fixed inset-0 bg-black/20 dark:bg-black/40 z-[190] sm:hidden" onClick={() => setIsOpen(false)} />
+            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-[200] origin-top-right flex flex-col max-h-[80dvh]">
               <div className="px-4 pt-3 pb-2 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                   <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base">Pendientes</h3>
@@ -943,8 +938,26 @@ export function NotificationsPopover() {
                 )}
               </div>
             </div>
-          </>
-        )}
+    </>
+  );
+
+  return (
+    <>
+      <div className="relative" ref={popoverRef}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 relative"
+          aria-label="Notificaciones"
+        >
+          <Bell className={clsx("w-[22px] h-[22px]", conteo.ahora > 0 && !isOpen && "campana-viva text-red-500")} />
+          {(conteo.ahora > 0 || conteo.hoy > 0) && (
+            <span className={clsx("absolute top-1 right-0.5 flex h-[18px] min-w-[18px] px-1 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900", conteo.ahora > 0 ? "bg-red-500 insignia-viva" : "bg-amber-500", popNuevo && "insignia-nueva")}>
+              {(conteo.ahora > 0 ? conteo.ahora : conteo.hoy) > 99 ? "99+" : conteo.ahora > 0 ? conteo.ahora : conteo.hoy}
+            </span>
+          )}
+        </button>
+
+        {isOpen && (esMovil ? createPortal(<div ref={panelMovilRef}>{panelAbierto}</div>, document.body) : panelAbierto)}
       </div>
 
       {/* Vehicle Detail Modal when clicked from a Match notification in Bell */}

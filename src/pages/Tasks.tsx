@@ -1239,7 +1239,7 @@ export function Tasks() {
     );
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f5f5] relative">
+    <div className="flex flex-col md:h-full min-h-full bg-[#f4f5f5] relative">
 
       {/* Encabezado: título, vistas y acción principal; abajo las cifras y los filtros */}
       <div className="p-3 md:p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 space-y-3">
@@ -1356,8 +1356,8 @@ export function Tasks() {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 flex overflow-hidden bg-white dark:bg-slate-800">
-        <div className="flex-1 overflow-auto bg-white dark:bg-slate-800 flex flex-col">
+      <div className="flex-1 flex md:overflow-hidden bg-white dark:bg-slate-800">
+        <div className="flex-1 min-w-0 md:overflow-auto bg-white dark:bg-slate-800 flex flex-col">
           {view === "agenda" && (
             <div className="flex-1 bg-slate-50 dark:bg-slate-900">
               <AgendaTareas
