@@ -24,6 +24,7 @@ type Resultado = {
 type Consulta = {
   id: string; fecha: string; marca: string; modelo: string; version: string; anio: number; km: number | null;
   guiaCompra: number | null; guiaVenta: number | null; guiaOrigen: 'autocosmos' | 'guardada' | 'manual' | null;
+  porNombre?: string;
 };
 
 const dinero = (n: number | null | undefined) => (n || n === 0 ? '$' + Math.round(n).toLocaleString('es-MX') : '—');
@@ -49,7 +50,8 @@ async function llamar(ruta: string, metodo = 'GET', cuerpo?: unknown) {
 
 const campo = 'h-10 w-full px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm';
 
-export function Recomendador() {
+/** `soloCotizar`: la vista del vendedor. Solo la cotización: sin historial, sin margen y sin nada de lo que cuesta o deja cada auto. */
+export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean }) {
   const { userData } = useAuth();
   const [f, setF] = useState({ marca: '', modelo: '', version: '', anio: '', km: '', precioOfrecido: '', guiaCompra: '', guiaVenta: '' });
   const [margen, setMargen] = useState('');
@@ -78,7 +80,7 @@ export function Recomendador() {
   // En el teléfono el resultado queda debajo del formulario, fuera de pantalla: al llegar, se baja hasta él.
   useEffect(() => { if (r) document.getElementById('resultado-cotizacion')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [r]);
   const cargarHistorial = () => { llamar('/api/precios/consultas').then((d) => setHistorial(d.consultas || [])).catch(() => {}); };
-  useEffect(() => { llamar('/api/precios/config').then((d) => setMargen(String(d.margenObjetivoPct))).catch(() => {}); cargarHistorial(); }, []);
+  useEffect(() => { if (soloCotizar) return; llamar('/api/precios/config').then((d) => setMargen(String(d.margenObjetivoPct))).catch(() => {}); cargarHistorial(); }, [soloCotizar]);
   const poner = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value;
     setF((x) => {
@@ -168,13 +170,13 @@ export function Recomendador() {
           <button disabled={cargando} className="h-11 sm:h-10 w-full sm:w-auto justify-center px-4 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-2">
             {cargando && <Loader2 className="w-4 h-4 animate-spin" />} {cargando ? 'Buscando… (puede tardar 15 segundos)' : 'Recomendar precios'}
           </button>
-          <div className="ml-auto flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          {!soloCotizar && <div className="ml-auto flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
             Margen de referencia
             <input value={margen} onChange={(e) => { setMargen(e.target.value); setGuardado(false); }} disabled={userData?.role !== 'admin'} inputMode="decimal" className="h-9 w-16 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-center" /> %
             {userData?.role === 'admin' && <button type="button" onClick={guardarMargen} className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold hover:bg-slate-50">{guardado ? 'Guardado' : 'Guardar'}</button>}
-          </div>
+          </div>}
         </div>
-        <p className="text-xs text-slate-500">El precio lo manda el mercado (esperado = mediana; peor caso = cerca del mínimo). El margen de referencia solo avisa si comprar al máximo deja menos ganancia que ese porcentaje.</p>
+        <p className="text-xs text-slate-500">{soloCotizar ? 'El precio lo manda el mercado (esperado = mediana; peor caso = cerca del mínimo).' : 'El precio lo manda el mercado (esperado = mediana; peor caso = cerca del mínimo). El margen de referencia solo avisa si comprar al máximo deja menos ganancia que ese porcentaje.'}</p>
       </form>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -219,7 +221,7 @@ export function Recomendador() {
             {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), r.maxCompraPorGuia !== null ? 'tope de la guía' : 'sin guía: sale del peor caso')}
             {grande('Se vendería en', r.diasEstimados === null ? '—' : `${r.diasEstimados} días`, r.diasRango ? `normalmente entre ${r.diasRango[0]} y ${r.diasRango[1]}` : undefined, fuenteDias(r.diasBase))}
           </div>
-          {r.utilidadEsperada !== null && r.utilidadPesimista !== null && (
+          {r.utilidadEsperada != null && r.utilidadPesimista != null && (
             <p className="text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
               Comprando al máximo: <b>{dinero(r.utilidadEsperada)}</b> de ganancia ({r.margenEsperadoPct}%) si se vende al esperado, y <b className={r.utilidadPesimista < 0 ? 'text-red-600' : ''}>{r.utilidadPesimista < 0 ? `pérdida de ${dinero(-r.utilidadPesimista)}` : dinero(r.utilidadPesimista)}</b> ({r.margenPesimistaPct}%) en el peor caso. <span className="text-slate-400">Es informativo: el precio lo manda el mercado.</span>
             </p>
@@ -234,7 +236,7 @@ export function Recomendador() {
               <ul className="list-disc pl-5 space-y-1">{r.advertencias.map((t, i) => <li key={i}>{t}</li>)}</ul>
             </div>
           )}
-          {r.comparablesUsados.length > 0 && (
+          {(r.comparablesUsados || []).length > 0 && (
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
               <p className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200 dark:border-slate-700">Ventas parecidas que se usaron</p>
               <table className="w-full text-sm min-w-[640px]">
@@ -256,6 +258,7 @@ export function Recomendador() {
         </>
       )}
 
+      {!soloCotizar && (
       <section aria-labelledby="historial-consultas" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-baseline justify-between gap-2">
           <h3 id="historial-consultas" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Historial de consultas</h3>
@@ -276,7 +279,7 @@ export function Recomendador() {
                   <span className="text-xs text-slate-500 whitespace-nowrap">{fechaCorta(c.fecha)}</span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  {c.km ? `${c.km.toLocaleString('es-MX')} km` : 'km no indicado'}
+                  {c.km ? `${c.km.toLocaleString('es-MX')} km` : 'km no indicado'}{c.porNombre ? ` · Consultó ${c.porNombre}` : ''}
                   {c.guiaOrigen && c.guiaOrigen !== 'autocosmos' ? ` · ${ORIGEN_GUIA[c.guiaOrigen]}` : ''}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -295,6 +298,7 @@ export function Recomendador() {
               <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-2 font-bold">Fecha</th>
                 <th className="px-3 py-2 font-bold">Auto</th>
+                <th className="px-3 py-2 font-bold">Consultó</th>
                 <th className="px-3 py-2 font-bold text-right">Km</th>
                 <th className="px-3 py-2 font-bold text-right">Guía compra</th>
                 <th className="px-3 py-2 font-bold text-right">Guía venta</th>
@@ -309,6 +313,7 @@ export function Recomendador() {
                     {c.marca} {c.modelo}{c.version ? ` ${c.version}` : ''} <span className="text-slate-500 font-normal">{c.anio}</span>
                     {c.guiaOrigen && c.guiaOrigen !== 'autocosmos' && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">{ORIGEN_GUIA[c.guiaOrigen]}</span>}
                   </td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300 whitespace-nowrap">{c.porNombre || '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-500">{c.km ? c.km.toLocaleString('es-MX') : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-extrabold">{dinero(c.guiaCompra)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-extrabold">{dinero(c.guiaVenta)}</td>
@@ -325,6 +330,7 @@ export function Recomendador() {
           </>
         )}
       </section>
+      )}
     </div>
   );
 }

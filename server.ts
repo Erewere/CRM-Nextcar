@@ -4565,6 +4565,24 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
 
   // ----- Fase 3: memoria de operaciones y recomendador de precios -----
   const verCostos = (q: any) => ROLES_PRECIOS.includes(q.rol) && puedeRol(q.rol, "vehiculos.costo");
+  const ROLES_COTIZAN = ["admin", "manager", "seller"];
+
+  /**
+   * La cotización para quien no ve costos: lo útil para tratar con el cliente (guía, precio de mercado, máximo a pagar, días)
+   * sin lo que delata lo que la agencia pagó o ganó en sus ventas: los autos comparables con su compra y utilidad, la
+   * ganancia y el margen, los gastos y las frases que los mencionan.
+   */
+  const sinCostos = (r: any) => {
+    const tocaCostos = (t: string) => /ganancia|ganar|ganarías|perderías|gastos|costo|margen|utilidad|recuperar/i.test(t);
+    return {
+      ...r,
+      comparablesUsados: [],
+      utilidadEsperada: null, utilidadPesimista: null, margenEsperadoPct: null, margenPesimistaPct: null,
+      gastosEstimados: 0, margenObjetivoPct: 0,
+      advertencias: (r.advertencias || []).filter((t: string) => !tocaCostos(t)),
+      insights: (r.insights || []).filter((t: string) => !tocaCostos(t)),
+    };
+  };
 
   app.get("/api/precios/config", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
@@ -4613,17 +4631,21 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   app.post("/api/precios/recomendar", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
     if (!q) return;
-    if (!verCostos(q)) return res.status(403).json({ error: "Tu usuario no ve los costos de compra." });
+    // Cotizar un auto lo pueden hacer administrador, gerente y vendedor. Quien no ve costos recibe la cotización SIN lo que
+    // revela cuánto costó o cuánto dejó ganar cada auto de la agencia (ver sinCostos).
+    if (!ROLES_COTIZAN.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no puede cotizar autos." });
+    const conCostos = verCostos(q);
     if (!frenoPermite(`reco:${q.agencyId}`, 20)) return res.status(429).json({ error: "Muchas consultas seguidas. Intenta en un minuto." });
     const c = validarConsultaReco(req.body);
     if ("error" in c) return res.status(400).json(c);
     try {
       const resultado: any = await recomendarParaAgencia(q.adminDb, q.agencyId, c);
-      // Queda en el historial de consultas. Si guardar falla, la consulta igual se contesta.
+      // Queda en el historial de consultas, con quién la hizo. Si guardar falla, la consulta igual se contesta.
       try {
         const g = resultado.guia;
+        const quien = (await q.adminDb.collection("users").doc(q.uid).get()).data() || {};
         await q.adminDb.collection(COL_CONSULTAS_PRECIO).add({
-          agencyId: q.agencyId, porUid: q.uid,
+          agencyId: q.agencyId, porUid: q.uid, porNombre: String(quien.name || quien.email || "Usuario").slice(0, 80), porRol: q.rol,
           marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km,
           guiaCompra: g?.compra ?? null, guiaVenta: g?.venta ?? null,
           guiaOrigen: g ? (g.manual ? "manual" : resultado.estadoGuia?.estado === "guardada" ? "guardada" : "autocosmos") : null,
@@ -4634,7 +4656,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       } catch (e) {
         console.error("precios/recomendar (historial):", e);
       }
-      res.json(resultado);
+      res.json(conCostos ? resultado : sinCostos(resultado));
     } catch (e) {
       console.error("precios/recomendar:", e);
       res.status(500).json({ error: "No se pudo armar la recomendación." });

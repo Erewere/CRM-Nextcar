@@ -120,10 +120,10 @@ export function MobileFab() {
                   <CheckSquare className="w-5 h-5" />
                 </span>
               </button>
-              {/* Cotizar un auto (cuánto pagar como máximo y en cuánto se vendería): la pantalla de precios es solo del administrador. */}
-              {userData?.role === "admin" && (
+              {/* Cotizar un auto (cuánto pagar como máximo y en cuánto se vendería): administrador y vendedor. */}
+              {(userData?.role === "admin" || userData?.role === "seller") && (
               <button
-                onClick={() => { setIsOpen(false); navigate('/precios?vista=recomendar'); }}
+                onClick={() => { setIsOpen(false); navigate('/cotizar'); }}
                 className="flex items-center gap-2 active:scale-95 transition-all"
               >
                 <span className="rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">

@@ -1032,10 +1032,10 @@ export function Inventory() {
               <Search className="w-4 h-4 shrink-0" /> <span className="hidden lg:inline">Lo que buscan</span>
             </button>
           )}
-          {activeTab === 'my' && userData?.role === 'admin' && (
+          {activeTab === 'my' && (userData?.role === 'admin' || userData?.role === 'seller') && (
             <button
               type="button"
-              onClick={() => navigate('/precios?vista=recomendar')}
+              onClick={() => navigate('/cotizar')}
               className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 text-sm shrink-0"
               title="Cotizar un auto: cuánto pagar como máximo y en cuánto se vendería"
             >

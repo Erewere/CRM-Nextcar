@@ -28,6 +28,7 @@ import {
   Bot,
   Phone,
   UserPlus,
+  Calculator,
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import clsx from "clsx";
@@ -268,6 +269,13 @@ export function Layout() {
       path: "/inventory",
       icon: Car,
       roles: ["admin", "seller", "taller"],
+    },
+    {
+      name: "Cotizar auto",
+      path: "/cotizar",
+      icon: Calculator,
+      // El administrador llega por Inventario y Revisión de precios; el vendedor, solo por aquí.
+      roles: ["seller"],
     },
     {
       name: "Créditos",
