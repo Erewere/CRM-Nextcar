@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Car, CheckSquare, Target } from 'lucide-react';
+import { Plus, Users, Car, CheckSquare, Target, Calculator } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import clsx from 'clsx';
 import { ClientDetailModal } from './ClientDetailModal';
 import { VehicleDetailModal } from './VehicleDetailModal';
@@ -17,6 +18,7 @@ export function MobileFab() {
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const { userData } = useAuth();
+  const navigate = useNavigate();
   const isReadOnly = useReadOnly();
   
   const [clients, setClients] = useState<Client[]>([]);
@@ -118,6 +120,20 @@ export function MobileFab() {
                   <CheckSquare className="w-5 h-5" />
                 </span>
               </button>
+              {/* Cotizar un auto (cuánto pagar como máximo y en cuánto se vendería): la pantalla de precios es solo del administrador. */}
+              {userData?.role === "admin" && (
+              <button
+                onClick={() => { setIsOpen(false); navigate('/precios?vista=recomendar'); }}
+                className="flex items-center gap-2 active:scale-95 transition-all"
+              >
+                <span className="rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-sm px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Cotizar auto
+                </span>
+                <span className="w-12 h-12 bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 rounded-full shadow-sm flex items-center justify-center border border-gray-200 dark:border-slate-700 shrink-0">
+                  <Calculator className="w-5 h-5" />
+                </span>
+              </button>
+              )}
               {userData?.role !== "seller" && (
               <button
                 onClick={() => { setIsOpen(false); setShowVehicleModal(true); }}

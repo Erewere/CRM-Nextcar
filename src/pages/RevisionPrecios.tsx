@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useVolver } from '../hooks/useVolver';
 import { ArrowLeft, RefreshCw, Search, TrendingDown, TrendingUp, Equal, HelpCircle, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
@@ -59,11 +59,14 @@ export function RevisionPrecios() {
   const [filtro, setFiltro] = useState<Sugerencia | 'todos'>('todos');
   const [busca, setBusca] = useState('');
   const [revisando, setRevisando] = useState(false);
+  const ubicacion = useLocation();
   const [vista, setVista] = useState<'venta' | 'compras' | 'recomendar' | 'memoria'>(() => {
     // /precios?vista=recomendar abre directo el cotizador (es la entrada del botón «Cotizar» del inventario).
     const v = new URLSearchParams(window.location.search).get('vista');
     return v === 'compras' || v === 'recomendar' || v === 'memoria' ? v : 'venta';
   });
+  // Si ya estás en esta pantalla y tocas «Cotizar auto» del botón +, la dirección cambia pero la pantalla no se vuelve a crear.
+  useEffect(() => { if (new URLSearchParams(ubicacion.search).get('vista') === 'recomendar') setVista('recomendar'); }, [ubicacion.search]);
 
   const cargar = () => pedir('/api/precios/analisis').then((d) => { setAutos(d.autos || []); setUltima(d.ultimaRevision || null); setError(''); }).catch((e) => setError(e.message));
   useEffect(() => { cargar(); }, []);
