@@ -18,6 +18,7 @@ import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { useAvisosDescartados, descartarAviso, idDeMatch } from "../lib/avisosDescartados";
 import { deFormaVieja, estadoDeCuenta } from '../lib/planDePagos';
 import { creditosApi } from "../lib/creditosApi";
+import { publicarAvisosDelDia } from "../lib/avisosDelDia";
 
 const parseDate = (val: any): Date | null => {
   if (!val) return null;
@@ -78,7 +79,7 @@ const CLASE: Record<string, { grupo: string; nivel: Nivel }> = {
   "config-pendiente": { grupo: "config", nivel: "seguimiento" },
 };
 
-const GRUPOS: Record<string, { titulo: (n: number) => string; Icono: any; color: string; ruta?: string; verTodas?: string; recientesPrimero?: boolean }> = {
+export const GRUPOS: Record<string, { titulo: (n: number) => string; Icono: any; color: string; ruta?: string; verTodas?: string; recientesPrimero?: boolean }> = {
   chats: { titulo: (n) => (n === 1 ? "Cliente esperando respuesta" : "Clientes esperando respuesta"), Icono: MessageCircle, color: "text-green-600", ruta: "/chats", verTodas: "Ir a Chats" },
   citas: { titulo: (n) => (n === 1 ? "Cita en este momento" : "Citas en este momento"), Icono: Calendar, color: "text-emerald-600", ruta: "/tasks", verTodas: "Ver agenda" },
   "tareas-vencidas": { titulo: (n) => `${n === 1 ? "Tarea vencida" : "Tareas vencidas"}`, Icono: Clock, color: "text-red-600", ruta: "/tasks", verTodas: "Ver todas en Tareas", recientesPrimero: true },
@@ -784,6 +785,9 @@ export function NotificationsPopover() {
   }
   (Object.keys(porNivel) as Nivel[]).forEach((k) => porNivel[k].sort((a, b) => ORDEN_GRUPOS.indexOf(a.grupo) - ORDEN_GRUPOS.indexOf(b.grupo)));
   const conteo = { ahora: porNivel.ahora.reduce((s, g) => s + g.items.length, 0), hoy: porNivel.hoy.reduce((s, g) => s + g.items.length, 0), seguimiento: porNivel.seguimiento.reduce((s, g) => s + g.items.length, 0) };
+
+  // La pantalla de Inicio del celular muestra esta misma lista como «Lo de hoy».
+  useEffect(() => { publicarAvisosDelDia(porNivel as any); });
 
   useEffect(() => {
     if (urgentesAntes.current !== null && conteo.ahora > urgentesAntes.current) {

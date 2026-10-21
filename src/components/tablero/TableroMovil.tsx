@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, X } from "lucide-react";
+import { useNavigate } from "react-router";
+import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, ChevronRight, X } from "lucide-react";
 import { calcularAnalitica, hallazgos as calcularHallazgos, RANGOS_DE_PRECIO } from "../../lib/analiticaAgencia";
 import {
   PERIODOS, rangoDelPeriodo, leer, guardar, dinero, dineroCorto, ICONO_HALLAZGO,
@@ -23,12 +24,20 @@ const CORTO: Record<Periodo, string> = { mes: "Este mes", "3m": "3 meses", anio:
 
 type A = ReturnType<typeof calcularAnalitica>;
 
+/** A dónde lleva tocar una frase de «Lo que dicen tus números»: a la pantalla donde se actúa sobre eso. */
+function rutaDeFrase(t: string) {
+  if (/prospectos|canal|convierte/i.test(t)) return "/nuevos";
+  if (/ventas|presupuesto/i.test(t)) return "/closed-sales";
+  return "/inventory"; // días en piso, exceso o falta de un tipo de auto
+}
+
 export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
   const [periodo, setPeriodoEstado] = useState<Periodo>(() =>
     leer("tablero_periodo", PERIODOS.map((x) => x.id), "12m"));
   const [seccion, setSeccionEstado] = useState<Seccion>(() =>
     leer("tablero_movil_seccion", SECCIONES.map((x) => x.id), "ventas"));
   const [todasLasFrases, setTodasLasFrases] = useState(false);
+  const navigate = useNavigate();
   const setPeriodo = (x: Periodo) => { setPeriodoEstado(x); guardar("tablero_periodo", x); };
   const setSeccion = (x: Seccion) => { setSeccionEstado(x); guardar("tablero_movil_seccion", x); };
 
@@ -50,15 +59,15 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
   return (
     <section className="space-y-3">
       {/* Sin Excel en el movil: decision de Luis. El reporte se baja en la computadora. */}
-      <h2 className="text-base font-extrabold tracking-tight text-slate-800 dark:text-white">Tu agencia en números</h2>
+      <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Tu agencia en números</h2>
 
       {/* Periodo */}
-      <div className="flex gap-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-1">
+      <div className="flex gap-1 bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl p-1">
         {PERIODOS.map((x) => (
           <button
             key={x.id}
             onClick={() => setPeriodo(x.id)}
-            className={`flex-1 text-[11px] font-bold py-1.5 rounded transition-colors ${
+            className={`flex-1 text-[11px] font-bold py-2 rounded-xl transition-colors ${
               periodo === x.id ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "text-slate-500"
             }`}
           >
@@ -75,15 +84,16 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
 
       {/* Lo que dicen los numeros */}
       {h.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3.5 space-y-2.5">
+        <div className="bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl p-4 space-y-2.5">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Lo que dicen tus números</p>
           {frases.map((x, i) => {
             const Icono = ICONO_HALLAZGO[x.tono];
             return (
-              <div key={i} className="flex gap-2 items-start">
+              <button key={i} type="button" onClick={() => navigate(rutaDeFrase(x.texto))} className="w-full flex gap-2 items-start text-left active:opacity-70">
                 <Icono className={`w-4 h-4 mt-0.5 shrink-0 ${x.tono === "alerta" ? "text-[#D6402A]" : x.tono === "oportunidad" ? "text-emerald-600" : "text-slate-400"}`} />
-                <p className="text-[13px] leading-snug text-slate-700 dark:text-slate-200">{x.texto}</p>
-              </div>
+                <p className="flex-1 text-[13px] leading-snug text-slate-700 dark:text-slate-200">{x.texto}</p>
+                <ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-slate-300 dark:text-slate-600" />
+              </button>
             );
           })}
           {h.length > 3 && (
@@ -96,20 +106,20 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
 
       {/* Numeros clave */}
       <div className="grid grid-cols-2 gap-2.5">
-        <Cifra titulo="Autos vendidos" valor={r.ventas} pie={<Cambio ahora={r.ventas} antes={r.ventasAntes} />} />
-        <Cifra titulo="Ingresos" valor={dineroCorto(r.ingresos)} pie={<Cambio ahora={r.ingresos} antes={r.ingresosAntes} />} />
-        <Cifra titulo="Ticket promedio" valor={r.ventas ? dineroCorto(r.ticket) : "—"} pie={r.diasParaVender != null ? `se vende en ~${r.diasParaVender} días` : null} />
+        <Cifra a="/closed-sales" titulo="Autos vendidos" valor={r.ventas} pie={<Cambio ahora={r.ventas} antes={r.ventasAntes} />} />
+        <Cifra a="/payments" titulo="Ingresos" valor={dineroCorto(r.ingresos)} pie={<Cambio ahora={r.ingresos} antes={r.ingresosAntes} />} />
+        <Cifra a="/closed-sales" titulo="Ticket promedio" valor={r.ventas ? dineroCorto(r.ticket) : "—"} pie={r.diasParaVender != null ? `se vende en ~${r.diasParaVender} días` : null} />
         {p.verCostos ? (
-          <Cifra titulo="Margen bruto" valor={r.margenSobre ? dineroCorto(r.margen) : "—"} pie={r.ventas ? `${r.margenSobre} de ${r.ventas} con costo` : null} />
+          <Cifra a="/closed-sales" titulo="Margen bruto" valor={r.margenSobre ? dineroCorto(r.margen) : "—"} pie={r.ventas ? `${r.margenSobre} de ${r.ventas} con costo` : null} />
         ) : (
-          <Cifra titulo="Conversión" valor={r.prospectos ? `${Math.round((r.ventas / r.prospectos) * 100)}%` : "—"} pie="ventas / prospectos" />
+          <Cifra a="/kanban" titulo="Conversión" valor={r.prospectos ? `${Math.round((r.ventas / r.prospectos) * 100)}%` : "—"} pie="ventas / prospectos" />
         )}
-        <Cifra titulo="Prospectos nuevos" valor={r.prospectos} pie={<Cambio ahora={r.prospectos} antes={r.prospectosAntes} />} />
-        <Cifra titulo="Inventario" valor={`${r.inventarioUnidades} autos`} pie={viejos ? <span className="text-[#A82A17] dark:text-[#F2705B] font-semibold">{viejos} con +90 días</span> : dineroCorto(r.inventarioValor)} />
+        <Cifra a="/nuevos" titulo="Prospectos nuevos" valor={r.prospectos} pie={<Cambio ahora={r.prospectos} antes={r.prospectosAntes} />} />
+        <Cifra a="/inventory" titulo="Inventario" valor={`${r.inventarioUnidades} autos`} pie={viejos ? <span className="text-[#A82A17] dark:text-[#F2705B] font-semibold">{viejos} con +90 días</span> : dineroCorto(r.inventarioValor)} />
       </div>
 
       {/* Detalle */}
-      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded">
+      <div className="bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl overflow-hidden">
         <div className="flex border-b border-gray-200 dark:border-slate-700">
           {SECCIONES.map((x) => (
             <button
@@ -136,14 +146,23 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
 
 // ---------------------------------------------------------------------------
 
-function Cifra({ titulo, valor, pie }: { titulo: string; valor: ReactNode; pie?: ReactNode }) {
-  return (
-    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3">
-      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{titulo}</p>
-      <p className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mt-0.5">{valor}</p>
-      <div className="text-[10px] text-slate-500 min-h-[14px]">{pie}</div>
-    </div>
+function Cifra({ titulo, valor, pie, a }: { titulo: string; valor: ReactNode; pie?: ReactNode; a?: string }) {
+  const navigate = useNavigate();
+  const contenido = (
+    <>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{titulo}</p>
+        {a && <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />}
+      </div>
+      <p className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mt-1">{valor}</p>
+      <div className="text-[11px] text-slate-500 min-h-[14px] mt-0.5">{pie}</div>
+    </>
   );
+  const clase = "text-left bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl p-3.5";
+  // Con a=ruta, tocar la cifra lleva a la pantalla donde se ve el detalle.
+  return a
+    ? <button type="button" onClick={() => navigate(a)} className={`${clase} active:scale-[0.98] transition-transform`}>{contenido}</button>
+    : <div className={clase}>{contenido}</div>;
 }
 
 function Cambio({ ahora, antes }: { ahora: number; antes: number }) {

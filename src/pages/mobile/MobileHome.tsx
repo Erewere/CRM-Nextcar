@@ -14,6 +14,9 @@ import clsx from "clsx";
 import { getClientMatches } from "../../services/matchingEngine";
 import { useSharedInventoryMatches } from "../../hooks/useSharedInventoryMatches";
 import { VehicleDetailModal } from "../../components/VehicleDetailModal";
+import { HoyMovil, resumenDeHoy } from "../../components/tablero/HoyMovil";
+import { SaludoDelDia } from "../../components/SaludoDelDia";
+import { useAvisosDelDia, useAvisosListos } from "../../lib/avisosDelDia";
 
 const getWantedTitle = (c: Client) => {
   if (c.wantedVehicle && (c.wantedVehicle.make || c.wantedVehicle.model || (c.wantedVehicle.bodyType && c.wantedVehicle.bodyType !== 'Cualquiera'))) {
@@ -84,6 +87,10 @@ export function MobileHome({
   const { userData } = useAuth();
   const [currentTime] = useState(new Date());
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const avisos = useAvisosDelDia();
+  const avisosListos = useAvisosListos();
+  const nAhora = avisos.ahora.reduce((t, g) => t + g.items.length, 0);
+  const nHoy = avisos.hoy.reduce((t, g) => t + g.items.length, 0);
 
   const missingChecklistVehicles = useMemo(() => {
     const isRestrictedSeller = userRole === 'seller' || (userRole === 'admin' && (userData as any)?.adminMobileViewAllContacts === false);
@@ -201,29 +208,14 @@ export function MobileHome({
 
   return (
     <div className="flex flex-col h-full overflow-y-auto pb-24 bg-[#f4f5f5] dark:bg-slate-900">
-      {/* Dynamic Role-Based Header */}
-      <div className="px-5 pt-6 pb-4 bg-slate-900 text-white shadow-sm sticky top-0 z-20 border-b border-slate-850">
-        <div className="flex justify-between items-center">
-          <div>
-            <span className={clsx(
-              "text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border",
-              isAdmin 
-                ? "bg-indigo-950/80 border-indigo-900 text-indigo-400" 
-                : "bg-emerald-950/80 border-emerald-900 text-emerald-400"
-            )}>
-              {isAdmin ? "Panel Consolidado • Admin" : "Asesor Comercial"}
-            </span>
-            <h1 className="text-xl font-black text-white tracking-tight mt-1">
-              {greeting}, <span className={clsx(isAdmin ? "text-indigo-400" : "text-emerald-400")}>{userName.split(' ')[0]}</span>
-            </h1>
-          </div>
-          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700/50 rounded-full px-3 py-1">
-            <Activity className={clsx("w-3 h-3 animate-pulse", isAdmin ? "text-indigo-400" : "text-emerald-400")} />
-            <span className="text-[10px] font-bold text-slate-300">Vivo</span>
-          </div>
-        </div>
-        <p className="text-xs text-slate-400 mt-1 capitalize font-medium">
-          {formattedDate} {agencyName ? ` • ${agencyName}` : ''}
+      {/* Saludo y, debajo, lo que toca hacer hoy en una frase. Lo demás va debajo, ya ordenado por importancia. */}
+      <div className="px-5 pt-5 pb-1">
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 capitalize">{formattedDate}</p>
+        <h1 className="mt-0.5">
+          <SaludoDelDia nombre={userName} tam="text-[26px] leading-tight" className="text-slate-900 dark:text-white" />
+        </h1>
+        <p className={clsx("mt-1.5 text-sm font-medium", nAhora > 0 ? "text-red-600 dark:text-red-400" : "text-slate-500 dark:text-slate-400")}>
+          {nAhora + nHoy === 0 && !avisosListos ? "Revisando lo de hoy…" : resumenDeHoy(nAhora, nHoy)}
         </p>
       </div>
 
@@ -235,41 +227,11 @@ export function MobileHome({
           /* ========================================================================= */
           <div className="space-y-6">
             
-            {tablero}
+            <HoyMovil />
 
             {leadIntel}
 
-            {/* Inventory Checklist Alerts for Mobile */}
-            {missingChecklistVehicles.length > 0 && (
-              <section className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <h2 className="text-base font-black text-slate-800 dark:text-white">Alertas de Inventario</h2>
-                </div>
-                <div className="space-y-2">
-                  {missingChecklistVehicles.slice(0, 4).map((v: any, index: number) => (
-                    <div
-                      key={`missing-v-${v.id || index}`}
-                      onClick={() => onSelectVehicle?.(v)}
-                      className="p-3 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200 dark:border-amber-900/30 rounded flex items-start gap-3 cursor-pointer active:scale-[0.99] transition-transform"
-                    >
-                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-xs font-black text-slate-900 dark:text-slate-200 truncate">{v.make} {v.model} ({v.year})</p>
-                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
-                            Ver <ExternalLink className="w-3 h-3" />
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-1 truncate">
-                          Faltan: <span className="font-bold text-amber-800 dark:text-amber-300">{v.missingItems.join(', ')}</span>
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {tablero}
 
             {/* Admin Inactivity Alerts */}
             {filteredInactiveAlerts.length > 0 && (
@@ -322,56 +284,7 @@ export function MobileHome({
           /* ========================================================================= */
           <div className="space-y-6">
             
-            {/* Advisor Metrics Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mis Cierres</p>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
-                    {clients.filter(c => c.status === "won" || c.status === "Ganado").length}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
-                    <DollarSign className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mis Ventas</p>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-1 truncate">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
-                    <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prospectos Activos</p>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
-                    {activeContacts.length}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="w-7 h-7 rounded bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
-                    <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Coincidencias</p>
-                  <h3 className="text-xl font-black text-orange-600 dark:text-orange-400 mt-1">
-                    {allClientMatches}
-                  </h3>
-                </div>
-              </div>
-            </div>
+            <HoyMovil />
 
             {leadIntel}
 
@@ -454,7 +367,7 @@ export function MobileHome({
                       <div 
                         key={`${task.id}-${idx}`}
                         onClick={() => handleTaskClick(task.clientId)}
-                        className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm border border-gray-200 dark:border-slate-700 flex items-center justify-between active:scale-[0.98] transition-transform cursor-pointer"
+                        className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-200 dark:border-slate-700 flex items-center justify-between active:scale-[0.98] transition-transform cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shrink-0">
@@ -496,7 +409,7 @@ export function MobileHome({
                         <div 
                           key={`${task.id}-${idx}`}
                           onClick={() => handleTaskClick(task.clientId)}
-                          className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm border border-gray-200 dark:border-slate-700 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
+                          className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-200 dark:border-slate-700 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
                         >
                           <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -511,39 +424,58 @@ export function MobileHome({
                   </div>
                 )}
               </div>
-
-              {/* Overdue Tasks */}
-              {overdueTasks.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertCircle className="w-4.5 h-4.5 text-rose-500" />
-                    <h3 className="text-sm font-black text-slate-800 dark:text-white">Tareas Vencidas</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {overdueTasks.map((task, idx) => {
-                      const Icon = typeIcons[task.type] || Clock;
-                      return (
-                        <div 
-                          key={`${task.id}-${idx}`}
-                          onClick={() => handleTaskClick(task.clientId)}
-                          className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm border border-rose-200 dark:border-rose-900/40 flex items-center gap-3 active:scale-[0.98] transition-transform cursor-pointer"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center shrink-0">
-                            <Icon className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 dark:text-white text-xs truncate">{task.title}</p>
-                            <p className="text-[10px] text-rose-500 font-bold truncate">
-                              Venció: {task.dueDate} - {getClientName(task.clientId)}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </section>
+
+            {/* Advisor Metrics Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="w-7 h-7 rounded bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mis Cierres</p>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                    {clients.filter(c => c.status === "won" || c.status === "Ganado").length}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="w-7 h-7 rounded bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center mb-2">
+                    <DollarSign className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mis Ventas</p>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-1 truncate">
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalWonAmount)}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="w-7 h-7 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-2">
+                    <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prospectos Activos</p>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                    {activeContacts.length}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="w-7 h-7 rounded bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center mb-2">
+                    <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Coincidencias</p>
+                  <h3 className="text-xl font-black text-orange-600 dark:text-orange-400 mt-1">
+                    {allClientMatches}
+                  </h3>
+                </div>
+              </div>
+            </div>
 
           </div>
         )}
