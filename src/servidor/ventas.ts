@@ -96,6 +96,52 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     });
   }
 
+
+  /**
+   * Un trato ganado con auto tiene que sacar ese auto del inventario. Las
+   * pantallas lo hacen al cerrar la venta, pero hay varios caminos de cierre
+   * («Marcar ganado» desde el contacto, editar la venta desde su página...) y
+   * alguno se salta el paso: el trato queda ganado, con sus pagos, y el auto
+   * sigue «disponible» (Jetta de Xavier Gomez, 22 oct 2026). Esto lo
+   * garantiza aquí, que es por donde pasan todos.
+   *
+   * Un administrador o el dueño confirman la venta; para los demás queda la
+   * solicitud de aprobación de siempre. Nunca toca un auto que ya está
+   * vendido, que ya espera aprobación o que otro trato ya registra como suyo.
+   */
+  async function asegurarAutoVendido(db: any, dealId: string, rol: string): Promise<"vendido" | "solicitud" | null> {
+    const d = (await db.collection("deals").doc(dealId).get()).data();
+    if (!d || d.isDeleted || d.status !== "won" || !d.vehicleId || !idValido(String(d.vehicleId))) return null;
+    const vRef = db.collection("vehicles").doc(String(d.vehicleId));
+    const x = (await vRef.get()).data();
+    if (!x || x.agencyId !== d.agencyId || x.status === "sold" || x.pendingValidation || x.soldDealId) return null;
+    const otros = await db.collection("deals").where("vehicleId", "==", String(d.vehicleId)).get();
+    if (otros.docs.some((o: any) => o.id !== dealId && o.data().status === "won" && !o.data().isDeleted)) return null;
+    const cliente = d.clientId && idValido(String(d.clientId)) ? (await db.collection("clients").doc(String(d.clientId)).get()).data() : null;
+    const precio = Number(d.saleDetails?.price) || Number(d.value) || Number(x.price) || 0;
+    const ahora = new Date().toISOString();
+    const nombre = String(cliente?.name || String(d.title || "").replace(/ - .*$/, "").replace(/^Trato con /, "") || "");
+    if (rol === "admin" || rol === "master") {
+      await vRef.update({
+        status: "sold", price: precio, soldAt: d.soldAt || hoyISO(),
+        saleDetails: { ...planDe(d.saleDetails), price: precio, payments: d.saleDetails?.payments || [] },
+        pendingValidation: null, soldDealId: dealId,
+        ...(d.clientId ? { buyerId: d.clientId, soldToClientId: d.clientId } : {}),
+        ...(nombre ? { buyerName: nombre } : {}),
+        updatedAt: ahora,
+      });
+      return "vendido";
+    }
+    await vRef.update({
+      pendingValidation: {
+        type: "sold", requestedBy: null, requestedByName: "Trato ganado", clientId: d.clientId || null, dealId, clientName: nombre,
+        originalPrice: Number(x.price) || 0, proposedPrice: precio, hasPriceChange: (Number(x.price) || 0) > 0 && Number(x.price) !== precio,
+        saleDetails: { ...planDe(d.saleDetails), price: precio }, vehicle: String(d.vehicle || ""), requestedAt: ahora,
+      },
+    });
+    return "solicitud";
+  }
+
   /**
    * Reescribe la copia vieja (saleDetails.payments) en trato, contacto y auto
    * a partir de pagosVenta, y pone las tareas de cobro según el dinero real.
@@ -215,6 +261,8 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
       const t = await tratoDe(q, String(req.params.dealId || ""));
       if (!t) return res.status(404).json({ error: "No encontramos esa venta." });
       const d = t.datos;
+      // Abrir una venta antigua que dejó el auto disponible lo corrige (solo si quien la abre puede confirmarla y la venta es de los últimos 60 días).
+      if ((q.rol === "admin" || q.rol === "master") && Date.now() - Date.parse(`${String(d.soldAt || "").slice(0, 10)}T12:00:00`) < 60 * 864e5) await asegurarAutoVendido(q.adminDb, t.ref.id, q.rol);
       const auto = await autoDe(q.adminDb, t.ref.id, d);
       const cliente = d.clientId && idValido(String(d.clientId)) ? (await q.adminDb.collection("clients").doc(String(d.clientId)).get()).data() : null;
       // Ver no migra: lo viejo (las tres copias juntas, como se migrará) se muestra tal cual hasta que alguien registre algo.
@@ -493,6 +541,7 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
       const t = await tratoDe(q, String(req.params.dealId || ""));
       if (!t) return res.status(404).json({ error: "No encontramos esa venta." });
       await asegurarMigrado(q.adminDb, t.ref.id);
+      await asegurarAutoVendido(q.adminDb, t.ref.id, q.rol);
       const r = await reflejar(q.adminDb, t.ref.id);
       res.json({ ok: true, cuenta: r?.ec });
     } catch (e) {
@@ -501,5 +550,5 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     }
   });
 
-  return { asegurarMigrado, reflejar, pagosDe, autoDe };
+  return { asegurarMigrado, asegurarAutoVendido, reflejar, pagosDe, autoDe };
 }

@@ -3501,6 +3501,8 @@ export function ClientDetailModal({
                     onClick={async () => {
                       if (confirm("¿Marcar trato como ganado?")) {
                         await guardarTratoSiExiste(deal.id, { status: "won" });
+                        // Saca el auto del inventario y deja las tareas de cobro al día.
+                        try { await ventasApi.reflejar(deal.id); } catch (e) { console.error(e); }
                       }
                     }}
                     className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
