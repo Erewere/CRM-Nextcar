@@ -45,7 +45,7 @@ import { getStorage as getAdminStorage } from "firebase-admin/storage";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 
 import { Resend } from "resend";
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { destinatariosDeLaSemana, armarCorreo, DIAS_ENTRE_CORREOS, type TipoCorreo } from "./src/lib/correosDeAnimo.ts";
 import { correoBienvenidaAdmin, correoInvitacionEquipo, CONTACTO } from "./src/lib/plantillasCorreo";
 import Stripe from "stripe";
@@ -420,8 +420,8 @@ async function mandarCorreo(para: string, asunto: string, html: string): Promise
  * que sale por aqui llega firmado. Resend queda de respaldo: si Hostinger
  * rechaza o no responde, el correo sale por el otro lado en vez de perderse.
  */
-let transporteHostinger: nodemailer.Transporter | null = null;
-function hostinger(): nodemailer.Transporter | null {
+let transporteHostinger: Transporter | null = null;
+function hostinger(): Transporter | null {
   const { SMTP_HOST, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
   if (!transporteHostinger) {
