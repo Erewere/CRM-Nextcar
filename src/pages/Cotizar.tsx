@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useVolver } from '../hooks/useVolver';
 import { Recomendador } from '../components/precios/Recomendador';
+import { AvisoPremium, usePremium } from '../components/PlanPremium';
 
 /**
  * Cotizar un auto: cuánto pagar como máximo y en cuánto se vendería. Es lo único de «Revisión de precios» que ven los
@@ -12,6 +13,8 @@ export function Cotizar() {
   const { userData } = useAuth();
   const volver = useVolver('/');
   const esVendedor = userData?.role === 'seller';
+  const premium = usePremium();
+  if (!premium) return <AvisoPremium titulo="Cotizar autos es del plan Premium" />;
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900 overflow-y-auto">
       <div className="p-4 md:p-6 max-w-5xl mx-auto w-full space-y-4">

@@ -22,7 +22,7 @@ interface Props {
   onCerrar: () => void;
 }
 
-interface Plantilla { name: string; language: string; category?: string; texto: string; variables: number; }
+interface Plantilla { name: string; language: string; category?: string; texto: string; variables: number; noSirve?: string; }
 
 // Meta cobra por mensaje de plantilla y no todas cuestan igual: una de
 // marketing es la mas cara, una de utilidad cuesta bastante menos. Si en
@@ -76,6 +76,7 @@ export function EscribirAlCliente({ clientId, nombre, telefono, ultimoMensajeEnt
   // La primera variable de casi todas las plantillas es el nombre; se rellena
   // sola para ahorrarle el tecleo al vendedor, y se puede cambiar.
   const elegirPlantilla = (p: Plantilla) => {
+    if (p.noSirve) return;
     setElegida(p);
     setValores(Array.from({ length: p.variables }, (_, i) => (i === 0 ? nombre : '')));
   };
@@ -215,17 +216,32 @@ export function EscribirAlCliente({ clientId, nombre, telefono, ultimoMensajeEnt
                   <button
                     key={p.name}
                     onClick={() => elegirPlantilla(p)}
-                    className="w-full text-left p-3 rounded border border-gray-200 dark:border-slate-700 hover:border-green-500 transition-colors"
+                    disabled={!!p.noSirve}
+                    className={clsx(
+                      "w-full text-left p-3 rounded border transition-colors",
+                      p.noSirve
+                        ? "border-gray-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 cursor-not-allowed"
+                        : "border-gray-200 dark:border-slate-700 hover:border-green-500",
+                    )}
                   >
-                    <span className="flex items-center gap-1.5 font-bold text-sm text-slate-800 dark:text-slate-200">
+                    <span className={clsx(
+                      "flex items-center gap-1.5 font-bold text-sm",
+                      p.noSirve ? "text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-slate-200",
+                    )}>
                       <FileText className="w-3.5 h-3.5 text-slate-400" /> {p.name}
-                      {precio(p.category) && (
+                      {!p.noSirve && precio(p.category) && (
                         <span className={clsx("text-[10px] font-bold ml-auto shrink-0", precio(p.category)!.clase)}>
                           {precio(p.category)!.texto}
                         </span>
                       )}
+                      {p.noSirve && (
+                        <span className="text-[10px] font-bold ml-auto shrink-0 text-slate-400">No se puede enviar</span>
+                      )}
                     </span>
-                    <span className="block text-xs text-slate-500 mt-1 line-clamp-2">{p.texto}</span>
+                    <span className={clsx("block text-xs mt-1 line-clamp-2", p.noSirve ? "text-slate-400" : "text-slate-500")}>{p.texto}</span>
+                    {/* El motivo se escribe aqui mismo: una plantilla apagada sin
+                        explicacion manda al vendedor a adivinar o a reintentar. */}
+                    {p.noSirve && <span className="block text-[11px] text-amber-700 dark:text-amber-400 mt-1.5">{p.noSirve}</span>}
                   </button>
                 ))}
               </div>

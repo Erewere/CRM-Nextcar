@@ -63,6 +63,7 @@ import { PaymentModal } from "./PaymentModal";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 import { ResumenCliente } from "./ficha/ResumenCliente";
 import { Cotizador } from "./Cotizador";
+import { CotizadorConPlan } from './PlanPremium';
 import { NewActivityModal } from "./NewActivityModal";
 import { createPaymentTasks } from "../lib/paymentTasks";
 import { ventasApi } from "../lib/ventasApi";
@@ -4298,7 +4299,7 @@ export function ClientDetailModal({
       )}
 
       {cotizandoAuto !== false && (
-        <Cotizador
+        <CotizadorConPlan
           auto={cotizandoAuto}
           autos={inventoryVehicles.filter((v) => v.status !== 'sold' && Number(v.price) > 0)}
           cliente={{ id: (client.originalClientId || client.id) as string, name: formData.name, phone: formData.phone }}

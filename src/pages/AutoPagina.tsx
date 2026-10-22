@@ -31,6 +31,7 @@ import { generarFichaPdf, descargarOCompartir } from '../lib/fichaPdf';
 import { generarHojasParabrisas } from '../lib/hojaParabrisasPdf';
 import { ElegirFotosFicha, fotosInicialesDeFicha } from '../components/auto/ElegirFotosFicha';
 import { Cotizador } from '../components/Cotizador';
+import { CotizadorConPlan } from '../components/PlanPremium';
 import { ShareVehicleModal } from '../components/ShareVehicleModal';
 import { ImagenesRedes } from '../components/auto/ImagenesRedes';
 import { ConsultaRepuveAuto } from '../components/auto/ConsultaRepuve';
@@ -903,7 +904,7 @@ export function AutoPagina() {
       </div>
 
       {cotizando !== false && (
-        <Cotizador
+        <CotizadorConPlan
           auto={auto}
           cliente={cotizando}
           clientes={(() => {

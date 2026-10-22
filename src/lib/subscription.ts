@@ -10,6 +10,10 @@
 export const PRECIO_POR_USUARIO =
   Number((import.meta as any).env?.VITE_STRIPE_PRICE_AMOUNT) || 199;
 
+/** Lo que se cobra al mes por cada usuario del plan Premium (mismo aviso: lo que cobra de verdad lo fija su precio en Stripe). */
+export const PRECIO_PREMIUM_POR_USUARIO =
+  Number((import.meta as any).env?.VITE_STRIPE_PRICE_PREMIUM_AMOUNT) || 299;
+
 /**
  * Reglas de acceso por suscripcion, en un solo lugar.
  *

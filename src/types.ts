@@ -111,6 +111,8 @@ export interface Vehicle {
 export interface Agency {
   id: string;
   name: string;
+  /** Plan de la suscripción (lo pone el servidor según el precio de Stripe). Ver src/lib/planes.ts. */
+  plan?: 'basico' | 'premium';
   /** Datos que pone el dueño al entrar por primera vez. */
   address?: string;
   phone?: string;

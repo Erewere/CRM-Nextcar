@@ -146,7 +146,14 @@ service cloud.firestore {
       // sesion, de cualquier agencia, puede leerlo entero.
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isMaster() || (isAuthenticated() && getUserAgencyId() == id);
+      // Quien sea de la agencia puede editarla, EXCEPTO lo que decide el cobro: estado de la suscripción, acceso de cortesía,
+      // plan, prueba y datos de Stripe. Eso solo lo cambia el master (desde el panel) o el servidor (que no pasa por estas
+      // reglas). Sin esto, cualquier usuario podía darse acceso gratis o el plan Premium desde la consola del navegador.
+      allow update: if isMaster() || (isAuthenticated() && getUserAgencyId() == id
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'subscriptionStatus', 'hasFreeAccess', 'plan', 'planCambiadoEl', 'planCambiadoPor',
+          'trialEndsAt', 'accesoManual', 'stripeCustomerId', 'facturacion'
+        ]));
       allow delete: if isMaster();
     }
 

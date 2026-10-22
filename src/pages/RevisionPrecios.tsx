@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useVolver } from '../hooks/useVolver';
+import { AvisoPremium, usePremium } from '../components/PlanPremium';
 import { ArrowLeft, RefreshCw, Search, TrendingDown, TrendingUp, Equal, HelpCircle, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 import { auth } from '../lib/firebase';
@@ -50,7 +51,7 @@ const hace = (iso: string | null) => {
   return `hace ${Math.round(h / 24)} días`;
 };
 
-export function RevisionPrecios() {
+function RevisionPreciosContenido() {
   const navigate = useNavigate();
   const volver = useVolver('/inventory');
   const [autos, setAutos] = useState<Analisis[] | null>(null);
@@ -185,4 +186,10 @@ export function RevisionPrecios() {
       </div>
     </div>
   );
+}
+
+/** La revisión de precios es del plan Premium: sin él se explica qué incluye, y el servidor no entrega datos. */
+export function RevisionPrecios() {
+  const premium = usePremium();
+  return premium ? <RevisionPreciosContenido /> : <AvisoPremium titulo="La revisión de precios es del plan Premium" />;
 }

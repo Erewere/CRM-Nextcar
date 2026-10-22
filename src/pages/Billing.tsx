@@ -5,7 +5,8 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db, auth } from '../lib/firebase';
 import { Agency } from '../types';
 import { getApiUrl } from '../lib/api';
-import { PRECIO_POR_USUARIO } from '../lib/subscription';
+import { PRECIO_POR_USUARIO, PRECIO_PREMIUM_POR_USUARIO } from '../lib/subscription';
+import { INCLUYE_PREMIUM, NOMBRE_PLAN, planDeAgencia, type Plan } from '../lib/planes';
 
 export function Billing() {
   const { userData } = useAuth();
@@ -55,7 +56,7 @@ export function Billing() {
     fetchData();
   }, [userData?.agencyId]);
 
-  const handleSubscribe = async () => {
+  const handleSubscribe = async (plan: Plan) => {
     if (!userData?.agencyId) {
       setError('No se encontró el ID de la agencia.');
       return;
@@ -81,6 +82,7 @@ export function Billing() {
         body: JSON.stringify({
           agencyId: userData.agencyId,
           priceId,
+          plan,
           quantity: userCount || 1,
           mode: 'subscription'
         }),
@@ -118,6 +120,27 @@ export function Billing() {
   };
 
 
+  const handleCambiarPlan = async (destino: Plan) => {
+    const precio = destino === 'premium' ? PRECIO_PREMIUM_POR_USUARIO : PRECIO_POR_USUARIO;
+    const aviso = destino === 'premium'
+      ? `Te cambiarás a Premium: ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(precio)} por usuario al mes. Stripe cobra ahora solo la diferencia de lo que falta del mes. ¿Continuar?`
+      : `Volverás al plan Básico (${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(precio)} por usuario al mes). Dejarás de tener cotizar autos, la revisión de precios y el cotizador de financiamiento. ¿Continuar?`;
+    if (!window.confirm(aviso)) return;
+    setLoading(true); setError(''); setSuccess('');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const r = await fetch(getApiUrl('/api/cambiar-plan'), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ plan: destino }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo cambiar de plan.');
+      setAgency((a) => (a ? ({ ...a, plan: destino } as Agency) : a));
+      setSuccess(`Listo: tu agencia está en el plan ${NOMBRE_PLAN[destino]}. Recarga la aplicación para ver el cambio en todas las pantallas.`);
+    } catch (e: any) {
+      setError(e.message || 'No se pudo cambiar de plan.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isInactive = agency && !agency.hasFreeAccess && agency.subscriptionStatus !== 'active';
 
   return (
@@ -129,7 +152,7 @@ export function Billing() {
           <div>
             <p className="font-semibold text-sm">Suscripción Inactiva o Periodo de Prueba Vencido</p>
             <p className="text-xs mt-1 leading-relaxed text-amber-700 dark:text-amber-500/90">
-              La suscripción Pro de tu agencia se encuentra suspendida o inactiva. Por favor, haz clic en <strong>"Actualizar Suscripción"</strong> a continuación para restablecer de forma inmediata el acceso completo para todos los usuarios de la agencia.
+              La suscripción de tu agencia se encuentra suspendida o inactiva. Por favor, elige un plan y suscríbete a continuación para restablecer de forma inmediata el acceso completo para todos los usuarios de la agencia.
             </p>
           </div>
         </div>
@@ -149,65 +172,48 @@ export function Billing() {
         </div>
       )}
 
-      {/* Plan Base */}
-      <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
-        <div className="p-6 md:p-8 flex flex-col md:flex-row items-center gap-8">
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Plan Pro - Mensual</h2>
-            <p className="text-slate-500 dark:text-slate-400 mb-6">
-              Acceso completo a todas las funciones del CRM para tu agencia, incluyendo gestión de inventario y embudos de ventas.
-            </p>
-            
-            <div className="flex flex-col gap-3 mb-8 text-sm text-slate-600 dark:text-slate-300">
-              <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-blue-500" />
-                <span>Precio por cada usuario en tu agencia</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-blue-500" />
-                <span>Inventario ilimitado de vehículos</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-blue-500" />
-                <span>Leads ilimitados</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleSubscribe}
-              disabled={loading}
-              className="flex items-center justify-center gap-2 w-full md:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <CreditCard className="w-5 h-5" />
-                  Actualizar Suscripción
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="w-full md:w-auto min-w-[280px] bg-[#f4f5f5] dark:bg-slate-900 p-6 md:p-8 rounded border border-gray-200 dark:border-slate-700 text-center">
-            <div className="text-5xl font-extrabold text-slate-900 dark:text-white mb-2">
-              {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(PRICE_PER_USER)}
-            </div>
-            <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 uppercase tracking-wider">
-              MXN / usuario / mes
-            </div>
-            <div className="flex items-center justify-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium bg-white dark:bg-slate-800 py-2 px-4 rounded shadow-sm border border-gray-200 dark:border-slate-700">
-              <Users className="w-4 h-4 text-blue-500" />
-              <span>{userCount} {userCount === 1 ? 'usuario actual' : 'usuarios actuales'}</span>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center font-bold text-slate-900 dark:text-white">
-              <span>Total Estimado:</span>
-              <span>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(PRICE_PER_USER * userCount)} / mes</span>
-            </div>
-          </div>
+      {/* Planes */}
+      {agency?.hasFreeAccess ? (
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">Acceso de cortesía</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Tu agencia tiene acceso gratuito e incluye todo lo del plan Premium. No necesitas suscribirte.</p>
         </div>
-      </div>
-
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {(['basico', 'premium'] as Plan[]).map((p) => {
+            const precio = p === 'premium' ? PRECIO_PREMIUM_POR_USUARIO : PRICE_PER_USER;
+            const activa = agency?.subscriptionStatus === 'active';
+            const actual = planDeAgencia(agency) === p && activa;
+            const dinero = (n: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
+            return (
+              <div key={p} className={`bg-white dark:bg-slate-800 rounded-xl border p-6 shadow-sm flex flex-col ${p === 'premium' ? 'border-amber-300 dark:border-amber-700 ring-1 ring-amber-200 dark:ring-amber-900/40' : 'border-gray-200 dark:border-slate-700'}`}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Plan {NOMBRE_PLAN[p]}</h2>
+                  {actual && <span className="text-[11px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Tu plan</span>}
+                  {!activa && agency?.subscriptionStatus === 'trialing' && p === 'premium' && <span className="text-[11px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">En tu prueba</span>}
+                </div>
+                <p className="text-3xl font-extrabold text-slate-900 dark:text-white">{dinero(precio)} <span className="text-sm font-medium text-slate-500">por usuario al mes</span></p>
+                <p className="text-xs text-slate-500 mb-4">{userCount} {userCount === 1 ? 'usuario' : 'usuarios'} · {dinero(precio * userCount)} al mes</p>
+                <ul className="flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300 mb-5 flex-1">
+                  <li className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" /> {p === 'basico' ? 'El CRM completo: inventario, embudo, tareas, chats y pagos' : 'Todo lo del plan Básico'}</li>
+                  {p === 'premium' && INCLUYE_PREMIUM.map((t) => <li key={t} className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" /> {t}</li>)}
+                </ul>
+                {actual ? (
+                  <p className="text-sm text-slate-500">Es el plan que tienes ahora.</p>
+                ) : activa ? (
+                  <button onClick={() => handleCambiarPlan(p)} disabled={loading} className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">
+                    {p === 'premium' ? 'Cambiar a Premium' : 'Volver a Básico'}
+                  </button>
+                ) : (
+                  <button onClick={() => handleSubscribe(p)} disabled={loading} className={`h-11 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 ${p === 'premium' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                    {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><CreditCard className="w-4 h-4" /> Suscribirme a {NOMBRE_PLAN[p]}</>}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
     </div>
   );

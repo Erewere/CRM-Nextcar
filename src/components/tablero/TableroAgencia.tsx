@@ -16,6 +16,7 @@ import { MetaBarra } from "../metas/MetaBarra";
 import { useMetas } from "../../lib/metasApi";
 import { nombreDelMes } from "../../lib/metas";
 import { SaludDelInventario } from "../precios/SaludDelInventario";
+import { usePremium } from "../PlanPremium";
 import { ResumenComprasTablero } from "../precios/ResumenComprasTablero";
 
 /**
@@ -125,6 +126,7 @@ export interface TableroAgenciaProps {
 }
 
 export function TableroAgencia(p: TableroAgenciaProps) {
+  const premium = usePremium();
   const [pestana, setPestanaEstado] = useState<Pestana>(() =>
     leer("tablero_pestana", PESTANAS.map((x) => x.id), "resumen"));
   const [periodo, setPeriodoEstado] = useState<Periodo>(() =>
@@ -217,8 +219,8 @@ export function TableroAgencia(p: TableroAgenciaProps) {
       {pestana === "ventas" && <Ventas a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />}
       {pestana === "inventario" && (
         <div className="space-y-4">
-          <SaludDelInventario />
-          {p.verCostos && <ResumenComprasTablero />}
+          {premium && <SaludDelInventario />}
+          {premium && p.verCostos && <ResumenComprasTablero />}
           <Inventario a={a} verCostos={p.verCostos} onAbrirVehiculo={p.onAbrirVehiculo} />
         </div>
       )}

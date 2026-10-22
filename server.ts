@@ -16,6 +16,7 @@ import { sembrarPostventa } from "./src/servidor/postventa.ts";
 import { sembrarSeguimiento } from "./src/servidor/seguimiento.ts";
 import { registrarPush } from "./src/servidor/push.ts";
 import { sincronizarTodas, sincronizarUsuariosDeAgencia } from "./src/servidor/usuariosFacturados.ts";
+import { planDeAgencia, planDePrecio, tienePremium } from "./src/lib/planes.ts";
 import { avisarActividades } from "./src/servidor/avisosActividades.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
@@ -525,6 +526,12 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+/** Id del precio Premium en Stripe (VITE_STRIPE_PRICE_PREMIUM_ID). Vacío = el plan Premium aún no está configurado. */
+const precioPremiumId = () => String(process.env.VITE_STRIPE_PRICE_PREMIUM_ID || "").trim();
+const precioBasicoId = () => String(process.env.VITE_STRIPE_PRICE_ID || "").trim();
+/** Qué plan paga una suscripción de Stripe, según el precio de su (único) renglón. */
+const planDeSuscripcion = (sub: any) => planDePrecio(sub?.items?.data?.[0]?.price?.id, precioPremiumId());
+
 async function checkAdminDbAccess() {
   // Verificación de diagnóstico del Admin SDK (ejecutado en segundo plano)
   try {
@@ -633,6 +640,7 @@ async function startServer() {
               {
                 subscriptionStatus: status,
                 stripeCustomerId: customerId,
+                plan: planDeSuscripcion(subscription),
                 updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true }
@@ -645,7 +653,7 @@ async function startServer() {
 
           if (!agenciesSnapshot.empty) {
             const agencyDoc = agenciesSnapshot.docs[0];
-            await agencyDoc.ref.set({ subscriptionStatus: status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            await agencyDoc.ref.set({ subscriptionStatus: status, plan: planDeSuscripcion(subscription), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
           } else {
             console.error("Suscripcion sin agencia identificable:", subscription.id, customerId);
           }
@@ -699,7 +707,9 @@ async function startServer() {
         return res.status(401).json({ error: "Token inválido o expirado. Por favor, vuelve a iniciar sesión." });
       }
       
-      const { agencyId, priceId, quantity, mode, metadata } = req.body;
+      const { agencyId, priceId: priceIdDelCliente, quantity, mode, metadata, plan: planElegido } = req.body;
+      // El precio lo decide el servidor según el plan elegido; el que mande el navegador solo vale si no hay precios configurados.
+      const priceId = planElegido === "premium" ? precioPremiumId() : (precioBasicoId() || priceIdDelCliente);
       if (!agencyId) {
         return res.status(400).json({ error: "Falta el ID de la agencia (agencyId)" });
       }
@@ -727,7 +737,7 @@ async function startServer() {
 
       if (!priceId || priceId === "price_..." || priceId.includes("...")) {
         return res.status(400).json({ 
-          error: "ID de precio de Stripe no configurado (VITE_STRIPE_PRICE_ID)." 
+          error: planElegido === "premium" ? "El plan Premium todavía no está configurado en Stripe (VITE_STRIPE_PRICE_PREMIUM_ID)." : "ID de precio de Stripe no configurado (VITE_STRIPE_PRICE_ID)."
         });
       }
 
@@ -766,6 +776,41 @@ async function startServer() {
     } catch (err: any) {
       console.error("Error in create-checkout-session:", err);
       return res.status(500).json({ error: err.message || "Error al crear la sesión de pago con Stripe." });
+    }
+  });
+
+  // === Cambiar de plan (Básico <-> Premium) en una suscripción que ya existe ===
+  // Cambia el precio del único renglón de la suscripción; Stripe prorratea lo ya pagado del mes. El plan de la agencia se
+  // actualiza de inmediato (el aviso de Stripe lo confirma después).
+  app.post("/api/cambiar-plan", async (req, res) => {
+    try {
+      const q = await usuarioQuePide(req, res);
+      if (!q) return;
+      if (q.rol !== "admin") return res.status(403).json({ error: "Solo el administrador de la agencia puede cambiar de plan." });
+      const destino = req.body?.plan === "premium" ? "premium" : req.body?.plan === "basico" ? "basico" : "";
+      if (!destino) return res.status(400).json({ error: "Elige el plan." });
+      const precio = destino === "premium" ? precioPremiumId() : precioBasicoId();
+      if (!precio) return res.status(400).json({ error: `El plan ${destino === "premium" ? "Premium" : "Básico"} todavía no está configurado en Stripe.` });
+      const a = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
+      if (a.hasFreeAccess) return res.status(409).json({ error: "Tu agencia tiene acceso de cortesía: ya incluye todo." });
+      if (!a.stripeCustomerId) return res.status(409).json({ error: "Primero suscríbete desde Facturación." });
+      const stripe = getStripe();
+      const lista = await stripe.subscriptions.list({ customer: a.stripeCustomerId, status: "all", limit: 10 });
+      const vigentes = lista.data.filter((x: any) => ["active", "trialing", "past_due"].includes(x.status));
+      if (vigentes.length !== 1 || vigentes[0].items.data.length !== 1) return res.status(409).json({ error: "No se pudo identificar tu suscripción. Escríbenos y lo resolvemos." });
+      const sub = vigentes[0];
+      if (sub.items.data[0].price.id === precio) return res.status(409).json({ error: "Tu agencia ya está en ese plan." });
+      await stripe.subscriptions.update(sub.id, {
+        items: [{ id: sub.items.data[0].id, price: precio }],
+        proration_behavior: "create_prorations",
+        metadata: { ...(sub.metadata || {}), agencyId: q.agencyId },
+      });
+      await q.adminDb.collection("agencies").doc(q.agencyId).set({ plan: destino, planCambiadoEl: new Date().toISOString(), planCambiadoPor: q.uid }, { merge: true });
+      cacheFuncionAgencia.delete(q.agencyId);
+      res.json({ ok: true, plan: destino });
+    } catch (e: any) {
+      console.error("Cambiar de plan:", e);
+      res.status(500).json({ error: "No se pudo cambiar de plan. Intenta de nuevo." });
     }
   });
 
@@ -1562,7 +1607,7 @@ async function startServer() {
       const metaData: any = await metaRes.json();
       if (!metaRes.ok) {
         console.error("Meta API error (send-message):", metaData);
-        return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje" });
+        return res.status(metaRes.status).json({ error: enEspanol(metaData?.error) });
       }
 
       await adminDb.collection("whatsappMessages").add({
@@ -1727,7 +1772,7 @@ async function startServer() {
       }
 
       const metaRes = await fetch(
-        `https://graph.facebook.com/v21.0/${wabaId}/message_templates?limit=100&fields=name,status,language,category,components`,
+        `https://graph.facebook.com/v21.0/${wabaId}/message_templates?limit=100&fields=name,status,language,category,sub_category,components`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       const metaData: any = await metaRes.json();
@@ -1745,10 +1790,21 @@ async function startServer() {
           const texto = cuerpo?.text || "";
           // Cuantos huecos hay que rellenar: {{1}}, {{2}}...
           const huecos = new Set((texto.match(/\{\{\s*\d+\s*\}\}/g) || []).map((h: string) => h.replace(/\D/g, "")));
+          // Hay plantillas aprobadas que este CRM no puede mandar. La de
+          // "permiso para llamar" (CALL_PERMISSION_REQUEST, de la biblioteca de
+          // Meta) necesita las llamadas de WhatsApp activadas en el numero, y
+          // Meta la rechaza con un error en ingles que al vendedor no le dice
+          // nada (#138000). Se sigue mostrando, apagada y con el motivo
+          // escrito: esconderla haria que el vendedor la buscara sin encontrarla.
+          const pideLlamadas = (t.components || []).some((c: any) => c.type === "CALL_PERMISSION_REQUEST")
+            || String(t.sub_category || "").toUpperCase().startsWith("CALL_PERMISSION");
+          const noSirve = pideLlamadas
+            ? "Pide permiso para llamar por WhatsApp, y tu número no tiene activadas las llamadas. El CRM tampoco llama por WhatsApp, así que ese permiso no serviría de nada."
+            : "";
           // La categoria viaja porque decide el precio: Meta cobra mas por una
           // de marketing que por una de utilidad, y quien manda deberia verlo
           // antes de elegir.
-          return { name: t.name, language: t.language, category: t.category || "", texto, variables: huecos.size };
+          return { name: t.name, language: t.language, category: t.category || "", texto, variables: huecos.size, ...(noSirve ? { noSirve } : {}) };
         });
 
       return res.json({ plantillas });
@@ -1757,6 +1813,39 @@ async function startServer() {
       return res.status(500).json({ error: e.message || "Error al leer las plantillas" });
     }
   });
+
+  /**
+   * El error de Meta, dicho para quien vende.
+   *
+   * Los mensajes de Meta vienen en ingles y hablan de la API: "Calling API not
+   * enabled. Enable calling for this phone number in WhatsApp Manager, or via
+   * the settings API: POST /{phone_number_id}/settings...". Un vendedor ve eso
+   * y no sabe si fallo el, el cliente o el sistema. Lo que no se reconoce se
+   * devuelve tal cual: inventar una explicacion seria peor.
+   */
+  function enEspanol(error: any): string {
+    const codigo = Number(error?.code);
+    const texto = String(error?.message || "");
+    if (codigo === 138000) {
+      return "Esa plantilla pide permiso para llamar al cliente por WhatsApp, y tu número no tiene activadas las llamadas. Elige otra plantilla.";
+    }
+    if (codigo === 132000 || codigo === 132001 || codigo === 132012 || codigo === 132015 || codigo === 132007) {
+      return "Meta rechazó la plantilla: puede que la hayan pausado, borrado o que falte alguno de los datos que pide. Elige otra o revísala en el administrador de WhatsApp.";
+    }
+    if (codigo === 131047) {
+      return "Pasaron más de 24 horas desde el último mensaje del cliente: solo se le puede escribir con una plantilla aprobada.";
+    }
+    if (codigo === 131026 || codigo === 131051) {
+      return "Ese número no recibe mensajes de WhatsApp. Revisa que esté bien escrito y que tenga WhatsApp.";
+    }
+    if (codigo === 190 || codigo === 102) {
+      return "La conexión con WhatsApp caducó. Hay que volver a conectarla en Integraciones.";
+    }
+    if (codigo === 80007 || codigo === 130429) {
+      return "WhatsApp está limitando los envíos de tu número en este momento. Inténtalo más tarde.";
+    }
+    return texto || "Error al enviar el mensaje de WhatsApp";
+  }
 
   app.post("/api/meta/send-template", async (req, res) => {
     try {
@@ -1846,7 +1935,7 @@ async function startServer() {
       const metaData: any = await metaRes.json();
       if (!metaRes.ok) {
         console.error("Meta API error:", metaData);
-        return res.status(metaRes.status).json({ error: metaData?.error?.message || "Error al enviar el mensaje de WhatsApp" });
+        return res.status(metaRes.status).json({ error: enEspanol(metaData?.error) });
       }
 
       // Dejar rastro en la conversación: si no, el vendedor comparte un auto y
@@ -4109,6 +4198,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     mercadoCorriendo = true;
     try {
       const limite = new Date(Date.now() - DIAS_MERCADO * 86_400_000).toISOString();
+      // Solo las agencias con plan Premium: las consultas a Autocosmos y Mercado Libre son el costo de esta función.
+      const conPremium = await agenciasConPremium(adminDb);
       const [autos, hechos] = await Promise.all([
         adminDb.collection("vehicles").get(),
         adminDb.collection("mercadoAutos").get(),
@@ -4126,6 +4217,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         .filter((d: any) => {
           const v = d.data() || {};
           if (v.isDeleted || !v.make || !v.model || !v.year) return false;
+          if (!conPremium.has(String(v.agencyId || ""))) return false;
           // Los vendidos ya no necesitan precio de mercado, pero sí la guía UNA vez:
           // con ella se mide si su compra fue buena (analisis_compra). Si ya la
           // tienen, no se vuelve a consultar.
@@ -4415,7 +4507,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       const ultimaBuena = ult.docs.map((d: any) => d.data()).find((x: any) => x.origen === "programada" && x.version === VERSION_REGLAS && (x.estado === "ok" || x.estado === "con_errores"));
       if (ultimaBuena && Date.now() - Date.parse(ultimaBuena.inicio) < HORAS_ENTRE_REVISIONES * 3_600_000) return;
     } catch { /* sin historial: se corre */ }
-    await revisarPreciosDelInventario("programada");
+    // Una revisión por agencia con plan Premium (las demás no la tienen).
+    for (const agencyId of await agenciasConPremium(adminDb)) await revisarPreciosDelInventario("programada", agencyId);
   }
   // Despues de la vuelta de mercado (que tarda), y luego se revisa cada 6 horas si ya toca.
   setTimeout(revisionProgramada, 15 * 60 * 1000);
@@ -4573,6 +4666,28 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   const ultimaRevisionManual = new Map<string, number>();
 
   const ROLES_PRECIOS = ["admin", "manager"];
+
+  // ----- Plan Premium: la inteligencia de precios (pantallas, mercado de las tarjetas y consultas) -----
+  // El candado va aquí, en el servidor: ocultar botones no basta, la dirección se puede escribir a mano.
+  const cacheFuncionAgencia = new Map<string, { premium: boolean; hasta: number }>();
+  async function agenciaTienePremium(adminDb: any, agencyId: string): Promise<boolean> {
+    const hit = cacheFuncionAgencia.get(agencyId);
+    if (hit && hit.hasta > Date.now()) return hit.premium;
+    const premium = tienePremium((await adminDb.collection("agencies").doc(agencyId).get()).data());
+    cacheFuncionAgencia.set(agencyId, { premium, hasta: Date.now() + 60_000 });
+    return premium;
+  }
+  async function agenciasConPremium(adminDb: any): Promise<Set<string>> {
+    const todas = await adminDb.collection("agencies").get();
+    return new Set<string>(todas.docs.filter((d: any) => tienePremium(d.data())).map((d: any) => d.id));
+  }
+  const MENSAJE_PREMIUM = "Esta función es del plan Premium. El administrador de tu agencia puede cambiarlo en Facturación.";
+  app.use(["/api/precios", "/api/mercado"], async (req: any, res: any, next: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!(await agenciaTienePremium(q.adminDb, q.agencyId))) return res.status(402).json({ error: MENSAJE_PREMIUM, requierePlan: "premium" });
+    next();
+  });
 
   app.get("/api/precios/analisis", async (req: any, res: any) => {
     const q = await usuarioQuePide(req, res);
@@ -6882,6 +6997,11 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       const precioRol = ["admin", "manager"].includes(sesion?.role);
       const precioCostos = precioRol && sesionPuede(sesion, "vehiculos.costo");
       const sinAgencia = !targetAgencyId || targetAgencyId === "unassigned";
+
+      // Plan Premium: el asistente tampoco puede dar la inteligencia de precios a una agencia que no la tiene.
+      if (["analisis_inventario", "analisis_precio_auto", "calidad_de_compras", "recomendar_precios", "correr_revision_precios", "aplicar_precio_sugerido"].includes(toolName) && !sinAgencia && !(await agenciaTienePremium(db, targetAgencyId))) {
+        return texto({ error: MENSAJE_PREMIUM });
+      }
 
       if (toolName === "analisis_inventario") {
         if (!precioRol) return sinPermiso(id, "el análisis de precios");
