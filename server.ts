@@ -2630,7 +2630,7 @@ async function startServer() {
           return estadoOk && fotos && v.agencyId && v.agencyId !== "unassigned" && !v.isDeleted && (!soloMarcados || v.publicarEnWeb === true);
         });
 
-      const idsAgencias = [...new Set(candidatos.map((v) => String(v.agencyId)))];
+      const idsAgencias = [...new Set<string>(candidatos.map((v) => String(v.agencyId)))];
       const agencias = new Map<string, any>();
       await Promise.all(idsAgencias.map(async (id) => {
         const a = await adminDb.collection("agencies").doc(id).get();
@@ -5740,7 +5740,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       const fichas = await adminDb.collection("users").get();
 
       // Un correo puede repetirse en varias fichas; su cuenta se busca una vez.
-      const correos = [...new Set(fichas.docs.map((d) => d.data().email).filter(Boolean))];
+      const correos = [...new Set<string>(fichas.docs.map((d) => d.data().email).filter(Boolean))];
       const uidPorCorreo = new Map<string, string | null>();
       for (const correo of correos) {
         try {
