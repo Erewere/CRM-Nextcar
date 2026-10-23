@@ -1,3 +1,4 @@
+import { novedadesDeLaSemana } from "./novedades.ts";
 import { CONTACTO } from "./plantillasCorreo";
 
 /**
@@ -289,6 +290,28 @@ function consejoHtml(i: number): string {
   </table>`;
 }
 
+/** «Lo nuevo»: hasta 3 mejoras que la persona puede probar, dichas como las vería ella. Ver src/lib/novedades.ts. */
+function novedadesHtml(esAdmin: boolean, hoy: number): { html: string; texto: string[] } {
+  const lista = novedadesDeLaSemana(esAdmin, hoy);
+  if (!lista.length) return { html: "", texto: [] };
+  const filas = lista
+    .map(
+      (n) => `<tr><td style="padding:14px 0 0;">
+        <div style="font-family:${FUENTE};font-size:15px;font-weight:800;letter-spacing:-0.01em;color:${NEGRO};">${esc(n.titulo)}</div>
+        <div style="font-family:${FUENTE};font-size:14px;color:${CUERPO};line-height:1.6;margin-top:3px;">${esc(n.texto)}</div>
+        <div style="font-family:${FUENTE};font-size:13px;color:${NEGRO};line-height:1.5;margin-top:5px;"><strong style="color:${ROJO_TEXTO};">Pruébalo:</strong> ${esc(n.probar)}</div>
+      </td></tr>`,
+    )
+    .join("");
+  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 18px;border-top:1px solid ${LINEA};">
+    <tr><td style="padding:22px 0 0;">
+      <div style="font-family:${FUENTE};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${ROJO_TEXTO};">Lo nuevo para que pruebes</div>
+    </td></tr>${filas}
+  </table>`;
+  const texto = ["", "Lo nuevo para que pruebes:", ...lista.flatMap((n) => [`- ${n.titulo}. ${n.texto} Pruébalo: ${n.probar}`])];
+  return { html, texto };
+}
+
 function pasos(items: string[]): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">${items
     .map(
@@ -332,7 +355,8 @@ function envoltura(tituloDoc: string, cuerpo: string, enlaceBaja: string): strin
 </body></html>`;
 }
 
-export function armarCorreo(d: DatosCorreo, enlaceBaja: string): { asunto: string; html: string; texto: string } {
+export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()): { asunto: string; html: string; texto: string } {
+  const nov = novedadesHtml(d.esAdmin, hoy);
   const hola = d.nombre ? `Hola ${esc(d.nombre)},` : "Hola,";
   const c = CONSEJOS[d.consejo % CONSEJOS.length];
   const lineas: string[] = []; // version en texto plano, para los que no leen HTML
@@ -375,7 +399,7 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string): { asunto: strin
         numeros +
         equipo +
         vencidas("agencia") +
-        consejoHtml(d.consejo) +
+        nov.html + consejoHtml(d.consejo) +
         boton("Abrir el CRM", CONTACTO.crm);
       lineas.push(`Así va ${d.agencia} esta semana:`);
       if (d.equipoTotal && d.equipoTotal > 1) lineas.push(`Tu equipo: ${d.equipoActivo} de ${d.equipoTotal} metieron datos esta semana.`);
@@ -399,7 +423,7 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string): { asunto: strin
         p(d.ventas7 > 0 ? `Cerraste ${fuerte(plural(d.ventas7, "venta", "ventas"))} esta semana. Así se ve tu Nextcar:` : `Así quedó tu semana en Nextcar CRM:`) +
         numeros +
         vencidas("tu") +
-        consejoHtml(d.consejo) +
+        nov.html + consejoHtml(d.consejo) +
         boton("Abrir mi CRM", CONTACTO.crm);
       lineas.push(`Así quedó tu semana en Nextcar CRM:`);
     }
@@ -449,7 +473,7 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string): { asunto: strin
           `Si alguien de tu equipo no tiene cuenta, invítalo desde ${fuerte("Agencias &amp; Usuarios")}.`,
           "Revisa el Embudo una vez al día: en dos minutos ves qué trato lleva días sin moverse.",
         ]) +
-        consejoHtml(d.consejo) +
+        nov.html + consejoHtml(d.consejo) +
         boton("Entrar a Nextcar CRM", CONTACTO.crm);
       lineas.push(
         d.nunca
@@ -486,7 +510,7 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string): { asunto: strin
           "Mueve un trato de etapa. Desde el celular basta con tocar la tarjeta.",
           "Agenda tu próximo seguimiento para no depender de la memoria.",
         ]) +
-        consejoHtml(d.consejo) +
+        nov.html + consejoHtml(d.consejo) +
         boton("Entrar a Nextcar CRM", CONTACTO.crm);
       lineas.push(
         d.nunca
@@ -508,6 +532,7 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string): { asunto: strin
     d.nombre ? `Hola ${d.nombre},` : "Hola,",
     "",
     ...lineas,
+    ...nov.texto,
     "",
     `Consejo de la semana: ${c.titulo}. ${c.texto}`,
     "",
