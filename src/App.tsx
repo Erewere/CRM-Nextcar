@@ -132,7 +132,7 @@ export default function App() {
             <Route path="tasks" element={<ProtectedRoute requireRole={['admin', 'seller']}><Tasks /></ProtectedRoute>} />
             {/* El vendedor contesta sus WhatsApp aqui. El menu ya le mostraba Chats,
                 pero esta puerta lo regresaba al inicio: nunca pudo entrar. */}
-            <Route path="chats" element={<ProtectedRoute requireRole={['master', 'admin', 'seller']}><Chats /></ProtectedRoute>} />
+            <Route path="chats" element={<ProtectedRoute requireRole={['admin', 'seller']}><Chats /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute requireRole={['master', 'admin']}><AgencyUsers /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute requireRole={['admin']}><Billing /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute requireRole={['master', 'admin']}><Integrations /></ProtectedRoute>} />
