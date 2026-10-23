@@ -21,7 +21,7 @@ import { avisarActividades } from "./src/servidor/avisosActividades.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
-import { registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
+import { acreditarCompraPlacas, registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
 import { registrarVentas } from "./src/servidor/ventas.ts";
 import { registrarMetas } from "./src/servidor/metas.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
@@ -608,6 +608,12 @@ async function startServer() {
       switch (event.type) {
         case "checkout.session.completed":
           const checkoutSession = event.data.object as Stripe.Checkout.Session;
+          // Compra de consultas de antecedentes (pago único): suma al saldo; NO es una suscripción.
+          if (checkoutSession.metadata?.tipo === "placasinfo") {
+            const r = await acreditarCompraPlacas(adminDb, checkoutSession);
+            if (!r.ok) console.error("Compra de consultas sin acreditar:", checkoutSession.id, r.motivo);
+            break;
+          }
           const agencyId = checkoutSession.client_reference_id;
           
           if (agencyId) {
@@ -5309,7 +5315,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
   const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos, mandarCorreo });
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
-  registrarPlacasInfo(app, { usuarioQuePide, getAdminDb, express, bucket: bucketDocumentos });
+  registrarPlacasInfo(app, { usuarioQuePide, getAdminDb, getStripe, express, bucket: bucketDocumentos });
   registrarVentas(app, { usuarioQuePide, getAdminDb });
   // Avisos al celular (Web Push). Se asigna aqui, antes de recibir el primer mensaje.
   avisosPush = registrarPush(app, { usuarioQuePide, getAdminDb, frenoPermite });

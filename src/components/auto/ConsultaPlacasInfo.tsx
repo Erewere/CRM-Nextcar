@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { Link } from 'react-router';
 import { AlertTriangle, FileCheck2, FileText, History, Loader2, Radar, ShieldAlert, ShieldCheck, ShieldQuestion, WifiOff } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { getApiUrl } from '../../lib/api';
@@ -46,6 +47,8 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto, agencia }: {
   agencia?: { name?: string; address?: string; phone?: string; logoUrl?: string } | null;
 }) {
   const [activo, setActivo] = useState(false);
+  // Consultas que le quedan a la agencia (null = usa la cuenta propia, sin límite).
+  const [saldo, setSaldo] = useState<number | null>(null);
   const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
@@ -59,7 +62,7 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto, agencia }: {
 
   useEffect(() => {
     vivo.current = true;
-    api('/api/placasinfo/disponible').then((d) => { if (vivo.current && d.activo) { setActivo(true); cargar(); } }).catch(() => {});
+    api('/api/placasinfo/disponible').then((d) => { if (vivo.current && d.activo) { setActivo(true); setSaldo(typeof d.saldo === 'number' ? d.saldo : null); cargar(); } }).catch(() => {});
     return () => { vivo.current = false; };
   }, [autoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -135,12 +138,13 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto, agencia }: {
 
   const consultar = async (forzar = false) => {
     if (!confirm(forzar
-      ? 'Este auto ya se consultó hace poco. ¿Consultarlo otra vez? Se usa un crédito de PlacasInfo.'
-      : 'Se consultará REPUVE, Fiscalías, aseguradoras, avisos ministeriales y robo en EE. UU./Canadá. Se usa un crédito de PlacasInfo. ¿Continuar?')) return;
+      ? `Este auto ya se consultó hace poco. ¿Consultarlo otra vez? ${saldo !== null ? `Se descuenta 1 de tus ${saldo} consultas.` : 'Se usa un crédito de PlacasInfo.'}`
+      : `Se consultará REPUVE, Fiscalías, aseguradoras, avisos ministeriales y robo en EE. UU./Canadá. ${saldo !== null ? `Se descuenta 1 de tus ${saldo} consultas.` : 'Se usa un crédito de PlacasInfo.'} ¿Continuar?`)) return;
     setEnviando(true); setError('');
     try {
       const d = await api(`/api/autos/${autoId}/placasinfo`, { method: 'POST', body: JSON.stringify({ forzar }) });
       setConsultas((c) => [d.consulta, ...c.filter((x) => x.id !== d.consulta.id)]);
+      if (saldo !== null && !d.repetida) setSaldo(Math.max(0, saldo - 1));
     } catch (e: any) { setError(e.message); }
     finally { setEnviando(false); }
   };
@@ -229,8 +233,8 @@ export function ConsultaPlacasInfo({ autoId, puedeConsultar, auto, agencia }: {
           {ultima ? 'Consultar de nuevo' : 'Consultar ahora'}
         </button>
       )}
-      {error && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{error}</p>}
-      {typeof ultima?.creditos === 'number' && <p className="text-[11px] text-slate-500">Quedan {ultima.creditos} créditos en PlacasInfo.</p>}
+      {error && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{error}{/Facturaci/.test(error) && <> <Link to="/billing" className="underline">Ir a Facturación</Link></>}</p>}
+      {saldo !== null && <p className="text-[11px] text-slate-500">{saldo === 0 ? 'Ya no te quedan consultas.' : `Te ${saldo === 1 ? 'queda 1 consulta' : `quedan ${saldo} consultas`}.`} <Link to="/billing" className="underline">Comprar más</Link></p>}
 
       {consultas.length > 1 && (
         <details className="text-xs text-slate-600 dark:text-slate-400">

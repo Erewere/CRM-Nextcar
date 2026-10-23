@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db, auth } from '../lib/firebase';
 import { Agency } from '../types';
 import { getApiUrl } from '../lib/api';
+import { ConsultasAntecedentes } from '../components/billing/ConsultasAntecedentes';
 import { PRECIO_POR_USUARIO, PRECIO_PREMIUM_POR_USUARIO } from '../lib/subscription';
 import { INCLUYE_PREMIUM, NOMBRE_PLAN, esFundadora, planDeAgencia, type Plan } from '../lib/planes';
 
@@ -220,6 +221,8 @@ export function Billing() {
           })}
         </div>
       )}
+
+      {userData?.role === 'admin' && <ConsultasAntecedentes volvioDePagar={new URLSearchParams(window.location.search).get('consultas') === 'ok'} />}
 
     </div>
   );

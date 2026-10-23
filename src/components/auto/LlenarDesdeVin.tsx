@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { Link } from 'react-router';
 import { AlertTriangle, CheckCircle2, Loader2, Radar, ShieldAlert, ShieldCheck, ShieldQuestion, History } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { getApiUrl } from '../../lib/api';
@@ -55,13 +56,12 @@ export function LlenarDesdeVin({ vin, onVin, anio, onDatos, onConsulta, campoCla
 
   useEffect(() => {
     vivo.current = true;
-    api('/api/placasinfo/disponible').then((d) => { if (vivo.current) setActivo(!!d.activo); }).catch(() => {});
+    api('/api/placasinfo/disponible').then((d) => { if (vivo.current) { setActivo(!!d.activo); setCreditos(typeof d.saldo === 'number' ? d.saldo : null); } }).catch(() => {});
     return () => { vivo.current = false; };
   }, []);
 
   const terminar = (d: any) => {
     const c = d.consulta;
-    if (typeof c?.creditos === 'number') setCreditos(c.creditos);
     if (c?.estado === 'error') { setError(c.error || 'La consulta falló.'); setEstado(''); return true; }
     if (c?.estado !== 'lista') return false;
     setEv(c.evaluacion || null);
@@ -71,11 +71,12 @@ export function LlenarDesdeVin({ vin, onVin, anio, onDatos, onConsulta, campoCla
   };
 
   const consultar = async () => {
-    if (!confirm('Se consultará el VIN en PlacasInfo: llena los datos del auto y revisa si tiene reporte de robo. Se usa un crédito. ¿Continuar?')) return;
+    if (!confirm(`Se consultará el VIN en PlacasInfo: llena los datos del auto y revisa si tiene reporte de robo. ${creditos !== null ? `Se descuenta 1 de tus ${creditos} consultas.` : 'Se usa un crédito.'} ¿Continuar?`)) return;
     setEstado('enviando'); setError(''); setEv(null); setLlenados([]);
     try {
       const d = await api('/api/placasinfo/vin', { method: 'POST', body: JSON.stringify({ vin }) });
       onConsulta(d.consulta.id);
+      if (creditos !== null && !d.repetida) setCreditos(Math.max(0, creditos - 1));
       if (terminar(d)) return;
       setEstado('esperando');
       const inicio = Date.now();
@@ -115,7 +116,7 @@ export function LlenarDesdeVin({ vin, onVin, anio, onDatos, onConsulta, campoCla
         <p key={i} className={clsx('text-xs flex items-start gap-1.5 font-semibold', a.tipo === 'error' ? 'text-red-700 dark:text-red-400' : 'text-amber-800 dark:text-amber-300')}><AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {a.texto}</p>
       ))}
       {estado === 'esperando' && <p className="text-xs text-blue-900 dark:text-blue-200">Revisando REPUVE, Fiscalías y aseguradoras… suele tardar de 5 a 20 segundos.</p>}
-      {error && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{error}</p>}
+      {error && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{error}{/Facturaci/.test(error) && <> <Link to="/billing" className="underline">Ir a Facturación</Link></>}</p>}
 
       {ev && Icono && (
         <div className={clsx('rounded-lg border px-3 py-2 flex items-start gap-2', CAJA[ev.veredicto])}>
@@ -136,7 +137,7 @@ export function LlenarDesdeVin({ vin, onVin, anio, onDatos, onConsulta, campoCla
             : <span>No llenamos nada: esos datos ya los habías escrito, o el REPUVE no los trae.</span>}
         </p>
       )}
-      {creditos !== null && <p className="text-[11px] text-slate-500">Quedan {creditos} créditos en PlacasInfo.</p>}
+      {creditos !== null && <p className="text-[11px] text-slate-500">{creditos === 0 ? 'Ya no te quedan consultas.' : `Te ${creditos === 1 ? 'queda 1 consulta' : `quedan ${creditos} consultas`}.`} <Link to="/billing" className="underline">Comprar más</Link></p>}
     </div>
   );
 }

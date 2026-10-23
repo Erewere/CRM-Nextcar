@@ -44,6 +44,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { PRECIO_POR_USUARIO } from '../lib/subscription';
 import { FacturacionUsuarios } from '../components/plataforma/FacturacionUsuarios';
+import { ConsumoPlacasInfo } from '../components/plataforma/ConsumoPlacasInfo';
 import { AvisoSinPublicarMaster } from '../components/auto/AvisoPaginaWeb';
 
 /**
@@ -637,6 +638,8 @@ function Resumen({
       </div>
 
       <FacturacionUsuarios />
+
+      <ConsumoPlacasInfo />
 
       {/* Pruebas por vencer: el momento de convertir */}
       <section>
