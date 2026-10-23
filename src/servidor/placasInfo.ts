@@ -63,7 +63,10 @@ export type ConfigPlacas = typeof CONFIG_DEFECTO;
 export async function acreditarCompraPlacas(db: any, sesion: any): Promise<{ ok: boolean; motivo?: string }> {
   const agencyId = String(sesion?.metadata?.agencyId || "");
   const consultas = Math.floor(Number(sesion?.metadata?.consultas) || 0);
-  if (sesion?.payment_status !== "paid") return { ok: false, motivo: "no pagada" };
+  // Con un cupón del 100 % Stripe puede marcar la sesión como «sin pago requerido» aunque esté completa: vale igual (el
+  // cupón solo lo crea el dueño de la cuenta de Stripe). Cualquier otro caso sin pagar no acredita nada.
+  const pagada = sesion?.payment_status === "paid" || (sesion?.payment_status === "no_payment_required" && Number(sesion?.amount_total) === 0);
+  if (!pagada) return { ok: false, motivo: "no pagada" };
   if (!idValido(agencyId) || consultas < 1 || consultas > 1000) return { ok: false, motivo: "datos de la compra no válidos" };
   if (!(await db.collection("agencies").doc(agencyId).get()).exists) return { ok: false, motivo: "agencia inexistente" };
   const cuenta = db.collection("creditosPlacas").doc(agencyId);
