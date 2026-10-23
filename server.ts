@@ -48,6 +48,7 @@ import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/fi
 import { Resend } from "resend";
 import nodemailer, { type Transporter } from "nodemailer";
 import { destinatariosDeLaSemana, armarCorreo, DIAS_ENTRE_CORREOS, type TipoCorreo } from "./src/lib/correosDeAnimo.ts";
+import { edicionDeLaSemana, estructuraAutomatica, lunesDeLaEdicion, type AjusteEdicion } from "./src/lib/edicionCorreo.ts";
 import { correoBienvenidaAdmin, correoInvitacionEquipo, CONTACTO } from "./src/lib/plantillasCorreo";
 import Stripe from "stripe";
 
@@ -3784,6 +3785,41 @@ ${extra}
     return destinatariosDeLaSemana(metricas, Date.now(), ultimo);
   }
 
+  // ----- Edición de la semana: cada lunes el correo cambia (ver src/lib/edicionCorreo.ts) -----
+  /** La edición que toca ahora (o la del lunes que viene, de jueves a domingo), con lo que Luis haya fijado en el panel. */
+  async function edicionActual(adminDb: any, hoy = Date.now()) {
+    const d = (await adminDb.collection("plataforma").doc("correoEdicion").get()).data();
+    const ajuste: AjusteEdicion | null = d ? { semana: String(d.semana || ""), estructura: d.estructura, nota: d.nota } : null;
+    return edicionDeLaSemana(hoy, ajuste);
+  }
+
+  /**
+   * La revisión del sábado: a cada master le llegan las versiones del correo del lunes (resumen de administrador, resumen de
+   * vendedor y el de ánimo), tal como saldrán, con una franja que dice que es una revisión. No se manda a nadie más.
+   */
+  async function mandarRevisionDelSabado(adminDb: any) {
+    const masters = (await adminDb.collection("users").where("role", "==", "master").get()).docs.map((d: any) => ({ uid: d.id, email: String(d.data().email || "") })).filter((m: any) => m.email);
+    if (!masters.length) return { enviados: 0, motivo: "No hay usuario master con correo." };
+    const lista = await destinatariosActuales(adminDb, true);
+    const ed = await edicionActual(adminDb);
+    const muestra = (f: (x: any) => boolean) => lista.map((x) => ({ x, datos: x.datos || x.datosPrueba })).find(({ datos }) => datos && f(datos));
+    const ejemplos = [
+      muestra((d) => d.esAdmin && d.tipo === "semanal"),
+      muestra((d) => !d.esAdmin && d.tipo === "semanal"),
+      muestra((d) => d.tipo === "animo"),
+    ].filter(Boolean) as { x: any; datos: any }[];
+    let enviados = 0;
+    for (const m of masters) {
+      for (const e of ejemplos) {
+        const c = armarCorreo(e.datos, enlaceDeBaja(m.uid), Date.now(), ed, { revisionDelSabado: true });
+        const r = await enviarCorreo(m.email, c.asunto, c.html, { texto: c.texto });
+        if (r.ok) enviados++;
+        await new Promise((ok) => setTimeout(ok, 400));
+      }
+    }
+    return { enviados, semana: ed.semana, estructura: ed.estructura };
+  }
+
   /**
    * Manda los correos de la semana. `uids` null = todos a los que les toca.
    * La lista se recalcula aqui mismo, con el registro de envios al dia: asi
@@ -3797,9 +3833,10 @@ ${extra}
     const omitidos = uids ? uids.filter((u) => !elegidos.some((d) => d.uid === u)) : [];
 
     const detalle: { uid: string; nombre: string; ok: boolean; via: string; error?: string }[] = [];
+    const edicion = await edicionActual(adminDb);
     for (const d of elegidos) {
       const baja = enlaceDeBaja(d.uid);
-      const correo = armarCorreo(d.datos!, baja);
+      const correo = armarCorreo(d.datos!, baja, Date.now(), edicion);
       const r = await enviarCorreo(d.correo, correo.asunto, correo.html, {
         texto: correo.texto,
         cabeceras: {
@@ -3904,7 +3941,7 @@ ${extra}
     const d = lista.find((x) => x.uid === String(req.query.uid || ""));
     const datos = d?.datos || d?.datosPrueba;
     if (!d || !datos) return res.status(404).json({ error: "No hay datos para armar este correo." });
-    const c = armarCorreo(datos, enlaceDeBaja(d.uid));
+    const c = armarCorreo(datos, enlaceDeBaja(d.uid), Date.now(), await edicionActual(quien.adminDb));
     res.json({ asunto: c.asunto, html: c.html, para: d.correo, aunqueNoLeToca: !d.datos });
   });
 
@@ -3933,7 +3970,7 @@ ${extra}
     const d = lista.find((x) => x.uid === String(req.body?.uid || "") && (x.datos || x.datosPrueba)) || lista.find((x) => x.datos) || lista.find((x) => x.datosPrueba);
     const datos = d?.datos || d?.datosPrueba;
     if (!d || !datos) return res.status(404).json({ error: "No hay a quién tomar de ejemplo." });
-    const c = armarCorreo(datos, enlaceDeBaja(quien.uid));
+    const c = armarCorreo(datos, enlaceDeBaja(quien.uid), Date.now(), await edicionActual(quien.adminDb));
     const r = await enviarCorreo(yo.email, `[Prueba] ${c.asunto}`, c.html, { texto: c.texto });
     res.json({ ...r, para: yo.email, ejemploDe: d.nombre });
   });
@@ -3948,6 +3985,43 @@ ${extra}
       res.json({ hostinger: "ok" });
     } catch (e: any) {
       res.json({ hostinger: "error", detalle: e?.message || String(e) });
+    }
+  });
+
+  app.get("/api/admin/correos/edicion", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const ed = await edicionActual(quien.adminDb);
+    const d = (await quien.adminDb.collection("plataforma").doc("correoEdicion").get()).data();
+    res.json({
+      semana: ed.semana, estructura: ed.estructura, automatica: estructuraAutomatica(ed.semana), contexto: ed.contexto,
+      ajuste: d && d.semana === ed.semana ? { estructura: d.estructura || "auto", nota: d.nota || "" } : { estructura: "auto", nota: "" },
+      ultimaRevision: (await quien.adminDb.collection("plataforma").doc("correos").get()).data()?.ultimaRevision || null,
+    });
+  });
+
+  app.post("/api/admin/correos/edicion", express.json(), async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    const estructura = ["auto", "numeros", "novedades", "consejo"].includes(req.body?.estructura) ? req.body.estructura : "auto";
+    const nota = String(req.body?.nota || "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 600);
+    await quien.adminDb.collection("plataforma").doc("correoEdicion").set(
+      { semana: lunesDeLaEdicion(Date.now()), estructura, nota, actualizadoEl: new Date().toISOString(), actualizadoPor: quien.uid },
+      { merge: false },
+    );
+    const ed = await edicionActual(quien.adminDb);
+    res.json({ semana: ed.semana, estructura: ed.estructura });
+  });
+
+  /** «Mandarme la revisión ahora»: lo mismo que llega el sábado, a pedido. */
+  app.post("/api/admin/correos/revision", async (req, res) => {
+    const quien = await soloMaster(req, res);
+    if (!quien) return;
+    try {
+      res.json(await mandarRevisionDelSabado(quien.adminDb));
+    } catch (e: any) {
+      console.error("Correos: revisión", e);
+      res.status(500).json({ error: e?.message || "No se pudo mandar la revisión." });
     }
   });
 
@@ -4003,6 +4077,36 @@ ${extra}
   }
   setTimeout(revisarEnvioAutomatico, 2 * 60 * 1000);
   setInterval(revisarEnvioAutomatico, 30 * 60 * 1000);
+
+  /**
+   * Revisión del sábado: desde las 9:00 (hora de México) a los master les llega, por correo, cómo saldrá el del lunes.
+   * Así hay tiempo de cambiar algo (en el panel o pidiéndolo) antes del lunes a las 9:00. Una vez por semana; solo si el
+   * envío automático está encendido, porque si no hay envío no hay nada que revisar.
+   */
+  async function revisarRevisionDelSabado() {
+    const adminDb = getAdminDb();
+    if (!adminDb) return;
+    try {
+      const ref = adminDb.collection("plataforma").doc("correos");
+      if (!(await ref.get()).data()?.automatico) return;
+      const mx = new Date(Date.now() - 6 * 3_600_000);
+      if (mx.getUTCDay() !== 6 || mx.getUTCHours() < 9) return;
+      const semana = lunesDeLaEdicion(Date.now());
+      const tomada = await adminDb.runTransaction(async (tx: any) => {
+        const x = await tx.get(ref);
+        if (x.data()?.ultimaRevision === semana) return false;
+        tx.set(ref, { ultimaRevision: semana, ultimaRevisionEl: new Date().toISOString() }, { merge: true });
+        return true;
+      });
+      if (!tomada) return;
+      const r = await mandarRevisionDelSabado(adminDb);
+      console.log(`Revisión del sábado (${semana}): ${r.enviados} correos a los master.`);
+    } catch (e) {
+      console.error("Revisión del sábado:", e);
+    }
+  }
+  setTimeout(revisarRevisionDelSabado, 3 * 60 * 1000);
+  setInterval(revisarRevisionDelSabado, 30 * 60 * 1000);
 
   /**
    * Accesos concedidos a mano (agencias que pagan la plataforma dentro de otro

@@ -46,6 +46,7 @@ import { PRECIO_POR_USUARIO } from '../lib/subscription';
 import { FacturacionUsuarios } from '../components/plataforma/FacturacionUsuarios';
 import { ConsumoPlacasInfo } from '../components/plataforma/ConsumoPlacasInfo';
 import { EliminarAgencia } from '../components/plataforma/EliminarAgencia';
+import { EdicionDelLunes } from '../components/plataforma/EdicionDelLunes';
 import { AvisoSinPublicarMaster } from '../components/auto/AvisoPaginaWeb';
 
 /**
@@ -1521,6 +1522,8 @@ function VistaCorreos({ usuarios }: { usuarios: Usuario[] }) {
           )}
         </div>
       </div>
+
+      <EdicionDelLunes />
 
       {aviso && (
         <div

@@ -1,4 +1,5 @@
 import { novedadesDeLaSemana } from "./novedades.ts";
+import { edicionDeLaSemana, elegir, LINEA_DE_CONTEXTO, type Edicion } from "./edicionCorreo.ts";
 import { CONTACTO } from "./plantillasCorreo";
 
 /**
@@ -290,10 +291,10 @@ function aviso(html: string): string {
   </table>`;
 }
 
-function consejoHtml(i: number): string {
+function consejoHtml(i: number, primero = false): string {
   const c = CONSEJOS[i % CONSEJOS.length];
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 4px;border-top:1px solid ${LINEA};">
-    <tr><td style="padding:22px 0 0;">
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:${primero ? "4px 0 18px" : "10px 0 4px"};${primero ? "" : `border-top:1px solid ${LINEA};`}">
+    <tr><td style="padding:${primero ? "0" : "22px 0 0"};">
       <div style="font-family:${FUENTE};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${ROJO_TEXTO};">Consejo de la semana</div>
       <div style="font-family:${FUENTE};font-size:16px;font-weight:800;letter-spacing:-0.01em;color:${NEGRO};margin-top:8px;">${esc(c.titulo)}</div>
       <div style="font-family:${FUENTE};font-size:14px;color:${CUERPO};line-height:1.6;margin-top:4px;">${esc(c.texto)}</div>
@@ -302,7 +303,7 @@ function consejoHtml(i: number): string {
 }
 
 /** «Lo nuevo»: hasta 3 mejoras que la persona puede probar, dichas como las vería ella. Ver src/lib/novedades.ts. */
-function novedadesHtml(esAdmin: boolean, hoy: number): { html: string; texto: string[] } {
+function novedadesHtml(esAdmin: boolean, hoy: number, primero = false): { html: string; texto: string[] } {
   const lista = novedadesDeLaSemana(esAdmin, hoy);
   if (!lista.length) return { html: "", texto: [] };
   const filas = lista
@@ -314,12 +315,12 @@ function novedadesHtml(esAdmin: boolean, hoy: number): { html: string; texto: st
       </td></tr>`,
     )
     .join("");
-  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 18px;border-top:1px solid ${LINEA};">
-    <tr><td style="padding:22px 0 0;">
-      <div style="font-family:${FUENTE};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${ROJO_TEXTO};">Lo nuevo para que pruebes</div>
+  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:${primero ? "4px 0 20px" : "10px 0 18px"};${primero ? "" : `border-top:1px solid ${LINEA};`}">
+    <tr><td style="padding:${primero ? "0" : "22px 0 0"};">
+      <div style="font-family:${FUENTE};font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${ROJO_TEXTO};">${primero ? "Lo que estrenamos esta semana" : "Lo nuevo para que pruebes"}</div>
     </td></tr>${filas}
   </table>`;
-  const texto = ["", "Lo nuevo para que pruebes:", ...lista.flatMap((n) => [`- ${n.titulo}. ${n.texto} Pruébalo: ${n.probar}`])];
+  const texto = ["", primero ? "Lo que estrenamos esta semana:" : "Lo nuevo para que pruebes:", ...lista.flatMap((n) => [`- ${n.titulo}. ${n.texto} Pruébalo: ${n.probar}`])];
   return { html, texto };
 }
 
@@ -366,13 +367,34 @@ function envoltura(tituloDoc: string, cuerpo: string, enlaceBaja: string): strin
 </body></html>`;
 }
 
-export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()): { asunto: string; html: string; texto: string } {
-  const nov = novedadesHtml(d.esAdmin, hoy);
+export function armarCorreo(
+  d: DatosCorreo,
+  enlaceBaja: string,
+  hoy = Date.now(),
+  edicion: Edicion = edicionDeLaSemana(hoy),
+  opciones: { revisionDelSabado?: boolean } = {},
+): { asunto: string; html: string; texto: string } {
+  const ed = edicion;
+  const nov = novedadesHtml(d.esAdmin, hoy, ed.estructura === "novedades");
   const hola = d.nombre ? `Hola ${esc(d.nombre)},` : "Hola,";
   const c = CONSEJOS[d.consejo % CONSEJOS.length];
   const lineas: string[] = []; // version en texto plano, para los que no leen HTML
   let asunto: string;
   let cuerpo: string;
+
+  // Lo de esta semana, igual para todos: la nota de Luis (si la escribió) y la línea del momento del mes.
+  const nota = ed.nota ? aviso(`<strong style="color:${NEGRO};">Una nota del equipo:</strong> ${esc(ed.nota)}`) : "";
+  const momento = ed.contexto ? p(esc(LINEA_DE_CONTEXTO[ed.contexto][d.esAdmin ? "admin" : "vendedor"])) : "";
+  if (ed.nota) lineas.push(`Una nota del equipo: ${ed.nota}`, "");
+  if (ed.contexto) lineas.push(LINEA_DE_CONTEXTO[ed.contexto][d.esAdmin ? "admin" : "vendedor"], "");
+
+  /** Las tres piezas se acomodan según la edición: cifras primero, lo nuevo primero o el consejo primero. */
+  const ordenar = (numeros: string) => {
+    const cons = consejoHtml(d.consejo, ed.estructura === "consejo");
+    if (ed.estructura === "novedades") return nov.html + numeros + cons;
+    if (ed.estructura === "consejo") return cons + numeros + nov.html;
+    return numeros + nov.html + cons;
+  };
 
   const vencidas = (quien: "tu" | "agencia") =>
     d.tareasVencidas > 0
@@ -390,11 +412,24 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()
       ["Ventas esta semana", d.ventas7],
       ["Ventas en 30 días", d.ventas30],
     ]);
+    const nV = plural(d.ventas7, "venta", "ventas");
     if (d.esAdmin) {
-      asunto =
+      asunto = elegir(
         d.ventas7 > 0
-          ? `${d.agencia} cerró ${plural(d.ventas7, "venta", "ventas")} esta semana`
-          : `Así va ${d.agencia} esta semana`;
+          ? [`${d.agencia} cerró ${nV} esta semana`, `${nV} en ${d.agencia}: así va la semana`, `Buena semana para ${d.agencia}: ${nV}`, `${d.agencia}: ${nV} y lo que sigue`]
+          : [`Así va ${d.agencia} esta semana`, `Lo que tiene ${d.agencia} en el embudo`, `${d.agencia}: tu semana de un vistazo`, `Qué se mueve en ${d.agencia}`],
+        ed, 1,
+      );
+      const tituloSemana = elegir(
+        d.ventas7 > 0 ? [`${nV} esta semana`, `Se cerraron ${nV}`, `Semana con ${nV}`, `${nV} en el tablero`] : ["Así va tu agencia", "Tu agencia, de un vistazo", "Lo que se mueve esta semana", "El pulso de tu piso"],
+        ed, 2,
+      );
+      const intro = elegir(
+        d.ventas7 > 0
+          ? [`Buena semana en ${fuerte(esc(d.agencia))}. Así se ve en números:`, `${fuerte(esc(d.agencia))} cerró ventas esta semana. Esto es lo que hay detrás:`, `Qué bueno cerrar. Mira cómo quedó todo en ${fuerte(esc(d.agencia))}:`, `Una semana con movimiento en ${fuerte(esc(d.agencia))}. Los números:`]
+          : [`Así quedó la semana en ${fuerte(esc(d.agencia))}:`, `Esto es lo que se movió en ${fuerte(esc(d.agencia))}:`, `Un vistazo rápido a ${fuerte(esc(d.agencia))} antes de empezar la semana:`, `Estos son los números de ${fuerte(esc(d.agencia))} al arrancar la semana:`],
+        ed, 3,
+      );
       const equipo =
         d.equipoTotal && d.equipoTotal > 1
           ? p(
@@ -404,37 +439,44 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()
           : "";
       cuerpo =
         antetitulo(`Resumen de ${d.agencia}`) +
-        titulo(d.ventas7 > 0 ? `${plural(d.ventas7, "venta", "ventas")} esta semana` : "Así va tu agencia") +
+        titulo(tituloSemana) +
         p(hola) +
-        p(d.ventas7 > 0 ? `Buena semana en ${fuerte(esc(d.agencia))}. Así se ve en números:` : `Así quedó la semana en ${fuerte(esc(d.agencia))}:`) +
-        numeros +
-        equipo +
-        vencidas("agencia") +
-        nov.html + consejoHtml(d.consejo) +
+        nota +
+        momento +
+        ordenar(p(intro) + numeros + equipo + vencidas("agencia")) +
         boton("Abrir el CRM", CONTACTO.crm);
       lineas.push(`Así va ${d.agencia} esta semana:`);
       if (d.equipoTotal && d.equipoTotal > 1) lineas.push(`Tu equipo: ${d.equipoActivo} de ${d.equipoTotal} metieron datos esta semana.`);
     } else {
-      asunto =
+      asunto = elegir(
         d.ventas7 > 0
-          ? `${d.nombre ? d.nombre + ", c" : "C"}erraste ${plural(d.ventas7, "venta", "ventas")} esta semana`
+          ? [`${d.nombre ? d.nombre + ", c" : "C"}erraste ${nV} esta semana`, `${nV}: así va tu semana en Nextcar`, `${d.nombre ? d.nombre + ", b" : "B"}uena semana: ${nV}`]
           : d.tratosNuevos7 > 0
-          ? `Tu semana: ${plural(d.tratosNuevos7, "trato nuevo", "tratos nuevos")} en Nextcar`
-          : `Tu resumen de la semana en Nextcar`;
+          ? [`Tu semana: ${plural(d.tratosNuevos7, "trato nuevo", "tratos nuevos")} en Nextcar`, `${plural(d.tratosNuevos7, "trato nuevo", "tratos nuevos")} te esperan`, `Así va tu semana en Nextcar`]
+          : [`Tu resumen de la semana en Nextcar`, `Así arranca tu semana en Nextcar`, `Tus números de la semana`],
+        ed, 1,
+      );
+      const tituloSemana = elegir(
+        d.ventas7 > 0
+          ? [`Cerraste ${nV}`, `${nV} para ti`, `Tu semana: ${nV}`]
+          : d.tratosNuevos7 > 0
+          ? [plural(d.tratosNuevos7, "trato nuevo", "tratos nuevos"), `Llegaron ${plural(d.tratosNuevos7, "trato", "tratos")}`, "Tienes movimiento"]
+          : ["Así quedó tu semana", "Tu semana, de un vistazo", "Tus números de la semana"],
+        ed, 2,
+      );
+      const intro = elegir(
+        d.ventas7 > 0
+          ? [`Cerraste ${fuerte(nV)} esta semana. Así se ve tu Nextcar:`, `${fuerte(nV)} cerradas: buen trabajo. Mira cómo estás:`, `Lo hiciste bien esta semana: ${fuerte(nV)}. Tus números:`]
+          : [`Así quedó tu semana en Nextcar CRM:`, `Esto es lo que tienes en Nextcar hoy:`, `Un vistazo a tus clientes antes de empezar:`],
+        ed, 3,
+      );
       cuerpo =
         antetitulo("Tu semana en Nextcar") +
-        titulo(
-          d.ventas7 > 0
-            ? `Cerraste ${plural(d.ventas7, "venta", "ventas")}`
-            : d.tratosNuevos7 > 0
-            ? plural(d.tratosNuevos7, "trato nuevo", "tratos nuevos")
-            : "Así quedó tu semana",
-        ) +
+        titulo(tituloSemana) +
         p(hola) +
-        p(d.ventas7 > 0 ? `Cerraste ${fuerte(plural(d.ventas7, "venta", "ventas"))} esta semana. Así se ve tu Nextcar:` : `Así quedó tu semana en Nextcar CRM:`) +
-        numeros +
-        vencidas("tu") +
-        nov.html + consejoHtml(d.consejo) +
+        nota +
+        momento +
+        ordenar(p(intro) + numeros + vencidas("tu")) +
         boton("Abrir mi CRM", CONTACTO.crm);
       lineas.push(`Así quedó tu semana en Nextcar CRM:`);
     }
@@ -448,7 +490,14 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()
   } else {
     // Animo. Sin regaños: la historia es de Nextcar, no un reproche.
     const historia = p(
-      `En Nextcar lo aprendimos a la mala: en una campaña juntamos ${fuerte("81 conversaciones")} y cerramos ${fuerte("1 venta")}. No faltaban interesados; el seguimiento se perdía en el camino. Un cliente que no se anota es un cliente que se olvida.`,
+      elegir(
+        [
+          `En Nextcar lo aprendimos a la mala: en una campaña juntamos ${fuerte("81 conversaciones")} y cerramos ${fuerte("1 venta")}. No faltaban interesados; el seguimiento se perdía en el camino. Un cliente que no se anota es un cliente que se olvida.`,
+          `Nos pasó a nosotros: ${fuerte("81 conversaciones")} y solo ${fuerte("1 venta")}. Los interesados estaban ahí; lo que faltó fue seguirlos. Lo que no se anota, se olvida.`,
+          `Una campaña nuestra dejó ${fuerte("81 conversaciones")} y ${fuerte("1 venta")}. No fue falta de clientes: fue falta de seguimiento. Por eso insistimos tanto en anotar a cada uno.`,
+        ],
+        ed, 4,
+      ),
     );
     const esperando =
       d.tratosAbiertos > 0 || d.tareasVencidas > 0
@@ -465,26 +514,29 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()
       asunto = d.nunca
         ? `${d.agencia} todavía no registra su primer cliente en Nextcar`
         : d.tratosAbiertos > 0
-        ? `${d.agencia} tiene ${plural(d.tratosAbiertos, "trato esperando", "tratos esperando")} seguimiento`
-        : `¿Cómo van las ventas en ${d.agencia}?`;
+        ? elegir([`${d.agencia} tiene ${plural(d.tratosAbiertos, "trato esperando", "tratos esperando")} seguimiento`, `${plural(d.tratosAbiertos, "trato espera", "tratos esperan")} en ${d.agencia}`, `Tus clientes de ${d.agencia} esperan una llamada`], ed, 1)
+        : elegir([`¿Cómo van las ventas en ${d.agencia}?`, `${d.agencia}: ¿retomamos?`, `Una pregunta sobre ${d.agencia}`], ed, 1);
       cuerpo =
         antetitulo(d.agencia) +
         titulo(d.nunca ? "Tu agencia está lista para arrancar" : d.tratosAbiertos > 0 ? "Tu equipo tiene clientes esperando" : "¿Cómo va el piso de ventas?") +
         p(hola) +
+        nota +
+        momento +
         p(
           d.nunca
             ? `La cuenta de ${fuerte(esc(d.agencia))} en Nextcar CRM ya está lista, pero todavía no hay ningún cliente registrado.`
             : `${fuerte(esc(d.agencia))} lleva ${d.diasSinActividad} días sin movimiento en Nextcar CRM.`,
         ) +
         historia +
-        esperando +
-        p(fuerte("Tres cosas para que tu equipo lo retome:"), "margin-bottom:6px;") +
-        pasos([
-          "Pídele a tu equipo que anote a cada cliente del día, aunque sea solo nombre y teléfono.",
-          `Si alguien de tu equipo no tiene cuenta, invítalo desde ${fuerte("Agencias &amp; Usuarios")}.`,
-          "Revisa el Embudo una vez al día: en dos minutos ves qué trato lleva días sin moverse.",
-        ]) +
-        nov.html + consejoHtml(d.consejo) +
+        ordenar(
+          esperando +
+            p(fuerte("Tres cosas para que tu equipo lo retome:"), "margin-bottom:6px;") +
+            pasos([
+              "Pídele a tu equipo que anote a cada cliente del día, aunque sea solo nombre y teléfono.",
+              `Si alguien de tu equipo no tiene cuenta, invítalo desde ${fuerte("Agencias &amp; Usuarios")}.`,
+              "Revisa el Embudo una vez al día: en dos minutos ves qué trato lleva días sin moverse.",
+            ]),
+        ) +
         boton("Entrar a Nextcar CRM", CONTACTO.crm);
       lineas.push(
         d.nunca
@@ -502,26 +554,29 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()
       asunto = d.nunca
         ? `${d.nombre ? d.nombre + ", tu" : "Tu"} Nextcar CRM te está esperando`
         : d.tratosAbiertos > 0
-        ? `Tienes ${plural(d.tratosAbiertos, "trato esperando", "tratos esperando")} seguimiento`
-        : `${d.nombre ? d.nombre + ", ¿cómo" : "¿Cómo"} van las ventas?`;
+        ? elegir([`Tienes ${plural(d.tratosAbiertos, "trato esperando", "tratos esperando")} seguimiento`, `${plural(d.tratosAbiertos, "cliente espera", "clientes esperan")} tu llamada`, `${d.nombre ? d.nombre + ", t" : "T"}us clientes te esperan`], ed, 1)
+        : elegir([`${d.nombre ? d.nombre + ", ¿cómo" : "¿Cómo"} van las ventas?`, `${d.nombre ? d.nombre + ", ¿" : "¿"}retomamos?`, `Una vuelta rápida por tu CRM`], ed, 1);
       cuerpo =
         antetitulo("Nextcar CRM") +
         titulo(d.nunca ? "Tu cuenta está lista" : d.tratosAbiertos > 0 ? "Tus clientes te esperan" : "¿Retomamos?") +
         p(hola) +
+        nota +
+        momento +
         p(
           d.nunca
             ? "Tu cuenta en Nextcar CRM ya está lista, pero todavía no registras ningún cliente."
             : `Hace ${fuerte(`${d.diasSinActividad} días`)} que no anotas nada en Nextcar CRM.`,
         ) +
         historia +
-        esperando +
-        p(fuerte("Tres cosas de un minuto para retomar:"), "margin-bottom:6px;") +
-        pasos([
-          "Anota al último cliente que te escribió, con el auto que le interesa.",
-          "Mueve un trato de etapa. Desde el celular basta con tocar la tarjeta.",
-          "Agenda tu próximo seguimiento para no depender de la memoria.",
-        ]) +
-        nov.html + consejoHtml(d.consejo) +
+        ordenar(
+          esperando +
+            p(fuerte("Tres cosas de un minuto para retomar:"), "margin-bottom:6px;") +
+            pasos([
+              "Anota al último cliente que te escribió, con el auto que le interesa.",
+              "Mueve un trato de etapa. Desde el celular basta con tocar la tarjeta.",
+              "Agenda tu próximo seguimiento para no depender de la memoria.",
+            ]),
+        ) +
         boton("Entrar a Nextcar CRM", CONTACTO.crm);
       lineas.push(
         d.nunca
@@ -554,5 +609,9 @@ export function armarCorreo(d: DatosCorreo, enlaceBaja: string, hoy = Date.now()
     `Dejar de recibir estos correos: ${enlaceBaja}`,
   ].join("\n");
 
-  return { asunto, html: envoltura(asunto, cuerpo, enlaceBaja), texto };
+  // La revisión del sábado lleva arriba una franja que dice que es una revisión; el correo del lunes no la lleva.
+  const franja = opciones.revisionDelSabado
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;"><tr><td style="border:1px dashed ${NEGRO};border-radius:8px;padding:12px 14px;font-family:${FUENTE};font-size:13px;line-height:1.5;color:${NEGRO};"><strong>Revisión del sábado.</strong> Así saldrá el lunes a las 9:00 (estructura: ${ed.estructura === "numeros" ? "cifras primero" : ed.estructura === "novedades" ? "novedades primero" : "consejo primero"}). Para cambiar algo entra al panel → Correos → «Edición del lunes», o contesta a Claude.</td></tr></table>`
+    : "";
+  return { asunto: opciones.revisionDelSabado ? `[Revisión del sábado] ${asunto}` : asunto, html: envoltura(asunto, franja + cuerpo, enlaceBaja), texto: (opciones.revisionDelSabado ? "[REVISIÓN DEL SÁBADO: así saldrá el lunes a las 9:00]\n\n" : "") + texto };
 }
