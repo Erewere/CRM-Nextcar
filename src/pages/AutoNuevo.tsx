@@ -51,7 +51,7 @@ export function AutoNuevo() {
   const [agencias, setAgencias] = useState<{ id: string; name: string }[]>([]);
   const [f, setF] = useState<any>({
     agencyId: userData?.agencyId && userData.agencyId !== 'unassigned' ? userData.agencyId : '',
-    make: '', model: '', year: String(new Date().getFullYear()), price: '', costo: '',
+    make: '', model: '', year: '', price: '', costo: '',
     km: '', color: '', transmission: 'Automática', bodyType: 'Sedán', ownership: 'propio',
     receivedAt: hoyLocal(), vin: '', engineNumber: '', licensePlate: '', platesState: '', passengers: '5', liters: '', cylinders: '4', equipment: '',
     publicarEnWeb: params.get('web') === '1',
@@ -237,7 +237,7 @@ export function AutoNuevo() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Campo etiqueta="Marca" obligatorio><input value={f.make} onChange={poner('make')} placeholder="Nissan" className={campoClase} /></Campo>
               <Campo etiqueta="Modelo y versión" obligatorio className="md:col-span-2"><input value={f.model} onChange={poner('model')} placeholder="Pathfinder Advance" className={campoClase} /></Campo>
-              <Campo etiqueta="Año" obligatorio><input value={f.year} onChange={poner('year')} inputMode="numeric" className={campoClase} /></Campo>
+              <Campo etiqueta="Año" obligatorio><input value={f.year} onChange={poner('year')} inputMode="numeric" placeholder="Ej. 2020" className={campoClase} /></Campo>
               <Campo etiqueta="Precio de venta" obligatorio><input value={f.price} onChange={poner('price')} inputMode="decimal" placeholder="$0" className={campoClase} /></Campo>
               {puedeVerCostos && (
                 <Campo etiqueta={f.ownership === 'consignacion' ? 'Se le paga al dueño' : 'Costo de compra'}><input value={f.costo} onChange={poner('costo')} inputMode="decimal" placeholder="$0" className={campoClase} /></Campo>
