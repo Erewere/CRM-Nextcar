@@ -230,6 +230,11 @@ export function correoInvitacionEquipo(d: {
  * el home de una página. El enfoque es el problema del lote (seguimiento,
  * inventario, pagos), no la historia de Nextcar: sin "como la suya", sin
  * "lo construimos nosotros" y sin cifras propias.
+ *
+ * Todo lo que la lista promete tiene que existir en el CRM y estar incluido en la
+ * prueba: quien se registra sin tarjeta queda «en prueba» y planDeAgencia()
+ * (src/lib/planes.ts) le da Premium completo. Antes de agregar una promesa, se
+ * revisa ahí y en src/lib/novedades.ts, que cuenta lo que la persona ve.
  */
 export function correoInvitacionAgencia(d: {
   agencia: string;
@@ -263,17 +268,18 @@ export function correoInvitacionAgencia(d: {
       Qué va a encontrar ${esc(d.agencia)}
     </h2>
     <ul style="margin:0 0 24px;padding-left:20px;color:${NEGRO};font-size:15px;line-height:1.8;">
+      <li><strong>Da de alta un auto con su VIN</strong> — escribe el número de serie y el CRM llena los datos del auto y revisa si tiene reporte de robo. Las primeras 3 consultas son de regalo.</li>
+      <li><strong>Sabe cuánto vale cada auto</strong> — el precio de mercado a la vista en cada tarjeta del inventario y, al cotizar el auto de un cliente, cuánto pagar como máximo y en cuánto se vendería.</li>
       <li><strong>Tablero de negociaciones</strong> — cada cliente en su etapa, desde el primer mensaje hasta la firma, sin post-its ni WhatsApp perdido.</li>
-      <li><strong>Leads automáticos de WhatsApp y Meta</strong> — entran solos a la herramienta; nadie los captura a mano.</li>
-      <li><strong>Equipo de ventas</strong> — se asignan los clientes, se mide a cada vendedor y ninguno se queda sin dueño.</li>
-      <li><strong>Inventario y pagos</strong> — autos, gastos, consignaciones y mensualidades de crédito en un solo lugar.</li>
-      <li><strong>Reportes reales</strong> — qué campaña y qué vendedor están cerrando ventas de verdad.</li>
+      <li><strong>Leads de WhatsApp y Meta</strong> — entran solos al CRM con un reloj de atención; nadie los captura a mano.</li>
+      <li><strong>Seguimiento que no se pierde</strong> — a quien no responde le crea tareas a las 24, 72 y 144 horas con el mensaje sugerido, y después de la venta programa la llamada, la reseña y el servicio.</li>
+      <li><strong>Equipo, inventario y pagos</strong> — cada cliente con su vendedor, gastos, consignaciones, mensualidades y el cotizador de financiamiento en PDF, también desde el celular.</li>
     </ul>
 
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BLANCO};border:1px solid ${LINEA};border-radius:8px;padding:16px 18px;margin:0 0 4px;">
       <tr><td style="color:${NEGRO};font-size:15px;line-height:1.6;">
         <span style="color:${ROJO_TEXTO};font-size:12px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;">Pruébelo sin pagar</span><br>
-        <strong>${DURACION_PRUEBA_DIAS} días gratis</strong>, con su propio equipo y sus propios autos.
+        <strong>${DURACION_PRUEBA_DIAS} días gratis y con todo incluido</strong>, con su propio equipo y sus propios autos.
         Sin tarjeta: crea su cuenta y empieza a trabajar el mismo día.
       </td></tr>
     </table>
