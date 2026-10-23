@@ -45,6 +45,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { PRECIO_POR_USUARIO } from '../lib/subscription';
 import { FacturacionUsuarios } from '../components/plataforma/FacturacionUsuarios';
 import { ConsumoPlacasInfo } from '../components/plataforma/ConsumoPlacasInfo';
+import { EliminarAgencia } from '../components/plataforma/EliminarAgencia';
 import { AvisoSinPublicarMaster } from '../components/auto/AvisoPaginaWeb';
 
 /**
@@ -802,6 +803,7 @@ function VistaAgencias({
       onCambio();
     } catch (e: any) { alert('No se pudo prorrogar: ' + (e?.message || e)); } finally { setTrabajando(null); }
   };
+  const [eliminando, setEliminando] = useState<Agencia | null>(null);
   const [busca, setBusca] = useState('');
   const [estado, setEstado] = useState<string>('todos');
   const [orden, setOrden] = useState<Orden>('actividad');
@@ -837,6 +839,7 @@ function VistaAgencias({
 
   return (
     <div>
+      {eliminando && <EliminarAgencia agencyId={eliminando.id} nombre={eliminando.nombre} onCerrar={() => setEliminando(null)} onEliminada={() => { setEliminando(null); onCambio(); }} />}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-3 mb-4">
         <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Ciudades · con cuántas agencias</p>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -1021,6 +1024,7 @@ function VistaAgencias({
                       <button disabled={!!trabajando} onClick={() => darFundador(a)} className="h-8 px-3 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 text-xs font-bold disabled:opacity-50">{a.fundador ? 'Cambiar fundador' : 'Precio de fundador'}</button>
                       {a.fundador && <button disabled={!!trabajando} onClick={() => quitarFundador(a)} className="h-8 px-3 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-xs font-bold disabled:opacity-50">Quitar fundador</button>}
                       <button disabled={!!trabajando} onClick={() => darCortesia(a, a.estado !== 'cortesia')} className={`h-8 px-3 rounded-lg border text-xs font-bold disabled:opacity-50 ${a.estado === 'cortesia' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-sky-200 text-sky-800 hover:bg-sky-50'}`}>{a.estado === 'cortesia' ? 'Quitar cortesía' : 'Dar cortesía'}</button>
+                      <button disabled={!!trabajando} onClick={() => setEliminando(a)} className="h-8 px-3 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-xs font-bold disabled:opacity-50">Eliminar agencia…</button>
                       <button onClick={onAdministrar} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold dark:bg-white dark:text-slate-900">Invitar usuarios y roles →</button>
                     </div>
                   </div>

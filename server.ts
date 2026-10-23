@@ -22,6 +22,7 @@ import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "
 import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { acreditarCompraPlacas, registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
+import { registrarEliminarAgencias } from "./src/servidor/agencias.ts";
 import { registrarVentas } from "./src/servidor/ventas.ts";
 import { registrarMetas } from "./src/servidor/metas.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
@@ -1096,61 +1097,8 @@ async function startServer() {
     }
   });
 
-  app.post("/api/delete-agency", async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "No autorizado" });
-      }
-
-      const token = authHeader.split("Bearer ")[1];
-      if (!token) {
-        return res.status(401).json({ error: "No autorizado" });
-      }
-
-      const adminApp = getAdminApp();
-      if (!adminApp) return res.status(500).json({ error: "Server admin app error" });
-
-      let decodedToken;
-      try {
-        decodedToken = await getAuth(adminApp).verifyIdToken(token);
-      } catch (err) {
-        return res.status(401).json({ error: "Token inválido" });
-      }
-
-      const adminDb = getAdminDb();
-      if (!adminDb) {
-        return res.status(500).json({ error: "Base de datos no disponible" });
-      }
-
-      const userDocRef = adminDb.collection("users").doc(decodedToken.uid);
-      const userDoc = await userDocRef.get();
-      if (!userDoc.exists) {
-        return res.status(403).json({ error: "Usuario no encontrado" });
-      }
-
-      const userData = userDoc.data();
-      if (userData?.role !== "master") {
-        return res.status(403).json({ error: "Solo el rol master puede eliminar una agencia" });
-      }
-
-      const { agencyId } = req.body;
-      if (!agencyId) {
-        return res.status(400).json({ error: "Falta el parámetro agencyId" });
-      }
-
-      const usersSnap = await adminDb.collection("users").where("agencyId", "==", agencyId).get();
-      for (const uDoc of usersSnap.docs) {
-        await adminDb.collection("users").doc(uDoc.id).update({ agencyId: "unassigned" });
-      }
-      await adminDb.collection("agencies").doc(agencyId).delete();
-
-      return res.status(200).json({ success: true });
-    } catch (err: any) {
-      console.error("Delete Agency Error:", err);
-      return res.status(500).json({ error: err.message || "Error al eliminar agencia" });
-    }
-  });
+  // (El endpoint viejo /api/delete-agency se quitó: dejaba huérfanos todos los datos de la agencia. La eliminación completa y con
+  // respaldo vive en src/servidor/agencias.ts.)
 
   app.post("/api/delete-vehicle", async (req, res) => {
     try {
@@ -5315,6 +5263,11 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
   const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos, mandarCorreo });
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
+  registrarEliminarAgencias(app, {
+    usuarioQuePide, getAdminDb, bucket: bucketDocumentos,
+    borrarCuenta: async (uid: string) => { await getAuth(getAdminApp()!).deleteUser(uid); },
+    alEliminar: () => { metricasEnMemoria = null; },
+  });
   registrarPlacasInfo(app, { usuarioQuePide, getAdminDb, getStripe, express, bucket: bucketDocumentos });
   registrarVentas(app, { usuarioQuePide, getAdminDb });
   // Avisos al celular (Web Push). Se asigna aqui, antes de recibir el primer mensaje.
