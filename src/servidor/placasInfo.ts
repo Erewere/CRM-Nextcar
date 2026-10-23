@@ -56,6 +56,12 @@ function publica(id: string, x: any) {
 
 export type ConfigPlacas = typeof CONFIG_DEFECTO;
 
+/** Consultas de bienvenida (plataforma/placasInfo.regaloInicial; 3 si no está). */
+async function regaloInicialDe(db: any): Promise<number> {
+  const d = (await db.collection("plataforma").doc("placasInfo").get()).data() || {};
+  return Number.isFinite(Number(d.regaloInicial)) ? Math.max(0, Math.min(20, Math.floor(Number(d.regaloInicial)))) : CONFIG_DEFECTO.regaloInicial;
+}
+
 /**
  * Acredita un paquete pagado (lo llama el aviso de Stripe). Una sola vez por pago: el movimiento lleva el id de la sesión
  * de Stripe, así que si el aviso llega repetido no suma dos veces.
@@ -71,12 +77,17 @@ export async function acreditarCompraPlacas(db: any, sesion: any): Promise<{ ok:
   if (!(await db.collection("agencies").doc(agencyId).get()).exists) return { ok: false, motivo: "agencia inexistente" };
   const cuenta = db.collection("creditosPlacas").doc(agencyId);
   const mov = db.collection("movimientosPlacas").doc(`compra_${String(sesion.id).replace(/[^\w-]/g, "_")}`);
+  const regalo = await regaloInicialDe(db);
   await db.runTransaction(async (tx: any) => {
     const [m, c] = await Promise.all([tx.get(mov), tx.get(cuenta)]);
     if (m.exists) return;
-    const x = c.data() || { saldo: 0, regalados: 0, comprados: 0, usados: 0 };
+    const ahora = new Date().toISOString();
+    // Primera vez que la agencia toca sus consultas: la cuenta nace con las de bienvenida, que la pantalla ya le mostraba.
+    const nueva = !c.exists;
+    const x = c.data() || { saldo: regalo, regalados: regalo, comprados: 0, usados: 0, creadaEn: ahora };
+    if (nueva && regalo > 0) tx.set(db.collection("movimientosPlacas").doc(), { agencyId, tipo: "regalo", cantidad: regalo, saldoDespues: regalo, nota: "Consultas de bienvenida", fecha: ahora });
     const saldo = (Number(x.saldo) || 0) + consultas;
-    tx.set(cuenta, { ...x, saldo, comprados: (Number(x.comprados) || 0) + consultas, actualizadoEn: new Date().toISOString() }, { merge: true });
+    tx.set(cuenta, { ...x, saldo, comprados: (Number(x.comprados) || 0) + consultas, actualizadoEn: ahora }, { merge: true });
     tx.set(mov, { agencyId, tipo: "compra", cantidad: consultas, saldoDespues: saldo, sesionStripe: String(sesion.id), monto: (Number(sesion.amount_total) || 0) / 100, fecha: new Date().toISOString() });
   });
   return { ok: true };
@@ -569,7 +580,8 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb, getS
       if (!(await q.adminDb.collection("agencies").doc(agencyId).get()).exists) return res.status(404).json({ error: "Esa agencia no existe." });
       const cuenta = q.adminDb.collection("creditosPlacas").doc(agencyId);
       const saldo = await q.adminDb.runTransaction(async (tx: any) => {
-        const x = (await tx.get(cuenta)).data() || { saldo: 0, regalados: 0, comprados: 0, usados: 0, creadaEn: new Date().toISOString() };
+        const c = await tx.get(cuenta);
+        const x = c.data() || { saldo: 0, regalados: 0, comprados: 0, usados: 0, creadaEn: new Date().toISOString() };
         const nuevo = (Number(x.saldo) || 0) + cantidad;
         tx.set(cuenta, { ...x, saldo: nuevo, regalados: (Number(x.regalados) || 0) + cantidad, actualizadoEn: new Date().toISOString() }, { merge: true });
         tx.set(q.adminDb.collection("movimientosPlacas").doc(), { agencyId, tipo: "regalo", cantidad, saldoDespues: nuevo, nota: String(req.body?.nota || "Regalo").slice(0, 120), fecha: new Date().toISOString(), por: q.uid });
