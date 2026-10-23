@@ -247,13 +247,12 @@ export function correoInvitacionAgencia(d: {
       Una invitación de Nextcar
     </p>
     <h1 style="margin:0 0 14px;color:${NEGRO};font-size:25px;font-weight:800;letter-spacing:-0.02em;line-height:1.25;">
-      Menos tareas a mano en ${esc(saludo)}.<br>Ningún cliente sin seguimiento.
+      Sepa si los autos de ${esc(saludo)} están bien de precio.<br>Y no compre uno con reporte de robo.
     </h1>
     <p style="margin:0 0 22px;color:${CUERPO};font-size:15px;line-height:1.65;">
       Desarrollamos una herramienta para lotes y agencias de seminuevos que
-      resuelve lo que más tiempo quita en el día a día: dar seguimiento a
-      cada cliente que escribe, tener el inventario en orden y saber quién
-      debe qué.
+      ayuda con lo que más tiempo quita: dar de alta autos, ponerles precio
+      y dar seguimiento a cada cliente.
     </p>
 
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BLANCO};border:1px solid ${LINEA};border-radius:8px;padding:16px 18px;margin:0 0 26px;">
@@ -268,12 +267,13 @@ export function correoInvitacionAgencia(d: {
       Qué va a encontrar ${esc(d.agencia)}
     </h2>
     <ul style="margin:0 0 24px;padding-left:20px;color:${NEGRO};font-size:15px;line-height:1.8;">
-      <li><strong>Da de alta un auto con su VIN</strong> — escribe el número de serie y el CRM llena los datos del auto y revisa si tiene reporte de robo. Las primeras 3 consultas son de regalo.</li>
-      <li><strong>Sabe cuánto vale cada auto</strong> — el precio de mercado a la vista en cada tarjeta del inventario y, al cotizar el auto de un cliente, cuánto pagar como máximo y en cuánto se vendería.</li>
+      <li><strong>Da de alta un auto con solo el VIN</strong> — escribe el número de serie y el CRM llena marca, modelo, año y motor. También le dice si el auto tiene reporte de robo antes de comprarlo y le deja una constancia lista para enseñarle al cliente. Las primeras 3 consultas son de regalo.</li>
+      <li><strong>Revisa los precios de todo su inventario contra el mercado</strong> — ve de un vistazo qué autos están caros, cuáles baratos y cuáles bien. Le sugiere bajar, subir o mantener el precio, y lo aplica con un clic.</li>
+      <li><strong>Sabe cuánto vale cada auto</strong> — el precio de mercado a la vista en cada tarjeta del inventario y, al cotizar el auto de un cliente, desde el celular, cuánto pagar como máximo.</li>
       <li><strong>Tablero de negociaciones</strong> — cada cliente en su etapa, desde el primer mensaje hasta la firma, sin post-its ni WhatsApp perdido.</li>
       <li><strong>Leads de WhatsApp y Meta</strong> — entran solos al CRM con un reloj de atención; nadie los captura a mano.</li>
       <li><strong>Seguimiento que no se pierde</strong> — a quien no responde le crea tareas a las 24, 72 y 144 horas con el mensaje sugerido, y después de la venta programa la llamada, la reseña y el servicio.</li>
-      <li><strong>Equipo, inventario y pagos</strong> — cada cliente con su vendedor, gastos, consignaciones, mensualidades y el cotizador de financiamiento en PDF, también desde el celular.</li>
+      <li><strong>Equipo, inventario y pagos</strong> — cada cliente con su vendedor, gastos, consignaciones, mensualidades y el cotizador de financiamiento en PDF.</li>
     </ul>
 
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BLANCO};border:1px solid ${LINEA};border-radius:8px;padding:16px 18px;margin:0 0 4px;">
