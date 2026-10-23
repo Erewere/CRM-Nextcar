@@ -6,7 +6,7 @@ import { db, auth } from '../lib/firebase';
 import { Agency } from '../types';
 import { getApiUrl } from '../lib/api';
 import { PRECIO_POR_USUARIO, PRECIO_PREMIUM_POR_USUARIO } from '../lib/subscription';
-import { INCLUYE_PREMIUM, NOMBRE_PLAN, planDeAgencia, type Plan } from '../lib/planes';
+import { INCLUYE_PREMIUM, NOMBRE_PLAN, esFundadora, planDeAgencia, type Plan } from '../lib/planes';
 
 export function Billing() {
   const { userData } = useAuth();
@@ -169,6 +169,12 @@ export function Billing() {
         <div className="p-4 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded flex items-start gap-2 border border-green-100 dark:border-green-900/50">
           <Check className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="text-sm">{success}</p>
+        </div>
+      )}
+
+      {esFundadora(agency) && !agency?.hasFreeAccess && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 text-sm text-amber-900 dark:text-amber-200">
+          <b>Precio de fundador.</b> Tu agencia tiene el plan Premium incluido {(agency as any)?.fundador?.hasta ? `hasta el ${new Date((agency as any).fundador.hasta).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}` : 'sin fecha de fin'} pagando el precio del plan Básico. Gracias por ser de las primeras.
         </div>
       )}
 

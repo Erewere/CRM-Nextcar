@@ -68,6 +68,7 @@ interface Agencia {
   diasDePruebaRestantes: number | null;
   ciudad?: string;
   accesoManualHasta?: string | null;
+  fundador?: { hasta: string | null; nota: string } | null;
   accesoManualNota?: string;
   creadaEl: string | null;
   usuarios: number;
@@ -768,6 +769,25 @@ function VistaAgencias({
     setTrabajando(a.id + 'q');
     try { await updateDoc(doc(db, 'agencies', a.id), { accesoManual: deleteField() }); onCambio(); } catch (e: any) { alert('No se pudo quitar: ' + (e?.message || e)); } finally { setTrabajando(null); }
   };
+  // Precio de fundador: la agencia paga el precio Básico y tiene Premium incluido por un tiempo (o de por vida).
+  const darFundador = async (a: Agencia) => {
+    const meses = window.prompt(`Precio de fundador para ${a.nombre}: tendrá Premium incluido pagando el precio Básico.\n\n¿Por cuántos meses? (número; escribe 0 para dejarlo de por vida)`, '12');
+    if (meses === null) return;
+    const n = Math.max(0, Math.floor(Number(meses)));
+    if (!Number.isFinite(n) || meses.trim() === '') return alert('Escribe un número de meses.');
+    const nota = window.prompt('Nota para recordar el trato (opcional). Ej.: «Primera agencia que pagó».', a.fundador?.nota || '') ?? '';
+    setTrabajando(a.id + 'f');
+    try {
+      const hasta = n === 0 ? null : new Date(Date.now() + n * 30.4375 * 86400000).toISOString();
+      await updateDoc(doc(db, 'agencies', a.id), { fundador: { desde: new Date().toISOString(), hasta, nota } });
+      onCambio();
+    } catch (e: any) { alert('No se pudo guardar: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
+  const quitarFundador = async (a: Agencia) => {
+    if (!window.confirm(`¿Quitar el precio de fundador de ${a.nombre}? Si paga el plan Básico, perderá Premium desde ahora.`)) return;
+    setTrabajando(a.id + 'f');
+    try { await updateDoc(doc(db, 'agencies', a.id), { fundador: deleteField() }); onCambio(); } catch (e: any) { alert('No se pudo quitar: ' + (e?.message || e)); } finally { setTrabajando(null); }
+  };
   const prorrogar = async (a: Agencia, dias: number) => {
     if (!window.confirm(`¿Darle ${dias} días más de prueba a ${a.nombre}?`)) return;
     setTrabajando(a.id + 'p');
@@ -978,6 +998,11 @@ function VistaAgencias({
                           {a.accesoManualHasta ? 'Renovar 30 días' : 'Dar 30 días (pagado aparte)'}
                         </button>
                       )}
+                      {a.fundador && (
+                        <p className="w-full text-xs text-amber-800 dark:text-amber-300">
+                          Fundadora: Premium incluido {a.fundador.hasta ? `hasta el ${fechaCorta(a.fundador.hasta)}` : 'de por vida'}{a.fundador.nota ? ` · ${a.fundador.nota}` : ''}
+                        </p>
+                      )}
                       {a.accesoManualHasta && (
                         <span className="text-xs text-slate-500 dark:text-slate-400">
                           Acceso manual hasta el {fechaCorta(a.accesoManualHasta)}{a.accesoManualNota ? ` · ${a.accesoManualNota}` : ''}
@@ -990,6 +1015,8 @@ function VistaAgencias({
                           <button disabled={!!trabajando} onClick={() => prorrogar(a, 15)} className="h-8 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">+15 días</button>
                         </>
                       ) : null}
+                      <button disabled={!!trabajando} onClick={() => darFundador(a)} className="h-8 px-3 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 text-xs font-bold disabled:opacity-50">{a.fundador ? 'Cambiar fundador' : 'Precio de fundador'}</button>
+                      {a.fundador && <button disabled={!!trabajando} onClick={() => quitarFundador(a)} className="h-8 px-3 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-xs font-bold disabled:opacity-50">Quitar fundador</button>}
                       <button disabled={!!trabajando} onClick={() => darCortesia(a, a.estado !== 'cortesia')} className={`h-8 px-3 rounded-lg border text-xs font-bold disabled:opacity-50 ${a.estado === 'cortesia' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-sky-200 text-sky-800 hover:bg-sky-50'}`}>{a.estado === 'cortesia' ? 'Quitar cortesía' : 'Dar cortesía'}</button>
                       <button onClick={onAdministrar} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold dark:bg-white dark:text-slate-900">Invitar usuarios y roles →</button>
                     </div>

@@ -152,7 +152,7 @@ service cloud.firestore {
       allow update: if isMaster() || (isAuthenticated() && getUserAgencyId() == id
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'subscriptionStatus', 'hasFreeAccess', 'plan', 'planCambiadoEl', 'planCambiadoPor',
-          'trialEndsAt', 'accesoManual', 'stripeCustomerId', 'facturacion'
+          'trialEndsAt', 'accesoManual', 'stripeCustomerId', 'facturacion', 'fundador'
         ]));
       allow delete: if isMaster();
     }

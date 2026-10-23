@@ -310,6 +310,7 @@ export function calcularMetricas(e: EntradaMetricas) {
       estado,
       diasDePruebaRestantes,
       // Acceso que Luis concede a mano porque la agencia paga la plataforma dentro de otro servicio.
+      fundador: (a as any).fundador ? { hasta: (a as any).fundador.hasta || null, nota: String((a as any).fundador.nota || '') } : null,
       accesoManualHasta: aMs((a as any).accesoManual?.hasta) ? new Date(aMs((a as any).accesoManual?.hasta)!).toISOString() : null,
       accesoManualNota: String((a as any).accesoManual?.nota || ""),
       creadaEl: creada ? new Date(creada).toISOString() : null,
