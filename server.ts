@@ -3887,7 +3887,8 @@ ${extra}
         ultimaSemanaAutomatica: cfg?.ultimaSemana || null,
         ultimoResultadoAutomatico: cfg?.ultimoResultado || null,
         // Sin `datos`: la lista dice a quien y por que, no sus numeros.
-        destinatarios: lista.map(({ datos, ...resto }) => resto),
+        // Sin `datos`: la lista dice a quien y por que, no sus numeros. `hayEjemplo` dice si se puede ver/probar su correo.
+        destinatarios: lista.map(({ datos, datosPrueba, ...resto }) => ({ ...resto, hayEjemplo: !!(datos || datosPrueba) })),
         historial: histSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })),
       });
     } catch (e: any) {
@@ -3901,9 +3902,10 @@ ${extra}
     if (!quien) return;
     const lista = await destinatariosActuales(quien.adminDb);
     const d = lista.find((x) => x.uid === String(req.query.uid || ""));
-    if (!d || !d.datos) return res.status(404).json({ error: "Esta semana no le toca correo." });
-    const c = armarCorreo(d.datos, enlaceDeBaja(d.uid));
-    res.json({ asunto: c.asunto, html: c.html, para: d.correo });
+    const datos = d?.datos || d?.datosPrueba;
+    if (!d || !datos) return res.status(404).json({ error: "No hay datos para armar este correo." });
+    const c = armarCorreo(datos, enlaceDeBaja(d.uid));
+    res.json({ asunto: c.asunto, html: c.html, para: d.correo, aunqueNoLeToca: !d.datos });
   });
 
   app.post("/api/admin/correos/enviar", express.json(), async (req, res) => {
@@ -3927,9 +3929,11 @@ ${extra}
     const yo = (await quien.adminDb.collection("users").doc(quien.uid).get()).data();
     if (!yo?.email) return res.status(400).json({ error: "Tu usuario no tiene correo." });
     const lista = await destinatariosActuales(quien.adminDb);
-    const d = lista.find((x) => x.uid === String(req.body?.uid || "")) || lista.find((x) => x.datos);
-    if (!d || !d.datos) return res.status(404).json({ error: "No hay a quién tomar de ejemplo esta semana." });
-    const c = armarCorreo(d.datos, enlaceDeBaja(quien.uid));
+    // Se toma de ejemplo a quien le toca; si esta semana a nadie le toca, a cualquiera (solo se te manda a ti, nunca a esa persona).
+    const d = lista.find((x) => x.uid === String(req.body?.uid || "") && (x.datos || x.datosPrueba)) || lista.find((x) => x.datos) || lista.find((x) => x.datosPrueba);
+    const datos = d?.datos || d?.datosPrueba;
+    if (!d || !datos) return res.status(404).json({ error: "No hay a quién tomar de ejemplo." });
+    const c = armarCorreo(datos, enlaceDeBaja(quien.uid));
     const r = await enviarCorreo(yo.email, `[Prueba] ${c.asunto}`, c.html, { texto: c.texto });
     res.json({ ...r, para: yo.email, ejemploDe: d.nombre });
   });

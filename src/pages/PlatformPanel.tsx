@@ -1246,6 +1246,8 @@ interface DestinatarioFila {
   agencia: string;
   tipo: 'semanal' | 'animo' | null;
   motivo: string;
+  /** Se puede ver o probar su correo aunque esta semana no le toque. */
+  hayEjemplo?: boolean;
 }
 
 const TIPO_CORREO: Record<string, { etiqueta: string; chip: string }> = {
@@ -1380,7 +1382,7 @@ function VistaCorreos({ usuarios }: { usuarios: Usuario[] }) {
     setOcupado('probar');
     setAviso(null);
     try {
-      const uid = [...marcados][0] || tocan[0]?.uid;
+      const uid = [...marcados][0] || tocan[0]?.uid || lista.find((d) => d.hayEjemplo)?.uid;
       const r = await pedir('/api/admin/correos/probar', { uid });
       setAviso(
         r.ok
@@ -1474,7 +1476,7 @@ function VistaCorreos({ usuarios }: { usuarios: Usuario[] }) {
                 </button>
                 <button
                   onClick={probar}
-                  disabled={!!ocupado || tocan.length === 0}
+                  disabled={!!ocupado || !lista.some((d) => d.hayEjemplo)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                   title="Te manda a ti el correo de alguien de la lista, para ver cómo llega"
                 >
@@ -1630,13 +1632,13 @@ function VistaCorreos({ usuarios }: { usuarios: Usuario[] }) {
                     </td>
                     <td className="px-2 py-2.5 text-slate-600 dark:text-slate-400 text-xs">{d.motivo}</td>
                     <td className="px-4 py-2.5 text-right">
-                      {d.tipo && (
+                      {(d.tipo || d.hayEjemplo) && (
                         <button
                           onClick={() => verPrevia(d.uid)}
                           disabled={!!ocupado}
                           className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
                         >
-                          <Eye className="w-3.5 h-3.5" /> {ocupado === `vista-${d.uid}` ? 'Abriendo…' : 'Ver correo'}
+                          <Eye className="w-3.5 h-3.5" /> {ocupado === `vista-${d.uid}` ? 'Abriendo…' : d.tipo ? 'Ver correo' : 'Ver cómo sería'}
                         </button>
                       )}
                     </td>

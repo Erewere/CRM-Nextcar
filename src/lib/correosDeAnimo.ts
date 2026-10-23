@@ -78,6 +78,11 @@ export interface Destinatario {
   tipo: TipoCorreo | null;
   motivo: string;
   datos: DatosCorreo | null;
+  /**
+   * Cómo sería su correo si le tocara hoy, aunque esta semana no le toque (ya recibió uno, cuenta nueva, baja…). Sirve para
+   * que el master pueda mandarse una prueba y ver el correo aunque nadie esté en turno. NUNCA se envía a la persona.
+   */
+  datosPrueba: DatosCorreo | null;
 }
 
 function nombreDePila(nombre: string): string {
@@ -111,6 +116,32 @@ export function destinatariosDeLaSemana(
     equipo.set(u.agencyId, e);
   }
 
+  const armarDatos = (u: any, a: any): DatosCorreo => {
+    // El admin no suele meter datos: los mete su equipo. Si la agencia se
+    // mueve, el admin no esta "estancado" aunque el no anote nada.
+    const esAdmin = u.rol === "admin" || u.rol === "manager";
+    const fuente = esAdmin ? a : u;
+    const estancado = fuente.actividad === "estancada" || fuente.actividad === "nunca";
+    const e = equipo.get(u.agencyId);
+    return {
+      tipo: estancado ? "animo" : "semanal",
+      nombre: nombreDePila(u.nombre),
+      esAdmin,
+      agencia: a.nombre,
+      nunca: fuente.actividad === "nunca",
+      diasSinActividad: fuente.diasSinActividad,
+      tratosAbiertos: fuente.tratosAbiertos || 0,
+      tratosNuevos7: fuente.tratosNuevos7 || 0,
+      ventas7: fuente.ventas7 || 0,
+      ventas30: fuente.ventas30 || 0,
+      tareasVencidas: fuente.tareasVencidas || 0,
+      datos7: fuente.datos7 || 0,
+      equipoActivo: esAdmin ? e?.activos ?? 0 : undefined,
+      equipoTotal: esAdmin ? e?.total ?? 0 : undefined,
+      consejo,
+    };
+  };
+
   return metricas.usuarios
     .filter((u) => ROLES_QUE_RECIBEN.has(u.rol))
     .map((u): Destinatario => {
@@ -123,7 +154,8 @@ export function destinatariosDeLaSemana(
         agencyId: u.agencyId,
         agencia: a?.nombre || "Sin agencia",
       };
-      const no = (motivo: string): Destinatario => ({ ...base, tipo: null, motivo, datos: null });
+      const muestra = a ? armarDatos(u, a) : null;
+      const no = (motivo: string): Destinatario => ({ ...base, tipo: null, motivo, datos: null, datosPrueba: muestra });
 
       if (!a) return no("No pertenece a ninguna agencia");
       // Mandarle "tus tratos abiertos" a quien no puede entrar solo frustra.
@@ -142,30 +174,9 @@ export function destinatariosDeLaSemana(
         return no("Cuenta nueva: se le da su primera semana");
       }
 
-      // El admin no suele meter datos: los mete su equipo. Si la agencia se
-      // mueve, el admin no esta "estancado" aunque el no anote nada.
-      const esAdmin = u.rol === "admin" || u.rol === "manager";
-      const fuente = esAdmin ? a : u;
-      const estancado = fuente.actividad === "estancada" || fuente.actividad === "nunca";
-      const e = equipo.get(u.agencyId);
-
-      const datos: DatosCorreo = {
-        tipo: estancado ? "animo" : "semanal",
-        nombre: nombreDePila(u.nombre),
-        esAdmin,
-        agencia: a.nombre,
-        nunca: fuente.actividad === "nunca",
-        diasSinActividad: fuente.diasSinActividad,
-        tratosAbiertos: fuente.tratosAbiertos || 0,
-        tratosNuevos7: fuente.tratosNuevos7 || 0,
-        ventas7: fuente.ventas7 || 0,
-        ventas30: fuente.ventas30 || 0,
-        tareasVencidas: fuente.tareasVencidas || 0,
-        datos7: fuente.datos7 || 0,
-        equipoActivo: esAdmin ? e?.activos ?? 0 : undefined,
-        equipoTotal: esAdmin ? e?.total ?? 0 : undefined,
-        consejo,
-      };
+      const datos = armarDatos(u, a);
+      const estancado = datos.tipo === "animo";
+      const esAdmin = datos.esAdmin;
 
       const motivo = !estancado
         ? "Resumen de la semana"
@@ -177,7 +188,7 @@ export function destinatariosDeLaSemana(
         ? `Su agencia lleva ${datos.diasSinActividad} días sin datos`
         : `${datos.diasSinActividad} días sin meter datos`;
 
-      return { ...base, tipo: datos.tipo, motivo, datos };
+      return { ...base, tipo: datos.tipo, motivo, datos, datosPrueba: datos };
     });
 }
 
