@@ -512,9 +512,13 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb, getS
       if (!paquete) return res.status(400).json({ error: "Elige un paquete." });
       const origen = String(req.headers.origin || process.env.APP_URL || "https://crm.erewere.com").replace(/\/+$/, "");
       const a = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
-      const sesion = await getStripe().checkout.sessions.create({
+      // Con tarjeta se acredita al instante; con OXXO el cliente recibe una ficha y paga en tienda (Stripe avisa al día hábil
+      // siguiente). Solo para pagos únicos: OXXO no sirve para suscripciones. Si la cuenta de Stripe aún no tiene OXXO activo,
+      // se ofrece solo tarjeta en lugar de fallar.
+      const crear = (metodos: string[]) => getStripe().checkout.sessions.create({
         mode: "payment",
-        payment_method_types: ["card"],
+        payment_method_types: metodos as any,
+        ...(metodos.includes("oxxo") ? { payment_method_options: { oxxo: { expires_after_days: 3 } } } : {}),
         allow_promotion_codes: true,
         ...(a.stripeCustomerId ? { customer: a.stripeCustomerId } : {}),
         line_items: [{
@@ -526,6 +530,12 @@ export function registrarPlacasInfo(app: any, { usuarioQuePide, getAdminDb, getS
         success_url: `${origen}/billing?consultas=ok`,
         cancel_url: `${origen}/billing?consultas=cancelado`,
       });
+      let sesion;
+      try { sesion = await crear(["card", "oxxo"]); }
+      catch (e: any) {
+        if (!/oxxo/i.test(String(e?.message || ""))) throw e;
+        sesion = await crear(["card"]);
+      }
       res.json({ url: sesion.url });
     } catch (e: any) {
       console.error("placasinfo/comprar:", e);

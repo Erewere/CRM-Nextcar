@@ -613,7 +613,8 @@ async function startServer() {
           // Compra de consultas de antecedentes (pago único): suma al saldo; NO es una suscripción.
           if (checkoutSession.metadata?.tipo === "placasinfo") {
             const r = await acreditarCompraPlacas(adminDb, checkoutSession);
-            if (!r.ok) console.error("Compra de consultas sin acreditar:", checkoutSession.id, r.motivo);
+            // «no pagada» es lo normal en OXXO: la ficha se emitió y el dinero llega después (async_payment_succeeded).
+            if (!r.ok && r.motivo !== "no pagada") console.error("Compra de consultas sin acreditar:", checkoutSession.id, r.motivo);
             break;
           }
           const agencyId = checkoutSession.client_reference_id;
@@ -631,6 +632,15 @@ async function startServer() {
             await agencyRef.set(updates, { merge: true });
           }
           break;
+        // Pago en OXXO de un paquete de consultas: la sesión se completa al emitir la ficha y el dinero llega después.
+        case "checkout.session.async_payment_succeeded": {
+          const sesion = event.data.object as Stripe.Checkout.Session;
+          if (sesion.metadata?.tipo === "placasinfo") {
+            const r = await acreditarCompraPlacas(adminDb, sesion);
+            if (!r.ok) console.error("Compra de consultas (OXXO) sin acreditar:", sesion.id, r.motivo);
+          }
+          break;
+        }
         case "customer.subscription.created":
         case "customer.subscription.updated": {
           const subscription = event.data.object as Stripe.Subscription;

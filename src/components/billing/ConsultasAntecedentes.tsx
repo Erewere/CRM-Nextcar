@@ -64,7 +64,7 @@ export function ConsultasAntecedentes({ volvioDePagar }: { volvioDePagar: boolea
         <>
           <p className="text-3xl font-extrabold text-slate-900 dark:text-white">{d.saldo} <span className="text-sm font-medium text-slate-500">{d.saldo === 1 ? 'consulta disponible' : 'consultas disponibles'}</span></p>
           {d.regaloPendiente && <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">Incluye {d.saldo} de bienvenida para que lo pruebes.</p>}
-          {volvioDePagar && <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-2">Pago recibido. El saldo se actualiza en unos segundos.</p>}
+          {volvioDePagar && <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-2">Con tarjeta, el saldo se actualiza en unos segundos. Si elegiste OXXO, se acredita al día hábil siguiente de pagar la ficha en la tienda.</p>}
 
           <div className="grid sm:grid-cols-3 gap-3 mt-4">
             {d.paquetes.map((p: any, i: number) => (
@@ -75,7 +75,7 @@ export function ConsultasAntecedentes({ volvioDePagar }: { volvioDePagar: boolea
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">Pago único con tarjeta. Las consultas no caducan. Si una consulta no se puede completar, se te devuelve.</p>
+          <p className="text-[11px] text-slate-500 mt-2">Pago único con tarjeta o en efectivo en OXXO (con OXXO se acredita al día hábil siguiente de pagar). Las consultas no caducan. Si una consulta no se puede completar, se te devuelve.</p>
 
           {d.movimientos?.length > 0 && (
             <details className="mt-4 text-sm">
