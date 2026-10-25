@@ -52,6 +52,29 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
     return () => { vivo = false; };
   }, [auto.id]);
 
+  // Publicar directo desde el CRM (solo administrador y gerente; el servidor responde 403 a los demás y entonces no se muestra).
+  const [conexion, setConexion] = useState<any>(null);
+  const [previas, setPrevias] = useState<any[]>([]);
+  const [destinos, setDestinos] = useState<{ fb: boolean; ig: boolean }>({ fb: true, ig: true });
+  const [publicando, setPublicando] = useState(false);
+  const [resultado, setResultado] = useState<any>(null);
+  const [errorPub, setErrorPub] = useState('');
+  const pedirApi = async (ruta: string, cuerpo?: any, tipo = 'application/json') => {
+    const token = await auth.currentUser?.getIdToken();
+    const r = await fetch(getApiUrl(ruta), {
+      method: cuerpo ? 'POST' : 'GET',
+      headers: { Authorization: `Bearer ${token}`, ...(cuerpo ? { 'Content-Type': tipo } : {}) },
+      body: cuerpo ? (tipo === 'application/json' ? JSON.stringify(cuerpo) : cuerpo) : undefined,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(d.error || 'No se pudo completar.'), { status: r.status });
+    return d;
+  };
+  const cargarPrevias = () => pedirApi(`/api/autos/${auto.id}/publicaciones`).then((d) => setPrevias(d.publicaciones || [])).catch(() => {});
+  useEffect(() => {
+    pedirApi('/api/redes/estado').then((d) => { setConexion(d); setDestinos({ fb: !!d.facebook?.listo, ig: !!d.instagram?.listo }); cargarPrevias(); }).catch(() => setConexion(null));
+  }, [auto.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const opciones: OpcionesRed = useMemo(() => ({
     auto, foto: principal, fotosExtra: extras, agencia, telefono, etiqueta, conEnganche, enlace,
   }), [auto, principal, extras, agencia, telefono, etiqueta, conEnganche, enlace]);
@@ -102,6 +125,22 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
   const abrirFacebook = async () => {
     await copiarTexto();
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(enlace)}`, '_blank', 'noopener,width=660,height=640');
+  };
+  const publicarAhora = async () => {
+    if (!blobRef.current) return;
+    const redes = (['fb', 'ig'] as const).filter((r) => destinos[r]);
+    const nombres = redes.map((r) => (r === 'fb' ? 'la página de Facebook' : 'Instagram')).join(' y ');
+    if (!window.confirm(`Se va a publicar ahora en ${nombres}, a nombre de la agencia, con la imagen y el texto que ves. ¿Continuar?`)) return;
+    setPublicando(true); setErrorPub(''); setResultado(null);
+    try {
+      const subida = await pedirApi(`/api/autos/${auto.id}/publicar/imagen`, blobRef.current, 'image/jpeg');
+      const base = { ...opciones };
+      const textos = { fb: textoParaPublicacion({ ...base, enlace: enlace.replace(/o=\w+$/, 'o=fb') }), ig: textoParaPublicacion({ ...base, enlace: enlace.replace(/o=\w+$/, 'o=ig') }) };
+      const r = await pedirApi(`/api/autos/${auto.id}/publicar`, { imagenId: subida.imagenId, redes, textos });
+      setResultado(r.resultado);
+      cargarPrevias();
+    } catch (e: any) { setErrorPub(e.message || 'No se pudo publicar.'); }
+    finally { setPublicando(false); }
   };
   const mandarWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
 
@@ -231,6 +270,50 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
                 </div>
               )}
             </div>
+
+            {conexion && (
+              <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3 space-y-2">
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white">Publicar ahora desde el CRM</p>
+                {([['fb', 'Facebook', conexion.facebook], ['ig', 'Instagram', conexion.instagram]] as const).map(([k, t, c]) => (
+                  <label key={k} className={clsx('flex items-start gap-2 text-sm', c?.listo ? 'cursor-pointer' : 'opacity-70')}>
+                    <input type="checkbox" disabled={!c?.listo} checked={!!destinos[k] && !!c?.listo} onChange={(e) => setDestinos((d) => ({ ...d, [k]: e.target.checked }))} className="mt-1" />
+                    <span>
+                      <b>{t}</b>{c?.listo ? <span className="text-slate-500"> · {k === 'fb' ? c.nombre : c.usuario ? `@${c.usuario}` : 'conectado'}</span> : null}
+                      {!c?.listo && c?.motivo && <span className="block text-xs text-amber-800 dark:text-amber-300">{c.motivo}</span>}
+                    </span>
+                  </label>
+                ))}
+                {formato !== 'cuadrada' && <p className="text-xs text-amber-800 dark:text-amber-300">Para publicar en la página y en Instagram usa el formato <b>Cuadrada</b>; la vertical es para historias.</p>}
+                <button type="button" onClick={publicarAhora} disabled={publicando || armando || !vista || formato !== 'cuadrada' || !(destinos.fb || destinos.ig)}
+                  className={clsx(boton, 'w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-40')}>
+                  {publicando ? 'Publicando… (puede tardar unos segundos)' : 'Publicar ahora'}
+                </button>
+                {errorPub && <p className="text-sm font-semibold text-red-700 dark:text-red-400">{errorPub}</p>}
+                {resultado && (
+                  <ul className="text-sm space-y-1">
+                    {Object.entries(resultado).map(([k, r]: [string, any]) => (
+                      <li key={k} className={r.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>
+                        <b>{k === 'fb' ? 'Facebook' : 'Instagram'}:</b> {r.ok ? <>publicado. {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">Verla</a>}</> : r.error}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {previas.length > 0 && (
+                  <div className="pt-1">
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Ya publicado</p>
+                    <ul className="text-xs text-slate-700 dark:text-slate-300 space-y-0.5">
+                      {previas.map((p, i) => (
+                        <li key={i}>
+                          {p.red === 'fb' ? 'Facebook' : 'Instagram'} · {new Date(p.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                          {p.cifras ? ` · ${p.cifras.reacciones} reacciones · ${p.cifras.comentarios} comentarios${p.cifras.compartidos !== undefined ? ` · ${p.cifras.compartidos} compartidos` : ''}` : ''}
+                          {p.url && <> · <a href={p.url} target="_blank" rel="noopener noreferrer" className="underline">ver</a></>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <div className="flex items-center justify-between mb-1">

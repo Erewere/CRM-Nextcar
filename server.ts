@@ -24,6 +24,7 @@ import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { acreditarCompraPlacas, registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
 import { registrarEliminarAgencias } from "./src/servidor/agencias.ts";
+import { registrarPublicarRedes } from "./src/servidor/publicarRedes.ts";
 import { registrarPublicarAuto, enlazarPublicacion, leerCodigoDeTexto, leerCodigoDeRef } from "./src/servidor/publicarAuto.ts";
 import { registrarVentas } from "./src/servidor/ventas.ts";
 import { registrarMetas } from "./src/servidor/metas.ts";
@@ -5411,6 +5412,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos, mandarCorreo });
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
   registrarPublicarAuto(app, { getAdminDb, usuarioQuePide, express });
+  registrarPublicarRedes(app, { usuarioQuePide, bucket: bucketDocumentos, express });
   registrarEliminarAgencias(app, {
     usuarioQuePide, getAdminDb, bucket: bucketDocumentos,
     borrarCuenta: async (uid: string) => { await getAuth(getAdminApp()!).deleteUser(uid); },
