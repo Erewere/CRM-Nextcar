@@ -353,10 +353,11 @@ export function NotificationsPopover() {
     if (task.type === 'payment' && /^Pago \d+\/\d+ /.test(String(task.title || '')) && clients.some((c) => c.id === task.clientId && (c as any).saleDetails?.method === 'credito')) return;
     const quienEs = (clients.find((c) => c.id === task.clientId)?.name || "").trim();
     const conDetalle = (texto: string) => `${texto}${quienEs ? ` · ${quienEs}` : ""}`;
-    const isPaymentTask = task.type === 'payment' || 
-      task.title?.toLowerCase().includes('pago') || 
-      task.title?.toLowerCase().includes('mensualidad') || 
-      task.title?.toLowerCase().includes('crédito');
+    // Una tarea es de cobro por su TIPO, no por lo que diga el título. Antes bastaba con que el título dijera «pago», y una
+    // tarea tipo Mensaje como «Espera respuesta msj del pago de su carro» salía como «Pago mensual faltante». Solo las
+    // tareas viejas sin tipo se siguen reconociendo por el título.
+    const isPaymentTask = task.type === 'payment' ||
+      (!task.type && /pago|mensualidad|cr[eé]dito/i.test(String(task.title || '')));
     
     // Una cita que empieza dentro de un rato, o que acaba de empezar, no es ni
     // "vencida" ni "por vencer": es ahora. Merece su propio aviso, y es el que
