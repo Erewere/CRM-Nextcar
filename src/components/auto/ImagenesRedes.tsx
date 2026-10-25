@@ -57,6 +57,8 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
   const [previas, setPrevias] = useState<any[]>([]);
   const [destinos, setDestinos] = useState<{ fb: boolean; ig: boolean }>({ fb: true, ig: true });
   const [publicando, setPublicando] = useState(false);
+  // La confirmación va dentro de la pantalla: las ventanitas del navegador (confirm) se bloquean en varios visores.
+  const [confirmando, setConfirmando] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
   const [errorPub, setErrorPub] = useState('');
   const pedirApi = async (ruta: string, cuerpo?: any, tipo = 'application/json') => {
@@ -129,8 +131,7 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
   const publicarAhora = async () => {
     if (!blobRef.current) return;
     const redes = (['fb', 'ig'] as const).filter((r) => destinos[r]);
-    const nombres = redes.map((r) => (r === 'fb' ? 'la página de Facebook' : 'Instagram')).join(' y ');
-    if (!window.confirm(`Se va a publicar ahora en ${nombres}, a nombre de la agencia, con la imagen y el texto que ves. ¿Continuar?`)) return;
+    setConfirmando(false);
     setPublicando(true); setErrorPub(''); setResultado(null);
     try {
       const subida = await pedirApi(`/api/autos/${auto.id}/publicar/imagen`, blobRef.current, 'image/jpeg');
@@ -284,10 +285,22 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
                   </label>
                 ))}
                 {formato !== 'cuadrada' && <p className="text-xs text-amber-800 dark:text-amber-300">Para publicar en la página y en Instagram usa el formato <b>Cuadrada</b>; la vertical es para historias.</p>}
-                <button type="button" onClick={publicarAhora} disabled={publicando || armando || !vista || formato !== 'cuadrada' || !(destinos.fb || destinos.ig)}
-                  className={clsx(boton, 'w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-40')}>
-                  {publicando ? 'Publicando… (puede tardar unos segundos)' : 'Publicar ahora'}
-                </button>
+                {confirmando && !publicando ? (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 space-y-2">
+                    <p className="text-sm text-slate-900 dark:text-slate-100">
+                      Se va a publicar ahora en {([destinos.fb && 'la página de Facebook', destinos.ig && 'Instagram'].filter(Boolean) as string[]).join(' y ')}, a nombre de la agencia, con la imagen y el texto que ves.
+                    </p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={publicarAhora} className={clsx(boton, 'flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90')}>Sí, publicar</button>
+                      <button type="button" onClick={() => setConfirmando(false)} className={clsx(boton, 'flex-1 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200')}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setConfirmando(true)} disabled={publicando || armando || !vista || formato !== 'cuadrada' || !(destinos.fb || destinos.ig)}
+                    className={clsx(boton, 'w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-40')}>
+                    {publicando ? 'Publicando… (puede tardar unos segundos)' : 'Publicar ahora'}
+                  </button>
+                )}
                 {errorPub && <p className="text-sm font-semibold text-red-700 dark:text-red-400">{errorPub}</p>}
                 {resultado && (
                   <ul className="text-sm space-y-1">
