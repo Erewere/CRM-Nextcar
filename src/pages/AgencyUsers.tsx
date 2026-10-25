@@ -45,6 +45,7 @@ export function AgencyUsers() {
   const [waReglas, setWaReglas] = useState<Record<string, string>>({});
   const [postventaActiva, setPostventaActiva] = useState(false);
   const [seguimientoActivo, setSeguimientoActivo] = useState(false);
+  const [reactivacionActiva, setReactivacionActiva] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [savingSharing, setSavingSharing] = useState(false);
   
@@ -152,6 +153,7 @@ export function AgencyUsers() {
             }
             setPostventaActiva((agencyData as any).postventa?.activa === true);
             setSeguimientoActivo((agencyData as any).seguimiento?.activa === true);
+            setReactivacionActiva((agencyData as any).reactivacion?.activa === true);
             if (agencyData.shareInventory !== undefined) {
               setShareInventory(!!agencyData.shareInventory);
             }
@@ -624,6 +626,23 @@ export function AgencyUsers() {
     } catch (e) {
       console.error(e);
       alert('No se pudo guardar el seguimiento.');
+    } finally {
+      setSavingRouting(false);
+    }
+  };
+
+  // Reactivación de tratos que se enfrían: igual que la postventa, solo cuenta lo que se enfría desde que se enciende.
+  const cambiarReactivacion = async (activa: boolean) => {
+    if (!userData?.agencyId) return;
+    setSavingRouting(true);
+    try {
+      await updateDoc(doc(db, 'agencies', userData.agencyId), activa
+        ? { 'reactivacion.activa': true, 'reactivacion.desde': new Date().toLocaleDateString('en-CA') }
+        : { 'reactivacion.activa': false });
+      setReactivacionActiva(activa);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo guardar la reactivación.');
     } finally {
       setSavingRouting(false);
     }
@@ -1209,6 +1228,25 @@ export function AgencyUsers() {
           <label className="flex items-center gap-3 p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800 cursor-pointer">
             <input type="checkbox" checked={seguimientoActivo} disabled={savingRouting} onChange={(e) => cambiarSeguimiento(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
             <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{seguimientoActivo ? 'Encendido' : 'Apagado'}: crear las tareas de seguimiento a quienes no contestan</span>
+          </label>
+        </div>
+      )}
+
+      {/* Tratos que se enfrían */}
+      {userData?.role === 'admin' && (
+        <div className="bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-orange-600" />
+              Retomar tratos que se enfrían
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Si un trato lleva 7 días sin ninguna actividad (ni una nota, ni un mensaje, ni una tarea hecha), el vendedor recibe una tarea para retomarlo, con un mensaje sugerido. Si a los 14 días sigue igual, recibe una última. Solo cuenta lo que se enfríe desde que lo enciendes, y solo tratos con vendedor asignado: los contactos que solo están en el Directorio no se persiguen. Los que ya llevaban tiempo quietos los ves en Nuevos, pestaña «Sin contacto».
+            </p>
+          </div>
+          <label className="flex items-center gap-3 p-4 bg-[#f4f5f5] dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-800 cursor-pointer">
+            <input type="checkbox" checked={reactivacionActiva} disabled={savingRouting} onChange={(e) => cambiarReactivacion(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{reactivacionActiva ? 'Encendido' : 'Apagado'}: crear tareas para retomar los tratos sin contacto</span>
           </label>
         </div>
       )}

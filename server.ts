@@ -14,6 +14,7 @@ import { analizarPrecio, resumirAnalisisDeVenta, VERSION_REGLAS } from "./src/li
 import { analizarCompra, comercialidad, resumirCompras } from "./src/lib/analisisCompra.ts";
 import { sembrarPostventa } from "./src/servidor/postventa.ts";
 import { sembrarSeguimiento } from "./src/servidor/seguimiento.ts";
+import { sembrarReactivacion } from "./src/servidor/reactivacion.ts";
 import { registrarPush } from "./src/servidor/push.ts";
 import { sincronizarTodas, sincronizarUsuariosDeAgencia } from "./src/servidor/usuariosFacturados.ts";
 import { planDeAgencia, planDePrecio, tienePremium } from "./src/lib/planes.ts";
@@ -5046,6 +5047,26 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   }
   setTimeout(correrSeguimiento, 7 * 60 * 1000);
   setInterval(correrSeguimiento, 30 * 60 * 1000);
+
+  // ===== Reactivación de tratos que se enfrían =====
+  // A los 7 y a los 14 días sin ninguna actividad, el vendedor recibe una tarea de «retomar» con un mensaje sugerido. Es
+  // opcional por agencia (reactivacion.activa) y solo aplica a tratos, no a contactos del Directorio. Ver src/servidor/reactivacion.ts.
+  let reactivacionCorriendo = false;
+  async function correrReactivacion() {
+    const adminDb = getAdminDb();
+    if (!adminDb || reactivacionCorriendo) return;
+    reactivacionCorriendo = true;
+    try {
+      const hechas = await sembrarReactivacion(adminDb);
+      if (hechas.length) console.log(`Reactivación: ${hechas.length} tareas nuevas.`);
+    } catch (e) {
+      console.error("Reactivación:", e);
+    } finally {
+      reactivacionCorriendo = false;
+    }
+  }
+  setTimeout(correrReactivacion, 9 * 60 * 1000);
+  setInterval(correrReactivacion, 3 * 60 * 60 * 1000);
 
   // ===== Avisos al celular de citas y tareas =====
   // Cada 5 minutos: avisa 15 minutos antes de una actividad con hora y, una vez al dia por la manana, cuantas tareas
