@@ -41,6 +41,7 @@ import { NotificationsPopover } from "./NotificationsPopover";
 import { AvisoDeVersion } from "./AvisoDeVersion";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSharedInventoryMatches } from "../hooks/useSharedInventoryMatches";
+import { useLeadsNuevos } from "../hooks/useLeadsNuevos";
 import { useChatsPendientes } from '../contexts/ChatsPendientesContext';
 
 import { MobileFab } from "./MobileFab";
@@ -136,7 +137,8 @@ export function Layout() {
   const { total: chatsPendientes } = useChatsPendientes();
   // El chat entre agencias no lo ve el vendedor: no se le suma.
   const globoChats = (userData?.role === 'seller' ? 0 : unreadChatsCount) + chatsPendientes;
-  const { matches: sharedMatches, ownAgencySharing } = useSharedInventoryMatches();
+  const { matchesNuevos: sharedMatches, ownAgencySharing } = useSharedInventoryMatches();
+  const { nuevos: leadsNuevos } = useLeadsNuevos();
 
   useEffect(() => {
     // Check local storage for dark mode preference
@@ -252,6 +254,7 @@ export function Layout() {
       path: "/kanban",
       icon: Trello,
       roles: ["admin", "seller"],
+      badge: leadsNuevos.length > 0 ? leadsNuevos.length : undefined,
     },
     {
       name: "Directorio",
@@ -796,7 +799,7 @@ export function Layout() {
             // lateral, asi que no habia forma de llegar a el salvo escribiendo
             // la direccion a mano: la pantalla donde vive el trabajo diario de
             // un vendedor era inalcanzable desde su telefono.
-            { name: "Embudo", path: "/kanban", icon: Trello },
+            { name: "Embudo", path: "/kanban", icon: Trello, badge: leadsNuevos.length > 0 ? leadsNuevos.length : undefined },
             { name: "Directorio", path: "/persons", icon: Users },
             { name: "Inventario", path: "/inventory", icon: Car, badge: (ownAgencySharing && sharedMatches.length > 0 && location.pathname !== "/inventory") ? sharedMatches.length : undefined },
             { name: "Chat", path: "/chats", icon: MessageSquare, badge: globoChats > 0 ? globoChats : undefined },

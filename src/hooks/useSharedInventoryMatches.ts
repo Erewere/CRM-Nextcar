@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAvisosDescartados, idDeMatch } from "../lib/avisosDescartados";
+import { matchesVistos } from "../lib/listaDeVistos";
 import { puedoVer, useOtrasCiudades, leerOtrasCiudades } from "../lib/compartir";
 import { auth } from "../lib/firebase";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
@@ -145,6 +146,7 @@ export function useSharedInventoryMatches() {
   const [todasAgencias, setTodasAgencias] = useState<any[]>([]);
   const [otrasCiudades] = useOtrasCiudades();
   const descartados = useAvisosDescartados();
+  const vistos = matchesVistos.usar();
   // Las agencias que esta agencia puede ver (misma ciudad, o de otras si así lo eligió el usuario).
   const sharingAgencies = useMemo<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -280,6 +282,11 @@ export function useSharedInventoryMatches() {
     sharingAgencies,
     otherVehicles,
     matches,
+    // Los que aún no se han visto en Inventario: son los que encienden el puntito.
+    matchesNuevos: useMemo(
+      () => matches.filter((m) => !vistos.has(idDeMatch(m.client.id as string, m.vehicle.id))),
+      [matches, vistos],
+    ),
     loading,
   };
 }

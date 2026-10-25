@@ -16,6 +16,7 @@ import { VehicleDetailModal } from "./VehicleDetailModal";
 
 import { checkIsWon, checkIsLost } from "../lib/clientUtils";
 import { useAvisosDescartados, descartarAviso, idDeMatch } from "../lib/avisosDescartados";
+import { matchesVistos } from "../lib/listaDeVistos";
 import { deFormaVieja, estadoDeCuenta } from '../lib/planDePagos';
 import { creditosApi } from "../lib/creditosApi";
 import { ventasApi } from "../lib/ventasApi";
@@ -119,6 +120,7 @@ export function NotificationsPopover() {
   // La lista de descartados vive en un solo sitio para todo el CRM, para que
   // descartar aquí también descarte en el aviso flotante de coincidencias.
   const dismissedIds = useAvisosDescartados();
+  const matchesYaVistos = matchesVistos.usar();
   /**
    * Que avisos de configuracion ya se pospusieron en la pantalla.
    *
@@ -567,7 +569,7 @@ export function NotificationsPopover() {
     matches.forEach((m) => {
       if (isSellerNotif && m.client.sellerId && m.client.sellerId !== userData?.id) return;
       const notifId = idDeMatch(m.client.id, m.vehicle.id);
-      if (dismissedIds.has(notifId)) return;
+      if (dismissedIds.has(notifId) || matchesYaVistos.has(notifId)) return;
       notifications.push({
         id: notifId,
         type: "match-network",

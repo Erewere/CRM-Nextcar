@@ -35,6 +35,7 @@ import {
   horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { KanbanColumn } from "../components/KanbanColumn";
+import { leadsVistos } from "../lib/listaDeVistos";
 import { SortableKanbanColumn } from "../components/SortableKanbanColumn";
 import { ClientCard, SortableClientCard } from "../components/ClientCard";
 import { ClientDetailModal } from "../components/ClientDetailModal";
@@ -258,6 +259,10 @@ export function Kanban() {
   const [newColumnId, setNewColumnId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  // Abrir un trato que llegó solo lo da por visto: se le quita la marca de «nuevo».
+  useEffect(() => {
+    if (selectedClient?.id) leadsVistos.marcar([selectedClient.id as string]);
+  }, [selectedClient?.id]);
   // Que trato esta esperando elegir etapa desde el telefono.
   const [tratoAMover, setTratoAMover] = useState<Client | null>(null);
   // Para poder distinguir «no hay tratos» de «no se pudieron leer».
@@ -512,6 +517,8 @@ export function Kanban() {
         id: deal.id, // Use Deal ID so DnD and updates affect the deal
         originalClientId: deal.clientId,
         dealTitle: deal.title,
+        tratoEntrante: !!(deal as any).entrante,
+        tratoCreadoEn: deal.createdAt,
         dealValue: deal.value,
         status: deal.status || "open",
         sellerId: deal.sellerId || person.sellerId,

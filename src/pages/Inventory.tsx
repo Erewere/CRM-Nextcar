@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { descartarAviso, idDeMatch } from '../lib/avisosDescartados';
+import { matchesVistos } from '../lib/listaDeVistos';
 import { puedoVer, alcanceDe, useOtrasCiudades } from '../lib/compartir';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,9 +102,9 @@ export function Inventory() {
   }, [userData?.agencyId, userData?.role]);
   const [isPendingMinimized, setIsPendingMinimized] = useState(false);
 
-  const { matches } = useSharedInventoryMatches();
+  const { matches, matchesNuevos } = useSharedInventoryMatches();
   const [soloCoincidencias, setSoloCoincidencias] = useState(false);
-  const hasSharedMatches = matches.length > 0;
+  const hasSharedMatches = matchesNuevos.length > 0;
 
   const handleDismissMatch = async (client: Client, vehicleId: string, vehiclePrice: number) => {
     try {
@@ -122,6 +123,17 @@ export function Inventory() {
     const params = new URLSearchParams(window.location.search);
     return params.get('tab') === 'shared' ? 'shared' : 'my';
   });
+
+  // Al abrir la pestaña Compartido se dan por vistos los matches de ahora: el
+  // puntito amarillo se apaga y solo vuelve cuando aparece uno nuevo.
+  useEffect(() => {
+    if (activeTab !== 'shared' || matchesNuevos.length === 0) return;
+    const t = setTimeout(
+      () => matchesVistos.marcar(matchesNuevos.map((m) => idDeMatch(m.client.id as string, m.vehicle.id))),
+      1500,
+    );
+    return () => clearTimeout(t);
+  }, [activeTab, matchesNuevos]);
 
   const location = useLocation();
 

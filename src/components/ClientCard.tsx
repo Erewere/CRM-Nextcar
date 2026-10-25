@@ -6,6 +6,8 @@ import { MessageCircle, Phone, ChevronRight, AlertTriangle, Lock, ArrowRightLeft
 import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
 import { getVehicleOfInterestText } from '../lib/clientUtils';
+import { esLeadNuevo } from '../lib/leadsNuevos';
+import { leadsVistos } from '../lib/listaDeVistos';
 
 interface Props {
   client: Client;
@@ -20,6 +22,14 @@ interface Props {
 }
 
 export function ClientCard({ client, tasks = [], onClick, disabled, onMover, recienLlegado }: Props) {
+  const vistos = leadsVistos.usar();
+  const esNuevo =
+    !vistos.has(client.id as string) &&
+    esLeadNuevo({
+      entrante: (client as any).tratoEntrante,
+      status: client.status as string,
+      createdAt: (client as any).tratoCreadoEn,
+    });
   const getTaskStatusInfo = () => {
     const pendingTasks = tasks.filter(t => !t.completed);
     if (pendingTasks.length === 0) {
@@ -98,9 +108,15 @@ export function ClientCard({ client, tasks = [], onClick, disabled, onMover, rec
         // Al cambiar de etapa la tarjeta desaparece de donde estaba y aparece
         // en otra columna que en el telefono ni siquiera se ve. Llega
         // señalada un par de segundos para no tener que buscarla.
-        recienLlegado && "ring-2 ring-blue-500 ring-offset-1 animate-in zoom-in-95 fade-in duration-500 shadow-lg"
+        recienLlegado && "ring-2 ring-blue-500 ring-offset-1 animate-in zoom-in-95 fade-in duration-500 shadow-lg",
+        esNuevo && "ring-2 ring-amber-400 shadow-lg shadow-amber-200/60 dark:shadow-amber-900/30"
       )}
     >
+      {esNuevo && (
+        <span className="absolute -top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-amber-950 shadow">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-950 animate-pulse" /> Nuevo lead
+        </span>
+      )}
       {/* Modern water-drop / glass highlight effect */}
       <div className="absolute inset-0 overflow-hidden rounded pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-400/0 via-blue-300/5 to-indigo-400/10 dark:from-blue-500/0 dark:via-blue-400/5 dark:to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none mix-blend-overlay" />

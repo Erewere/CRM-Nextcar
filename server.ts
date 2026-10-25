@@ -337,6 +337,8 @@ async function crearTratoDelLead(
     value: 0,
     vehicle: datos.vehicle || null,
     vehicleId: datos.vehicleId || null,
+    // Llegó solo por la puerta pública: el embudo lo marca como «nuevo».
+    entrante: true,
     createdAt: ahora,
     updatedAt: ahora,
   });

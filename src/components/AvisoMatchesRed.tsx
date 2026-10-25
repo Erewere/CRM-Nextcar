@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useSharedInventoryMatches } from '../hooks/useSharedInventoryMatches';
 import { useAvisosDescartados, descartarAviso, idDeMatch } from '../lib/avisosDescartados';
+import { matchesVistos } from '../lib/listaDeVistos';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { VehicleDetailModal } from './VehicleDetailModal';
 import { Vehicle, Client } from '../types';
@@ -22,14 +23,18 @@ import clsx from 'clsx';
 export function AvisoMatchesRed() {
   const { matches, ownAgencySharing } = useSharedInventoryMatches();
   const descartados = useAvisosDescartados();
+  const vistos = matchesVistos.usar();
   const esMovil = useIsMobile();
   const [abierto, setAbierto] = useState(false);
   const [vehiculoAbierto, setVehiculoAbierto] = useState<Vehicle | null>(null);
   const [clienteDelVehiculo, setClienteDelVehiculo] = useState<Client | null>(null);
 
   const visibles = useMemo(
-    () => matches.filter((m) => !descartados.has(idDeMatch(m.client.id, m.vehicle.id))),
-    [matches, descartados],
+    () => matches.filter((m) => {
+      const id = idDeMatch(m.client.id, m.vehicle.id);
+      return !descartados.has(id) && !vistos.has(id);
+    }),
+    [matches, descartados, vistos],
   );
 
   // En el móvil ya hay un botón flotante para crear cosas; dos se estorban.
