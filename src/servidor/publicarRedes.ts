@@ -37,6 +37,23 @@ async function graph(ruta: string, token: string, opciones: { metodo?: "GET" | "
   }
 }
 
+/**
+ * Lo que se pega en Integraciones puede ser el token de la página o el del usuario que la administra (el Explorador de
+ * Meta entrega este último si no se elige la página aparte). Con el de usuario Meta no deja publicar ni leer `tasks`.
+ * Pidiéndole a la página su propio `access_token` se obtiene el bueno en los dos casos; si no se puede, se queda con el
+ * que había y el error de Meta se explica como siempre. Se recuerda 10 minutos para no preguntarle a Meta cada vez.
+ */
+const tokensDePagina = new Map<string, { token: string; hasta: number }>();
+async function tokenDeLaPagina(pageId: string, guardado: string): Promise<string> {
+  const clave = `${pageId}:${guardado.slice(-12)}`;
+  const visto = tokensDePagina.get(clave);
+  if (visto && visto.hasta > Date.now()) return visto.token;
+  const r = await graph(pageId, guardado, { params: { fields: "access_token" }, ms: 10_000 });
+  const token = r.ok && typeof r.data?.access_token === "string" && r.data.access_token ? r.data.access_token : guardado;
+  tokensDePagina.set(clave, { token, hasta: Date.now() + 10 * 60_000 });
+  return token;
+}
+
 /** El error de Meta, dicho para quien vende autos. */
 export function explicarError(data: any, red: "facebook" | "instagram"): string {
   const e = data?.error || {};
@@ -65,7 +82,9 @@ export function registrarPublicarRedes(app: any, { usuarioQuePide, bucket, expre
   async function datosDeRedes(q: any) {
     const ref = q.adminDb.collection("agencies").doc(q.agencyId);
     const [ag, sec] = await Promise.all([ref.get(), ref.collection("secrets").doc("messenger").get()]);
-    return { pageId: String(ag.data()?.facebookPageId || ""), token: String(sec.data()?.pageAccessToken || "") };
+    const pageId = String(ag.data()?.facebookPageId || "");
+    const guardado = String(sec.data()?.pageAccessToken || "");
+    return { pageId, token: pageId && guardado ? await tokenDeLaPagina(pageId, guardado) : guardado };
   }
 
   // ---------- ¿Está lista la agencia para publicar? ----------
