@@ -44,13 +44,24 @@ async function graph(ruta: string, token: string, opciones: { metodo?: "GET" | "
  * que había y el error de Meta se explica como siempre. Se recuerda 10 minutos para no preguntarle a Meta cada vez.
  */
 const tokensDePagina = new Map<string, { token: string; hasta: number }>();
+/** Lo último que se supo de por qué no se pudo resolver el token, para decírselo a quien administra. */
+let ultimoAviso = "";
 async function tokenDeLaPagina(pageId: string, guardado: string): Promise<string> {
   const clave = `${pageId}:${guardado.slice(-12)}`;
   const visto = tokensDePagina.get(clave);
   if (visto && visto.hasta > Date.now()) return visto.token;
+  let token = guardado;
   const r = await graph(pageId, guardado, { params: { fields: "access_token" }, ms: 10_000 });
-  const token = r.ok && typeof r.data?.access_token === "string" && r.data.access_token ? r.data.access_token : guardado;
-  tokensDePagina.set(clave, { token, hasta: Date.now() + 10 * 60_000 });
+  if (r.ok && typeof r.data?.access_token === "string" && r.data.access_token) token = r.data.access_token;
+  else {
+    // Segunda vía: la lista de páginas que administra la persona dueña del token.
+    const c = await graph("me/accounts", guardado, { params: { fields: "id,name,access_token", limit: "100" }, ms: 12_000 });
+    const lista: any[] = c.ok && Array.isArray(c.data?.data) ? c.data.data : [];
+    const suya = lista.find((x) => String(x.id) === pageId);
+    if (suya?.access_token) token = String(suya.access_token);
+    else if (c.ok && lista.length) ultimoAviso = `El ID de página guardado (${pageId}) no es de ninguna de las páginas que administra esa cuenta: ${lista.map((x) => `${x.name} (${x.id})`).join(", ")}.`;
+  }
+  tokensDePagina.set(clave, { token, hasta: Date.now() + (token === guardado ? 60_000 : 10 * 60_000) });
   return token;
 }
 
@@ -96,10 +107,12 @@ export function registrarPublicarRedes(app: any, { usuarioQuePide, bucket, expre
       const sal: any = { facebook: { listo: false, motivo: "" }, instagram: { listo: false, motivo: "" } };
       if (!pageId) { sal.facebook.motivo = "Falta el identificador de la página de Facebook (Integraciones)."; return res.json(sal); }
       if (!token) { sal.facebook.motivo = "Falta el token de la página (Integraciones)."; return res.json(sal); }
-      const p = await graph(pageId, token, { params: { fields: "name,tasks,instagram_business_account{id,username}" }, ms: 12_000 });
-      if (!p.ok) { sal.facebook.motivo = explicarError(p.data, "facebook"); return res.json(sal); }
+      const p = await graph(pageId, token, { params: { fields: "name,instagram_business_account{id,username}" }, ms: 12_000 });
+      if (!p.ok) { sal.facebook.motivo = (ultimoAviso ? ultimoAviso + " " : "") + explicarError(p.data, "facebook"); return res.json(sal); }
       sal.facebook.nombre = String(p.data.name || "");
-      const tareas: string[] = Array.isArray(p.data.tasks) ? p.data.tasks : [];
+      // `tasks` solo se deja leer con el token de la página; si no, no se exige: publicar dirá lo que haga falta.
+      const t = await graph(pageId, token, { params: { fields: "tasks" }, ms: 8_000 });
+      const tareas: string[] = t.ok && Array.isArray(t.data.tasks) ? t.data.tasks : [];
       // `tasks` lista lo que el dueño del token puede hacer en la página; sin CREATE_CONTENT no podrá publicar.
       if (tareas.length && !tareas.includes("CREATE_CONTENT")) sal.facebook.motivo = "La persona dueña del token no tiene permiso de crear contenido en la página.";
       else sal.facebook.listo = true;
