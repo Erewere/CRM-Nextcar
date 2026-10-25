@@ -711,7 +711,7 @@ export function AutoPagina() {
               </button>
             )}
             {fotos.length > 0 && (
-              <button type="button" onClick={() => setParaRedes(true)} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><ImageIcon className="w-4 h-4" /> Para redes</button>
+              <button type="button" onClick={() => setParaRedes(true)} className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50"><ImageIcon className="w-4 h-4" /> Publicar en redes</button>
             )}
             {puedeFotos && (
               <label className="min-h-[38px] px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold flex items-center gap-1.5 hover:bg-slate-50 cursor-pointer">

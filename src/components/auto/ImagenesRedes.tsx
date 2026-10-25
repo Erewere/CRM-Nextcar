@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Check, Copy, Download, Share2, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Share2, X } from 'lucide-react';
+import { auth } from '../../lib/firebase';
+import { getApiUrl } from '../../lib/api';
 import type { Vehicle } from '../../types';
 import { generarImagenRed, textoParaPublicacion, type FormatoRed, type OpcionesRed } from '../../lib/imagenesRedes';
 
@@ -34,10 +36,25 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
   const [error, setError] = useState('');
   const [copiado, setCopiado] = useState(false);
   const blobRef = useRef<Blob | null>(null);
+  // Dónde se va a publicar: la liga lleva la marca de esa red, y así se sabe de dónde llegó cada visita y cada mensaje.
+  const [red, setRed] = useState<'fb' | 'ig' | 'wa'>('fb');
+  const [stats, setStats] = useState<any>(null);
+  const enlace = auto.agencyId && auto.id ? `${window.location.origin}/a/${auto.agencyId}/${auto.id}?o=${red}` : '';
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const r = await fetch(getApiUrl(`/api/autos/${auto.id}/publicacion`), { headers: { Authorization: `Bearer ${token}` } });
+        if (r.ok && vivo) setStats(await r.json());
+      } catch { /* sin cifras: no estorba */ }
+    })();
+    return () => { vivo = false; };
+  }, [auto.id]);
 
   const opciones: OpcionesRed = useMemo(() => ({
-    auto, foto: principal, fotosExtra: extras, agencia, telefono, etiqueta, conEnganche,
-  }), [auto, principal, extras, agencia, telefono, etiqueta, conEnganche]);
+    auto, foto: principal, fotosExtra: extras, agencia, telefono, etiqueta, conEnganche, enlace,
+  }), [auto, principal, extras, agencia, telefono, etiqueta, conEnganche, enlace]);
   const texto = useMemo(() => textoParaPublicacion(opciones), [opciones]);
 
   // Se vuelve a armar la vista previa cada vez que cambia algo (con una pausa corta al escribir).
@@ -81,6 +98,13 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
     descargar();
   };
 
+  /** Abre el cuadro de publicar de Facebook con la liga lista; el texto ya queda copiado para pegarlo. */
+  const abrirFacebook = async () => {
+    await copiarTexto();
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(enlace)}`, '_blank', 'noopener,width=660,height=640');
+  };
+  const mandarWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+
   const copiarTexto = async () => {
     try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2500); } catch { /* sin permiso */ }
   };
@@ -100,7 +124,7 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
       <div className="relative bg-white dark:bg-slate-800 md:rounded-2xl shadow-2xl w-full max-w-5xl md:max-h-[92vh] flex flex-col">
         <div className="flex items-start justify-between gap-3 p-4 border-b border-slate-200 dark:border-slate-700">
           <div>
-            <h2 id="titulo-redes" className="text-lg font-extrabold text-slate-900 dark:text-white">Imágenes para redes</h2>
+            <h2 id="titulo-redes" className="text-lg font-extrabold text-slate-900 dark:text-white">Publicar en redes</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">Lista para Facebook, Instagram, Marketplace o tu estado de WhatsApp.</p>
           </div>
           <button type="button" onClick={onCerrar} aria-label="Cerrar" className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"><X className="w-5 h-5" /></button>
@@ -181,6 +205,34 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
             </label>
 
             <div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">¿Dónde la vas a publicar?</p>
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900">
+                {([['fb', 'Facebook'], ['ig', 'Instagram'], ['wa', 'WhatsApp']] as const).map(([k, t]) => (
+                  <button key={k} type="button" onClick={() => setRed(k)} aria-pressed={red === k}
+                    className={clsx('rounded-lg py-1.5 text-sm font-bold', red === k ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400')}>{t}</button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                La liga del texto abre la ficha del auto y cuenta de qué red llegan las visitas y los mensajes.
+                {red === 'ig' && ' Instagram no deja publicar ligas ni subir desde la computadora: en el celular, «Compartir» manda la imagen y elige Instagram; la liga va en el texto (pégala en tu biografía o en el pie).'}
+              </p>
+              {stats && (
+                <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    ['Visitas a la ficha', ['fb', 'ig', 'wa', 'ot'].reduce((n, k) => n + Number(stats.vistas?.[k] || 0), 0)],
+                    ['Tocaron WhatsApp o Messenger', Object.entries(stats.toques || {}).filter(([k]) => k.startsWith('whatsapp') || k.startsWith('messenger')).reduce((n, [, v]) => n + Number(v), 0)],
+                    ['Contactos traídos', Number(stats.interesados || 0)],
+                  ].map(([t, n]) => (
+                    <div key={String(t)} className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 py-2">
+                      <p className="text-lg font-extrabold text-slate-900 dark:text-white">{n as number}</p>
+                      <p className="text-[10px] font-semibold text-slate-500 leading-tight px-1">{t as string}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Texto para la publicación</p>
                 <button type="button" onClick={copiarTexto} className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1 hover:underline">
@@ -194,8 +246,18 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
 
         <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-2">
           <p className="mr-auto text-xs text-slate-600 dark:text-slate-400">
-            {enTelefono() ? 'Al compartir, el texto se copia solo: pégalo en la publicación.' : 'Descarga la imagen y pega el texto al publicar.'}
+            {red === 'fb' ? 'Se abre el cuadro de Facebook con la liga lista y el texto queda copiado: pégalo y sube la imagen.' : enTelefono() ? 'Al compartir, el texto se copia solo: pégalo en la publicación.' : 'Descarga la imagen y pega el texto al publicar.'}
           </p>
+          {red === 'fb' && enlace && (
+            <button type="button" onClick={abrirFacebook} className={clsx(boton, 'bg-[#1877f2] hover:bg-[#1468d6] text-white')}>
+              <ExternalLink className="w-4 h-4" /> Abrir Facebook para publicar
+            </button>
+          )}
+          {red === 'wa' && (
+            <button type="button" onClick={mandarWhatsApp} className={clsx(boton, 'bg-green-700 hover:bg-green-800 text-white')}>
+              <ExternalLink className="w-4 h-4" /> Mandar por WhatsApp
+            </button>
+          )}
           <button type="button" onClick={descargar} disabled={!vista || armando}
             className={clsx(boton, 'border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50')}>
             <Download className="w-4 h-4" /> Descargar

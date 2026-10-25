@@ -18,6 +18,8 @@ export interface OpcionesRed {
   telefono?: string;            // WhatsApp que sale en la imagen
   etiqueta?: string;            // «¡Recién llegado!», etc.
   conEnganche: boolean;
+  /** Liga rastreable a la página pública del auto (ver src/servidor/publicarAuto.ts); sale en el texto de la publicación. */
+  enlace?: string;
 }
 
 const AZUL = '#0f172a', ACENTO = '#1d4ed8', VERDE = '#25d366', AMBAR = '#f59e0b';
@@ -228,7 +230,7 @@ export function textoParaPublicacion(o: OpcionesRed) {
     ...destacados.map((d) => `✅ ${d}`),
     '',
     tel ? `📲 Escríbenos por WhatsApp: ${tel}` : '',
-    a.websiteUrl ? `🔎 Más fotos: ${a.websiteUrl}` : '',
+    o.enlace ? `🔎 Ficha completa y más fotos: ${o.enlace}` : a.websiteUrl ? `🔎 Más fotos: ${a.websiteUrl}` : '',
     '',
     etiquetas.join(' '),
   ].filter((l, i, arr) => !(l === '' && arr[i - 1] === '')).join('\n').trim();

@@ -24,6 +24,7 @@ import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { acreditarCompraPlacas, registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
 import { registrarEliminarAgencias } from "./src/servidor/agencias.ts";
+import { registrarPublicarAuto, enlazarPublicacion, leerCodigoDeTexto, leerCodigoDeRef } from "./src/servidor/publicarAuto.ts";
 import { registrarVentas } from "./src/servidor/ventas.ts";
 import { registrarMetas } from "./src/servidor/metas.ts";
 import { calcularMetricas, DIAS_ESTANCADO } from "./src/lib/metricasPlataforma.ts";
@@ -2114,6 +2115,9 @@ async function startServer() {
               const referral = event.referral || event.postback?.referral;
               if (senderId && referral) {
                 const dueno = await buscarPorPsid(senderId);
+                // Una liga de publicación (m.me/…?ref=auto_abc12345_fb) liga al contacto con ese auto.
+                const refPubM = leerCodigoDeRef(String(referral.ref || ""));
+                if (dueno && refPubM) await enlazarPublicacion(adminDb, { agencyId, clientId: dueno.id, codigo: refPubM.codigo, origen: refPubM.origen, canal: "messenger" });
                 if (dueno) {
                   await dueno.ref.update({
                     messengerReferral: {
@@ -2272,6 +2276,10 @@ async function startServer() {
     } else {
       await clientsRef.doc(clientId).update(clientUpdate);
     }
+
+    // Si el mensaje trae el código de una publicación «(ref abc12345.fb)», el contacto queda ligado a ese auto y a esa red.
+    const refPub = leerCodigoDeTexto(text);
+    if (refPub) await enlazarPublicacion(adminDb, { agencyId, clientId, codigo: refPub.codigo, origen: refPub.origen, canal: origin === "messenger" ? "messenger" : "whatsapp" });
 
     // La conversacion vive en la pantalla de Chats, venga por donde venga.
     // Antes solo se guardaba la de WhatsApp: un mensaje de Messenger creaba el
@@ -5402,6 +5410,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   // ===== Solicitudes de crédito (ver src/servidor/creditos.ts) =====
   const creditos = registrarCreditos(app, { express, usuarioQuePide, getAdminDb, bucket: bucketDocumentos, mandarCorreo });
   abrirSolicitudDeFormulario = creditos.abrirDesdeFormulario;
+  registrarPublicarAuto(app, { getAdminDb, usuarioQuePide, express });
   registrarEliminarAgencias(app, {
     usuarioQuePide, getAdminDb, bucket: bucketDocumentos,
     borrarCuenta: async (uid: string) => { await getAuth(getAdminApp()!).deleteUser(uid); },
