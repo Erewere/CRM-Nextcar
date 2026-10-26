@@ -4680,14 +4680,23 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     let cache = cacheConsultaModelo.get(clave);
     let guiaFallo = false;
     if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
-      const [m, g] = await Promise.allSettled([
+      const pedirGuia = () => consultarGuia(c.marca, consultaGuia, c.anio, c.km, deLista ? c.version : "");
+      const [m, g0] = await Promise.allSettled([
         consultarMercado(c.marca, consulta, c.anio, { edades: true, km: c.km }),
-        consultarGuia(c.marca, consultaGuia, c.anio, c.km, deLista ? c.version : ""),
+        pedirGuia(),
       ]);
+      let g = g0;
+      // Autocosmos a veces rechaza o tarda una vez y a la siguiente contesta: «no hay guía» no se da por bueno a la primera.
+      if (g.status === "fulfilled" && !g.value && c.anio >= ANIO_MINIMO_GUIA) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        try { g = { status: "fulfilled", value: await pedirGuia() }; } catch (e) { g = { status: "rejected", reason: e }; }
+      }
       guiaFallo = g.status === "rejected";
       cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
-      // Si una consulta falló no se guarda: se reintenta la próxima vez.
-      if (m.status === "fulfilled" && g.status === "fulfilled") cacheConsultaModelo.set(clave, cache);
+      // Si una consulta falló no se guarda: se reintenta la próxima vez. Tampoco un «no hay guía» de un modelo que sí
+      // debería tenerla (2015 o más nuevo): casi siempre es Autocosmos fallando, y guardarlo lo dejaría así 12 horas.
+      const sinGuiaSospechoso = g.status === "fulfilled" && !g.value && c.anio >= ANIO_MINIMO_GUIA;
+      if (m.status === "fulfilled" && g.status === "fulfilled" && !sinGuiaSospechoso) cacheConsultaModelo.set(clave, cache);
     }
     // Autocosmos a veces no contesta (se queda colgado) o no tiene el modelo. Antes de quedarnos sin guía,
     // se busca una guardada de un auto de esta agencia con la misma marca, modelo y año.
