@@ -19,8 +19,13 @@ type Resultado = {
   confianza: 'alta' | 'media' | 'baja' | 'ninguna'; comparables: number; advertencias: string[]; insights: string[]; comparablesUsados: Comp[];
   estadoGuia?: { estado: 'en-vivo' | 'guardada' | 'no-disponible' | 'manual'; motivo: string; edadDias?: number };
   consulta?: { km: number | null };
-  mercado: { n: number; mediana: number } | null; guia: { compra: number; venta: number; confianza: string; manual?: boolean } | null; fechaAnalisis: string;
+  mercado: { n: number; mediana: number; kmAjuste?: KmAjusteMercado | null } | null; guia: { compra: number; venta: number; confianza: string; manual?: boolean; kmAjuste?: KmAjusteGuia | null } | null; fechaAnalisis: string;
 };
+type KmAjusteMercado = { kmObjetivo: number; kmAnuncios: number; anunciosConKm: number; porMilKm: number; origen: 'anuncios' | 'tipico'; medianaSinAjuste: number };
+type KmAjusteGuia = { kmUsado: number; kmReferencia: number; porMilKm: number; ventaSinAjuste: number; compraSinAjuste: number };
+/** Una lista de los menús del cotizador (marcas, modelos, años o versiones). */
+type Lista = { items: string[]; cargando: boolean; error: boolean };
+const SIN_LISTA: Lista = { items: [], cargando: false, error: false };
 type Consulta = {
   id: string; fecha: string; marca: string; modelo: string; version: string; anio: number; km: number | null;
   guiaCompra: number | null; guiaVenta: number | null; guiaOrigen: 'autocosmos' | 'guardada' | 'manual' | null;
@@ -64,6 +69,36 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
   // un Libro Azul escrito a mano: se vuelve a consultar la guía (por ejemplo si cambia el kilometraje).
   const [autoRelleno, setAutoRelleno] = useState<{ compra: string; venta: string } | null>(null);
 
+  // Menús en cascada: marca → modelo → año → versión. Salen de la guía de Autocosmos, para no escribir ni equivocarse.
+  const [marcas, setMarcas] = useState<Lista>({ ...SIN_LISTA, cargando: true });
+  const [modelos, setModelos] = useState<Lista>(SIN_LISTA);
+  const [anios, setAnios] = useState<Lista>(SIN_LISTA);
+  const [versiones, setVersiones] = useState<Lista>(SIN_LISTA);
+  const cargarLista = (tipo: string, params: Record<string, string>, guardar: (l: Lista) => void, vigente: () => boolean) => {
+    guardar({ items: [], cargando: true, error: false });
+    llamar(`/api/precios/catalogo?${new URLSearchParams({ tipo, ...params })}`)
+      .then((d) => { if (vigente()) guardar({ items: (d.items || []).map(String), cargando: false, error: false }); })
+      .catch(() => { if (vigente()) guardar({ items: [], cargando: false, error: true }); });
+  };
+  useEffect(() => { let vivo = true; cargarLista('marcas', {}, setMarcas, () => vivo); return () => { vivo = false; }; }, []);
+  useEffect(() => {
+    let vivo = true;
+    if (f.marca) cargarLista('modelos', { marca: f.marca }, setModelos, () => vivo); else setModelos(SIN_LISTA);
+    return () => { vivo = false; };
+  }, [f.marca]);
+  useEffect(() => {
+    let vivo = true;
+    if (f.marca && f.modelo) cargarLista('anios', { marca: f.marca, modelo: f.modelo }, setAnios, () => vivo); else setAnios(SIN_LISTA);
+    return () => { vivo = false; };
+  }, [f.marca, f.modelo]);
+  useEffect(() => {
+    let vivo = true;
+    if (f.marca && f.modelo && f.anio) cargarLista('versiones', { marca: f.marca, modelo: f.modelo, anio: f.anio }, setVersiones, () => vivo); else setVersiones(SIN_LISTA);
+    return () => { vivo = false; };
+  }, [f.marca, f.modelo, f.anio]);
+  // Si el catálogo no contesta, el formulario sigue con cuadros de texto para no dejar a nadie sin cotizar.
+  const aMano = marcas.error;
+
   const borrarConsulta = async (id: string) => {
     const previo = historial;
     setHistorial((h) => h.filter((c) => c.id !== id));
@@ -92,6 +127,23 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
       return { ...x, [k]: valor };
     });
     if (['marca', 'modelo', 'version', 'anio', 'km'].includes(k)) setAutoRelleno((a) => (a && f.guiaCompra === a.compra && f.guiaVenta === a.venta ? null : a));
+  };
+
+  /** Elegir en un menú: lo que depende de él se vacía (otra marca → otros modelos, otros años, otras versiones). */
+  const elegir = (k: 'marca' | 'modelo' | 'anio' | 'version', valor: string) => {
+    const dependientes: Record<string, ('modelo' | 'anio' | 'version')[]> = { marca: ['modelo', 'anio', 'version'], modelo: ['anio', 'version'], anio: ['version'], version: [] };
+    setF((x) => {
+      const nuevo = { ...x, [k]: valor };
+      dependientes[k].forEach((d) => { nuevo[d] = ''; });
+      if (autoRelleno && x.guiaCompra === autoRelleno.compra && x.guiaVenta === autoRelleno.venta) { nuevo.guiaCompra = ''; nuevo.guiaVenta = ''; }
+      return nuevo;
+    });
+    setAutoRelleno((a) => (a && f.guiaCompra === a.compra && f.guiaVenta === a.venta ? null : a));
+  };
+  /** Kilometraje con comas mientras se escribe: 81300 → 81,300. */
+  const ponerKm = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const solo = e.target.value.replace(/[^\d]/g, '').slice(0, 7);
+    poner('km')({ target: { value: solo ? Number(solo).toLocaleString('es-MX') : '' } } as React.ChangeEvent<HTMLInputElement>);
   };
 
   const consultar = async (e: React.FormEvent) => {
@@ -136,6 +188,31 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
       {fuente && <p className="text-[10px] text-slate-400 mt-1">{fuente}</p>}
     </div>
   );
+  /** Cómo influyó el kilometraje, en una frase: de cuánto a cuánto y con qué regla. */
+  const notaKm = (res: Resultado): string => {
+    const g = res.guia?.kmAjuste, m = res.mercado?.kmAjuste;
+    if (!g && !m) return res.consulta?.km ? '' : 'Sin kilometraje el precio es el de un auto con los km normales para su año.';
+    const km = (n: number) => n.toLocaleString('es-MX') + ' km';
+    const partes: string[] = [];
+    if (g && g.ventaSinAjuste !== res.guia!.venta) {
+      const dif = res.guia!.venta - g.ventaSinAjuste;
+      partes.push(`La guía para un auto con los km normales de su año (${km(g.kmReferencia)}) da ${dinero(g.ventaSinAjuste)} de venta; con ${km(g.kmUsado)} ${dif < 0 ? 'baja' : 'sube'} a ${dinero(res.guia!.venta)} (${dif < 0 ? '−' : '+'}${dinero(Math.abs(dif))}).`);
+    } else if (g) partes.push(`El kilometraje (${km(g.kmUsado)}) es parecido al normal de su año (${km(g.kmReferencia)}): no se ajusta la guía.`);
+    const pct = m?.origen === 'anuncios' ? m.porMilKm : g?.porMilKm;
+    if (pct) partes.push(m?.origen === 'anuncios'
+      ? `Cada 1,000 km de diferencia mueven el precio ${pct}%, medido en ${m.anunciosConKm} anuncios del mercado.`
+      : `Cada 1,000 km de diferencia mueven el precio ${pct}% (regla de respaldo: no hubo suficientes anuncios con kilometraje para medirlo).`);
+    return partes.join(' ');
+  };
+  const selector = (etiqueta: string, valor: string, alCambiar: (v: string) => void, lista: Lista, o: { vacio: string; deshabilitado?: boolean; requerido?: boolean }) => (
+    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 min-w-0">{etiqueta}
+      <select required={o.requerido} value={valor} onChange={(e) => alCambiar(e.target.value)} disabled={o.deshabilitado || lista.cargando} className={clsx(campo, 'disabled:opacity-60 truncate')}>
+        <option value="">{lista.cargando ? 'Cargando…' : o.vacio}</option>
+        {valor && !lista.items.includes(valor) && <option value={valor}>{valor}</option>}
+        {lista.items.map((x) => <option key={x} value={x}>{x}</option>)}
+      </select>
+    </label>
+  );
   // De dónde salen los días, en una línea chica.
   const fuenteDias = (b?: Resultado['diasBase']) => {
     if (!b) return undefined;
@@ -150,11 +227,22 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
     <div className="space-y-4">
       <form id="cotizador" onSubmit={consultar} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Marca<input required value={f.marca} onChange={poner('marca')} placeholder="Nissan" className={campo} /></label>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Modelo<input required value={f.modelo} onChange={poner('modelo')} placeholder="Sentra" className={campo} /></label>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Versión (opcional)<input value={f.version} onChange={poner('version')} placeholder="Advance" className={campo} /></label>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Año<input required inputMode="numeric" value={f.anio} onChange={poner('anio')} placeholder="2020" className={campo} /></label>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Kilometraje<input inputMode="numeric" value={f.km} onChange={poner('km')} placeholder="68,000" className={campo} /></label>
+          {aMano ? (
+            <>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Marca<input required value={f.marca} onChange={poner('marca')} placeholder="Nissan" className={campo} /></label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Modelo<input required value={f.modelo} onChange={poner('modelo')} placeholder="Sentra" className={campo} /></label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Año<input required inputMode="numeric" value={f.anio} onChange={poner('anio')} placeholder="2020" className={campo} /></label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Versión (opcional)<input value={f.version} onChange={poner('version')} placeholder="Advance" className={campo} /></label>
+            </>
+          ) : (
+            <>
+              {selector('Marca', f.marca, (v) => elegir('marca', v), marcas, { vacio: 'Elige la marca', requerido: true })}
+              {selector('Modelo', f.modelo, (v) => elegir('modelo', v), modelos, { vacio: f.marca ? 'Elige el modelo' : 'Primero la marca', deshabilitado: !f.marca, requerido: true })}
+              {selector('Año', f.anio, (v) => elegir('anio', v), anios, { vacio: f.modelo ? 'Elige el año' : 'Primero el modelo', deshabilitado: !f.modelo, requerido: true })}
+              {selector('Versión (opcional)', f.version, (v) => elegir('version', v), versiones, { vacio: !f.anio ? 'Primero el año' : versiones.items.length ? 'No sé / cualquiera' : 'Sin versiones en la guía', deshabilitado: !f.anio })}
+            </>
+          )}
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Kilometraje<input required inputMode="numeric" value={f.km} onChange={ponerKm} placeholder="68,000" className={campo} /></label>
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Piden (opcional)<input inputMode="numeric" value={f.precioOfrecido} onChange={poner('precioOfrecido')} placeholder="$215,000" className={campo} /></label>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -201,9 +289,10 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
               ))}
             </section>
           )}
+          {notaKm(r) && <p className="text-xs text-slate-600 dark:text-slate-300 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2">{notaKm(r)}</p>}
           <div className="flex flex-wrap items-center gap-2">
             <span className={clsx('inline-flex rounded-full border px-2.5 py-1 text-xs font-bold', CONF[r.confianza].c)}>{CONF[r.confianza].t} · {r.comparables} {r.comparables === 1 ? 'venta parecida' : 'ventas parecidas'}</span>
-            {r.mercado && <span className="text-xs text-slate-500">Mercado: {r.mercado.n} anuncios, mediana {dinero(r.mercado.mediana)}</span>}
+            {r.mercado && <span className="text-xs text-slate-500">Mercado: {r.mercado.n} anuncios, mediana {dinero(r.mercado.mediana)}{r.mercado.kmAjuste ? ` (ajustada a ${r.mercado.kmAjuste.kmObjetivo.toLocaleString('es-MX')} km; sin ajustar ${dinero(r.mercado.kmAjuste.medianaSinAjuste)})` : ''}</span>}
             {r.guia && <span className="text-xs text-slate-500">· Guía: compra {dinero(r.guia.compra)} / venta {dinero(r.guia.venta)}</span>}
           </div>
           {r.estadoGuia?.estado === 'no-disponible' && (

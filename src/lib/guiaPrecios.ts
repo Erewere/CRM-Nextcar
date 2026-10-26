@@ -19,6 +19,8 @@
  * cuando es «baja».
  */
 
+import { kmTipico, factorPorKm, PCT_POR_MIL_KM, DIFERENCIA_MINIMA_KM } from './kilometraje';
+
 export const URL_GUIA = 'https://www.nextcar.erewere.com/api/search-autocosmos.php';
 /** Autocosmos no consulta modelos de 2014 o anteriores (regla del revisor de precios). */
 export const ANIO_MINIMO_GUIA = 2015;
@@ -39,6 +41,48 @@ export interface GuiaPrecio {
   /** Una línea para la persona: por qué esta confianza. */
   motivo: string;
   fecha: string;
+  /** El kilometraje se descuenta aquí, no en Autocosmos (ver kilometraje.ts). Solo viene si se dio el km del auto. */
+  kmAjuste?: {
+    kmUsado: number;
+    /** El kilometraje típico de la edad del auto, al que Autocosmos dio su precio. */
+    kmReferencia: number;
+    porMilKm: number;
+    /** Los precios al kilometraje típico, antes de descontar. */
+    ventaSinAjuste: number;
+    compraSinAjuste: number;
+    ventaMinSinAjuste: number;
+    ventaMaxSinAjuste: number;
+  };
+}
+
+/** «4 pts. GL MID, 1.6l, TM6, a/ac.» → «GL MID». Para buscar en Mercado Libre y en las ventas propias. */
+export function nombreCortoVersion(v: string): string {
+  const sinPuertas = String(v || '').replace(/^\s*\d+\s*pts?\.?\s*/i, '');
+  return sinPuertas.split(',')[0].trim().slice(0, 40);
+}
+
+/** ¿Es una versión copiada de la guía («4 pts. GL MID, 1.6l, …») y no algo escrito a mano («Advance»)? */
+export const esVersionDeGuia = (v: string) => /pts\.?/i.test(v) && v.includes(',');
+
+/**
+ * Aplica el descuento por kilometraje a una guía pedida al kilometraje típico. Se puede volver a llamar con otro
+ * porcentaje: siempre parte de los precios sin ajustar (`kmAjuste`), nunca de los ya descontados.
+ */
+export function ajustarGuiaPorKm(g: GuiaPrecio, km: number | null | undefined, kmReferencia: number, porMilKm = PCT_POR_MIL_KM): GuiaPrecio {
+  if (km == null || !Number.isFinite(Number(km)) || Number(km) < 0) return g;
+  const kmUsado = Math.round(Number(km));
+  const base = g.kmAjuste
+    ? { venta: g.kmAjuste.ventaSinAjuste, compra: g.kmAjuste.compraSinAjuste, ventaMin: g.kmAjuste.ventaMinSinAjuste, ventaMax: g.kmAjuste.ventaMaxSinAjuste }
+    : { venta: g.venta, compra: g.compra, ventaMin: g.ventaMin, ventaMax: g.ventaMax };
+  const f = Math.abs(kmUsado - kmReferencia) < DIFERENCIA_MINIMA_KM ? 1 : factorPorKm(kmUsado, kmReferencia, porMilKm);
+  return {
+    ...g,
+    venta: f === 1 ? base.venta : redondear500(base.venta * f),
+    compra: f === 1 ? base.compra : redondear500(base.compra * f),
+    ventaMin: f === 1 ? base.ventaMin : redondear500(base.ventaMin * f),
+    ventaMax: f === 1 ? base.ventaMax : redondear500(base.ventaMax * f),
+    kmAjuste: { kmUsado, kmReferencia, porMilKm, ventaSinAjuste: base.venta, compraSinAjuste: base.compra, ventaMinSinAjuste: base.ventaMin, ventaMaxSinAjuste: base.ventaMax },
+  };
 }
 
 const MARCAS_SIN_GUIA = ['ferrari', 'lamborghini', 'mclaren', 'maserati', 'bentley', 'rolls-royce', 'rolls royce', 'aston martin', 'lotus', 'bugatti'];
@@ -75,6 +119,8 @@ interface VersionGuia { version: string; venta: number; compra: number }
  */
 export function interpretarGuia(
   respuesta: any, marca: string, modelo: string, anio: number | string, fecha = new Date().toISOString(),
+  /** La versión tal cual la da la guía (elegida de la lista): si existe, es esa y no hay que adivinar. */
+  versionExacta = '',
 ): GuiaPrecio | null {
   if (!respuesta?.success || !Array.isArray(respuesta.versiones) || !respuesta.versiones.length) return null;
   // Una estimación hecha con Mercado Libre NO es la guía: no se usa aquí.
@@ -105,11 +151,18 @@ export function interpretarGuia(
   let confianza: ConfianzaGuia = 'media';
   let motivo = 'La guía tiene varias versiones y no se pudo saber cuál es: es un rango.';
 
+  const clave = (x: string) => palabras(x).join(' ');
+  const iguales = versionExacta ? todas.filter((v) => clave(v.version) === clave(versionExacta)) : [];
   if (todas.length === 1) {
     elegidas = todas;
     version = todas[0].version;
     confianza = 'alta';
     motivo = 'La guía tiene una sola versión para este año.';
+  } else if (iguales.length === 1) {
+    elegidas = iguales;
+    version = iguales[0].version;
+    confianza = 'alta';
+    motivo = 'La versión que elegiste es la de la guía.';
   } else if (deVersion.length) {
     const puntos = todas.map((v) => {
       const enVersion = new Set(palabras(v.version));
@@ -154,12 +207,8 @@ export function interpretarGuia(
     }
   }
 
-  // La guía nueva de Autocosmos da un precio distinto según el kilometraje. Si el CRM no lo tenía y la
-  // página lo estimó por la edad del auto, el número vale menos: nunca queda en confianza alta.
-  if (respuesta.km_estimado && confianza === 'alta') {
-    confianza = 'media';
-    motivo = `${motivo} El kilometraje es estimado.`;
-  }
+  // La guía se pide siempre al kilometraje típico de la edad del auto; el descuento por kilómetros se hace después
+  // (ajustarGuiaPorKm). Si la página tuvo que estimarlo por su cuenta, igual es el típico.
 
   const venta = redondear500(elegidas.length === 1 ? elegidas[0].venta : mediana(ventas));
   const compra = redondear500(elegidas.length === 1 ? elegidas[0].compra : mediana(elegidas.map((v) => v.compra)));
@@ -167,10 +216,8 @@ export function interpretarGuia(
   return { venta, compra, ventaMin, ventaMax, version, versiones: todas.length, confianza, motivo, fecha };
 }
 
-async function pedirGuia(marca: string, modelo: string, anio: number | string, km?: number | null): Promise<any> {
-  const qs = new URLSearchParams({ marca, modelo, anio: String(anio || '') });
-  // Sin km la página estima 15,000 por año y lo avisa en `km_estimado`.
-  if (km != null && Number.isFinite(Number(km)) && Number(km) >= 0) qs.set('km', String(Math.round(Number(km))));
+async function pedirGuia(marca: string, modelo: string, anio: number | string, km: number): Promise<any> {
+  const qs = new URLSearchParams({ marca, modelo, anio: String(anio || ''), km: String(Math.round(km)) });
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 45000);
   try {
@@ -187,17 +234,27 @@ async function pedirGuia(marca: string, modelo: string, anio: number | string, k
 /**
  * null = no hay guía para este auto (modelo viejo o Autocosmos no lo tiene).
  * Si la página no responde, lanza: quien llama decide si reintenta.
+ *
+ * `km` es el kilometraje del auto. A Autocosmos se le pide el precio al kilometraje típico de la edad y el
+ * descuento por kilómetros se aplica aquí (ver kilometraje.ts). Sin `km` queda el precio típico, con confianza media.
+ * `versionExacta`: la versión copiada de la lista de la guía; si se da, se usa esa sin adivinar.
  */
-export async function consultarGuia(marca: string, modelo: string, anio: number | string, km?: number | null): Promise<GuiaPrecio | null> {
+export async function consultarGuia(marca: string, modelo: string, anio: number | string, km?: number | null, versionExacta = ''): Promise<GuiaPrecio | null> {
   if (!marca || !modelo || !(Number(anio) >= ANIO_MINIMO_GUIA)) return null;
   const completo = String(modelo).trim();
   const palabrasCompleto = completo.split(/\s+/);
+  const kmRef = kmTipico(anio);
   // Modelo completo; si Autocosmos no lo conoce, las dos primeras palabras («Serie 1») y luego solo la primera.
   const intentos = [completo, palabrasCompleto.slice(0, 2).join(' '), palabrasCompleto[0]]
     .filter((x, i, l) => x && l.indexOf(x) === i);
   for (const q of intentos) {
-    const g = interpretarGuia(await pedirGuia(marca, q, anio, km), marca, completo, anio);
-    if (g) return g;
+    const g = interpretarGuia(await pedirGuia(marca, q, anio, kmRef), marca, completo, anio, undefined, versionExacta);
+    if (!g) continue;
+    const conKm = ajustarGuiaPorKm(g, km, kmRef);
+    if (km == null && conKm.confianza === 'alta') {
+      return { ...conKm, confianza: 'media', motivo: `${conKm.motivo} No se dio el kilometraje: se usó el típico de la edad.` };
+    }
+    return conKm;
   }
   return null;
 }

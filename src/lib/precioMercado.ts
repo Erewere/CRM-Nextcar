@@ -12,6 +12,8 @@
  * guarda en `mercadoAutos/{vehicleId}`, que solo lee el servidor.
  */
 
+import { PCT_POR_MIL_KM } from './kilometraje';
+
 export const URL_MERCADO = 'https://www.nextcar.erewere.com/api/search-cars.php';
 export const MINIMO_ANUNCIOS = 5;
 
@@ -31,6 +33,21 @@ export interface PrecioMercado {
   fecha: string;
   /** Cuánto llevan publicados los anuncios (solo si se pidió y se pudieron leer al menos 5). */
   edad?: EdadMercado | null;
+  /** Si los precios se llevaron al kilometraje del auto consultado: de cuánto a cuánto y con qué regla. */
+  kmAjuste?: AjusteKmMercado | null;
+}
+
+export interface AjusteKmMercado {
+  /** El kilometraje del auto consultado, al que se llevaron los anuncios. */
+  kmObjetivo: number;
+  /** El kilometraje típico de los anuncios (mediana de los que lo traen). */
+  kmAnuncios: number;
+  anunciosConKm: number;
+  /** Cuánto baja el precio por cada 1,000 km de más, en %. */
+  porMilKm: number;
+  origen: 'anuncios' | 'tipico';
+  /** La mediana antes de ajustar. */
+  medianaSinAjuste: number;
 }
 
 /** Días que llevan publicados los anuncios que siguen a la venta, en días. */
@@ -48,6 +65,54 @@ const percentil = (ordenados: number[], p: number) => {
   const lo = Math.floor(i), hi = Math.ceil(i);
   return Math.round(ordenados[lo] + (ordenados[hi] - ordenados[lo]) * (i - lo));
 };
+
+
+const medianaDe_ = (xs: number[]) => {
+  const o = [...xs].sort((a, b) => a - b);
+  if (!o.length) return 0;
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+};
+
+/**
+ * Lleva el precio de cada anuncio al kilometraje del auto consultado. Un anuncio con 40,000 km de más barato que el
+ * tuyo vale más que el tuyo, y uno con 120,000 vale menos. Cuánto baja el precio por kilómetro se mide en los propios
+ * anuncios (pendiente robusta de Theil-Sen) si hay al menos 8 con kilometraje; si no, se usa la regla fija.
+ */
+export function ajustarPorKm(
+  anuncios: { precio: number; km: number | null }[],
+  kmObjetivo: number | null | undefined,
+): { precios: number[]; info: AjusteKmMercado | null } {
+  const validos = anuncios.filter((a) => a.precio > 10000);
+  const sinAjuste = { precios: validos.map((a) => a.precio), info: null as AjusteKmMercado | null };
+  if (!kmObjetivo || !(kmObjetivo > 0)) return sinAjuste;
+  const conKm = validos.filter((a) => a.km !== null && a.km > 0 && a.km < 500_000);
+  if (conKm.length < 3) return sinAjuste;
+  const kmAnuncios = Math.round(medianaDe_(conKm.map((a) => a.km as number)));
+  const medianaSinAjuste = Math.round(medianaDe_(validos.map((a) => a.precio)));
+
+  let porMilKm = PCT_POR_MIL_KM;
+  let origen: AjusteKmMercado['origen'] = 'tipico';
+  if (conKm.length >= 8) {
+    const pendientes: number[] = [];
+    for (let i = 0; i < conKm.length; i++) for (let j = i + 1; j < conKm.length; j++) {
+      const dk = (conKm[j].km as number) - (conKm[i].km as number);
+      if (Math.abs(dk) >= 5000) pendientes.push((conKm[j].precio - conKm[i].precio) / dk);
+    }
+    if (pendientes.length >= 10) {
+      const pct = (-medianaDe_(pendientes) * 1000 / medianaSinAjuste) * 100;
+      // Menos de 0.1 % por cada 1,000 km se toma como 0.1: los km sí cuentan. Más de 1 % son anuncios revueltos
+      // (versiones, golpes), no el efecto de los km, y se usa la regla de respaldo.
+      if (Number.isFinite(pct) && pct > 0 && pct <= 1) { porMilKm = Math.round(Math.max(0.1, pct) * 100) / 100; origen = 'anuncios'; }
+    }
+  }
+  const precios = validos.map((a) => {
+    const km = a.km !== null && a.km > 0 && a.km < 500_000 ? a.km : kmAnuncios;
+    const f = Math.min(1.3, Math.max(0.7, 1 - (porMilKm / 100) * ((kmObjetivo - km) / 1000)));
+    return Math.round(a.precio * f);
+  });
+  return { precios, info: { kmObjetivo: Math.round(kmObjetivo), kmAnuncios, anunciosConKm: conKm.length, porMilKm, origen, medianaSinAjuste } };
+}
 
 /** Estadísticas de una lista de precios; null si no hay ninguno. */
 export function resumirPrecios(precios: number[], consulta: string, fecha = new Date().toISOString()): PrecioMercado | null {
@@ -125,7 +190,7 @@ export async function edadDeAnuncios(links: string[], maximo = 14): Promise<Edad
   return { n: edades.length, mediana: percentil(edades, 0.5), p25: percentil(edades, 0.25), p75: percentil(edades, 0.75) };
 }
 
-async function anunciosDeMercadoLibre(marca: string, modelo: string, anio: number | string): Promise<{ precio: number; link: string }[]> {
+async function anunciosDeMercadoLibre(marca: string, modelo: string, anio: number | string): Promise<{ precio: number; link: string; km: number | null }[]> {
   const qs = new URLSearchParams({ marca, modelo, anio: String(anio || '') });
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 45000);
@@ -137,7 +202,7 @@ async function anunciosDeMercadoLibre(marca: string, modelo: string, anio: numbe
     return lista
       .filter((x) => !String(x?.id || '').startsWith('NEXTCAR-'))
       .filter((x) => !anio || !x?.['año'] || Number(x['año']) === Number(anio))
-      .map((x) => ({ precio: Number(x?.precio) || 0, link: String(x?.link || '') }));
+      .map((x) => ({ precio: Number(x?.precio) || 0, link: String(x?.link || ''), km: Number(x?.kilometraje) > 0 ? Number(x.kilometraje) : null }));
   } finally {
     clearTimeout(t);
   }
@@ -147,7 +212,7 @@ async function anunciosDeMercadoLibre(marca: string, modelo: string, anio: numbe
  * Busca con el modelo completo («X1 118iA Exclusive») y, si salen pocos
  * anuncios, con solo la primera palabra («X1»).
  */
-export async function consultarMercado(marca: string, modelo: string, anio: number | string, opciones?: { edades?: boolean }): Promise<PrecioMercado | null> {
+export async function consultarMercado(marca: string, modelo: string, anio: number | string, opciones?: { edades?: boolean; km?: number | null }): Promise<PrecioMercado | null> {
   const completo = String(modelo || '').trim();
   const corto = completo.split(/\s+/)[0] || completo;
   let anuncios = await anunciosDeMercadoLibre(marca, completo, anio);
@@ -159,7 +224,10 @@ export async function consultarMercado(marca: string, modelo: string, anio: numb
       consulta = `${marca} ${corto} ${anio}`.trim();
     }
   }
-  const resumen = resumirPrecios(anuncios.map((a) => a.precio), consulta);
+  // Si se dio el kilometraje del auto, los anuncios se llevan a ese kilometraje antes de sacar la mediana.
+  const ajustado = ajustarPorKm(anuncios, opciones?.km);
+  const resumen = resumirPrecios(ajustado.precios, consulta);
+  if (resumen && ajustado.info) resumen.kmAjuste = ajustado.info;
   // La edad de los anuncios tarda unos segundos más: solo se pide donde se va a usar (recomendar precio).
   if (resumen && opciones?.edades) {
     try {

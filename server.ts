@@ -20,7 +20,7 @@ import { sincronizarTodas, sincronizarUsuariosDeAgencia } from "./src/servidor/u
 import { planDeAgencia, planDePrecio, tienePremium } from "./src/lib/planes.ts";
 import { avisarActividades } from "./src/servidor/avisosActividades.ts";
 import { armarOperacion, recomendarPrecios, MARGEN_OBJETIVO_INICIAL_PCT } from "./src/lib/memoriaOperaciones.ts";
-import { consultarGuia, ANIO_MINIMO_GUIA } from "./src/lib/guiaPrecios.ts";
+import { consultarGuia, ANIO_MINIMO_GUIA, URL_GUIA, nombreCortoVersion, esVersionDeGuia, ajustarGuiaPorKm } from "./src/lib/guiaPrecios.ts";
 import { registrarCreditos } from "./src/servidor/creditos.ts";
 import { acreditarCompraPlacas, registrarPlacasInfo } from "./src/servidor/placasInfo.ts";
 import { registrarEliminarAgencias } from "./src/servidor/agencias.ts";
@@ -4626,7 +4626,7 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   function validarConsultaReco(b: any): { error: string } | { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null; guiaManual: { compra: number; venta: number } | null } {
     const marca = String(b?.marca || "").trim().slice(0, 60);
     const modelo = String(b?.modelo || "").trim().slice(0, 80);
-    const version = String(b?.version || "").trim().slice(0, 80);
+    const version = String(b?.version || "").trim().slice(0, 160);
     const anio = Number(b?.anio);
     const km = b?.km === "" || b?.km == null ? null : Number(b.km);
     const ofrecido = b?.precioOfrecido ? Number(b.precioOfrecido) : null;
@@ -4669,13 +4669,21 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
   async function recomendarParaAgencia(adminDb: any, agencyId: string, c: { marca: string; modelo: string; version: string; anio: number; km: number | null; ofrecido: number | null; guiaManual?: { compra: number; venta: number } | null }) {
     // La versión viaja a la guía y al mercado: sin ella la guía ve todas las versiones juntas
     // y no sabe cuál es (un Sentra Advance se consultaba como «Sentra» y salía confianza baja).
-    const yaTrae = c.version && c.modelo.toLowerCase().includes(c.version.toLowerCase());
-    const consulta = c.version && !yaTrae ? `${c.modelo} ${c.version}` : c.modelo;
-    const clave = `${c.marca}|${consulta}|${c.anio}|${c.km ?? ""}`.toLowerCase();
+    // Si viene de la lista de la guía («4 pts. GL MID, 1.6l, …»), la guía recibe el modelo limpio y esa versión exacta;
+    // el mercado y las ventas propias buscan con su nombre corto («GL MID»).
+    const deLista = esVersionDeGuia(c.version);
+    const corta = deLista ? nombreCortoVersion(c.version) : c.version;
+    const yaTrae = corta && c.modelo.toLowerCase().includes(corta.toLowerCase());
+    const consulta = corta && !yaTrae ? `${c.modelo} ${corta}` : c.modelo;
+    const consultaGuia = deLista ? c.modelo : consulta;
+    const clave = `${c.marca}|${consulta}|${c.version}|${c.anio}|${c.km ?? ""}`.toLowerCase();
     let cache = cacheConsultaModelo.get(clave);
     let guiaFallo = false;
     if (!cache || Date.now() - cache.momento > 12 * 3_600_000) {
-      const [m, g] = await Promise.allSettled([consultarMercado(c.marca, consulta, c.anio, { edades: true }), consultarGuia(c.marca, consulta, c.anio, c.km)]);
+      const [m, g] = await Promise.allSettled([
+        consultarMercado(c.marca, consulta, c.anio, { edades: true, km: c.km }),
+        consultarGuia(c.marca, consultaGuia, c.anio, c.km, deLista ? c.version : ""),
+      ]);
       guiaFallo = g.status === "rejected";
       cache = { momento: Date.now(), mercado: m.status === "fulfilled" ? m.value : null, guia: g.status === "fulfilled" ? g.value : null };
       // Si una consulta falló no se guarda: se reintenta la próxima vez.
@@ -4692,6 +4700,12 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
         const edad = g.guia.fecha ? Math.max(0, Math.round((Date.now() - Date.parse(g.guia.fecha)) / 86_400_000)) : undefined;
         estadoGuia = { estado: "guardada", motivo: `Autocosmos no respondió: se usa la guía guardada de un auto tuyo (${g.deAuto})${edad !== undefined ? `, de hace ${edad} días` : ""}.`, edadDias: edad };
       }
+    }
+    // El descuento por kilómetros de la guía usa el que se midió en los anuncios del mercado, si hubo suficientes; si no,
+    // la regla de respaldo. Siempre se parte de la guía sin ajustar (también la guardada de otro auto de la agencia).
+    if (cache.guia?.kmAjuste && c.km != null) {
+      const medido = cache.mercado?.kmAjuste?.origen === "anuncios" ? cache.mercado.kmAjuste.porMilKm : undefined;
+      cache = { ...cache, guia: ajustarGuiaPorKm(cache.guia, c.km, cache.guia.kmAjuste.kmReferencia, medido) };
     }
     const [opsSnap, agSnap] = await Promise.all([
       adminDb.collection(COL_OPERACIONES).where("agencyId", "==", agencyId).get(),
@@ -4710,8 +4724,8 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     return {
       consulta: { marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km },
       fechaAnalisis: new Date().toISOString(),
-      mercado: cache.mercado ? { n: cache.mercado.n, mediana: cache.mercado.mediana || cache.mercado.promedio, minimo: cache.mercado.minimo, maximo: cache.mercado.maximo } : null,
-      guia: guiaUsada ? { compra: guiaUsada.compra, venta: guiaUsada.venta, confianza: guiaUsada.confianza, manual: !!c.guiaManual, versionDeLaGuia: c.guiaManual ? null : (cache.guia?.version || null) } : null,
+      mercado: cache.mercado ? { n: cache.mercado.n, mediana: cache.mercado.mediana || cache.mercado.promedio, minimo: cache.mercado.minimo, maximo: cache.mercado.maximo, kmAjuste: cache.mercado.kmAjuste || null } : null,
+      guia: guiaUsada ? { compra: guiaUsada.compra, venta: guiaUsada.venta, confianza: guiaUsada.confianza, manual: !!c.guiaManual, versionDeLaGuia: c.guiaManual ? null : (cache.guia?.version || null), kmAjuste: c.guiaManual ? null : (cache.guia?.kmAjuste || null) } : null,
       estadoGuia: c.guiaManual ? { estado: "manual", motivo: "Usa el Libro Azul que escribiste." } : estadoGuia,
       ...reco,
       // Sin guía el máximo NO es confiable: se dice primero y claro.
@@ -4860,6 +4874,42 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
     } catch (e) {
       console.error("precios/operaciones:", e);
       res.status(500).json({ error: "No se pudo leer la memoria de ventas." });
+    }
+  });
+
+  // Menús del cotizador: marcas, modelos, años y versiones de la guía de Autocosmos, que ya expone la página Nextcar.
+  // Pasan por aquí (y no directo desde el navegador) para guardarlos 12 horas y no depender de los permisos de esa página.
+  const cacheCatalogo = new Map<string, { momento: number; items: (string | number)[] }>();
+  app.get("/api/precios/catalogo", async (req: any, res: any) => {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (!ROLES_COTIZAN.includes(q.rol)) return res.status(403).json({ error: "Tu usuario no puede cotizar autos." });
+    if (!frenoPermite(`catalogo:${q.uid}`, 120)) return res.status(429).json({ error: "Muchas consultas seguidas. Intenta en un minuto." });
+    const limpio = (x: any) => String(x ?? "").trim().slice(0, 80);
+    const tipo = limpio(req.query.tipo), marca = limpio(req.query.marca), modelo = limpio(req.query.modelo), anio = Number(req.query.anio);
+    const base = URL_GUIA.replace("search-autocosmos.php", "");
+    let url = "";
+    if (tipo === "marcas") url = `${base}get-autocosmos-catalog.php?action=brands`;
+    else if (tipo === "modelos" && marca) url = `${base}get-autocosmos-catalog.php?action=models&marca=${encodeURIComponent(marca)}`;
+    else if (tipo === "anios" && marca && modelo) url = `${base}get-autocosmos-catalog.php?action=years&marca=${encodeURIComponent(marca)}&modelo=${encodeURIComponent(modelo)}`;
+    else if (tipo === "versiones" && marca && modelo && anio >= 1990) url = `${base}versiones-venta.php?marca=${encodeURIComponent(marca)}&modelo=${encodeURIComponent(modelo)}&anio=${anio}`;
+    else return res.status(400).json({ error: "Falta marca, modelo o año." });
+    const hit = cacheCatalogo.get(url);
+    if (hit && Date.now() - hit.momento < 12 * 3_600_000) return res.json({ items: hit.items });
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(25_000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d: any = await r.json();
+      const items: (string | number)[] =
+        tipo === "versiones" ? (Array.isArray(d?.versiones) ? d.versiones.map(String) : [])
+        : tipo === "anios" ? (Array.isArray(d?.data) ? d.data.map(Number).filter((n: number) => n > 1980) : [])
+        : (Array.isArray(d?.data) ? d.data.map((x: any) => String(x?.name || "")).filter(Boolean) : []);
+      // Una lista vacía no se guarda: puede ser un fallo pasajero de Autocosmos.
+      if (items.length) cacheCatalogo.set(url, { momento: Date.now(), items });
+      res.json({ items });
+    } catch (e: any) {
+      console.error("precios/catalogo:", e?.message || e);
+      res.status(502).json({ error: "No se pudo consultar el catálogo de autos. Intenta de nuevo." });
     }
   });
 
