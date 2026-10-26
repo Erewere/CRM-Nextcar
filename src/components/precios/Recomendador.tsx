@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { auth } from '../../lib/firebase';
 import { getApiUrl } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { BuscadorLista } from './BuscadorLista';
 
 /**
  * «¿Cuánto vendería y cuánto pagaría como máximo?» Busca en las ventas pasadas
@@ -236,8 +237,8 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
             </>
           ) : (
             <>
-              {selector('Marca', f.marca, (v) => elegir('marca', v), marcas, { vacio: 'Elige la marca', requerido: true })}
-              {selector('Modelo', f.modelo, (v) => elegir('modelo', v), modelos, { vacio: f.marca ? 'Elige el modelo' : 'Primero la marca', deshabilitado: !f.marca, requerido: true })}
+              <BuscadorLista etiqueta="Marca" valor={f.marca} items={marcas.items} alElegir={(v) => elegir('marca', v)} campo={campo} cargando={marcas.cargando} requerido vacio="Escribe para buscar" />
+              <BuscadorLista etiqueta="Modelo" valor={f.modelo} items={modelos.items} alElegir={(v) => elegir('modelo', v)} campo={campo} cargando={modelos.cargando} deshabilitado={!f.marca} requerido vacio={f.marca ? 'Escribe para buscar' : 'Primero la marca'} />
               {selector('Año', f.anio, (v) => elegir('anio', v), anios, { vacio: f.modelo ? 'Elige el año' : 'Primero el modelo', deshabilitado: !f.modelo, requerido: true })}
               {selector('Versión (opcional)', f.version, (v) => elegir('version', v), versiones, { vacio: !f.anio ? 'Primero el año' : versiones.items.length ? 'No sé / cualquiera' : 'Sin versiones en la guía', deshabilitado: !f.anio })}
             </>
