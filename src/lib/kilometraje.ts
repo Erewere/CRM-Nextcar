@@ -1,10 +1,11 @@
 /**
  * Cuánto vale de menos un auto por tener más kilómetros.
  *
- * La guía de Autocosmos, al pedirle el precio con un kilometraje, contesta AL REVÉS: en Versa 2020, Jetta 2019 y
- * HB20 2023 (oct 2026) el precio sube entre 4 y 8 % cuando el auto pasa de 10,000 a 140,000 km. Por eso el
- * kilometraje ya no se le manda a la guía para que lo descuente: se le pide el precio a un kilometraje típico de la
- * edad del auto (lo que mide ±5 % contra el Libro Azul) y el descuento por kilómetros se hace aquí.
+ * La guía de Autocosmos se muestra TAL CUAL la da su página con el kilometraje del auto (así coincide con lo que se ve
+ * en autocosmos.com.mx/PriceGuide). Pero esa guía NO baja el precio cuando el auto tiene más kilómetros: en Versa 2020,
+ * Jetta 2019 y HB20 2023 (oct 2026) sube entre 4 y 8 % al pasar de 10,000 a 140,000 km, al revés de lo que se ve en
+ * los anuncios de Mercado Libre. Por eso el descuento por kilómetros no se espera de la guía: se aplica aparte, al
+ * «pagar como máximo», y solo hacia abajo (un auto con pocos km no sube el máximo: es lo prudente al comprar).
  */
 
 /** Kilómetros que recorre un auto al año, en promedio (lo mismo que estima la página Nextcar). */

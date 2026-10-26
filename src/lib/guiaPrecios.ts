@@ -65,8 +65,10 @@ export function nombreCortoVersion(v: string): string {
 export const esVersionDeGuia = (v: string) => /pts\.?/i.test(v) && v.includes(',');
 
 /**
- * Aplica el descuento por kilometraje a una guía pedida al kilometraje típico. Se puede volver a llamar con otro
- * porcentaje: siempre parte de los precios sin ajustar (`kmAjuste`), nunca de los ya descontados.
+ * Descuento por kilometraje: la guía se queda como la da Autocosmos con el km del auto (`kmAjuste.*SinAjuste`) y los
+ * precios de la guía que usa el cálculo del máximo a pagar bajan si el auto tiene MÁS km que lo normal para su año.
+ * Con menos km no suben (prudencia al comprar). Se puede volver a llamar con otro porcentaje: siempre parte de los
+ * precios sin ajustar, nunca de los ya descontados.
  */
 export function ajustarGuiaPorKm(g: GuiaPrecio, km: number | null | undefined, kmReferencia: number, porMilKm = PCT_POR_MIL_KM): GuiaPrecio {
   if (km == null || !Number.isFinite(Number(km)) || Number(km) < 0) return g;
@@ -74,7 +76,7 @@ export function ajustarGuiaPorKm(g: GuiaPrecio, km: number | null | undefined, k
   const base = g.kmAjuste
     ? { venta: g.kmAjuste.ventaSinAjuste, compra: g.kmAjuste.compraSinAjuste, ventaMin: g.kmAjuste.ventaMinSinAjuste, ventaMax: g.kmAjuste.ventaMaxSinAjuste }
     : { venta: g.venta, compra: g.compra, ventaMin: g.ventaMin, ventaMax: g.ventaMax };
-  const f = Math.abs(kmUsado - kmReferencia) < DIFERENCIA_MINIMA_KM ? 1 : factorPorKm(kmUsado, kmReferencia, porMilKm);
+  const f = kmUsado - kmReferencia < DIFERENCIA_MINIMA_KM ? 1 : factorPorKm(kmUsado, kmReferencia, porMilKm);
   return {
     ...g,
     venta: f === 1 ? base.venta : redondear500(base.venta * f),
@@ -235,8 +237,9 @@ async function pedirGuia(marca: string, modelo: string, anio: number | string, k
  * null = no hay guía para este auto (modelo viejo o Autocosmos no lo tiene).
  * Si la página no responde, lanza: quien llama decide si reintenta.
  *
- * `km` es el kilometraje del auto. A Autocosmos se le pide el precio al kilometraje típico de la edad y el
- * descuento por kilómetros se aplica aquí (ver kilometraje.ts). Sin `km` queda el precio típico, con confianza media.
+ * `km` es el kilometraje del auto: a Autocosmos se le pide con ese km (igual que su página) y esa es la guía que se
+ * muestra; el descuento por kilómetros se aplica aparte (ver kilometraje.ts). Sin `km` se pide al típico de la edad,
+ * con confianza media.
  * `versionExacta`: la versión copiada de la lista de la guía; si se da, se usa esa sin adivinar.
  */
 export async function consultarGuia(marca: string, modelo: string, anio: number | string, km?: number | null, versionExacta = ''): Promise<GuiaPrecio | null> {
@@ -248,7 +251,7 @@ export async function consultarGuia(marca: string, modelo: string, anio: number 
   const intentos = [completo, palabrasCompleto.slice(0, 2).join(' '), palabrasCompleto[0]]
     .filter((x, i, l) => x && l.indexOf(x) === i);
   for (const q of intentos) {
-    const g = interpretarGuia(await pedirGuia(marca, q, anio, kmRef), marca, completo, anio, undefined, versionExacta);
+    const g = interpretarGuia(await pedirGuia(marca, q, anio, km != null && Number(km) >= 0 ? Number(km) : kmRef), marca, completo, anio, undefined, versionExacta);
     if (!g) continue;
     const conKm = ajustarGuiaPorKm(g, km, kmRef);
     if (km == null && conKm.confianza === 'alta') {

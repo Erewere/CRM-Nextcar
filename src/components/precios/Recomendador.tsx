@@ -80,9 +80,11 @@ export function PanelKilometraje({ d, mercado }: { d: NonNullable<Resultado['des
       <div>
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Cómo influye el kilometraje</p>
         <p className="text-sm text-slate-700 dark:text-slate-200 mt-1">
-          {sinEfecto
+          {difKm < 2000
             ? <>Este auto tiene {km(d.kmUsado)} km, parecido a lo normal para su año: <b>no cambia el máximo a pagar</b>.</>
-            : <>Este auto tiene <b>{km(d.kmUsado)} km</b>, <b className={masKm ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>{km(difKm)} km {masKm ? 'más' : 'menos'}</b> de lo normal para su año ({km(d.kmReferencia)} km). {masKm ? 'Por eso hay que pagar menos que lo que dice la guía.' : 'Por eso vale algo más que lo que dice la guía.'}</>}
+            : masKm
+              ? <>Este auto tiene <b>{km(d.kmUsado)} km</b>, <b className="text-amber-600 dark:text-amber-400">{km(difKm)} km más</b> de lo normal para su año ({km(d.kmReferencia)} km). La guía de Autocosmos no baja su precio por eso, así que aquí se descuenta aparte lo que conviene pagar.</>
+              : <>Este auto tiene <b>{km(d.kmUsado)} km</b>, <b className="text-emerald-600 dark:text-emerald-400">{km(difKm)} km menos</b> de lo normal para su año ({km(d.kmReferencia)} km). Eso lo hace valer algo más, pero el CRM no sube el máximo por eso: es lo prudente al comprar.</>}
         </p>
       </div>
 
@@ -107,7 +109,7 @@ export function PanelKilometraje({ d, mercado }: { d: NonNullable<Resultado['des
         <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">1 · Tope según la guía</p>
           <p className="text-xl font-extrabold tabular-nums text-slate-900 dark:text-white mt-0.5">{dinero(d.maxSinKm)}</p>
-          <p className="text-[11px] text-slate-500">para un auto con los km normales</p>
+          <p className="text-[11px] text-slate-500">con los km de este auto, como en Autocosmos</p>
         </div>
         <div className={clsx('rounded-xl border p-3', sinEfecto ? 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700' : masKm ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800' : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800')}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">2 · Por el kilometraje</p>
@@ -117,7 +119,7 @@ export function PanelKilometraje({ d, mercado }: { d: NonNullable<Resultado['des
         <div className="rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider opacity-75">3 · Pagar como máximo</p>
           <p className="text-xl font-extrabold tabular-nums mt-0.5">{dinero(d.maxConKm)}</p>
-          <p className="text-[11px] opacity-75">con los km de este auto</p>
+          <p className="text-[11px] opacity-75">ya descontado por kilometraje</p>
         </div>
       </div>
 
@@ -342,7 +344,7 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
                   <p className="text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums mt-1">{dinero(p.v)}</p>
                   <p className="text-xs opacity-75 mt-2">
                     {p.s} · {r.estadoGuia?.estado === 'manual' ? 'tu Libro Azul' : r.estadoGuia?.estado === 'guardada' ? 'guía guardada' : 'Autocosmos'}
-                    {' · '}{r.guia.kmAjuste ? `a ${r.guia.kmAjuste.kmReferencia.toLocaleString('es-MX')} km (lo normal para su año)` : r.consulta?.km ? `${r.consulta.km.toLocaleString('es-MX')} km` : 'km estimado'}
+                    {' · '}{r.guia.kmAjuste ? `con ${r.guia.kmAjuste.kmUsado.toLocaleString('es-MX')} km, igual que en Autocosmos` : r.consulta?.km ? `${r.consulta.km.toLocaleString('es-MX')} km` : 'km estimado'}
                   </p>
                 </div>
               ))}
