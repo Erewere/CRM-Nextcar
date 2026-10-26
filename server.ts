@@ -4730,8 +4730,30 @@ ${m.nota ? `<p style="color:#6b7280">Nota: ${String(m.nota).replace(/</g, "&lt;"
       mercado: cache.mercado, guia: guiaUsada,
       margenObjetivoPct: margen, precioOfrecido: c.ofrecido,
     });
+    // Cuánto del «pagar como máximo» se debe al kilometraje: el mismo cálculo con la guía a los km normales del año.
+    // La guía que se muestra es la original; el efecto de los km se explica aparte, con este número.
+    let descuentoKm: any = null;
+    const kmA = !c.guiaManual ? cache.guia?.kmAjuste : null;
+    if (kmA && guiaUsada && reco.maxCompraRecomendado !== null) {
+      const sinKm = recomendarPrecios({
+        marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km,
+        operaciones: opsSnap.docs.map((d: any) => d.data()),
+        mercado: cache.mercado,
+        guia: { compra: kmA.compraSinAjuste, venta: kmA.ventaSinAjuste, confianza: guiaUsada.confianza, ventaMin: kmA.ventaMinSinAjuste },
+        margenObjetivoPct: margen, precioOfrecido: c.ofrecido,
+      });
+      if (sinKm.maxCompraRecomendado !== null) {
+        descuentoKm = {
+          kmUsado: kmA.kmUsado, kmReferencia: kmA.kmReferencia, porMilKm: kmA.porMilKm,
+          medido: cache.mercado?.kmAjuste?.origen === "anuncios", anunciosConKm: cache.mercado?.kmAjuste?.origen === "anuncios" ? cache.mercado.kmAjuste.anunciosConKm : 0,
+          maxSinKm: sinKm.maxCompraRecomendado, maxConKm: reco.maxCompraRecomendado,
+          guiaCompraSinKm: kmA.compraSinAjuste, guiaVentaSinKm: kmA.ventaSinAjuste,
+        };
+      }
+    }
     return {
       consulta: { marca: c.marca, modelo: c.modelo, version: c.version, anio: c.anio, km: c.km },
+      descuentoKm,
       fechaAnalisis: new Date().toISOString(),
       mercado: cache.mercado ? { n: cache.mercado.n, mediana: cache.mercado.mediana || cache.mercado.promedio, minimo: cache.mercado.minimo, maximo: cache.mercado.maximo, kmAjuste: cache.mercado.kmAjuste || null } : null,
       guia: guiaUsada ? { compra: guiaUsada.compra, venta: guiaUsada.venta, confianza: guiaUsada.confianza, manual: !!c.guiaManual, versionDeLaGuia: c.guiaManual ? null : (cache.guia?.version || null), kmAjuste: c.guiaManual ? null : (cache.guia?.kmAjuste || null) } : null,

@@ -20,6 +20,8 @@ type Resultado = {
   confianza: 'alta' | 'media' | 'baja' | 'ninguna'; comparables: number; advertencias: string[]; insights: string[]; comparablesUsados: Comp[];
   estadoGuia?: { estado: 'en-vivo' | 'guardada' | 'no-disponible' | 'manual'; motivo: string; edadDias?: number };
   consulta?: { km: number | null };
+  /** Cuánto del «pagar como máximo» se debe al kilometraje (la guía que se muestra es la original). */
+  descuentoKm?: { kmUsado: number; kmReferencia: number; porMilKm: number; medido: boolean; anunciosConKm: number; maxSinKm: number; maxConKm: number; guiaCompraSinKm: number; guiaVentaSinKm: number } | null;
   mercado: { n: number; mediana: number; kmAjuste?: KmAjusteMercado | null } | null; guia: { compra: number; venta: number; confianza: string; manual?: boolean; kmAjuste?: KmAjusteGuia | null } | null; fechaAnalisis: string;
 };
 type KmAjusteMercado = { kmObjetivo: number; kmAnuncios: number; anunciosConKm: number; porMilKm: number; origen: 'anuncios' | 'tipico'; medianaSinAjuste: number };
@@ -55,6 +57,78 @@ async function llamar(ruta: string, metodo = 'GET', cuerpo?: unknown) {
 }
 
 const campo = 'h-10 w-full px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm';
+
+
+/**
+ * El efecto del kilometraje, a la vista: una regla con los km normales del año contra los de este auto, y los tres
+ * pasos hasta el «pagar como máximo» (lo que da la guía, lo que se quita o pone por los km, y el resultado).
+ * La guía de arriba es la original; aquí se explica por qué el máximo no es igual a ella.
+ */
+export function PanelKilometraje({ d, mercado }: { d: NonNullable<Resultado['descuentoKm']>; mercado: KmAjusteMercado | null }) {
+  const km = (n: number) => n.toLocaleString('es-MX');
+  const masKm = d.kmUsado > d.kmReferencia;
+  const diferencia = d.maxConKm - d.maxSinKm;
+  const difKm = Math.abs(d.kmUsado - d.kmReferencia);
+  const tope = Math.max(150_000, Math.ceil((Math.max(d.kmUsado, d.kmReferencia) * 1.25) / 10_000) * 10_000);
+  const pos = (n: number) => Math.min(100, Math.max(0, (n / tope) * 100));
+  const izq = Math.min(pos(d.kmUsado), pos(d.kmReferencia));
+  const ancho = Math.abs(pos(d.kmUsado) - pos(d.kmReferencia));
+  const sinEfecto = difKm < 2000 || diferencia === 0;
+  const color = masKm ? 'bg-amber-400' : 'bg-emerald-500';
+  return (
+    <section aria-label="Cómo influye el kilometraje" className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 sm:p-5 space-y-4">
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Cómo influye el kilometraje</p>
+        <p className="text-sm text-slate-700 dark:text-slate-200 mt-1">
+          {sinEfecto
+            ? <>Este auto tiene {km(d.kmUsado)} km, parecido a lo normal para su año: <b>no cambia el máximo a pagar</b>.</>
+            : <>Este auto tiene <b>{km(d.kmUsado)} km</b>, <b className={masKm ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>{km(difKm)} km {masKm ? 'más' : 'menos'}</b> de lo normal para su año ({km(d.kmReferencia)} km). {masKm ? 'Por eso hay que pagar menos que lo que dice la guía.' : 'Por eso vale algo más que lo que dice la guía.'}</>}
+        </p>
+      </div>
+
+      {/* La regla: de 0 km hacia la derecha, con lo normal y lo de este auto marcados. */}
+      <div className="px-3 pt-6 pb-8">
+        <div className="relative h-3 rounded-full bg-slate-200 dark:bg-slate-700">
+          <div className={clsx('absolute top-0 h-3 rounded-full', color)} style={{ left: `${izq}%`, width: `${ancho}%` }} />
+          <div className="absolute -top-6 -translate-x-1/2 text-center" style={{ left: `${pos(d.kmReferencia)}%` }}>
+            <p className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">Normal · {km(d.kmReferencia)}</p>
+          </div>
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-5 w-5 rounded-full border-2 border-slate-400 bg-white dark:bg-slate-800" style={{ left: `${pos(d.kmReferencia)}%` }} />
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-5 w-5 rounded-full border-2 border-white dark:border-slate-800 bg-slate-900 dark:bg-white shadow" style={{ left: `${pos(d.kmUsado)}%` }} />
+          <div className="absolute top-7 -translate-x-1/2 text-center" style={{ left: `${pos(d.kmUsado)}%` }}>
+            <p className="text-[10px] font-bold text-slate-900 dark:text-white whitespace-nowrap">Este auto · {km(d.kmUsado)}</p>
+          </div>
+        </div>
+        <div className="flex justify-between text-[10px] text-slate-400 mt-1"><span>0 km</span><span>{km(tope)} km</span></div>
+      </div>
+
+      {/* Los tres pasos. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">1 · Tope según la guía</p>
+          <p className="text-xl font-extrabold tabular-nums text-slate-900 dark:text-white mt-0.5">{dinero(d.maxSinKm)}</p>
+          <p className="text-[11px] text-slate-500">para un auto con los km normales</p>
+        </div>
+        <div className={clsx('rounded-xl border p-3', sinEfecto ? 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700' : masKm ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800' : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800')}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">2 · Por el kilometraje</p>
+          <p className="text-xl font-extrabold tabular-nums text-slate-900 dark:text-white mt-0.5">{sinEfecto ? '$0' : `${diferencia < 0 ? '−' : '+'}${dinero(Math.abs(diferencia))}`}</p>
+          <p className="text-[11px] text-slate-500">{sinEfecto ? 'sin ajuste' : `tiene ${km(difKm)} km ${masKm ? 'de más' : 'de menos'}`}</p>
+        </div>
+        <div className="rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider opacity-75">3 · Pagar como máximo</p>
+          <p className="text-xl font-extrabold tabular-nums mt-0.5">{dinero(d.maxConKm)}</p>
+          <p className="text-[11px] opacity-75">con los km de este auto</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-500">
+        Cada 1,000 km de diferencia mueven el precio {d.porMilKm}%{' '}
+        {d.medido ? `(medido en ${d.anunciosConKm} anuncios del mercado).` : '(regla de respaldo: no hubo suficientes anuncios con kilometraje para medirlo).'}
+        {mercado ? ` Los anuncios del mercado también se llevaron a ${km(mercado.kmObjetivo)} km antes de sacar la mediana.` : ''}
+      </p>
+    </section>
+  );
+}
 
 /** `soloCotizar`: la vista del vendedor. Solo la cotización: sin historial, sin margen y sin nada de lo que cuesta o deja cada auto. */
 export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean }) {
@@ -189,22 +263,6 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
       {fuente && <p className="text-[10px] text-slate-400 mt-1">{fuente}</p>}
     </div>
   );
-  /** Cómo influyó el kilometraje, en una frase: de cuánto a cuánto y con qué regla. */
-  const notaKm = (res: Resultado): string => {
-    const g = res.guia?.kmAjuste, m = res.mercado?.kmAjuste;
-    if (!g && !m) return res.consulta?.km ? '' : 'Sin kilometraje el precio es el de un auto con los km normales para su año.';
-    const km = (n: number) => n.toLocaleString('es-MX') + ' km';
-    const partes: string[] = [];
-    if (g && g.ventaSinAjuste !== res.guia!.venta) {
-      const dif = res.guia!.venta - g.ventaSinAjuste;
-      partes.push(`La guía para un auto con los km normales de su año (${km(g.kmReferencia)}) da ${dinero(g.ventaSinAjuste)} de venta; con ${km(g.kmUsado)} ${dif < 0 ? 'baja' : 'sube'} a ${dinero(res.guia!.venta)} (${dif < 0 ? '−' : '+'}${dinero(Math.abs(dif))}).`);
-    } else if (g) partes.push(`El kilometraje (${km(g.kmUsado)}) es parecido al normal de su año (${km(g.kmReferencia)}): no se ajusta la guía.`);
-    const pct = m?.origen === 'anuncios' ? m.porMilKm : g?.porMilKm;
-    if (pct) partes.push(m?.origen === 'anuncios'
-      ? `Cada 1,000 km de diferencia mueven el precio ${pct}%, medido en ${m.anunciosConKm} anuncios del mercado.`
-      : `Cada 1,000 km de diferencia mueven el precio ${pct}% (regla de respaldo: no hubo suficientes anuncios con kilometraje para medirlo).`);
-    return partes.join(' ');
-  };
   const selector = (etiqueta: string, valor: string, alCambiar: (v: string) => void, lista: Lista, o: { vacio: string; deshabilitado?: boolean; requerido?: boolean }) => (
     <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 min-w-0">{etiqueta}
       <select required={o.requerido} value={valor} onChange={(e) => alCambiar(e.target.value)} disabled={o.deshabilitado || lista.cargando} className={clsx(campo, 'disabled:opacity-60 truncate')}>
@@ -276,21 +334,21 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
           {r.guia && (
             <section aria-label="Precios de la guía" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
-                { t: 'Guía · Compra', v: r.guia.compra, s: 'lo que paga la agencia' },
-                { t: 'Guía · Venta', v: r.guia.venta, s: 'lo que paga el cliente' },
+                { t: 'Guía · Compra', v: r.guia.kmAjuste ? r.guia.kmAjuste.compraSinAjuste : r.guia.compra, s: 'lo que paga la agencia' },
+                { t: 'Guía · Venta', v: r.guia.kmAjuste ? r.guia.kmAjuste.ventaSinAjuste : r.guia.venta, s: 'lo que paga el cliente' },
               ] as const).map((p) => (
                 <div key={p.t} className="rounded-2xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-5 py-5 shadow-sm">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-80">{p.t}</p>
                   <p className="text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums mt-1">{dinero(p.v)}</p>
                   <p className="text-xs opacity-75 mt-2">
                     {p.s} · {r.estadoGuia?.estado === 'manual' ? 'tu Libro Azul' : r.estadoGuia?.estado === 'guardada' ? 'guía guardada' : 'Autocosmos'}
-                    {' · '}{r.consulta?.km ? `${r.consulta.km.toLocaleString('es-MX')} km` : 'km estimado'}
+                    {' · '}{r.guia.kmAjuste ? `a ${r.guia.kmAjuste.kmReferencia.toLocaleString('es-MX')} km (lo normal para su año)` : r.consulta?.km ? `${r.consulta.km.toLocaleString('es-MX')} km` : 'km estimado'}
                   </p>
                 </div>
               ))}
             </section>
           )}
-          {notaKm(r) && <p className="text-xs text-slate-600 dark:text-slate-300 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2">{notaKm(r)}</p>}
+          {r.descuentoKm && <PanelKilometraje d={r.descuentoKm} mercado={r.mercado?.kmAjuste || null} />}
           <div className="flex flex-wrap items-center gap-2">
             <span className={clsx('inline-flex rounded-full border px-2.5 py-1 text-xs font-bold', CONF[r.confianza].c)}>{CONF[r.confianza].t} · {r.comparables} {r.comparables === 1 ? 'venta parecida' : 'ventas parecidas'}</span>
             {r.mercado && <span className="text-xs text-slate-500">Mercado: {r.mercado.n} anuncios, mediana {dinero(r.mercado.mediana)}{r.mercado.kmAjuste ? ` (ajustada a ${r.mercado.kmAjuste.kmObjetivo.toLocaleString('es-MX')} km; sin ajustar ${dinero(r.mercado.kmAjuste.medianaSinAjuste)})` : ''}</span>}
@@ -308,7 +366,7 @@ export function Recomendador({ soloCotizar = false }: { soloCotizar?: boolean })
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {grande('Se vendería en (esperado)', dinero(r.precioVentaEsperado), r.origenPrecioVenta === 'mercado' ? 'mediana del precio comercial' : r.origenPrecioVenta === 'ventas-propias' ? 'mediana de tus ventas' : r.origenPrecioVenta === 'guia' ? 'guía de venta' : '')}
             {grande('Peor caso', dinero(r.precioVentaPesimista), 'si no es muy comercial')}
-            {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), r.maxCompraPorGuia !== null ? 'tope de la guía' : 'sin guía: sale del peor caso')}
+            {grande('Pagar como máximo', dinero(r.maxCompraRecomendado), r.descuentoKm && r.descuentoKm.maxSinKm !== r.descuentoKm.maxConKm ? `${dinero(r.descuentoKm.maxSinKm)} de la guía ${r.descuentoKm.maxConKm < r.descuentoKm.maxSinKm ? 'menos' : 'más'} ${dinero(Math.abs(r.descuentoKm.maxSinKm - r.descuentoKm.maxConKm))} por kilometraje` : r.maxCompraPorGuia !== null ? 'tope de la guía' : 'sin guía: sale del peor caso')}
             {grande('Se vendería en', r.diasEstimados === null ? '—' : `${r.diasEstimados} días`, r.diasRango ? `normalmente entre ${r.diasRango[0]} y ${r.diasRango[1]}` : undefined, fuenteDias(r.diasBase))}
           </div>
           {r.utilidadEsperada != null && r.utilidadPesimista != null && (
