@@ -324,6 +324,10 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
         const ec = estadoDeCuenta(planDe(t.datos.saleDetails), await pagosDe(q.adminDb, t.ref.id));
         if (monto > ec.aFavor + 0.5) return res.status(409).json({ error: `Solo se puede devolver lo que el cliente pagó de más (${ec.aFavor.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}).` });
       }
+      // Confirmar el «enganche por confirmar» desde una pantalla vieja: si ese dinero ya está registrado, no se repite.
+      if (concepto === "enganche" && b.nota === "Enganche anotado al registrar la venta" && !engancheDeclaradoDe(t.datos, await pagosDe(q.adminDb, t.ref.id))) {
+        return res.status(409).json({ error: "Ese enganche ya está registrado. Recarga la página para ver el pago." });
+      }
       const ref = clave ? col(q.adminDb).doc(`p_${t.ref.id}_${clave}`) : col(q.adminDb).doc();
       const pago = {
         dealId: t.ref.id, agencyId: t.datos.agencyId, clientId: t.datos.clientId || null,
