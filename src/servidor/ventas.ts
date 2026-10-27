@@ -247,7 +247,10 @@ export function registrarVentas(app: any, { usuarioQuePide, getAdminDb }: { usua
     const plan: any = planDe(d.saleDetails);
     const declarado = Number(plan.downPayment) || 0;
     if (plan.method !== "credito_bancario" || !(declarado > 0) || d.engancheDescartado) return null;
-    const recibido = pagos.filter((p: any) => !p.anulado && p.concepto === "enganche").reduce((t: number, p: any) => t + (Number(p.monto) || 0), 0);
+    // En un crédito bancario la agencia solo recibe dinero de la entrada: un apartado o «pago» suelto cuenta como enganche
+    // (si no, el aviso seguía pidiendo confirmar el mismo dinero y se registraba dos veces; Excelencia Automotriz, 26 oct 2026).
+    const recibido = pagos.filter((p: any) => !p.anulado && p.concepto !== "comision" && p.concepto !== "devolucion").reduce((t: number, p: any) => t + (Number(p.monto) || 0), 0)
+      - pagos.filter((p: any) => !p.anulado && p.concepto === "devolucion").reduce((t: number, p: any) => t + (Number(p.monto) || 0), 0);
     if (recibido + 0.5 >= declarado) return null;
     if (estadoDeCuenta(plan, pagos, hoyISO()).saldo <= 0.5) return null;
     return { monto: Math.round((declarado - recibido) * 100) / 100, declarado };
