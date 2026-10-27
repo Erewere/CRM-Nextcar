@@ -265,6 +265,10 @@ export function AutoPagina() {
     await guardar({ photoUrls: urls, photoUrl: elegida }).catch((e) => alert(`No se pudo cambiar la portada. ${e?.message || ''}`));
   };
 
+  const reordenarFotos = async (nuevas: string[]) => {
+    await guardar({ photoUrls: nuevas, photoUrl: nuevas[0] || '' }).catch((e) => alert(`No se pudo cambiar el orden. ${e?.message || ''}`));
+  };
+
   // --- Logo de la agencia en las fotos (ajuste de la agencia).
   const configLogo = configLogoDe(agencia);
   const logoActivo = configLogo.activo && !!agencia?.logoUrl;
@@ -832,7 +836,7 @@ export function AutoPagina() {
               </div>
             )}
             {seccion === 'fotos' && (
-              <Tarjeta titulo={`Fotos (${fotos.length})`} accion={puedeFotos && <span className="text-[11px] text-slate-500">La primera es la portada · pasa el mouse sobre una foto para cambiarla o quitarla</span>}>
+              <Tarjeta titulo={`Fotos (${fotos.length})`} accion={puedeFotos && <span className="text-[11px] text-slate-500">La primera es la portada · arrastra las fotos para cambiar el orden (en el teléfono, mantén presionada una)</span>}>
                 {puedeFotos && (
                   <label
                     onDragOver={(e) => e.preventDefault()}
@@ -845,7 +849,7 @@ export function AutoPagina() {
                     <input type="file" accept="image/*" multiple className="hidden" disabled={!!subiendo} onChange={(e) => { const elegidos = Array.from(e.target.files || []); e.target.value = ''; subirFotos(elegidos); }} />
                   </label>
                 )}
-                <Galeria fotos={fotos} titulo={titulo} puedeOrdenar={puedeFotos} onHacerPortada={hacerPortada} cuadricula onQuitar={puedeFotos ? quitarFoto : undefined} />
+                <Galeria fotos={fotos} titulo={titulo} puedeOrdenar={puedeFotos} onHacerPortada={hacerPortada} cuadricula onQuitar={puedeFotos ? quitarFoto : undefined} onReordenar={puedeFotos ? reordenarFotos : undefined} />
               </Tarjeta>
             )}
             {seccion === 'datos' && (

@@ -1,6 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { Car as CarIcon, ChevronLeft, ChevronRight, Star, X, Maximize2, Trash2 } from 'lucide-react';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+/** Envuelve una miniatura de la cuadrícula para poder arrastrarla a otro lugar. */
+function Arrastrable({ id, activo, children }: { id: string; activo: boolean; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !activo });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 20 : undefined, touchAction: activo ? 'manipulation' : undefined }}
+      className={clsx(isDragging && 'opacity-80 shadow-xl ring-2 ring-blue-500 rounded-md', activo && 'cursor-grab active:cursor-grabbing')}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
 
 /**
  * Fotos del auto: la grande, miniaturas para cambiarla, flechas del teclado y
@@ -8,7 +27,7 @@ import { Car as CarIcon, ChevronLeft, ChevronRight, Star, X, Maximize2, Trash2 }
  * el inventario y en la página Nextcar).
  */
 export function Galeria({
-  fotos, titulo, puedeOrdenar, onHacerPortada, cuadricula, onQuitar,
+  fotos, titulo, puedeOrdenar, onHacerPortada, cuadricula, onQuitar, onReordenar,
 }: {
   fotos: string[];
   titulo: string;
@@ -18,7 +37,18 @@ export function Galeria({
   cuadricula?: boolean;
   /** Quitar una foto (solo en la cuadrícula). */
   onQuitar?: (indice: number) => void;
+  /** Arrastrar una foto a otro lugar (solo en la cuadrícula): recibe la lista ya en el orden nuevo. */
+  onReordenar?: (nuevas: string[]) => void;
 }) {
+  const sensores = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
+  );
+  const alSoltar = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id || !onReordenar) return;
+    onReordenar(arrayMove(fotos, Number(e.active.id), Number(e.over.id)));
+  };
+  const arrastrar = !!(cuadricula && puedeOrdenar && onReordenar && fotos.length > 1);
   const [actual, setActual] = useState(0);
   const [completa, setCompleta] = useState(false);
   const total = fotos.length;
@@ -59,7 +89,7 @@ export function Galeria({
           i === actual && !cuadricula ? 'border-blue-600' : 'border-transparent hover:border-slate-300'
         )}
       >
-        <img src={url} alt="" loading="lazy" className="w-full h-full object-cover" />
+        <img src={url} alt="" loading="lazy" draggable={false} className="w-full h-full object-cover" />
       </button>
       {i === 0 ? (
         <span className="absolute top-1 left-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 pointer-events-none">
@@ -90,7 +120,13 @@ export function Galeria({
   return (
     <>
       {cuadricula ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">{fotos.map((u, i) => miniatura(u, i, true))}</div>
+        <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={alSoltar}>
+          <SortableContext items={fotos.map((_, i) => String(i))} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+              {fotos.map((u, i) => <Arrastrable key={u + i} id={String(i)} activo={arrastrar}>{miniatura(u, i, true)}</Arrastrable>)}
+            </div>
+          </SortableContext>
+        </DndContext>
       ) : (
         <div className="flex flex-col gap-2">
           <div
