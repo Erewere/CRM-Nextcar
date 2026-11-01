@@ -7,7 +7,7 @@ import { getApiUrl } from '../../lib/api';
 // El servidor hace el trabajo (ver src/servidor/conectarRedes.ts); aquí solo el botón, la lista cuando hay varias
 // páginas y el estado de lo ya conectado.
 
-export function ConectarRedes() {
+export function ConectarRedes({ incrustado = false }: { incrustado?: boolean }) {
   const [estado, setEstado] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [ocupado, setOcupado] = useState(false);
@@ -66,15 +66,19 @@ export function ConectarRedes() {
   const conectada = !!estado?.hayToken && !!estado?.paginaId;
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
-      <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+    <div className={incrustado ? '' : 'p-4 md:p-6 max-w-4xl mx-auto w-full'}>
+      <div className={incrustado ? 'p-6' : 'bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 p-6'}>
         <div className="flex items-start gap-4">
+          {!incrustado && (
           <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center shrink-0">
             <Facebook className="w-6 h-6 text-blue-600 dark:text-blue-400" />
           </div>
+          )}
           <div className="flex-1 min-w-0">
+            {!incrustado && (<>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">Facebook e Instagram <Instagram className="w-4 h-4 text-pink-500" /></h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">Publica tus autos en tu página y en tu Instagram desde el CRM. Solo tienes que iniciar sesión en Facebook y elegir tu página.</p>
+            </>)}
 
             {cargando ? (
               <p className="mt-4 text-sm text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Revisando…</p>

@@ -31,7 +31,7 @@ const hace = (iso: string | null) => {
   return `hace ${Math.round(min / 1440)} días`;
 };
 
-export function CatalogoMeta() {
+export function CatalogoMeta({ incrustado = false }: { incrustado?: boolean }) {
   const [liga, setLiga] = useState<Liga | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [error, setError] = useState('');
@@ -63,9 +63,10 @@ export function CatalogoMeta() {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
-      <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
-        <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
+    <div className={incrustado ? '' : 'p-4 md:p-6 max-w-4xl mx-auto w-full'}>
+      <div className={incrustado ? '' : 'bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden'}>
+        {!incrustado && (
+<div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center shrink-0">
             <ShoppingBag className="w-6 h-6 text-blue-600" />
           </div>
@@ -74,8 +75,9 @@ export function CatalogoMeta() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Tu inventario listo para anunciar tus autos en Facebook e Instagram. Se actualiza solo: lo que vendes sale del catálogo.</p>
           </div>
         </div>
+      )}
 
-        <div className="p-6 space-y-5">
+<div className="p-6 space-y-5">
           {liga.ultimaLecturaAt && (
             <div className={`rounded-lg border px-3 py-2 text-sm flex items-start gap-2 ${leyendo ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-200' : 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'}`}>
               {leyendo ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}

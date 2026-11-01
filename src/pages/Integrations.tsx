@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, Mail, Check, AlertCircle, Copy, Bot, Key, ShieldCheck } from 'lucide-react';
+import { MessageCircle, Save, CheckCircle2, Calendar, Check, Copy, Bot, Key, ShieldCheck, Facebook, ShoppingBag, Globe, Bell, Code2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { MiPaginaWeb } from '../components/integraciones/MiPaginaWeb';
 import { ConectarRedes } from '../components/integraciones/ConectarRedes';
 import { CatalogoMeta } from '../components/integraciones/CatalogoMeta';
+import { Seccion, Grupo } from '../components/integraciones/Seccion';
 
 export function Integrations() {
   const { userData, googleToken, googleAccount, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
@@ -292,25 +293,26 @@ export function Integrations() {
     }
   };
 
+  const esAdminOGerente = userData?.role === 'admin' || userData?.role === 'manager';
+  // Al volver de Meta con ?redes=… la sección de Facebook debe verse abierta con su aviso.
+  const volviDeMeta = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('redes');
+
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900 overflow-y-auto">
-      {(userData?.role === 'admin' || userData?.role === 'manager') && <ConectarRedes />}
-      {(userData?.role === 'admin' || userData?.role === 'manager') && <CatalogoMeta />}
+      <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Integraciones</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Conecta el CRM con tus mensajes, tus redes, tu página y tus herramientas. Toca una sección para abrirla.</p>
+        </div>
 
-      <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
-        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
-          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded flex items-center justify-center shrink-0">
-                <MessageCircle className="w-6 h-6 text-green-600 dark:text-green-500" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">WhatsApp Cloud API</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Conecta tu número oficial de WhatsApp Business directamente al CRM.</p>
-              </div>
-            </div>
-          </div>
-
+        <Grupo titulo="Mensajes y redes sociales">
+          <Seccion
+            icono={<MessageCircle className="w-5 h-5 text-green-600 dark:text-green-500" />}
+            colorIcono="bg-green-100 dark:bg-green-900/30"
+            titulo="WhatsApp"
+            descripcion="Conecta tu número oficial de WhatsApp Business directamente al CRM."
+            estado={hasAccessToken ? { texto: 'Conectado', tono: 'ok' } : null}
+          >
           <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Instrucciones */}
             <div>
@@ -476,24 +478,55 @@ export function Integrations() {
             </div>
 
           </div>
-        </div>
+          </Seccion>
 
+          {esAdminOGerente && (
+            <Seccion
+              icono={<Facebook className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+              colorIcono="bg-blue-100 dark:bg-blue-900/30"
+              titulo="Facebook e Instagram"
+              descripcion="Publica tus autos en tu página y en tu Instagram, y contesta Messenger desde el CRM."
+              abiertaAlInicio={volviDeMeta}
+            >
+              <ConectarRedes incrustado />
+            </Seccion>
+          )}
+        </Grupo>
 
-        {/* Google Workspace Integration */}
-        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mb-8">
-          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded flex items-center justify-center shrink-0">
-                <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Google Workspace (Calendario, Gmail, Contactos, Tasks)</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Sincroniza tu cuenta personal de Google para administrar tus correos, citas y tareas de forma individual y privada.
-                </p>
-              </div>
-            </div>
+        {(esAdminOGerente || userData?.role === 'admin') && (
+          <Grupo titulo="Mis autos en internet">
+            {esAdminOGerente && (
+              <Seccion
+                icono={<ShoppingBag className="w-5 h-5 text-blue-600" />}
+                colorIcono="bg-blue-100 dark:bg-blue-900/30"
+                titulo="Catálogo para anuncios de Meta"
+                descripcion="Tu inventario listo para anunciar en Facebook e Instagram; se actualiza solo."
+              >
+                <CatalogoMeta incrustado />
+              </Seccion>
+            )}
+            {userData?.role === 'admin' && (
+              <Seccion
+                icono={<Globe className="w-5 h-5 text-sky-600" />}
+                colorIcono="bg-sky-100 dark:bg-sky-900/30"
+                titulo="Mi página web"
+                descripcion="Si tu agencia tiene su propia página, conéctala y tus autos se publican solos."
+              >
+                <MiPaginaWeb incrustado />
+              </Seccion>
+            )}
+          </Grupo>
+        )}
 
+        <Grupo titulo="Mi cuenta">
+          <Seccion
+            icono={<Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+            colorIcono="bg-blue-100 dark:bg-blue-900/30"
+            titulo="Google (Calendario, Contactos y Tareas)"
+            descripcion="Sincroniza tu cuenta personal de Google para tus citas y tareas, de forma individual y privada."
+            estado={googleToken ? { texto: `Conectado${googleAccount ?? currentUser?.email ? ` · ${googleAccount ?? currentUser?.email}` : ''}`, tono: 'ok' } : null}
+          >
+            <div className="p-6 pb-0">
             <div>
               {googleToken ? (
                 <div className="flex items-center gap-3">
@@ -533,8 +566,7 @@ export function Integrations() {
                 </button>
               )}
             </div>
-          </div>
-
+            </div>
           <div className="p-6 bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-600 dark:text-slate-400 flex flex-col md:flex-row gap-6">
             <div className="flex items-start gap-2">
               <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
@@ -551,29 +583,64 @@ export function Integrations() {
               </div>
             </div>
           </div>
-        </div>
+          </Seccion>
 
-        {/* MCP Server Integration for Gemini / Spark / Claude */}
-        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mb-8">
-          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/40 rounded flex items-center justify-center shrink-0">
-                <Bot className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  Servidor MCP (Model Context Protocol)
-                  <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 rounded-full border border-indigo-300 dark:border-indigo-700">
-                    API Key Auth
-                  </span>
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Conecta tu CRM Erewere con Gemini, Spark, Claude u otro asistente de IA utilizando el protocolo MCP con Bearer API Key.
+          <Seccion
+            icono={<Bell className="w-5 h-5 text-slate-600 dark:text-slate-300" />}
+            colorIcono="bg-slate-100 dark:bg-slate-700"
+            titulo="Avisos en el escritorio"
+            descripcion="Para que el CRM te avise cuando se acerca una cita o tienes algo pendiente."
+            estado={permisoAvisos === 'granted' ? { texto: 'Activados', tono: 'ok' } : permisoAvisos === 'denied' ? { texto: 'Bloqueados', tono: 'aviso' } : null}
+          >
+          <div className="p-6">
+            {permisoAvisos === "granted" && (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                ✅ Activados. Recibirás los avisos mientras tengas el CRM abierto en una pestaña.
+              </p>
+            )}
+
+            {permisoAvisos === "default" && (
+              <button
+                onClick={pedirPermisoAvisos}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors"
+              >
+                Activar avisos
+              </button>
+            )}
+
+            {permisoAvisos === "denied" && (
+              <div className="p-3 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+                <p className="text-sm text-amber-900 dark:text-amber-200">
+                  <strong>Están bloqueados en este navegador.</strong> Desde aquí ya no se
+                  puede pedir permiso otra vez: hay que cambiarlo en los ajustes del sitio.
+                  Pulsa el candado que está junto a la dirección, arriba, y activa las
+                  notificaciones para crm.erewere.com.
                 </p>
               </div>
-            </div>
-          </div>
+            )}
 
+            {permisoAvisos === "unsupported" && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Este navegador no admite avisos de escritorio.
+              </p>
+            )}
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">
+              Los avisos llegan mientras el CRM esté abierto en una pestaña. Con el
+              navegador cerrado no llega nada: eso requiere una aplicación instalada.
+            </p>
+          </div>
+          </Seccion>
+        </Grupo>
+
+        <Grupo titulo="Asistentes de IA y desarrolladores">
+          <Seccion
+            icono={<Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+            colorIcono="bg-indigo-100 dark:bg-indigo-900/40"
+            titulo="Conectar un asistente de IA (MCP)"
+            descripcion="Conecta tu CRM con Gemini, Spark, Claude u otro asistente usando una clave de acceso."
+            estado={mcpKeyInfo?.hasKey ? { texto: 'Clave activa', tono: 'ok' } : null}
+          >
           <div className="p-6">
             <div className="mb-6 bg-indigo-50/80 dark:bg-slate-900/60 p-4 rounded-lg border border-indigo-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 space-y-2">
               <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 text-sm">
@@ -679,72 +746,57 @@ export function Integrations() {
               </div>
             </div>
           </div>
-        </div>
+          </Seccion>
 
-        {userData?.role === 'admin' && <MiPaginaWeb />}
-
-        {/* Avisos de escritorio */}
-        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
-          <div className="p-6 border-b border-gray-200 dark:border-slate-700">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Avisos en el escritorio</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Para que el CRM te avise cuando se acerca una cita o tienes algo
-              pendiente, el navegador tiene que darle permiso.
-            </p>
-          </div>
+          <Seccion
+            icono={<Code2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+            colorIcono="bg-purple-100 dark:bg-purple-900/30"
+            titulo="API para asistentes virtuales"
+            descripcion="Direcciones públicas para consultar inventario y capturar prospectos desde tu bot."
+          >
           <div className="p-6">
-            {permisoAvisos === "granted" && (
-              <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                ✅ Activados. Recibirás los avisos mientras tengas el CRM abierto en una pestaña.
-              </p>
-            )}
+             <div className="mb-4">
+               <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">ID de Agencia: </span>
+               <code className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded text-sm text-purple-600">{userData?.agencyId || '...'}</code>
+             </div>
+             
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+               <div className="border border-gray-200 dark:border-slate-700 rounded p-4 bg-[#f4f5f5] dark:bg-slate-900/50">
+                 <div className="flex items-center gap-2 mb-3">
+                   <span className="bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded text-xs uppercase">GET</span>
+                   <span className="font-mono text-sm font-semibold">/api/public/v1/inventory</span>
+                 </div>
+                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Obtiene la lista de vehículos disponibles.</p>
+                 <div className="bg-slate-800 text-slate-300 p-3 rounded text-xs font-mono overflow-x-auto">
+                   curl {window.location.origin}/api/public/v1/inventory?agencyId={userData?.agencyId}
+                 </div>
+               </div>
 
-            {permisoAvisos === "default" && (
-              <button
-                onClick={pedirPermisoAvisos}
-                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-medium text-sm transition-colors"
-              >
-                Activar avisos
-              </button>
-            )}
-
-            {permisoAvisos === "denied" && (
-              <div className="p-3 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-                <p className="text-sm text-amber-900 dark:text-amber-200">
-                  <strong>Están bloqueados en este navegador.</strong> Desde aquí ya no se
-                  puede pedir permiso otra vez: hay que cambiarlo en los ajustes del sitio.
-                  Pulsa el candado que está junto a la dirección, arriba, y activa las
-                  notificaciones para crm.erewere.com.
-                </p>
-              </div>
-            )}
-
-            {permisoAvisos === "unsupported" && (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Este navegador no admite avisos de escritorio.
-              </p>
-            )}
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-4">
-              Los avisos llegan mientras el CRM esté abierto en una pestaña. Con el
-              navegador cerrado no llega nada: eso requiere una aplicación instalada.
-            </p>
+               <div className="border border-gray-200 dark:border-slate-700 rounded p-4 bg-[#f4f5f5] dark:bg-slate-900/50">
+                 <div className="flex items-center gap-2 mb-3">
+                   <span className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-xs uppercase">POST</span>
+                   <span className="font-mono text-sm font-semibold">/api/public/v1/leads</span>
+                 </div>
+                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Crea un nuevo prospecto (Lead) en el CRM.</p>
+                 <div className="bg-slate-800 text-slate-300 p-3 rounded text-xs font-mono overflow-x-auto">
+                   {`curl -X POST ${window.location.origin}/api/public/v1/leads \
+  -H "Content-Type: application/json" \
+  -d '{"agencyId": "${userData?.agencyId}", "name": "Juan Perez", "phone": "5551234567"}'`}
+                 </div>
+               </div>
+             </div>
           </div>
-        </div>
+          </Seccion>
+        </Grupo>
 
         {isMaster && (
-          <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-6 h-6 text-amber-600 dark:text-amber-500" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Respaldo de la información</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Descarga una copia completa de tus contactos, tratos, inventario, gastos, tareas y notas.
-                </p>
-              </div>
-            </div>
+          <Grupo titulo="Solo plataforma">
+            <Seccion
+              icono={<ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-500" />}
+              colorIcono="bg-amber-100 dark:bg-amber-900/30"
+              titulo="Respaldo de la información"
+              descripcion="Descarga una copia completa de contactos, tratos, inventario, gastos, tareas y notas."
+            >
             <div className="p-6">
               <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
                 El archivo se guarda directamente en tu computadora en formato JSON. Conviene descargarlo
@@ -774,20 +826,15 @@ export function Integrations() {
                 </p>
               )}
             </div>
-          </div>
-        )}
+            </Seccion>
 
-        {/* Revisiones de mantenimiento, solo para master. */}
-        {isMaster && (
-          <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-dashed border-indigo-300 dark:border-indigo-800 overflow-hidden mt-8">
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                Revisiones de la plataforma
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Comprobaciones de solo lectura. No modifican nada.
-              </p>
-            </div>
+            <Seccion
+              icono={<ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+              colorIcono="bg-indigo-100 dark:bg-indigo-900/30"
+              titulo="Revisiones de la plataforma"
+              descripcion="Comprobaciones de solo lectura. No modifican nada."
+              discontinua
+            >
             <div className="p-6">
               <div className="mb-6 pb-5 border-b border-gray-200 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
@@ -867,55 +914,9 @@ export function Integrations() {
                 </div>
               )}
             </div>
-          </div>
+            </Seccion>
+          </Grupo>
         )}
-
-        {/* Virtual Assistants API */}
-        <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
-          <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded flex items-center justify-center shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 dark:text-purple-500"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">API para Asistentes Virtuales</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Endpoints públicos para consultar inventario y capturar leads desde tu bot de IA.</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-6">
-             <div className="mb-4">
-               <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">ID de Agencia: </span>
-               <code className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded text-sm text-purple-600">{userData?.agencyId || '...'}</code>
-             </div>
-             
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="border border-gray-200 dark:border-slate-700 rounded p-4 bg-[#f4f5f5] dark:bg-slate-900/50">
-                 <div className="flex items-center gap-2 mb-3">
-                   <span className="bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded text-xs uppercase">GET</span>
-                   <span className="font-mono text-sm font-semibold">/api/public/v1/inventory</span>
-                 </div>
-                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Obtiene la lista de vehículos disponibles.</p>
-                 <div className="bg-slate-800 text-slate-300 p-3 rounded text-xs font-mono overflow-x-auto">
-                   curl {window.location.origin}/api/public/v1/inventory?agencyId={userData?.agencyId}
-                 </div>
-               </div>
-
-               <div className="border border-gray-200 dark:border-slate-700 rounded p-4 bg-[#f4f5f5] dark:bg-slate-900/50">
-                 <div className="flex items-center gap-2 mb-3">
-                   <span className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-xs uppercase">POST</span>
-                   <span className="font-mono text-sm font-semibold">/api/public/v1/leads</span>
-                 </div>
-                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Crea un nuevo prospecto (Lead) en el CRM.</p>
-                 <div className="bg-slate-800 text-slate-300 p-3 rounded text-xs font-mono overflow-x-auto">
-                   {`curl -X POST ${window.location.origin}/api/public/v1/leads \
-  -H "Content-Type: application/json" \
-  -d '{"agencyId": "${userData?.agencyId}", "name": "Juan Perez", "phone": "5551234567"}'`}
-                 </div>
-               </div>
-             </div>
-          </div>
-        </div>
       </div>
     </div>
   );

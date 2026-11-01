@@ -35,7 +35,7 @@ const hace = (iso: string | null) => {
   return `hace ${Math.round(min / 1440)} días`;
 };
 
-export function MiPaginaWeb() {
+export function MiPaginaWeb({ incrustado = false }: { incrustado?: boolean }) {
   const [c, setC] = useState<Conexion | null>(null);
   const [url, setUrl] = useState('');
   const [soloMarcados, setSoloMarcados] = useState(false);
@@ -64,8 +64,9 @@ export function MiPaginaWeb() {
   const leyendo = c.ultimaLecturaAt && Date.now() - Date.parse(c.ultimaLecturaAt) < 3 * 3600_000;
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8">
-      <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
+    <div className={incrustado ? '' : 'bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden mt-8'}>
+      {!incrustado && (
+<div className="p-6 border-b border-gray-200 dark:border-slate-700 flex items-center gap-4">
         <div className="w-12 h-12 bg-sky-100 dark:bg-sky-900/30 rounded flex items-center justify-center shrink-0">
           <Globe className="w-6 h-6 text-sky-600" />
         </div>
@@ -74,8 +75,9 @@ export function MiPaginaWeb() {
           <p className="text-sm text-slate-500 dark:text-slate-400">Si tu agencia tiene su propia página, conéctala y tus autos se publican solos desde el inventario.</p>
         </div>
       </div>
+      )}
 
-      <div className="p-6 space-y-5">
+<div className="p-6 space-y-5">
         {c.tieneLlave && (
           <div className={`rounded-lg border px-3 py-2 text-sm flex items-start gap-2 ${leyendo ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-200' : 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'}`}>
             {leyendo ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
