@@ -3,6 +3,7 @@ import { MessageCircle, ArrowRight, ExternalLink, Save, CheckCircle2, Calendar, 
 import { useAuth } from '../contexts/AuthContext';
 import { MiPaginaWeb } from '../components/integraciones/MiPaginaWeb';
 import { ConectarRedes } from '../components/integraciones/ConectarRedes';
+import { CatalogoMeta } from '../components/integraciones/CatalogoMeta';
 
 export function Integrations() {
   const { userData, googleToken, googleAccount, connectGoogleServices, disconnectGoogleServices, currentUser } = useAuth();
@@ -294,6 +295,7 @@ export function Integrations() {
   return (
     <div className="flex flex-col h-full bg-[#f4f5f5] dark:bg-slate-900 overflow-y-auto">
       {(userData?.role === 'admin' || userData?.role === 'manager') && <ConectarRedes />}
+      {(userData?.role === 'admin' || userData?.role === 'manager') && <CatalogoMeta />}
 
       <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
         <div className="bg-white dark:bg-slate-800 rounded shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">

@@ -2747,6 +2747,180 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // ===== Catalogo de vehiculos para anuncios de Meta (CSV) =====
+  //
+  // La agencia pega la liga de este archivo en su Commerce Manager y Meta lo
+  // baja sola cada hora. Meta no manda cabeceras, asi que la llave va dentro de
+  // la liga (se guarda en agencies/{id}/secrets/feedMeta, que el navegador no
+  // puede leer). Solo sale lo que de todos modos es publico: autos disponibles
+  // con foto, km, color y precio. Nunca costos, compradores ni notas.
+  const FOTOS_FEED_META = 10;
+  const CACHE_FEED_META_MS = 5 * 60 * 1000;
+  const cacheFeedMeta = new Map<string, { momento: number; datos: { csv: string; total: number; fuera: Record<string, number> } }>();
+  const ultimaLecturaFeedMeta = new Map<string, number>();
+  const celdaCsv = (x: any) => {
+    const s = String(x ?? "");
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const transmisionMeta = (t: string) => (/autom/i.test(t) ? "AUTOMATIC" : /manual|est[aá]ndar/i.test(t) ? "MANUAL" : "OTHER");
+  const carroceriaMeta = (c: string) => {
+    if (/minivan/i.test(c)) return "MINIVAN";
+    if (/sed[aá]n/i.test(c)) return "SEDAN";
+    if (/suv/i.test(c)) return "SUV";
+    if (/hatch/i.test(c)) return "HATCHBACK";
+    if (/pick/i.test(c)) return "PICKUP";
+    if (/coup[eé]/i.test(c)) return "COUPE";
+    if (/convert/i.test(c)) return "CONVERTIBLE";
+    if (/van/i.test(c)) return "VAN";
+    return "OTHER";
+  };
+  const combustibleMeta = (c: string) => {
+    if (/h[ií]brid/i.test(c)) return "HYBRID";
+    if (/el[eé]ctric/i.test(c)) return "ELECTRIC";
+    if (/di[eé]sel/i.test(c)) return "DIESEL";
+    if (/gasolina|nafta|petrol/i.test(c)) return "GASOLINE";
+    return "OTHER";
+  };
+  const ligaHttp = (s: any) => {
+    const t = String(s || "").trim();
+    return /^https?:\/\/[^\s/]+\.[^\s/]+/i.test(t) ? t : "";
+  };
+
+  async function feedMetaDeAgencia(adminDb: any, agencyId: string, agencia: any) {
+    const guardado = cacheFeedMeta.get(agencyId);
+    if (guardado && Date.now() - guardado.momento < CACHE_FEED_META_MS) return guardado.datos;
+
+    const snap = await adminDb.collection("vehicles").where("agencyId", "==", agencyId).get();
+    const fuera = { sinFoto: 0, sinKm: 0, sinColor: 0, sinPrecio: 0, sinLiga: 0 };
+    const paginaUrl = ligaHttp(agencia?.paginaWeb?.url);
+    const direccion = String(agencia?.address || "").trim();
+    const ciudad = String(agencia?.ciudad || "").trim();
+    const domicilio = direccion
+      ? JSON.stringify({ addr1: direccion, ...(ciudad ? { city: ciudad } : {}), country: "MX" })
+      : "";
+
+    const cabecera = [
+      "vehicle_id", "title", "description", "url", "make", "model", "year", "mileage.value", "mileage.unit",
+      ...Array.from({ length: FOTOS_FEED_META }, (_, i) => `image[${i}].url`),
+      "transmission", "fuel_type", "body_style", "vin", "price", "state_of_vehicle", "exterior_color", "address", "availability",
+    ];
+    const filas: string[] = [cabecera.join(",")];
+    let total = 0;
+
+    for (const d of snap.docs) {
+      const v: any = d.data();
+      if (v.isDeleted || (v.status && v.status !== "available")) continue;
+      const fotos = (Array.isArray(v.photoUrls) && v.photoUrls.filter(Boolean).length ? v.photoUrls.filter(Boolean) : [v.photoUrl].filter(Boolean))
+        .filter((f: any) => /^https:\/\//i.test(String(f))).slice(0, FOTOS_FEED_META);
+      const precio = Number(v.price) || 0;
+      const km = v.km === undefined || v.km === null || v.km === "" ? NaN : Number(v.km);
+      const color = String(v.color || "").trim();
+      const url = ligaHttp(v.websiteUrl) || paginaUrl;
+      // Lo que falta se cuenta para decirselo a la agencia; el auto no sale.
+      if (!fotos.length) fuera.sinFoto++;
+      if (!Number.isFinite(km)) fuera.sinKm++;
+      if (!color) fuera.sinColor++;
+      if (precio <= 0) fuera.sinPrecio++;
+      if (!url) fuera.sinLiga++;
+      if (!fotos.length || !Number.isFinite(km) || !color || precio <= 0 || !url) continue;
+
+      const marca = String(v.make || "").trim();
+      const modelo = String(v.model || "").trim();
+      const anio = Number(v.year) || "";
+      const transmision = transmisionMeta(String(v.transmission || ""));
+      const descripcion = String(v.descripcionWeb || "").replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, 4500)
+        || `${marca} ${modelo} ${anio}. ${km.toLocaleString("es-MX")} km. Color ${color}. Transmisión ${transmision === "AUTOMATIC" ? "automática" : transmision === "MANUAL" ? "manual" : "no especificada"}.${v.equipment ? ` ${String(v.equipment).slice(0, 600)}` : ""}`;
+      const vin = /^[A-HJ-NPR-Z0-9]{17}$/i.test(String(v.vin || "").trim()) ? String(v.vin).trim().toUpperCase() : "";
+
+      const fila = [
+        d.id, `${marca} ${modelo} ${anio}`.trim(), descripcion, url, marca, modelo, anio, Math.round(km), "KM",
+        ...Array.from({ length: FOTOS_FEED_META }, (_, i) => fotos[i] || ""),
+        transmision, combustibleMeta(String(v.fichaWeb?.combustible || "")), carroceriaMeta(String(v.bodyType || "")),
+        vin, `${precio} MXN`, "Used", color, domicilio, "AVAILABLE",
+      ];
+      filas.push(fila.map(celdaCsv).join(","));
+      total++;
+    }
+
+    const datos = { csv: filas.join("\n") + "\n", total, fuera };
+    cacheFeedMeta.set(agencyId, { momento: Date.now(), datos });
+    return datos;
+  }
+
+  /** La llave de la liga; se crea la primera vez que se pide. */
+  async function llaveFeedMeta(adminDb: any, agencyId: string, renovar: boolean): Promise<string> {
+    const ref = adminDb.collection("agencies").doc(agencyId).collection("secrets").doc("feedMeta");
+    if (!renovar) {
+      const actual = String((await ref.get()).data()?.token || "");
+      if (/^[a-f0-9]{48}$/.test(actual)) return actual;
+    }
+    const nueva = crypto.randomBytes(24).toString("hex");
+    await ref.set({ token: nueva, creadaAt: new Date().toISOString() });
+    cacheFeedMeta.delete(agencyId);
+    return nueva;
+  }
+
+  async function respuestaLigaMeta(req: any, res: any, renovar: boolean) {
+    const q = await usuarioQuePide(req, res);
+    if (!q) return;
+    if (q.rol !== "admin" && q.rol !== "manager") {
+      return res.status(403).json({ error: "Solo el administrador o el gerente puede ver la liga del catálogo." });
+    }
+    try {
+      const token = await llaveFeedMeta(q.adminDb, q.agencyId, renovar);
+      const agencia = (await q.adminDb.collection("agencies").doc(q.agencyId).get()).data() || {};
+      const { total, fuera } = await feedMetaDeAgencia(q.adminDb, q.agencyId, agencia);
+      const host = String(req.get("host") || "crm.erewere.com");
+      const origen = `${/^localhost|^127\./.test(host) ? "http" : "https"}://${host}`;
+      res.json({
+        url: `${origen}/feed/meta/${q.agencyId}/${token}.csv`,
+        total,
+        fuera,
+        direccionLista: !!String(agencia.address || "").trim(),
+        ultimaLecturaAt: agencia.feedMeta?.ultimaLecturaAt || null,
+      });
+    } catch (e) {
+      console.error("feed-meta/mi-liga:", e);
+      res.status(500).json({ error: "No se pudo preparar la liga del catálogo." });
+    }
+  }
+
+  app.get("/api/feed-meta/mi-liga", (req: any, res: any) => respuestaLigaMeta(req, res, false));
+  // Renovar invalida la liga anterior: el catalogo de Meta deja de actualizarse hasta pegar la nueva.
+  app.post("/api/feed-meta/mi-liga/renovar", (req: any, res: any) => respuestaLigaMeta(req, res, true));
+
+  app.get("/feed/meta/:agencyId/:archivo", async (req, res) => {
+    try {
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(500).type("text/plain").send("Base de datos no disponible");
+      const agencyId = String(req.params.agencyId || "");
+      const dada = String(req.params.archivo || "").replace(/\.csv$/i, "");
+      if (!/^[A-Za-z0-9]{10,40}$/.test(agencyId) || !/^[a-f0-9]{48}$/.test(dada)) return res.status(404).type("text/plain").send("No encontrado");
+
+      const guardada = String((await adminDb.collection("agencies").doc(agencyId).collection("secrets").doc("feedMeta").get()).data()?.token || "");
+      if (guardada.length !== dada.length || !crypto.timingSafeEqual(Buffer.from(guardada), Buffer.from(dada))) {
+        return res.status(404).type("text/plain").send("No encontrado");
+      }
+      const agencia = (await adminDb.collection("agencies").doc(agencyId).get()).data();
+      if (!agencia) return res.status(404).type("text/plain").send("No encontrado");
+      if (!hasActiveAccess(agencia)) return res.status(402).type("text/plain").send("La suscripción del CRM de la agencia no está activa.");
+
+      const { csv, total } = await feedMetaDeAgencia(adminDb, agencyId, agencia);
+      if (Date.now() - (ultimaLecturaFeedMeta.get(agencyId) || 0) > 5 * 60_000) {
+        ultimaLecturaFeedMeta.set(agencyId, Date.now());
+        adminDb.collection("agencies").doc(agencyId).set(
+          { feedMeta: { ultimaLecturaAt: new Date().toISOString(), ultimaLecturaTotal: total } }, { merge: true }
+        ).catch(() => {});
+      }
+      res.set("Content-Type", "text/csv; charset=utf-8");
+      res.set("Cache-Control", "no-store");
+      res.send(csv);
+    } catch (e) {
+      console.error("Error armando el catalogo de Meta:", e);
+      res.status(500).type("text/plain").send("No se pudo armar el catalogo");
+    }
+  });
+
   // ===== Portal de agencias de nextcar.erewere.com =====
   // Al pegar la clave es facil que se cuele un espacio, unas comillas o un
   // caracter invisible (paso: un acento suelto U+0301 al final); la pagina las quita (trim en PHP), asi que aqui
