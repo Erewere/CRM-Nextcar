@@ -77,6 +77,7 @@ import { Link, Navigate } from "react-router";
 import { getClientMatches } from '../services/matchingEngine';
 import { useCostosVehiculos } from "../hooks/useVehicleFinancials";
 import { TableroAgencia } from "../components/tablero/TableroAgencia";
+import { useGastosPorAuto } from "../hooks/useGastosPorAuto";
 import { AvisoProspectosNuevos } from "../components/tablero/AvisoProspectosNuevos";
 import { LeadInteligente } from "../components/tablero/LeadInteligente";
 import { SaludoDelDia } from "../components/SaludoDelDia";
@@ -129,6 +130,7 @@ export function Dashboard() {
     for (const v of vehiculosCrudos) if (v.id && costoDe(v.id) > 0) mapa[v.id] = costoDe(v.id);
     return mapa;
   }, [vehiculosCrudos, costoDe]);
+  const gastosPorAuto = useGastosPorAuto(puedeVerCostos && userData?.role === "admin");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
@@ -718,6 +720,7 @@ export function Dashboard() {
                 agencia={agencyName}
                 vehiculos={vehiculosCrudos}
                 costos={costosPorAuto}
+                gastos={gastosPorAuto}
                 verCostos={puedeVerCostos}
                 clientes={clients}
                 tratos={deals}
@@ -1026,6 +1029,7 @@ export function Dashboard() {
               agencia={agencyName}
               vehiculos={vehiculosCrudos}
               costos={costosPorAuto}
+                gastos={gastosPorAuto}
               verCostos={puedeVerCostos}
               clientes={clients}
               tratos={deals}

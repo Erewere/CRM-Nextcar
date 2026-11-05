@@ -77,6 +77,8 @@ export interface TableroAgenciaProps {
   agencia: string;
   vehiculos: any[];
   costos: Record<string, number>;
+  /** Gastos por auto (vehicleId -> total); con el costo dan lo invertido para el ROI. */
+  gastos?: Record<string, number>;
   verCostos: boolean;
   clientes: any[];
   tratos: any[];
@@ -105,11 +107,11 @@ export function TableroAgencia(p: TableroAgenciaProps) {
     const { desde, hasta } = rangoEn(ahora);
     const a = calcularAnalitica({
       ahora, desde, hasta,
-      vehiculos: p.vehiculos, costos: p.costos, verCostos: p.verCostos,
+      vehiculos: p.vehiculos, costos: p.costos, gastos: p.gastos, verCostos: p.verCostos,
       clientes: p.clientes, tratos: p.tratos, usuarios: p.usuarios, etapas: p.etapas,
     });
     return { a, h: calcularHallazgos(a) };
-  }, [periodo, elegido, p.vehiculos, p.costos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
+  }, [periodo, elegido, p.vehiculos, p.costos, p.gastos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
 
   const exportar = (todo: boolean) =>
     exportarReporte(a, h, { verCostos: p.verCostos, periodo: nombrePeriodo, agencia: p.agencia }, todo ? "todo" : pestana);
@@ -330,6 +332,8 @@ function Resumen({ a, h, verCostos, irA, periodo, pendientes, inteligencia }: {
         <Kpi icono={Briefcase} titulo="Tratos abiertos" valor={r.tratosAbiertos} pie="hoy, en el embudo" onClick={() => irA("equipo")} />
       </div>
 
+      <Desempeno a={a} verCostos={verCostos} irA={irA} />
+
       <MetaDelMes irA={irA} />
 
       {inteligencia}
@@ -357,6 +361,65 @@ function Resumen({ a, h, verCostos, irA, periodo, pendientes, inteligencia }: {
 
       {pendientes}
     </div>
+  );
+}
+
+const pct = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("es-MX")}%`);
+
+function Medida({ titulo, valor, ayuda, onClick }: { titulo: string; valor: ReactNode; ayuda?: ReactNode; onClick?: () => void }) {
+  const Etiqueta = onClick ? "button" : "div";
+  return (
+    <Etiqueta onClick={onClick} className={`text-left rounded-lg border border-slate-100 dark:border-slate-700 p-3 ${onClick ? "hover:border-slate-300 dark:hover:border-slate-500 transition-colors" : ""}`}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">{titulo}</p>
+      <p className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mt-0.5">{valor}</p>
+      {ayuda && <p className="text-[11px] text-slate-500 leading-snug mt-1">{ayuda}</p>}
+    </Etiqueta>
+  );
+}
+
+/**
+ * Como le va a la agencia: lo que deja el dinero invertido y que tan rapido
+ * rota el piso. ROI = utilidad / (compra + gastos del auto). Lo de dinero solo
+ * lo ve quien puede ver costos; los dias y la rotacion los ve cualquiera.
+ */
+function Desempeno({ a, verCostos, irA }: { a: A; verCostos: boolean; irA: (p: Pestana) => void }) {
+  const d = a.desempeno;
+  const conRoi = verCostos && d.conCosto > 0;
+  const ant = d.antes;
+  const cambioRoi = d.roi != null && ant.roi != null
+    ? <>Antes: {pct(ant.roi)}</>
+    : null;
+  return (
+    <Tarjeta
+      titulo="Desempeño de la agencia"
+      accion={<button onClick={() => irA("ventas")} className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white">Ver por tipo y rapidez</button>}
+    >
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {verCostos && (
+          <>
+            <Medida titulo="ROI de lo vendido" valor={conRoi ? pct(d.roi) : "—"} ayuda={conRoi ? <>Por cada $100 invertidos (compra y gastos) te quedaron ${d.roi != null ? Math.round(d.roi) : 0}. {cambioRoi}</> : "Falta el costo de los autos vendidos"} />
+            <Medida titulo="ROI anualizado" valor={conRoi ? pct(d.roiAnual) : "—"} ayuda="Ese mismo retorno llevado a un año según los días que el dinero estuvo parado. Premia vender rápido." />
+            <Medida titulo="Utilidad neta" valor={conRoi ? dineroCorto(d.utilidad) : "—"} ayuda={conRoi ? `Después de compra y gastos, sobre ${d.conCosto} de ${d.ventas} ventas` : null} />
+            <Medida titulo="Margen sobre venta" valor={conRoi ? pct(d.margenPct) : "—"} ayuda="De cada $100 que vendes, lo que queda de utilidad." />
+            <Medida titulo="Utilidad por día en piso" valor={conRoi && d.utilidadPorDia != null ? dinero(d.utilidadPorDia) : "—"} ayuda="Lo que deja, en promedio, cada día que un auto está en tu piso." />
+          </>
+        )}
+        <Medida titulo="Días en piso al vender" valor={d.diasPromedio ?? "—"} ayuda={d.conDias ? `Promedio. ${d.pctRapidas}% se vendió en 30 días o menos; ${d.pctLentas}% tardó más de 90.` : "Sin ventas con fecha de llegada"} />
+        <Medida titulo="Rotación del piso" valor={a.desempeno.rotacion != null ? `${a.desempeno.rotacion} veces al año` : "—"} ayuda={d.diasDeInventario != null ? `Al ritmo de 12 meses, tu piso actual se vende en unos ${d.diasDeInventario} días.` : "Necesita ventas en los últimos 12 meses"} onClick={() => irA("inventario")} />
+        {verCostos && (
+          <>
+            <Medida titulo="Dinero en piso" valor={d.capitalSobre ? dineroCorto(d.capital) : "—"} ayuda={d.capitalSobre ? `Invertido en ${d.capitalSobre} autos propios sin vender (sin contar consignación).` : "Falta el costo de los autos en piso"} onClick={() => irA("inventario")} />
+            <Medida titulo="Parado más de 90 días" valor={d.capitalSobre ? dineroCorto(d.capitalParado90) : "—"} ayuda={d.capital > 0 ? `${Math.round((d.capitalParado90 / d.capital) * 100)}% de lo que tienes invertido.` : null} onClick={() => irA("inventario")} />
+            <Medida titulo="Utilidad en tu piso" valor={d.capitalSobre ? dineroCorto(d.utilidadPotencial) : "—"} ayuda={d.roiPotencial != null ? `Si vendes todo a precio de lista: ROI de ${pct(d.roiPotencial)}.` : null} />
+          </>
+        )}
+      </div>
+      {verCostos && d.ventas > 0 && d.conCosto < d.ventas && (
+        <p className="text-[11px] text-slate-500 mt-3">
+          El ROI se calcula con los {d.conCosto} de {d.ventas} autos vendidos que tienen costo capturado. Captura el costo y los gastos de cada auto para que cuenten todos.
+        </p>
+      )}
+    </Tarjeta>
   );
 }
 
@@ -427,6 +490,7 @@ function Ventas({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolean; o
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-slate-400 text-left">
                 <th className="py-1.5">Tipo</th><th className="text-right">Autos</th><th className="text-right">Ticket</th><th className="text-right">Días (mediana)</th>
+                {verCostos && <><th className="text-right">ROI</th><th className="text-right">Utilidad/día</th></>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -436,6 +500,7 @@ function Ventas({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolean; o
                   <td className="text-right">{t.unidades}</td>
                   <td className="text-right">{dineroCorto(t.ticket)}</td>
                   <td className="text-right">{t.diasMediana ?? "—"}</td>
+                  {verCostos && <><td className="text-right">{t.roi != null ? pct(t.roi) : "—"}</td><td className="text-right">{t.utilidadPorDia != null ? dinero(t.utilidadPorDia) : "—"}</td></>}
                 </tr>
               ))}
             </tbody>
@@ -455,13 +520,46 @@ function Ventas({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolean; o
         </Tarjeta>
       </div>
 
+      <Tarjeta titulo="Qué tan rápido se vende y cuánto deja">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-slate-400 text-left border-b border-slate-100 dark:border-slate-700">
+                <th className="py-1.5">Días en piso antes de venderse</th><th className="text-right">Autos</th><th className="text-right">Ingresos</th>
+                {verCostos && <><th className="text-right">Utilidad por auto</th><th className="text-right">ROI</th><th className="text-right">ROI anualizado</th></>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
+              {a.desempeno.porRapidez.map((r) => (
+                <tr key={r.rango}>
+                  <td className="py-1.5">{r.etiqueta}</td>
+                  <td className="text-right">{r.unidades}</td>
+                  <td className="text-right">{r.unidades ? dineroCorto(r.ingresos) : "—"}</td>
+                  {verCostos && (
+                    <>
+                      <td className="text-right">{r.utilidadPromedio != null ? dineroCorto(r.utilidadPromedio) : "—"}</td>
+                      <td className="text-right">{r.roi != null ? pct(r.roi) : "—"}</td>
+                      <td className="text-right">{r.roiAnual != null ? pct(r.roiAnual) : "—"}</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">
+          Un auto que se vende rápido deja menos por unidad pero libera el dinero para comprar otro: por eso el ROI anualizado es la mejor forma de comparar.
+          {verCostos && " Solo cuentan los autos con costo capturado."}
+        </p>
+      </Tarjeta>
+
       <Tarjeta titulo={`Autos vendidos (${lista.length})`} accion={filtro && <Filtro texto={filtro.texto} quitar={() => setFiltro(null)} />}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-slate-400 text-left border-b border-slate-100 dark:border-slate-700">
                 <th className="py-2">Auto</th><th>Tipo</th><th className="text-right">Precio</th><th className="text-right">Vendido</th><th className="text-right">Días</th>
-                {verCostos && <th className="text-right">Margen</th>}
+                {verCostos && <><th className="text-right">Margen</th><th className="text-right">ROI</th></>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -473,6 +571,7 @@ function Ventas({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolean; o
                   <td className="text-right">{fechaCorta(v.vendidoEl)}</td>
                   <td className="text-right">{v.dias ?? "—"}</td>
                   {verCostos && <td className="text-right">{v.margen != null ? dinero(v.margen) : <span className="text-slate-400">sin costo</span>}</td>}
+                  {verCostos && <td className="text-right">{v.roi != null ? pct(v.roi) : <span className="text-slate-400">—</span>}</td>}
                 </tr>
               ))}
             </tbody>
@@ -488,6 +587,7 @@ function Ventas({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolean; o
 
 function Inventario({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolean; onAbrirVehiculo?: (id: string) => void }) {
   const inv = a.inventario;
+  const d = a.desempeno;
   const [filtro, setFiltro] = useState<{ campo: "tipo" | "antiguedad"; valor: string } | null>(null);
   const alternar = (campo: "tipo" | "antiguedad", valor: string) =>
     setFiltro((f) => (f && f.campo === campo && f.valor === valor ? null : { campo, valor }));
@@ -517,10 +617,31 @@ function Inventario({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolea
         <Kpi icono={Briefcase} titulo="Propio / consignación" valor={`${inv.propiedad[0].unidades} / ${inv.propiedad[1].unidades}`} pie={inv.propiedad[2].unidades ? `${inv.propiedad[2].unidades} sin dato` : null} />
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi icono={Gauge} titulo="Rotación del piso" valor={d.rotacion != null ? `${d.rotacion} veces/año` : "—"} pie={d.diasDeInventario != null ? `se vende en ~${d.diasDeInventario} días al ritmo actual` : "sin ventas en 12 meses"} />
+        {verCostos && (
+          <>
+            <Kpi icono={DollarSign} titulo="Dinero en piso" valor={d.capitalSobre ? dineroCorto(d.capital) : "—"} pie={d.capitalSobre ? `invertido en ${d.capitalSobre} autos propios` : "falta el costo de los autos"} />
+            <Kpi icono={Clock} titulo="Dinero parado +90 días" valor={d.capitalSobre ? dineroCorto(d.capitalParado90) : "—"} pie={d.capital > 0 ? `${Math.round((d.capitalParado90 / d.capital) * 100)}% de lo invertido` : null} />
+            <Kpi icono={TrendingUp} titulo="Utilidad en tu piso" valor={d.capitalSobre ? dineroCorto(d.utilidadPotencial) : "—"} pie={d.roiPotencial != null ? `ROI de ${pct(d.roiPotencial)} a precio de lista` : null} />
+          </>
+        )}
+      </div>
+
       <p className="text-xs text-slate-500">Toca una barra para ver solo esos autos en la lista de abajo.</p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Tarjeta titulo="Cuánto tiempo llevan en piso">
           <Barras datos={inv.antiguedad} clave="etiqueta" valor="unidades" elegido={elegido("antiguedad")} onElegir={(k) => alternar("antiguedad", k)} />
+          {verCostos && d.capitalSobre > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {inv.antiguedad.map((x) => (
+                <span key={x.rango} className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {x.etiqueta}: <b>{dineroCorto(x.capital)}</b>
+                </span>
+              ))}
+              <p className="w-full text-[11px] text-slate-500">Dinero invertido en autos propios en cada tramo.</p>
+            </div>
+          )}
         </Tarjeta>
         <Tarjeta titulo={`Lo que vendes vs. lo que tienes (${inv.ventasDe12Meses} ventas en 12 meses)`}>
           {inv.mezcla.length ? (
@@ -550,7 +671,7 @@ function Inventario({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolea
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-slate-400 text-left border-b border-slate-100 dark:border-slate-700">
                 <th className="py-2">Auto</th><th>Tipo</th><th className="text-right">Precio</th><th className="text-right">Días en piso</th><th>Propiedad</th>
-                {verCostos && <th className="text-right">Costo</th>}
+                {verCostos && <><th className="text-right">Costo</th><th className="text-right">Invertido</th></>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -562,6 +683,7 @@ function Inventario({ a, verCostos, onAbrirVehiculo }: { a: A; verCostos: boolea
                   <td className={`text-right ${v.dias != null && v.dias > 90 ? "text-[#A82A17] dark:text-[#F2705B] font-semibold" : ""}`}>{v.dias ?? "—"}</td>
                   <td>{v.propiedad}</td>
                   {verCostos && <td className="text-right">{v.costo ? dinero(v.costo) : <span className="text-slate-400">—</span>}</td>}
+                  {verCostos && <td className="text-right">{v.inversion ? dinero(v.inversion) : <span className="text-slate-400">—</span>}</td>}
                 </tr>
               ))}
             </tbody>

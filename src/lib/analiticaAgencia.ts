@@ -118,6 +118,8 @@ export interface EntradaAnalitica {
   vehiculos: any[];
   /** vehicleId -> costo de compra. Vacio si quien mira no puede ver costos. */
   costos: Record<string, number>;
+  /** vehicleId -> suma de los gastos del auto (reparacion, tramites...). Solo cuenta con costo. */
+  gastos?: Record<string, number>;
   verCostos: boolean;
   clientes: any[];
   tratos: any[];
@@ -141,6 +143,11 @@ export function calcularAnalitica(e: EntradaAnalitica) {
       const llego = aMs(v.receivedAt) ?? aMs(v.createdAt);
       const precio = precioDe(v);
       const costo = e.verCostos ? e.costos[v.id] || 0 : 0;
+      const gastos = costo > 0 ? e.gastos?.[v.id] || 0 : 0;
+      // Lo invertido es compra + gastos; sin costo capturado no hay ROI que calcular,
+      // y sin precio de venta tampoco (saldria -100% por un dato que falta).
+      const inversion = costo > 0 ? costo + gastos : null;
+      const utilidad = inversion != null && precio > 0 ? precio - inversion : null;
       return {
         id: v.id as string,
         auto: nombreDelAuto(v),
@@ -153,6 +160,10 @@ export function calcularAnalitica(e: EntradaAnalitica) {
         dias: vendidoEl != null && llego != null ? Math.max(0, Math.round((vendidoEl - llego) / DIA)) : null,
         costo: costo > 0 ? costo : null,
         margen: costo > 0 ? precio - costo : null,
+        gastos: costo > 0 ? gastos : null,
+        inversion,
+        utilidad,
+        roi: utilidad != null && inversion ? Math.round((utilidad / inversion) * 1000) / 10 : null,
         compradorId: (v.soldToClientId || v.buyerId || null) as string | null,
       };
     });
@@ -171,8 +182,38 @@ export function calcularAnalitica(e: EntradaAnalitica) {
     return m;
   };
 
+  /**
+   * Lo que dejaron unas ventas, medido contra lo invertido (compra + gastos del auto).
+   * Solo cuenta los autos con costo y precio; `conCosto` dice cuantos son.
+   * - roi: utilidad entre inversion, en %.
+   * - roiAnual: el mismo retorno llevado a un año segun los dias que el dinero estuvo
+   *   parado en cada auto (ponderado por inversion x dias). Es lo que permite comparar
+   *   un auto que dejo 8% en 20 dias con otro que dejo 12% en 90.
+   * - utilidadPorDia: lo que dejo, en promedio, cada dia que un auto estuvo en piso.
+   */
+  const rendimiento = (xs: typeof ventas) => {
+    const c = xs.filter((v) => v.utilidad != null && v.inversion != null);
+    const inversion = c.reduce((s, v) => s + (v.inversion || 0), 0);
+    const utilidad = c.reduce((s, v) => s + (v.utilidad || 0), 0);
+    const ingresos = c.reduce((s, v) => s + v.precio, 0);
+    const cd = c.filter((v) => v.dias != null);
+    const capitalDias = cd.reduce((s, v) => s + (v.inversion || 0) * Math.max(1, v.dias || 0), 0);
+    const utilidadCd = cd.reduce((s, v) => s + (v.utilidad || 0), 0);
+    const diasCd = cd.reduce((s, v) => s + Math.max(1, v.dias || 0), 0);
+    return {
+      conCosto: c.length,
+      inversion,
+      utilidad,
+      roi: inversion > 0 ? Math.round((utilidad / inversion) * 1000) / 10 : null,
+      margenPct: ingresos > 0 ? Math.round((utilidad / ingresos) * 1000) / 10 : null,
+      roiAnual: capitalDias > 0 ? Math.round((utilidadCd / capitalDias) * 365 * 100) : null,
+      utilidadPorDia: diasCd > 0 ? Math.round(utilidadCd / diasCd) : null,
+    };
+  };
+
   const porTipo = [...agrupar(ventas, (v) => v.tipo)].map(([tipo, xs]) => ({
     tipo,
+    ...rendimiento(xs),
     unidades: xs.length,
     monto: suma(xs),
     ticket: Math.round(suma(xs) / xs.length),
@@ -180,7 +221,8 @@ export function calcularAnalitica(e: EntradaAnalitica) {
   })).sort((a, b) => b.unidades - a.unidades || b.monto - a.monto);
 
   const porMarca = [...agrupar(ventas, (v) => v.marca)].map(([marca, xs]) => ({
-    marca, unidades: xs.length, monto: suma(xs),
+    marca, unidades: xs.length, monto: suma(xs), ...rendimiento(xs),
+    diasMediana: mediana(xs.map((x) => x.dias).filter((d): d is number => d != null)),
   })).sort((a, b) => b.unidades - a.unidades || b.monto - a.monto);
 
   const porRango = RANGOS_DE_PRECIO.map((r) => {
@@ -217,6 +259,8 @@ export function calcularAnalitica(e: EntradaAnalitica) {
         propiedad: own.startsWith("consig") ? "Consignación" : own === "propio" ? "Propio" : "Sin dato",
         apartado: sinAcentos(String(v.status || "")).startsWith("reserv") || sinAcentos(String(v.status || "")).startsWith("apart"),
         costo: e.verCostos ? e.costos[v.id] || null : null,
+        gastos: e.verCostos && e.costos[v.id] ? e.gastos?.[v.id] || 0 : null,
+        inversion: e.verCostos && e.costos[v.id] ? e.costos[v.id] + (e.gastos?.[v.id] || 0) : null,
       };
     })
     .sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
@@ -226,9 +270,16 @@ export function calcularAnalitica(e: EntradaAnalitica) {
     return { tipo, unidades: xs.length, valor: xs.reduce((s, x) => s + x.precio, 0) };
   }).sort((a, b) => b.unidades - a.unidades);
 
+  // El dinero que de verdad esta parado: lo invertido en autos propios. Un auto en
+  // consignacion no costo dinero hasta que se vende, asi que no cuenta aqui.
+  const capitalPropio = (v: (typeof inventario)[number]) => v.inversion != null && v.propiedad !== "Consignación";
+
   const antiguedad = RANGOS_DE_ANTIGUEDAD.map((r) => {
     const xs = inventario.filter((v) => v.dias != null && v.dias >= r.min && v.dias < r.max);
-    return { rango: r.id, etiqueta: r.etiqueta, unidades: xs.length, valor: xs.reduce((s, x) => s + x.precio, 0) };
+    return {
+      rango: r.id, etiqueta: r.etiqueta, unidades: xs.length, valor: xs.reduce((s, x) => s + x.precio, 0),
+      capital: xs.filter(capitalPropio).reduce((s, x) => s + (x.inversion || 0), 0),
+    };
   });
 
   const propiedad = ["Propio", "Consignación", "Sin dato"].map((p) => ({
@@ -250,6 +301,38 @@ export function calcularAnalitica(e: EntradaAnalitica) {
       diferencia: Math.round((pv - pi) * 100),
     };
   }).sort((a, b) => b.diferencia - a.diferencia);
+
+  // ---------- Desempeno: lo que deja el negocio y que tan rapido lo deja ----------
+  const diasDeVenta = ventas.map((v) => v.dias).filter((d): d is number => d != null);
+  const enCapital = inventario.filter(capitalPropio);
+  const capital = enCapital.reduce((s, v) => s + (v.inversion || 0), 0);
+  const potencial = enCapital.filter((v) => v.precio > 0).reduce((s, v) => s + (v.precio - (v.inversion || 0)), 0);
+  const capitalPotencial = enCapital.filter((v) => v.precio > 0).reduce((s, v) => s + (v.inversion || 0), 0);
+  const desempeno = {
+    ...rendimiento(ventas),
+    antes: rendimiento(ventasAntes),
+    ventas: ventas.length,
+    conDias: diasDeVenta.length,
+    diasPromedio: diasDeVenta.length ? Math.round(diasDeVenta.reduce((s, d) => s + d, 0) / diasDeVenta.length) : null,
+    pctRapidas: diasDeVenta.length ? Math.round((diasDeVenta.filter((d) => d <= 30).length / diasDeVenta.length) * 100) : null,
+    pctLentas: diasDeVenta.length ? Math.round((diasDeVenta.filter((d) => d > 90).length / diasDeVenta.length) * 100) : null,
+    porRapidez: RANGOS_DE_ANTIGUEDAD.map((r) => {
+      const xs = ventas.filter((v) => v.dias != null && v.dias >= r.min && v.dias < r.max);
+      const rd = rendimiento(xs);
+      return {
+        rango: r.id, etiqueta: r.etiqueta, unidades: xs.length, ingresos: suma(xs), ...rd,
+        utilidadPromedio: rd.conCosto ? Math.round(rd.utilidad / rd.conCosto) : null,
+      };
+    }),
+    // Lo que sigue en piso, con el ritmo de los ultimos 12 meses.
+    rotacion: inventario.length && vendidos12.length ? Math.round((vendidos12.length / inventario.length) * 10) / 10 : null,
+    diasDeInventario: inventario.length && vendidos12.length ? Math.round(inventario.length / (vendidos12.length / 365)) : null,
+    capital,
+    capitalSobre: enCapital.length,
+    capitalParado90: enCapital.filter((v) => v.dias != null && v.dias > 90).reduce((s, v) => s + (v.inversion || 0), 0),
+    utilidadPotencial: potencial,
+    roiPotencial: capitalPotencial > 0 ? Math.round((potencial / capitalPotencial) * 1000) / 10 : null,
+  };
 
   // ---------- Clientes ----------
   const vivos = e.clientes.filter((c) => !c.isDeleted);
@@ -355,6 +438,7 @@ export function calcularAnalitica(e: EntradaAnalitica) {
       inventarioValor: inventario.reduce((s, v) => s + v.precio, 0),
       tratosAbiertos: e.tratos.filter((t) => !t.isDeleted && !checkIsWon(t.status, e.etapas) && !checkIsLost(t.status, e.etapas)).length,
     },
+    desempeno,
     ventas: { lista: ventas, porTipo, porMarca, porRango, porAnio, porMes },
     inventario: {
       lista: inventario,
@@ -469,6 +553,34 @@ export function hallazgos(a: Analitica): Hallazgo[] {
     h.push({ tono: "info", texto: `${rapido.tipo} es lo que más rápido se vende: la mitad en menos de ${rapido.diasMediana} días.` });
   }
 
+  // 5b. Lo que deja el dinero invertido (solo con costos capturados).
+  const d = a.desempeno;
+  if (d.conCosto >= 3 && d.roi != null && d.roiAnual != null) {
+    h.push({
+      tono: "info",
+      texto: `Lo que invertiste en los ${d.conCosto} autos que vendiste (compra y gastos) te dejó ${d.roi}%${d.diasPromedio != null ? `, con ${d.diasPromedio} días en piso en promedio` : ""}. Llevado a un año, tu dinero rinde cerca de ${d.roiAnual}%.`,
+    });
+  }
+  if (d.capital > 0 && d.capitalSobre >= 3 && d.capitalParado90 / d.capital >= 0.25) {
+    h.push({
+      tono: "alerta",
+      texto: `${pesos(d.capitalParado90)} de lo que tienes invertido (${Math.round((d.capitalParado90 / d.capital) * 100)}%) está en autos con más de 90 días en piso. Ese dinero no está trabajando.`,
+    });
+  }
+  const suma2 = (ids: string[]) => {
+    const rs = d.porRapidez.filter((r) => ids.includes(r.rango));
+    const n = rs.reduce((s, r) => s + r.conCosto, 0);
+    return { n, utilidad: n ? Math.round(rs.reduce((s, r) => s + r.utilidad, 0) / n) : 0 };
+  };
+  const rapidos = suma2(["a1", "a2"]);
+  const lentos = suma2(["a3", "a4"]);
+  if (rapidos.n >= 2 && lentos.n >= 2) {
+    h.push({
+      tono: "info",
+      texto: `Los autos que vendes en menos de 60 días te dejan en promedio ${pesos(rapidos.utilidad)} cada uno; los que pasan de 60 días, ${pesos(lentos.utilidad)}.`,
+    });
+  }
+
   // 6. Datos que faltan para poder decir mas.
   if (a.clientes.nuevos >= 10 && a.clientes.sinDato / a.clientes.nuevos >= 0.3) {
     h.push({
@@ -477,5 +589,5 @@ export function hallazgos(a: Analitica): Hallazgo[] {
     });
   }
 
-  return h.slice(0, 5);
+  return h.slice(0, 7);
 }

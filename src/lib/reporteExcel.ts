@@ -41,6 +41,7 @@ export function hojasDelReporte(
   o: { verCostos: boolean; periodo: string; agencia: string },
 ): Record<"resumen" | "ventas" | "inventario" | "clientes" | "equipo", Hoja[]> {
   const r = a.resumen;
+  const d = a.desempeno;
   const resumen: Hoja[] = [
     {
       nombre: "Resumen",
@@ -62,6 +63,37 @@ export function hojasDelReporte(
         ...h.map((x, i) => ({ Indicador: `Hallazgo ${i + 1}`, Valor: x.texto })),
       ],
     },
+    {
+      nombre: "Desempeño",
+      filas: [
+        ...(o.verCostos
+          ? [
+              { Indicador: "ROI de lo vendido (%)", Valor: d.roi, "Qué significa": "Utilidad entre lo invertido (compra + gastos del auto). De cada $100 invertidos, cuánto quedó." },
+              { Indicador: "ROI anualizado (%)", Valor: d.roiAnual, "Qué significa": "El mismo retorno llevado a un año según los días que el dinero estuvo parado en cada auto. Premia vender rápido y permite comparar autos que tardaron distinto." },
+              { Indicador: "Utilidad neta", Valor: d.conCosto ? d.utilidad : null, "Qué significa": "Precio de venta menos compra y gastos, de los autos con costo capturado." },
+              { Indicador: "Inversión en lo vendido", Valor: d.conCosto ? d.inversion : null, "Qué significa": "Compra más gastos (reparación, trámites) de esos autos." },
+              { Indicador: "Margen sobre venta (%)", Valor: d.margenPct, "Qué significa": "De cada $100 que se vendieron, cuánto fue utilidad." },
+              { Indicador: "Utilidad por día en piso", Valor: d.utilidadPorDia, "Qué significa": "Lo que dejó, en promedio, cada día que un auto estuvo en el piso." },
+              { Indicador: "Autos vendidos con costo capturado", Valor: `${d.conCosto} de ${d.ventas}`, "Qué significa": "El ROI solo cuenta los autos que tienen costo y precio de venta. Mientras más costos captures, más completo es." },
+              { Indicador: "ROI del periodo anterior (%)", Valor: d.antes.roi, "Qué significa": "Para comparar con el periodo de arriba, del mismo largo." },
+            ]
+          : []),
+        { Indicador: "Días en piso al vender (promedio)", Valor: d.diasPromedio, "Qué significa": "Desde que llegó el auto hasta que se vendió." },
+        { Indicador: "Días en piso al vender (mediana)", Valor: r.diasParaVender, "Qué significa": "La mitad de los autos se vendió en menos días que esto." },
+        { Indicador: "% vendido en 30 días o menos", Valor: d.pctRapidas, "Qué significa": "Autos que rotan rápido." },
+        { Indicador: "% que tardó más de 90 días", Valor: d.pctLentas, "Qué significa": "Autos que se quedaron mucho tiempo." },
+        { Indicador: "Rotación del piso (veces al año)", Valor: d.rotacion, "Qué significa": "Ventas de los últimos 12 meses entre autos en piso hoy. Más alto, mejor." },
+        { Indicador: "Días que tarda en venderse todo el piso", Valor: d.diasDeInventario, "Qué significa": "Con el ritmo de ventas de 12 meses, en cuánto tiempo se vendería el inventario actual." },
+        ...(o.verCostos
+          ? [
+              { Indicador: "Dinero invertido en el piso", Valor: d.capitalSobre ? d.capital : null, "Qué significa": `Compra + gastos de ${d.capitalSobre} autos propios sin vender. No cuenta consignación, que no costó dinero.` },
+              { Indicador: "Dinero parado más de 90 días", Valor: d.capitalSobre ? d.capitalParado90 : null, "Qué significa": "La parte de esa inversión que está en autos con más de 90 días en piso." },
+              { Indicador: "Utilidad en tu piso (a precio de lista)", Valor: d.capitalSobre ? d.utilidadPotencial : null, "Qué significa": "Lo que quedaría si se vendiera todo al precio publicado." },
+              { Indicador: "ROI en tu piso (%)", Valor: d.roiPotencial, "Qué significa": "Esa utilidad entre lo invertido." },
+            ]
+          : []),
+      ],
+    },
   ];
 
   const ventas: Hoja[] = [
@@ -76,12 +108,45 @@ export function hojasDelReporte(
         "Precio de venta": v.precio,
         "Vendido el": fecha(v.vendidoEl),
         "Días para vender": v.dias,
-        ...(o.verCostos ? { Costo: v.costo, "Margen bruto": v.margen } : {}),
+        ...(o.verCostos
+          ? {
+              Costo: v.costo,
+              Gastos: v.gastos,
+              Inversión: v.inversion,
+              "Margen bruto": v.margen,
+              "Utilidad neta": v.utilidad,
+              "ROI %": v.roi,
+              "Utilidad por día en piso": v.utilidad != null && v.dias != null ? Math.round(v.utilidad / Math.max(1, v.dias)) : null,
+            }
+          : {}),
       })),
     },
-    { nombre: "Ventas por tipo", filas: a.ventas.porTipo.map((t) => ({ Tipo: t.tipo, Unidades: t.unidades, Monto: t.monto, "Ticket promedio": t.ticket, "Días para vender (mediana)": t.diasMediana })) },
+    {
+      nombre: "Rapidez de venta",
+      filas: d.porRapidez.map((x) => ({
+        "Días en piso antes de venderse": x.etiqueta,
+        Autos: x.unidades,
+        Ingresos: x.ingresos,
+        ...(o.verCostos
+          ? { "Autos con costo": x.conCosto, Inversión: x.conCosto ? x.inversion : null, "Utilidad neta": x.conCosto ? x.utilidad : null, "Utilidad por auto": x.utilidadPromedio, "ROI %": x.roi, "ROI anualizado %": x.roiAnual }
+          : {}),
+      })),
+    },
+    {
+      nombre: "Ventas por tipo",
+      filas: a.ventas.porTipo.map((t) => ({
+        Tipo: t.tipo, Unidades: t.unidades, Monto: t.monto, "Ticket promedio": t.ticket, "Días para vender (mediana)": t.diasMediana,
+        ...(o.verCostos ? { "Autos con costo": t.conCosto, "Utilidad neta": t.conCosto ? t.utilidad : null, "ROI %": t.roi, "ROI anualizado %": t.roiAnual, "Utilidad por día en piso": t.utilidadPorDia } : {}),
+      })),
+    },
     { nombre: "Por rango de precio", filas: a.ventas.porRango.map((t) => ({ Rango: t.etiqueta, Unidades: t.unidades, Monto: t.monto })) },
-    { nombre: "Ventas por marca", filas: a.ventas.porMarca.map((t) => ({ Marca: t.marca, Unidades: t.unidades, Monto: t.monto })) },
+    {
+      nombre: "Ventas por marca",
+      filas: a.ventas.porMarca.map((t) => ({
+        Marca: t.marca, Unidades: t.unidades, Monto: t.monto, "Días para vender (mediana)": t.diasMediana,
+        ...(o.verCostos ? { "Autos con costo": t.conCosto, "Utilidad neta": t.conCosto ? t.utilidad : null, "ROI %": t.roi, "ROI anualizado %": t.roiAnual } : {}),
+      })),
+    },
     { nombre: "Ventas por año modelo", filas: a.ventas.porAnio.map((t) => ({ "Año modelo": t.rango, Unidades: t.unidades, Monto: t.monto })) },
     { nombre: "Ventas por mes", filas: a.ventas.porMes.map((t) => ({ Mes: t.etiqueta, Unidades: t.unidades, Monto: t.monto })) },
   ];
@@ -98,10 +163,16 @@ export function hojasDelReporte(
         "Días en piso": v.dias,
         Propiedad: v.propiedad,
         Apartado: v.apartado ? "Sí" : "No",
-        ...(o.verCostos ? { Costo: v.costo } : {}),
+        ...(o.verCostos ? { Costo: v.costo, Gastos: v.gastos, Inversión: v.inversion } : {}),
       })),
     },
-    { nombre: "Antigüedad", filas: a.inventario.antiguedad.map((x) => ({ Rango: x.etiqueta, Autos: x.unidades, Valor: x.valor })) },
+    {
+      nombre: "Antigüedad",
+      filas: a.inventario.antiguedad.map((x) => ({
+        Rango: x.etiqueta, Autos: x.unidades, Valor: x.valor,
+        ...(o.verCostos ? { "Dinero invertido (autos propios)": x.capital } : {}),
+      })),
+    },
     { nombre: "Vendo vs tengo", filas: a.inventario.mezcla.map((m) => ({ Tipo: m.tipo, "% de ventas (12 meses)": m.pctVentas, "% del inventario": m.pctInventario, "Diferencia (puntos)": m.diferencia })) },
     { nombre: "Inventario por tipo", filas: a.inventario.porTipo.map((t) => ({ Tipo: t.tipo, Autos: t.unidades, Valor: t.valor })) },
   ];

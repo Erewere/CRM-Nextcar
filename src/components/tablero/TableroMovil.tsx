@@ -42,11 +42,11 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
     const { desde, hasta } = rangoEn(ahora);
     const a = calcularAnalitica({
       ahora, desde, hasta,
-      vehiculos: p.vehiculos, costos: p.costos, verCostos: p.verCostos,
+      vehiculos: p.vehiculos, costos: p.costos, gastos: p.gastos, verCostos: p.verCostos,
       clientes: p.clientes, tratos: p.tratos, usuarios: p.usuarios, etapas: p.etapas,
     });
     return { a, h: calcularHallazgos(a) };
-  }, [periodo, elegido, p.vehiculos, p.costos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
+  }, [periodo, elegido, p.vehiculos, p.costos, p.gastos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
 
   const r = a.resumen;
   const viejos = a.inventario.lista.filter((v) => v.dias != null && v.dias > 90).length;
@@ -102,6 +102,8 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
         <Cifra a="/inventory" titulo="Inventario" valor={`${r.inventarioUnidades} autos`} pie={viejos ? <span className="text-[#A82A17] dark:text-[#F2705B] font-semibold">{viejos} con +90 días</span> : dineroCorto(r.inventarioValor)} />
       </div>
 
+      <Desempeno a={a} verCostos={p.verCostos} />
+
       {/* Detalle */}
       <div className="bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl overflow-hidden">
         <div className="flex border-b border-gray-200 dark:border-slate-700">
@@ -129,6 +131,51 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
+
+const pct = (n: number | null) => (n == null ? "—" : `${n.toLocaleString("es-MX")}%`);
+
+/** Como le va a la agencia: lo que deja lo invertido y que tan rapido rota el piso. */
+function Desempeno({ a, verCostos }: { a: A; verCostos: boolean }) {
+  const d = a.desempeno;
+  const conRoi = verCostos && d.conCosto > 0;
+  const filas: { t: string; v: ReactNode; ayuda?: string }[] = [
+    ...(verCostos
+      ? [
+          { t: "ROI de lo vendido", v: conRoi ? pct(d.roi) : "—", ayuda: "De cada $100 invertidos (compra y gastos), lo que quedó" },
+          { t: "ROI anualizado", v: conRoi ? pct(d.roiAnual) : "—", ayuda: "Ese retorno llevado a un año; premia vender rápido" },
+          { t: "Utilidad neta", v: conRoi ? dineroCorto(d.utilidad) : "—", ayuda: conRoi ? `${d.conCosto} de ${d.ventas} ventas con costo` : "Falta el costo de los autos vendidos" },
+          { t: "Utilidad por día en piso", v: conRoi && d.utilidadPorDia != null ? dinero(d.utilidadPorDia) : "—" },
+        ]
+      : []),
+    { t: "Días en piso al vender", v: d.diasPromedio ?? "—", ayuda: d.conDias ? `${d.pctRapidas}% en 30 días o menos · ${d.pctLentas}% en más de 90` : undefined },
+    { t: "Rotación del piso", v: d.rotacion != null ? `${d.rotacion} veces/año` : "—", ayuda: d.diasDeInventario != null ? `Tu piso se vende en ~${d.diasDeInventario} días` : undefined },
+    ...(verCostos
+      ? [
+          { t: "Dinero en piso", v: d.capitalSobre ? dineroCorto(d.capital) : "—", ayuda: d.capitalSobre ? "Invertido en autos propios sin vender" : "Falta el costo de los autos en piso" },
+          { t: "Parado más de 90 días", v: d.capitalSobre ? dineroCorto(d.capitalParado90) : "—", ayuda: d.capital > 0 ? `${Math.round((d.capitalParado90 / d.capital) * 100)}% de lo invertido` : undefined },
+        ]
+      : []),
+  ];
+  return (
+    <div className="bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl p-4">
+      <Subtitulo>Desempeño de la agencia</Subtitulo>
+      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+        {filas.map((f) => (
+          <div key={f.t} className="flex items-start justify-between gap-3 py-2">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{f.t}</p>
+              {f.ayuda && <p className="text-[11px] text-slate-500 leading-snug">{f.ayuda}</p>}
+            </div>
+            <p className="text-base font-extrabold text-slate-900 dark:text-white shrink-0">{f.v}</p>
+          </div>
+        ))}
+      </div>
+      {verCostos && d.ventas > 0 && d.conCosto < d.ventas && (
+        <p className="text-[10px] text-slate-400 mt-2">El ROI solo cuenta los autos con costo capturado.</p>
+      )}
+    </div>
+  );
+}
 
 function Cifra({ titulo, valor, pie, a }: { titulo: string; valor: ReactNode; pie?: ReactNode; a?: string }) {
   const navigate = useNavigate();
