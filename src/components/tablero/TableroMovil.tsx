@@ -2,10 +2,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, ChevronRight, X } from "lucide-react";
 import { calcularAnalitica, hallazgos as calcularHallazgos, RANGOS_DE_PRECIO } from "../../lib/analiticaAgencia";
-import {
-  PERIODOS, rangoDelPeriodo, leer, guardar, dinero, dineroCorto, ICONO_HALLAZGO,
-  type Periodo, type TableroAgenciaProps,
-} from "./TableroAgencia";
+import { dinero, dineroCorto, ICONO_HALLAZGO, type TableroAgenciaProps } from "./TableroAgencia";
+import { leer, guardar, usePeriodoTablero } from "../../lib/periodoTablero";
+import { SelectorDePeriodo } from "./SelectorDePeriodo";
 
 /**
  * El tablero del administrador en el celular. Mismo calculo y mismas frases
@@ -20,7 +19,6 @@ const SECCIONES: { id: Seccion; nombre: string }[] = [
   { id: "clientes", nombre: "Clientes" },
   { id: "equipo", nombre: "Equipo" },
 ];
-const CORTO: Record<Periodo, string> = { mes: "Este mes", "3m": "3 meses", anio: "Este año", "12m": "12 meses" };
 
 type A = ReturnType<typeof calcularAnalitica>;
 
@@ -32,25 +30,23 @@ function rutaDeFrase(t: string) {
 }
 
 export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
-  const [periodo, setPeriodoEstado] = useState<Periodo>(() =>
-    leer("tablero_periodo", PERIODOS.map((x) => x.id), "12m"));
+  const { periodo, elegido, setPeriodo, setRango, rangoEn } = usePeriodoTablero();
   const [seccion, setSeccionEstado] = useState<Seccion>(() =>
     leer("tablero_movil_seccion", SECCIONES.map((x) => x.id), "ventas"));
   const [todasLasFrases, setTodasLasFrases] = useState(false);
   const navigate = useNavigate();
-  const setPeriodo = (x: Periodo) => { setPeriodoEstado(x); guardar("tablero_periodo", x); };
   const setSeccion = (x: Seccion) => { setSeccionEstado(x); guardar("tablero_movil_seccion", x); };
 
   const { a, h } = useMemo(() => {
     const ahora = Date.now();
-    const { desde, hasta } = rangoDelPeriodo(periodo, ahora);
+    const { desde, hasta } = rangoEn(ahora);
     const a = calcularAnalitica({
       ahora, desde, hasta,
       vehiculos: p.vehiculos, costos: p.costos, verCostos: p.verCostos,
       clientes: p.clientes, tratos: p.tratos, usuarios: p.usuarios, etapas: p.etapas,
     });
     return { a, h: calcularHallazgos(a) };
-  }, [periodo, p.vehiculos, p.costos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
+  }, [periodo, elegido, p.vehiculos, p.costos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
 
   const r = a.resumen;
   const viejos = a.inventario.lista.filter((v) => v.dias != null && v.dias > 90).length;
@@ -61,20 +57,8 @@ export function TableroMovil(p: TableroAgenciaProps & { parcial?: boolean }) {
       {/* Sin Excel en el movil: decision de Luis. El reporte se baja en la computadora. */}
       <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Tu agencia en números</h2>
 
-      {/* Periodo */}
-      <div className="flex gap-1 bg-white dark:bg-slate-800 ring-1 ring-slate-200/70 dark:ring-slate-700 shadow-sm rounded-2xl p-1">
-        {PERIODOS.map((x) => (
-          <button
-            key={x.id}
-            onClick={() => setPeriodo(x.id)}
-            className={`flex-1 text-[11px] font-bold py-2 rounded-xl transition-colors ${
-              periodo === x.id ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "text-slate-500"
-            }`}
-          >
-            {CORTO[x.id]}
-          </button>
-        ))}
-      </div>
+      {/* Periodo: accesos rápidos y calendario */}
+      <SelectorDePeriodo compacto periodo={periodo} elegido={elegido} onPeriodo={setPeriodo} onRango={setRango} />
 
       {p.parcial && (
         <p className="text-[11px] text-slate-500 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-2.5">

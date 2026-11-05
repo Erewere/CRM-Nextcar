@@ -18,6 +18,11 @@ import { nombreDelMes } from "../../lib/metas";
 import { SaludDelInventario } from "../precios/SaludDelInventario";
 import { usePremium } from "../PlanPremium";
 import { ResumenComprasTablero } from "../precios/ResumenComprasTablero";
+import { SelectorDePeriodo } from "./SelectorDePeriodo";
+import { MX, leer, guardar, usePeriodoTablero, type Periodo } from "../../lib/periodoTablero";
+
+// Antes vivian aqui; se siguen exportando para quien los importaba de este archivo.
+export { PERIODOS, MX, leer, guardar, rangoDelPeriodo, type Periodo } from "../../lib/periodoTablero";
 
 /**
  * El tablero del administrador: lo que vende, lo que tiene, de donde le llegan
@@ -33,7 +38,6 @@ const ROJO = "#D6402A";
 const GRIS = "#CBD5E1";
 
 export type Pestana = "resumen" | "ventas" | "inventario" | "clientes" | "equipo";
-export type Periodo = "mes" | "3m" | "anio" | "12m";
 
 export const PESTANAS: { id: Pestana; nombre: string }[] = [
   { id: "resumen", nombre: "Resumen" },
@@ -42,42 +46,6 @@ export const PESTANAS: { id: Pestana; nombre: string }[] = [
   { id: "clientes", nombre: "Clientes" },
   { id: "equipo", nombre: "Equipo" },
 ];
-
-export const PERIODOS: { id: Periodo; nombre: string }[] = [
-  { id: "mes", nombre: "Este mes" },
-  { id: "3m", nombre: "Últimos 3 meses" },
-  { id: "anio", nombre: "Este año" },
-  { id: "12m", nombre: "Últimos 12 meses" },
-];
-
-const DIA = 86_400_000;
-export const MX = 6 * 3_600_000; // Mexico, UTC-6
-
-export function rangoDelPeriodo(p: Periodo, ahora: number) {
-  const local = new Date(ahora - MX);
-  const y = local.getUTCFullYear();
-  const m = local.getUTCMonth();
-  if (p === "mes") return { desde: Date.UTC(y, m, 1) + MX, hasta: ahora };
-  if (p === "anio") return { desde: Date.UTC(y, 0, 1) + MX, hasta: ahora };
-  if (p === "3m") return { desde: ahora - 91 * DIA, hasta: ahora };
-  return { desde: ahora - 365 * DIA, hasta: ahora };
-}
-
-export const leer = <T extends string>(clave: string, validos: readonly T[], def: T): T => {
-  try {
-    const v = localStorage.getItem(clave) as T | null;
-    return v && validos.includes(v) ? v : def;
-  } catch {
-    return def;
-  }
-};
-export const guardar = (clave: string, v: string) => {
-  try {
-    localStorage.setItem(clave, v);
-  } catch {
-    /* sin almacenamiento: se queda en memoria */
-  }
-};
 
 export const dinero = (n: number) =>
   "$" + new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(Math.round(n || 0));
@@ -129,23 +97,19 @@ export function TableroAgencia(p: TableroAgenciaProps) {
   const premium = usePremium();
   const [pestana, setPestanaEstado] = useState<Pestana>(() =>
     leer("tablero_pestana", PESTANAS.map((x) => x.id), "resumen"));
-  const [periodo, setPeriodoEstado] = useState<Periodo>(() =>
-    leer("tablero_periodo", PERIODOS.map((x) => x.id), "12m"));
+  const { periodo, elegido, setPeriodo, setRango, rangoEn, nombre: nombrePeriodo } = usePeriodoTablero();
   const setPestana = (x: Pestana) => { setPestanaEstado(x); guardar("tablero_pestana", x); };
-  const setPeriodo = (x: Periodo) => { setPeriodoEstado(x); guardar("tablero_periodo", x); };
 
   const { a, h } = useMemo(() => {
     const ahora = Date.now();
-    const { desde, hasta } = rangoDelPeriodo(periodo, ahora);
+    const { desde, hasta } = rangoEn(ahora);
     const a = calcularAnalitica({
       ahora, desde, hasta,
       vehiculos: p.vehiculos, costos: p.costos, verCostos: p.verCostos,
       clientes: p.clientes, tratos: p.tratos, usuarios: p.usuarios, etapas: p.etapas,
     });
     return { a, h: calcularHallazgos(a) };
-  }, [periodo, p.vehiculos, p.costos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
-
-  const nombrePeriodo = PERIODOS.find((x) => x.id === periodo)!.nombre;
+  }, [periodo, elegido, p.vehiculos, p.costos, p.verCostos, p.clientes, p.tratos, p.usuarios, p.etapas]);
 
   const exportar = (todo: boolean) =>
     exportarReporte(a, h, { verCostos: p.verCostos, periodo: nombrePeriodo, agencia: p.agencia }, todo ? "todo" : pestana);
@@ -160,21 +124,7 @@ export function TableroAgencia(p: TableroAgenciaProps) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 truncate">Tablero de la agencia · {p.agencia || "Tu agencia"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg">
-              {PERIODOS.map((x) => (
-                <button
-                  key={x.id}
-                  onClick={() => setPeriodo(x.id)}
-                  className={`h-7 px-2.5 rounded-md text-xs font-bold transition-colors ${
-                    periodo === x.id
-                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                  }`}
-                >
-                  {x.nombre}
-                </button>
-              ))}
-            </div>
+            <SelectorDePeriodo periodo={periodo} elegido={elegido} onPeriodo={setPeriodo} onRango={setRango} />
             <button
               onClick={() => exportar(false)}
               className="h-8 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
