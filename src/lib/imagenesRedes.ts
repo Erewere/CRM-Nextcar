@@ -1,5 +1,6 @@
 import type { Vehicle } from '../types';
 import { aDataUrl, cargar, planDeCredito } from './fichaPdf';
+import { dibujarPlantilla, paleta, type PlantillaRed } from './plantillasRedes';
 
 /**
  * Imágenes para redes de un auto, armadas en el navegador (canvas):
@@ -20,25 +21,29 @@ export interface OpcionesRed {
   conEnganche: boolean;
   /** Liga rastreable a la página pública del auto (ver src/servidor/publicarAuto.ts); sale en el texto de la publicación. */
   enlace?: string;
+  /** Diseño de la imagen; sin esto, la clásica. */
+  plantilla?: PlantillaRed;
+  /** Color de la agencia (#rrggbb). */
+  color?: string;
 }
 
-const AZUL = '#0f172a', ACENTO = '#1d4ed8', VERDE = '#25d366', AMBAR = '#f59e0b';
-const LETRA = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-const pesos = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('es-MX')}`;
+const VERDE = '#25d366', AMBAR = '#f59e0b';
+export const LETRA = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+export const pesos = (n: number | string) => `$${Math.round(Number(n) || 0).toLocaleString('es-MX')}`;
 
 async function imagen(url?: string) {
   if (!url) return null;
   return cargar(await aDataUrl(url));
 }
 
-function rectRedondo(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function rectRedondo(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
 /** Foto completa (contain) dentro de un recuadro, con fondo de la misma foto difuminada/oscura. */
-function fotoConFondo(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, radio = 0) {
+export function fotoConFondo(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, radio = 0) {
   ctx.save();
   if (radio) rectRedondo(ctx, x, y, w, h, radio); else { ctx.beginPath(); ctx.rect(x, y, w, h); }
   ctx.clip();
@@ -56,7 +61,7 @@ function fotoConFondo(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: n
   ctx.restore();
 }
 
-function textoAjustado(ctx: CanvasRenderingContext2D, t: string, maxW: number, tam: number, peso = 'bold', min = 28) {
+export function textoAjustado(ctx: CanvasRenderingContext2D, t: string, maxW: number, tam: number, peso = 'bold', min = 28) {
   let s = tam;
   ctx.font = `${peso} ${s}px ${LETRA}`;
   while (ctx.measureText(t).width > maxW && s > min) { s -= 2; ctx.font = `${peso} ${s}px ${LETRA}`; }
@@ -86,7 +91,7 @@ function logoArriba(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null
 }
 
 /** Ícono de WhatsApp dibujado (círculo verde con el globito), para no depender de otra imagen. */
-function iconoWa(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+export function iconoWa(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   ctx.fillStyle = VERDE; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#ffffff'; ctx.lineWidth = r * 0.14; ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0.7, Math.PI * 2 + 0.4); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx - r * 0.42, cy + r * 0.3); ctx.lineTo(cx - r * 0.55, cy + r * 0.62); ctx.lineTo(cx - r * 0.18, cy + r * 0.5); ctx.stroke();
@@ -105,6 +110,15 @@ export async function generarImagenRed(formato: FormatoRed, o: OpcionesRed): Pro
   const anterior = Number(a.fichaWeb?.precioAnterior) || 0;
   const antes = anterior > Number(a.price) ? anterior : 0;
 
+  const pal = paleta(o.color);
+  const AZUL = o.color ? pal.oscuro : '#0f172a', ACENTO = pal.marca;
+  if (o.plantilla && o.plantilla !== 'clasica') {
+    dibujarPlantilla(o.plantilla, {
+      ctx, W, H, vertical: formato === 'vertical', a, foto, extras: extras.filter(Boolean) as HTMLImageElement[], logo,
+      nombreAgencia: o.agencia?.name, tel, etiqueta: o.etiqueta, enganche: plan ? plan.enganche : 0, antes, p: pal,
+    });
+    return await new Promise<Blob>((ok, mal) => c.toBlob((b) => (b ? ok(b) : mal(new Error('No se pudo armar la imagen'))), 'image/jpeg', 0.92));
+  }
   ctx.fillStyle = AZUL; ctx.fillRect(0, 0, W, H);
 
   if (formato === 'cuadrada') {

@@ -120,6 +120,9 @@ export interface Agency {
   /** Cuando termino de poner los datos de su agencia; sin esto se le pide. */
   datosCompletadosAt?: string;
   phoneWhatsApp?: string;
+  /** Color de la agencia (#rrggbb) y diseño de sus imágenes para redes; los usan las imágenes, la ficha y la hoja del parabrisas. */
+  colorMarca?: string;
+  plantillaRedes?: string;
   facebookPageId?: string;
   /** Ciudad de la agencia (lista en plataforma/ciudades). Decide con quién se comparte inventario. */
   ciudad?: string;

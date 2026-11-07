@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Check, Copy, Download, ExternalLink, Share2, X } from 'lucide-react';
-import { auth } from '../../lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
 import { getApiUrl } from '../../lib/api';
 import type { Vehicle } from '../../types';
+import { PLANTILLAS, COLORES_MARCA, COLOR_MARCA_BASE, hexValido, type PlantillaRed } from '../../lib/plantillasRedes';
 import { generarImagenRed, textoParaPublicacion, type FormatoRed, type OpcionesRed } from '../../lib/imagenesRedes';
 
 /**
@@ -30,6 +32,20 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
   const extras = useMemo(() => elegidas.slice(1, 3), [elegidas]);
   const [etiqueta, setEtiqueta] = useState(Number(auto.fichaWeb?.precioAnterior) > Number(auto.price) ? '¡Precio rebajado!' : '');
   const [conEnganche, setConEnganche] = useState(true);
+  // Diseño y color: salen de lo que la agencia dejó guardado; se cambian aquí y, si quiere, se recuerdan para todos.
+  const [plantilla, setPlantilla] = useState<PlantillaRed>(PLANTILLAS.some((p) => p.id === agencia?.plantillaRedes) ? agencia.plantillaRedes : 'moderna');
+  const [color, setColor] = useState<string>(hexValido(agencia?.colorMarca) ? agencia.colorMarca : COLOR_MARCA_BASE);
+  const [estiloGuardado, setEstiloGuardado] = useState<'' | 'guardando' | 'listo' | 'error'>('');
+  const estiloCambiado = plantilla !== (agencia?.plantillaRedes || 'moderna') || color.toLowerCase() !== (hexValido(agencia?.colorMarca) ? String(agencia.colorMarca).toLowerCase() : COLOR_MARCA_BASE);
+  const guardarEstilo = async () => {
+    if (!auto.agencyId) return;
+    setEstiloGuardado('guardando');
+    try {
+      await updateDoc(doc(db, 'agencies', auto.agencyId), { plantillaRedes: plantilla, colorMarca: color.toLowerCase() });
+      if (agencia) { agencia.plantillaRedes = plantilla; agencia.colorMarca = color.toLowerCase(); }
+      setEstiloGuardado('listo'); setTimeout(() => setEstiloGuardado(''), 2500);
+    } catch { setEstiloGuardado('error'); }
+  };
   const [telefono, setTelefono] = useState(telefonoAsesor || telAgencia);
   const [vista, setVista] = useState('');
   const [armando, setArmando] = useState(false);
@@ -78,8 +94,8 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
   }, [auto.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const opciones: OpcionesRed = useMemo(() => ({
-    auto, foto: principal, fotosExtra: extras, agencia, telefono, etiqueta, conEnganche, enlace,
-  }), [auto, principal, extras, agencia, telefono, etiqueta, conEnganche, enlace]);
+    auto, foto: principal, fotosExtra: extras, agencia, telefono, etiqueta, conEnganche, enlace, plantilla, color,
+  }), [auto, principal, extras, agencia, telefono, etiqueta, conEnganche, enlace, plantilla, color]);
   const texto = useMemo(() => textoParaPublicacion(opciones), [opciones]);
 
   // Se vuelve a armar la vista previa cada vez que cambia algo (con una pausa corta al escribir).
@@ -191,6 +207,37 @@ export function ImagenesRedes({ auto, fotos, agencia, telefonoAsesor, onCerrar }
 
           {/* Opciones */}
           <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Diseño</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mt-1">
+                {PLANTILLAS.map((pl) => (
+                  <button key={pl.id} type="button" onClick={() => setPlantilla(pl.id)} aria-pressed={plantilla === pl.id}
+                    className={clsx('text-left rounded-lg border-2 px-2.5 py-2 leading-tight', plantilla === pl.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-slate-400')}>
+                    <span className="block text-sm font-extrabold text-slate-900 dark:text-white">{pl.nombre}</span>
+                    <span className="block text-[11px] text-slate-600 dark:text-slate-400">{pl.nota}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-3">Color de tu agencia</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {COLORES_MARCA.map((c) => (
+                  <button key={c} type="button" onClick={() => setColor(c)} aria-label={`Color ${c}`} aria-pressed={color.toLowerCase() === c}
+                    className={clsx('w-8 h-8 rounded-full border-2', color.toLowerCase() === c ? 'border-slate-900 dark:border-white ring-2 ring-offset-1 ring-slate-400' : 'border-white dark:border-slate-700 shadow')}
+                    style={{ backgroundColor: c }} />
+                ))}
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 p-0 border-0 rounded-full bg-transparent cursor-pointer" aria-label="Elegir otro color" />
+                  Otro
+                </label>
+              </div>
+              {estiloCambiado && (
+                <button type="button" onClick={guardarEstilo} disabled={estiloGuardado === 'guardando'} className="mt-2 text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline">
+                  {estiloGuardado === 'guardando' ? 'Guardando…' : 'Usar siempre este diseño y color en mi agencia'}
+                </button>
+              )}
+              {estiloGuardado === 'listo' && <p className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">Listo: así saldrán las próximas imágenes de tu agencia.</p>}
+              {estiloGuardado === 'error' && <p className="mt-1 text-xs font-semibold text-red-700 dark:text-red-400">No se pudo guardar. Intenta de nuevo.</p>}
+            </div>
             {fotos.length > 1 && (
               <div>
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Fotos</p>

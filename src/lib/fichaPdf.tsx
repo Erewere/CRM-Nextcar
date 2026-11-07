@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Vehicle } from '../types';
+import { coloresPdf } from './plantillasRedes';
 
 /**
  * Ficha del auto en PDF, dibujada directo (texto real, no una captura de
@@ -15,7 +16,7 @@ import type { Vehicle } from '../types';
 
 export interface DatosFicha {
   auto: Vehicle;
-  agencia?: { name?: string; address?: string; phone?: string; phoneWhatsApp?: string; logoUrl?: string } | null;
+  agencia?: { name?: string; address?: string; phone?: string; phoneWhatsApp?: string; logoUrl?: string; colorMarca?: string } | null;
   asesor?: { name?: string; phone?: string; email?: string } | null;
   /** Las fotos que lleva la ficha, en orden (la primera en grande). Sin esto, las primeras del auto. */
   fotosElegidas?: string[];
@@ -124,6 +125,9 @@ export async function codigoQR(texto: string): Promise<string> {
 export async function generarFichaPdf({ auto, agencia, asesor, fotosElegidas }: DatosFicha): Promise<Blob> {
   const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = 612, H = 792, M = 36, ANCHO = W - M * 2;
+  // Los colores de la agencia (si no eligió, el azul de siempre).
+  const col = coloresPdf(agencia?.colorMarca);
+  const AZUL = col.oscuro, ACENTO = col.marca;
   const color = (c: readonly number[]) => pdf.setTextColor(c[0], c[1], c[2]);
   const relleno = (c: readonly number[]) => pdf.setFillColor(c[0], c[1], c[2]);
   const trazo = (c: readonly number[]) => pdf.setDrawColor(c[0], c[1], c[2]);
@@ -154,18 +158,22 @@ export async function generarFichaPdf({ auto, agencia, asesor, fotosElegidas }: 
     ['Kilometraje', auto.km ? `${Number(auto.km).toLocaleString('es-MX')} km` : ''],
     ['Transmisión', auto.transmission || ''],
     ['Motor', ficha.motor || [auto.liters ? `${auto.liters} L` : '', auto.cylinders ? `${auto.cylinders} cil.` : ''].filter(Boolean).join(' · ')],
+    ['Potencia', ficha.potencia || ''],
     ['Carrocería', auto.bodyType || ''],
     ['Color', auto.color || ''],
     ['Pasajeros', auto.passengers ? String(auto.passengers) : ''],
     ['Combustible', ficha.combustible || ''],
     ['Tracción', ficha.traccion || ''],
     ['Rendimiento', ficha.rendimiento || ''],
-  ] as [string, string][]).filter(([, v]) => v).slice(0, 8);
+    ['Dueños', auto.checklist?.ownersCount ? String(auto.checklist.ownersCount) : ''],
+    ['Placas de', auto.checklist?.platesState || ''],
+    ['NIV (últimos 8)', auto.vin ? String(auto.vin).slice(-8).toUpperCase() : ''],
+  ] as [string, string][]).filter(([, v]) => v).slice(0, 12);
   const FILAS_DATOS = Math.ceil(datos.length / 4), TILE_H = 40, TILE_GAP = 8;
   const altoDatos = datos.length ? 18 + FILAS_DATOS * TILE_H + (FILAS_DATOS - 1) * TILE_GAP : 0;
 
   const destacados = (ficha.loQueNosEncanta ? String(ficha.loQueNosEncanta).split(/\n+/) : String(auto.equipment || '').split(/[,;\n]/))
-    .map((x: string) => x.replace(/^[-•*\s]+/, '').trim()).filter(Boolean).slice(0, 4);
+    .map((x: string) => x.replace(/^[-•*\s]+/, '').trim()).filter(Boolean).slice(0, 5);
   const plan = auto.status !== 'sold' ? planDeCredito(Number(auto.year), Number(auto.price)) : null;
   const dosTarjetas = destacados.length > 0 && !!plan;
   const anchoTarjeta = dosTarjetas ? (ANCHO - 12) / 2 : ANCHO;

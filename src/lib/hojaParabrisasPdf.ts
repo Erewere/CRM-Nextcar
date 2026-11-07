@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { Vehicle } from '../types';
 import { codigoQR, logo, numeroWhatsApp, planDeCredito } from './fichaPdf';
+import { coloresPdf } from './plantillasRedes';
 
 /**
  * Hoja para el parabrisas: tamaño carta, para pegarla por dentro del vidrio.
@@ -14,7 +15,7 @@ import { codigoQR, logo, numeroWhatsApp, planDeCredito } from './fichaPdf';
 
 export interface DatosHoja {
   autos: Vehicle[];
-  agencia?: { name?: string; address?: string; phone?: string; phoneWhatsApp?: string; logoUrl?: string } | null;
+  agencia?: { name?: string; address?: string; phone?: string; phoneWhatsApp?: string; logoUrl?: string; colorMarca?: string } | null;
   asesor?: { name?: string; phone?: string } | null;
   conCredito?: boolean;
   alAvanzar?: (hecho: number, total: number) => void;
@@ -53,6 +54,8 @@ function telBonito(tel: string) {
 
 async function pagina(pdf: jsPDF, auto: Vehicle, o: DatosHoja, logoAg: { src: string; ratio: number } | null) {
   const ag = o.agencia || {};
+  const col = coloresPdf(ag.colorMarca);
+  const ACENTO = col.marca;
   const tel = ag.phoneWhatsApp || ag.phone || o.asesor?.phone || '';
   const num = numeroWhatsApp(tel);
   const titulo = `${auto.make || ''} ${auto.model || ''}`.trim().toUpperCase();
@@ -62,7 +65,8 @@ async function pagina(pdf: jsPDF, auto: Vehicle, o: DatosHoja, logoAg: { src: st
   const plan = o.conCredito === false ? null : planDeCredito(Number(auto.year), precio);
   const mensual = Math.round(mensualidadAprox(precio, plan));
 
-  // --- Encabezado: logo y nombre de la agencia
+  // --- Franja de color arriba y encabezado: logo y nombre de la agencia
+  pdf.setFillColor(...ACENTO); pdf.rect(0, 0, W, 14, 'F');
   let y = M;
   if (logoAg) {
     const h = Math.min(48, 170 / logoAg.ratio), w = h * logoAg.ratio;
@@ -100,19 +104,19 @@ async function pagina(pdf: jsPDF, auto: Vehicle, o: DatosHoja, logoAg: { src: st
   // --- Precio, en un recuadro con borde (sin relleno: no gasta tóner)
   y += 18;
   const altoPrecio = 114;
-  pdf.setDrawColor(...NEGRO); pdf.setLineWidth(4);
-  pdf.roundedRect(M, y, W - 2 * M, altoPrecio, 14, 14, 'S');
-  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...GRIS);
+  pdf.setFillColor(...ACENTO);
+  pdf.roundedRect(M, y, W - 2 * M, altoPrecio, 14, 14, 'F');
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...col.sobreMarca);
   pdf.text('PRECIO', M + 22, y + 30);
   if (antes) {
     const ta = `Antes ${pesos(antes)}`;
-    pdf.setFontSize(18); pdf.setTextColor(...ROJO);
+    pdf.setFontSize(18); pdf.setTextColor(...col.sobreMarca);
     pdf.text(ta, W - M - 22, y + 30, { align: 'right' });
     const wa = pdf.getTextWidth(ta);
-    pdf.setDrawColor(...ROJO); pdf.setLineWidth(1.6);
+    pdf.setDrawColor(...col.sobreMarca); pdf.setLineWidth(1.6);
     pdf.line(W - M - 22 - wa, y + 24, W - M - 22, y + 24);
   }
-  pdf.setTextColor(...NEGRO);
+  pdf.setTextColor(...col.sobreMarca);
   ajustar(pdf, pesos(precio), W - 2 * M - 44, 76, 46);
   pdf.text(pesos(precio), W / 2, y + altoPrecio - 20, { align: 'center' });
   y += altoPrecio;
@@ -146,7 +150,10 @@ async function pagina(pdf: jsPDF, auto: Vehicle, o: DatosHoja, logoAg: { src: st
     ['Combustible', ficha.combustible || ''],
     ['Pasajeros', auto.passengers ? String(auto.passengers) : ''],
     ['Tracción', ficha.traccion || ''],
-  ] as [string, string][]).filter(([, v]) => v).slice(0, 6);
+    ['Potencia', ficha.potencia || ''],
+    ['Rendimiento', ficha.rendimiento || ''],
+    ['Dueños', auto.checklist?.ownersCount ? String(auto.checklist.ownersCount) : ''],
+  ] as [string, string][]).filter(([, v]) => v).slice(0, 9);
   // El pie va fijo abajo: si no caben dos renglones de datos, va uno.
   const pieY = H - M - 140;
   const filasQueCaben = Math.floor((pieY - 14 - (y + 24) + 18) / 46);
