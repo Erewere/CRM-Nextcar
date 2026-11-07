@@ -632,6 +632,8 @@ export function AutoPagina() {
       dias={dias}
       onPrecio={campo('price')}
       onCambioGastos={() => {}}
+      agencia={agencia}
+      emitidoPor={userData?.name}
     />
   );
 

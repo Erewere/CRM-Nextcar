@@ -7,6 +7,8 @@ import { hoyLocal } from '../../lib/fechas';
 import { guardarCosto } from '../../hooks/useVehicleFinancials';
 import { CampoEditable } from './CampoEditable';
 import type { Vehicle } from '../../types';
+import { generarReporteSocios } from '../../lib/reporteSociosPdf';
+import { descargarOCompartir } from '../../lib/fichaPdf';
 
 /**
  * Costos y gastos del auto, todo en la página: el resumen de lo que deja, la
@@ -36,9 +38,12 @@ interface Props {
   dias: number | null;
   onPrecio: (v: any) => Promise<void>;
   onCambioGastos: () => void;
+  agencia?: any;
+  emitidoPor?: string;
 }
 
-export function SeccionGastos({ auto, gastos, costo, puedeVerCostos, puedeCapturar, puedePrecio, usuarioId, dias, onPrecio, onCambioGastos }: Props) {
+export function SeccionGastos({ auto, gastos, costo, puedeVerCostos, puedeCapturar, puedePrecio, usuarioId, dias, onPrecio, onCambioGastos, agencia, emitidoPor }: Props) {
+  const [armandoReporte, setArmandoReporte] = useState(false);
   const [fecha, setFecha] = useState(hoyLocal());
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
@@ -115,14 +120,16 @@ export function SeccionGastos({ auto, gastos, costo, puedeVerCostos, puedeCaptur
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-extrabold">Resumen financiero</h2>
           {puedeVerCostos && (
-            <button type="button" onClick={() => {
-              // Solo se imprime este reporte, no el resto del CRM (ver index.css).
-              document.body.classList.add('imprimir-socios');
-              const quitar = () => { document.body.classList.remove('imprimir-socios'); window.removeEventListener('afterprint', quitar); };
-              window.addEventListener('afterprint', quitar);
-              window.print();
-            }} className="print:hidden text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
-              <Printer className="w-3.5 h-3.5" /> Reporte para socios (PDF)
+            <button type="button" disabled={armandoReporte} onClick={async () => {
+              setArmandoReporte(true);
+              try {
+                const blob = await generarReporteSocios({ auto, agencia, gastos, costo, precioVenta, dias, emitidoPor });
+                await descargarOCompartir(blob, `Reporte-socios-${[auto.year, auto.make, auto.model].filter(Boolean).join('-').replace(/\s+/g, '-')}.pdf`, 'Reporte para socios');
+              } catch (e: any) {
+                alert(`No se pudo armar el reporte. ${e?.message || ''}`);
+              } finally { setArmandoReporte(false); }
+            }} className="print:hidden text-xs font-bold text-blue-700 hover:underline flex items-center gap-1 disabled:opacity-50">
+              <Printer className="w-3.5 h-3.5" /> {armandoReporte ? 'Armando…' : 'Reporte para socios (PDF)'}
             </button>
           )}
         </div>
